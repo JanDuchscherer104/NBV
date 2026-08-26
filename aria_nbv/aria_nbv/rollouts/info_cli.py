@@ -164,10 +164,14 @@ def info_command(
             binding = None
             if candidate_benchmark_bundle is not None:
                 if candidate_benchmark_binding_json is None:
-                    raise typer.BadParameter("--candidate-benchmark-binding-json is required with --candidate-benchmark-bundle")
+                    raise typer.BadParameter(
+                        "--candidate-benchmark-binding-json is required with --candidate-benchmark-bundle"
+                    )
                 binding = json.loads(candidate_benchmark_binding_json.read_text(encoding="utf-8"))
             elif candidate_benchmark_binding_json is not None:
-                raise typer.BadParameter("--candidate-benchmark-bundle is required with --candidate-benchmark-binding-json")
+                raise typer.BadParameter(
+                    "--candidate-benchmark-bundle is required with --candidate-benchmark-binding-json"
+                )
             digest = write_thesis_report_bundle(
                 thesis_bundle_output,
                 frames,

@@ -42,12 +42,26 @@ def test_canonical_json_is_order_independent() -> None:
 def test_production_seminar_jitter_contract_is_unchanged() -> None:
     config = tomllib.loads((Path(__file__).parents[3] / ".configs/build_rollouts_v1_realistic.toml").read_text())
     mixture = config["candidate_mixture"]["base"]
-    assert (mixture["view_max_azimuth_deg"], mixture["view_max_elevation_deg"], mixture["view_roll_jitter_deg"]) == (60.0, 30.0, 0.0)
+    assert (mixture["view_max_azimuth_deg"], mixture["view_max_elevation_deg"], mixture["view_roll_jitter_deg"]) == (
+        60.0,
+        30.0,
+        0.0,
+    )
 
 
 def test_bundle_requires_parquet_engine_or_round_trips(tmp_path: Path) -> None:
     provenance = {
-        key: ("candidate_benchmark" if key == "evidence_class" else "complete" if key == "completion" else "aria-nbv-candidate-benchmark-v1" if key == "schema_id" else "1" if key == "implementation_revision" else "1" * 64)
+        key: (
+            "candidate_benchmark"
+            if key == "evidence_class"
+            else "complete"
+            if key == "completion"
+            else "aria-nbv-candidate-benchmark-v1"
+            if key == "schema_id"
+            else "1"
+            if key == "implementation_revision"
+            else "1" * 64
+        )
         for key in BINDING_KEYS
     }
     try:
@@ -86,4 +100,11 @@ def test_dto_rejects_duplicate_or_misaligned_candidates() -> None:
 
     point = CandidatePoint(1, (0.0, 0.0, 0.0), "forward", "forward", True, False, "s")
     with pytest.raises(ValueError):
-        CandidateBenchmark("s", "scene", (), candidate_ids=(1, 1), coordinates=((0.0, 0.0, 0.0), (0.0, 0.0, 0.0)), points=(point, point))
+        CandidateBenchmark(
+            "s",
+            "scene",
+            (),
+            candidate_ids=(1, 1),
+            coordinates=((0.0, 0.0, 0.0), (0.0, 0.0, 0.0)),
+            points=(point, point),
+        )

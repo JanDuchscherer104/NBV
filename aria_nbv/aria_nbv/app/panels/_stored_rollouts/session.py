@@ -200,7 +200,9 @@ class StoredRolloutSession:
         self._assert_current_identity()
         return result
 
-    def candidate_benchmark_records(self, *, state_key: str | None = None, candidate_limit: int = 500) -> tuple[Any, ...]:
+    def candidate_benchmark_records(
+        self, *, state_key: str | None = None, candidate_limit: int = 500
+    ) -> tuple[Any, ...]:
         """Build immutable benchmark facts through the canonical inspection reader."""
 
         return benchmarks_from_reader(self.reader, state_key=state_key, candidate_limit=candidate_limit)

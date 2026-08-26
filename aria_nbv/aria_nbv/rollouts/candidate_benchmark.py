@@ -26,9 +26,17 @@ SCHEMA_ID = "aria-nbv-candidate-benchmark-v1"
 MANIFEST_NAME = "manifest.json"
 DATA_NAME = "candidates.parquet"
 BINDING_KEYS = (
-    "source_sha256", "scene_split_sha256", "store_content_sha256", "config_sha256",
-    "candidate_config_sha256", "oracle_config_sha256", "family_config_sha256",
-    "schema_id", "implementation_revision", "evidence_class", "completion",
+    "source_sha256",
+    "scene_split_sha256",
+    "store_content_sha256",
+    "config_sha256",
+    "candidate_config_sha256",
+    "oracle_config_sha256",
+    "family_config_sha256",
+    "schema_id",
+    "implementation_revision",
+    "evidence_class",
+    "completion",
 )
 
 
@@ -201,22 +209,22 @@ def reduce_candidate_records(records: list[Mapping[str, Any]]) -> tuple[Candidat
     for record in records:
         families = tuple(CandidateFamilyCounts(**family) for family in record.get("families", ()))
         dto = CandidateBenchmark(
-                state_key=str(record["state_key"]),
-                scene_key=str(record["scene_key"]),
-                families=families,
-                geometry=_mapping_field(record.get("geometry", {})),
-                diversity=_mapping_field(record.get("diversity", {})),
-                timings_ms=_mapping_field(record.get("timings_ms", {})),
-                resources=_mapping_field(record.get("resources", {})),
-                provenance=_mapping_field(record.get("provenance", {})),
-                candidate_ids=tuple(int(value) for value in record.get("candidate_ids", ())),
-                coordinates=tuple(tuple(float(value) for value in point) for point in record.get("coordinates", ())),
-                lineage=_mapping_field(record.get("lineage", {})),
-                points=tuple(
-                    CandidatePoint(**{**point, "xyz": tuple(float(value) for value in point["xyz"])})
-                    for point in record.get("points", ())
-                ),
-            )
+            state_key=str(record["state_key"]),
+            scene_key=str(record["scene_key"]),
+            families=families,
+            geometry=_mapping_field(record.get("geometry", {})),
+            diversity=_mapping_field(record.get("diversity", {})),
+            timings_ms=_mapping_field(record.get("timings_ms", {})),
+            resources=_mapping_field(record.get("resources", {})),
+            provenance=_mapping_field(record.get("provenance", {})),
+            candidate_ids=tuple(int(value) for value in record.get("candidate_ids", ())),
+            coordinates=tuple(tuple(float(value) for value in point) for point in record.get("coordinates", ())),
+            lineage=_mapping_field(record.get("lineage", {})),
+            points=tuple(
+                CandidatePoint(**{**point, "xyz": tuple(float(value) for value in point["xyz"])})
+                for point in record.get("points", ())
+            ),
+        )
         key = (dto.scene_key, dto.state_key)
         if key in keys:
             raise ValueError(f"duplicate benchmark state key: {key}")
@@ -225,7 +233,9 @@ def reduce_candidate_records(records: list[Mapping[str, Any]]) -> tuple[Candidat
     return tuple(sorted(result, key=lambda item: (item.scene_key, item.state_key)))
 
 
-def benchmarks_from_reader(reader: Any, *, state_key: str | None = None, candidate_limit: int = 500) -> tuple[CandidateBenchmark, ...]:
+def benchmarks_from_reader(
+    reader: Any, *, state_key: str | None = None, candidate_limit: int = 500
+) -> tuple[CandidateBenchmark, ...]:
     """Build state-keyed facts from the canonical inspection candidate rows."""
 
     from .inspection import candidate_audit_rows
@@ -259,13 +269,30 @@ def benchmarks_from_reader(reader: Any, *, state_key: str | None = None, candida
             applicable = None
             valid = sum(bool(row.get("actor_action")) for row in rows)
             selected = sum(bool(row.get("selected")) for row in rows)
-            families.append(CandidateFamilyCounts(family, applicable, len(rows), valid, selected, len(rows), "unavailable_in_legacy_store"))
+            families.append(
+                CandidateFamilyCounts(
+                    family, applicable, len(rows), valid, selected, len(rows), "unavailable_in_legacy_store"
+                )
+            )
             for row in rows:
                 candidate_ids.append(int(row["candidate_row_id"]))
-                scale = (sum(float(row.get(f"root_to_target_{axis}_m") or 0.0) ** 2 for axis in ("x", "y", "z")) ** 0.5)
+                scale = sum(float(row.get(f"root_to_target_{axis}_m") or 0.0) ** 2 for axis in ("x", "y", "z")) ** 0.5
                 scale = scale if scale > 0.0 else 1.0
                 coordinates.append(tuple(float(row[f"root_relative_{axis}_m"]) / scale for axis in ("x", "y", "z")))
-                points.append(CandidatePoint(int(row["candidate_row_id"]), coordinates[-1], family, str(row["position"]), bool(row.get("actor_action")), bool(row.get("selected")), state, str(row.get("candidate_config")), str(row.get("rollout_config")), str(row.get("branch_schedule"))))
+                points.append(
+                    CandidatePoint(
+                        int(row["candidate_row_id"]),
+                        coordinates[-1],
+                        family,
+                        str(row["position"]),
+                        bool(row.get("actor_action")),
+                        bool(row.get("selected")),
+                        state,
+                        str(row.get("candidate_config")),
+                        str(row.get("rollout_config")),
+                        str(row.get("branch_schedule")),
+                    )
+                )
         result.append(
             CandidateBenchmark(
                 scene_key=scene,
@@ -296,8 +323,18 @@ def write_bundle(
     frame = pd.DataFrame(
         rows,
         columns=[
-            "scene_key", "state_key", "families", "geometry", "diversity",
-            "timings_ms", "resources", "provenance", "candidate_ids", "coordinates", "lineage", "points",
+            "scene_key",
+            "state_key",
+            "families",
+            "geometry",
+            "diversity",
+            "timings_ms",
+            "resources",
+            "provenance",
+            "candidate_ids",
+            "coordinates",
+            "lineage",
+            "points",
         ],
     )
     with tempfile.TemporaryDirectory(dir=destination.parent) as temp:
@@ -313,7 +350,14 @@ def write_bundle(
         missing_binding = [key for key in BINDING_KEYS if key not in provenance_payload]
         if missing_binding:
             raise ValueError(f"missing immutable benchmark binding fields: {', '.join(missing_binding)}")
-        provenance_payload.update({"schema_id": SCHEMA_ID, "implementation_revision": "1", "evidence_class": "candidate_benchmark", "completion": "complete"})
+        provenance_payload.update(
+            {
+                "schema_id": SCHEMA_ID,
+                "implementation_revision": "1",
+                "evidence_class": "candidate_benchmark",
+                "completion": "complete",
+            }
+        )
         manifest = {
             "schema_id": SCHEMA_ID,
             "evidence_class": "candidate_benchmark",
@@ -359,11 +403,23 @@ def benchmark_binding_from_manifest(manifest_payload: Mapping[str, Any]) -> dict
     root_attrs = root_attrs if isinstance(root_attrs, Mapping) else {}
     counts = manifest.get("counts", {})
     counts = counts if isinstance(counts, Mapping) else {}
-    source = _existing_sha256(manifest, "source_sha256", "source_manifest_sha256") or sha256_bytes(canonical_json_bytes(coverage))
-    split = _existing_sha256(manifest, "scene_split_sha256", "split_manifest_sha256") or _existing_sha256(root_attrs, "split_manifest_hash")
-    split = split or sha256_bytes(canonical_json_bytes({"split": root_attrs.get("split_manifest_hash"), "scenes": coverage.get("scene_counts", {})}))
-    store = _existing_sha256(manifest, "store_content_sha256", "content_sha256") or sha256_bytes(canonical_json_bytes({"root_attrs": root_attrs, "counts": counts}))
-    config = _existing_sha256(generation, "config_sha256", "writer_config_sha256") or sha256_bytes(canonical_json_bytes(writer))
+    source = _existing_sha256(manifest, "source_sha256", "source_manifest_sha256") or sha256_bytes(
+        canonical_json_bytes(coverage)
+    )
+    split = _existing_sha256(manifest, "scene_split_sha256", "split_manifest_sha256") or _existing_sha256(
+        root_attrs, "split_manifest_hash"
+    )
+    split = split or sha256_bytes(
+        canonical_json_bytes(
+            {"split": root_attrs.get("split_manifest_hash"), "scenes": coverage.get("scene_counts", {})}
+        )
+    )
+    store = _existing_sha256(manifest, "store_content_sha256", "content_sha256") or sha256_bytes(
+        canonical_json_bytes({"root_attrs": root_attrs, "counts": counts})
+    )
+    config = _existing_sha256(generation, "config_sha256", "writer_config_sha256") or sha256_bytes(
+        canonical_json_bytes(writer)
+    )
     mixture = writer.get("candidate_mixture", {}) if isinstance(writer, Mapping) else {}
     scorer = writer.get("target_scorer", {}) if isinstance(writer, Mapping) else {}
     family = mixture.get("components", []) if isinstance(mixture, Mapping) else []
@@ -375,14 +431,14 @@ def benchmark_binding_from_manifest(manifest_payload: Mapping[str, Any]) -> dict
         "candidate_config_sha256": sha256_bytes(canonical_json_bytes(mixture)),
         "oracle_config_sha256": sha256_bytes(canonical_json_bytes(scorer)),
         "family_config_sha256": sha256_bytes(canonical_json_bytes(family)),
-        "schema_id": SCHEMA_ID, "implementation_revision": "1",
-        "evidence_class": "candidate_benchmark", "completion": "complete",
+        "schema_id": SCHEMA_ID,
+        "implementation_revision": "1",
+        "evidence_class": "candidate_benchmark",
+        "completion": "complete",
     }
 
 
-def serialize_bundle_bytes(
-    records: tuple[CandidateBenchmark, ...], *, provenance: Mapping[str, str]
-) -> bytes:
+def serialize_bundle_bytes(records: tuple[CandidateBenchmark, ...], *, provenance: Mapping[str, str]) -> bytes:
     """Produce deterministic bundle bytes through the same canonical writer."""
 
     with tempfile.TemporaryDirectory() as directory:
@@ -446,16 +502,15 @@ def read_bundle(path: Path | str, *, expected_binding: Mapping[str, str]) -> Can
     if set(expected_binding) != set(BINDING_KEYS):
         raise ValueError("expected_binding must contain every immutable benchmark binding field")
     if any(
-        key.endswith("_sha256") and (
+        key.endswith("_sha256")
+        and (
             not re.fullmatch(r"[0-9a-f]{64}", str(manifest["provenance"].get(key, "")))
             or set(str(manifest["provenance"].get(key, ""))) == {"0"}
         )
         for key in BINDING_KEYS
     ):
         raise ValueError("invalid benchmark SHA-256 binding")
-    if any(
-        manifest["provenance"].get(key) != value for key, value in expected_binding.items()
-    ):
+    if any(manifest["provenance"].get(key) != value for key, value in expected_binding.items()):
         raise ValueError("stale candidate benchmark bundle: provenance binding mismatch")
     if any(key not in manifest["provenance"] for key in BINDING_KEYS):
         raise ValueError("stale candidate benchmark bundle: incomplete provenance binding")
@@ -467,8 +522,18 @@ def read_bundle(path: Path | str, *, expected_binding: Mapping[str, str]) -> Can
     except Exception as exc:
         raise ValueError("invalid candidate benchmark Parquet payload") from exc
     expected_columns = {
-        "scene_key", "state_key", "families", "geometry", "diversity",
-        "timings_ms", "resources", "provenance", "candidate_ids", "coordinates", "lineage", "points",
+        "scene_key",
+        "state_key",
+        "families",
+        "geometry",
+        "diversity",
+        "timings_ms",
+        "resources",
+        "provenance",
+        "candidate_ids",
+        "coordinates",
+        "lineage",
+        "points",
     }
     if set(frame.columns) != expected_columns:
         raise ValueError("schema-mismatched candidate benchmark columns")
@@ -483,8 +548,18 @@ def read_bundle(path: Path | str, *, expected_binding: Mapping[str, str]) -> Can
 
 
 __all__ = [
-    "SCHEMA_ID", "BINDING_KEYS", "CandidateBenchmark", "CandidateBenchmarkBundle",
-    "CandidateFamilyCounts", "canonical_json_bytes", "read_bundle",
-    "benchmarks_from_reader", "read_bundle_bytes", "reduce_candidate_records", "serialize_bundle_bytes", "sha256_bytes", "write_bundle",
+    "SCHEMA_ID",
+    "BINDING_KEYS",
+    "CandidateBenchmark",
+    "CandidateBenchmarkBundle",
+    "CandidateFamilyCounts",
+    "canonical_json_bytes",
+    "read_bundle",
+    "benchmarks_from_reader",
+    "read_bundle_bytes",
+    "reduce_candidate_records",
+    "serialize_bundle_bytes",
+    "sha256_bytes",
+    "write_bundle",
     "benchmark_binding_from_manifest",
 ]

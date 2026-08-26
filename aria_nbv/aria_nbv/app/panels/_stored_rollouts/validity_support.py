@@ -44,37 +44,43 @@ def _render_candidate_benchmark_card(session_handle: Any) -> None:
     )
     if not benchmark_enabled:
         return
-    benchmark_state = st.text_input(
-        "Benchmark state key (optional)",
-        value="",
-        help="Restrict the benchmark to one persisted rollout/step key; leave empty for all states.",
-    ).strip() or None
-    benchmark_limit = int(st.number_input(
-        "Benchmark candidate row limit",
-        min_value=1,
-        max_value=500_000,
-        value=500,
-        step=100,
-    ))
-    records = session_handle.candidate_benchmark_records(
-        state_key=benchmark_state, candidate_limit=benchmark_limit
+    benchmark_state = (
+        st.text_input(
+            "Benchmark state key (optional)",
+            value="",
+            help="Restrict the benchmark to one persisted rollout/step key; leave empty for all states.",
+        ).strip()
+        or None
     )
+    benchmark_limit = int(
+        st.number_input(
+            "Benchmark candidate row limit",
+            min_value=1,
+            max_value=500_000,
+            value=500,
+            step=100,
+        )
+    )
+    records = session_handle.candidate_benchmark_records(state_key=benchmark_state, candidate_limit=benchmark_limit)
     st.download_button(
         "Download candidate benchmark bundle",
-        session_handle.candidate_benchmark_export(
-            state_key=benchmark_state, candidate_limit=benchmark_limit
-        ),
+        session_handle.candidate_benchmark_export(state_key=benchmark_state, candidate_limit=benchmark_limit),
         "candidate-benchmark.zip",
     )
     st.markdown("#### Candidate benchmark support")
     for figure in _candidate_benchmark_figures(records):
-        _render_plot(figure, ScientificExplanation(
-            question="What candidate support does the immutable benchmark contain?",
-            answer="The plot shows only validated, persisted candidate coordinates and IDs.",
-            sections=(ExplanationSection("Availability", "Unavailable metrics remain absent rather than zero-filled."),),
-            evidence_role="derived training data",
-            source_fields=("candidate_benchmark.parquet",),
-        ))
+        _render_plot(
+            figure,
+            ScientificExplanation(
+                question="What candidate support does the immutable benchmark contain?",
+                answer="The plot shows only validated, persisted candidate coordinates and IDs.",
+                sections=(
+                    ExplanationSection("Availability", "Unavailable metrics remain absent rather than zero-filled."),
+                ),
+                evidence_role="derived training data",
+                source_fields=("candidate_benchmark.parquet",),
+            ),
+        )
 
 
 def _render_targets_and_support(session_handle: Any) -> None:

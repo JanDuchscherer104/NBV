@@ -27,16 +27,33 @@ from tests.rollout_fixtures import build_rollout_records
 
 def _binding() -> dict[str, str]:
     return {
-        key: (SCHEMA_ID if key == "schema_id" else "candidate_benchmark" if key == "evidence_class" else "complete" if key == "completion" else "1" if key == "implementation_revision" else sha256_bytes(key.encode()))
+        key: (
+            SCHEMA_ID
+            if key == "schema_id"
+            else "candidate_benchmark"
+            if key == "evidence_class"
+            else "complete"
+            if key == "completion"
+            else "1"
+            if key == "implementation_revision"
+            else sha256_bytes(key.encode())
+        )
         for key in BINDING_KEYS
     }
 
 
 def _record() -> CandidateBenchmark:
     return CandidateBenchmark(
-        "state-1", "scene-a", (CandidateFamilyCounts("forward", True, 1, 1, 1, 1),),
-        candidate_ids=(1,), coordinates=((0.1, 0.2, 0.3),),
-        points=(CandidatePoint(1, (0.1, 0.2, 0.3), "forward", "forward_local", True, True, "state-1", "cfg", "roll", "branch"),),
+        "state-1",
+        "scene-a",
+        (CandidateFamilyCounts("forward", True, 1, 1, 1, 1),),
+        candidate_ids=(1,),
+        coordinates=((0.1, 0.2, 0.3),),
+        points=(
+            CandidatePoint(
+                1, (0.1, 0.2, 0.3), "forward", "forward_local", True, True, "state-1", "cfg", "roll", "branch"
+            ),
+        ),
     )
 
 
@@ -108,13 +125,24 @@ def test_candidate_benchmark_card_is_lazy_and_renders_real_plots_and_download(tm
 
 
 def test_cli_requires_binding_and_attaches_validated_candidate_bundle(tmp_path: Path) -> None:
-    store = write_rollout_zarr_store(tmp_path / "rollouts.zarr", build_rollout_records(horizon=1, num_samples=2, seed=19)[:1])
+    store = write_rollout_zarr_store(
+        tmp_path / "rollouts.zarr", build_rollout_records(horizon=1, num_samples=2, seed=19)[:1]
+    )
     benchmark = write_bundle(tmp_path / "benchmark", (_record(),), provenance=_binding())
     output = tmp_path / "thesis.json"
     runner = CliRunner()
     missing = runner.invoke(
         rollouts_info_app,
-        ["--store", str(store.store_dir), "--thesis-bundle-output", str(output), "--thesis-evidence-status", "pilot", "--candidate-benchmark-bundle", str(benchmark)],
+        [
+            "--store",
+            str(store.store_dir),
+            "--thesis-bundle-output",
+            str(output),
+            "--thesis-evidence-status",
+            "pilot",
+            "--candidate-benchmark-bundle",
+            str(benchmark),
+        ],
     )
     assert missing.exit_code != 0
     assert "candidate-benchmark-binding-json" in missing.output
@@ -122,7 +150,18 @@ def test_cli_requires_binding_and_attaches_validated_candidate_bundle(tmp_path: 
     binding_path.write_text(json.dumps(_binding()), encoding="utf-8")
     attached = runner.invoke(
         rollouts_info_app,
-        ["--store", str(store.store_dir), "--thesis-bundle-output", str(output), "--thesis-evidence-status", "pilot", "--candidate-benchmark-bundle", str(benchmark), "--candidate-benchmark-binding-json", str(binding_path)],
+        [
+            "--store",
+            str(store.store_dir),
+            "--thesis-bundle-output",
+            str(output),
+            "--thesis-evidence-status",
+            "pilot",
+            "--candidate-benchmark-bundle",
+            str(benchmark),
+            "--candidate-benchmark-binding-json",
+            str(binding_path),
+        ],
     )
     assert attached.exit_code == 0, attached.output
     assert output.is_file()

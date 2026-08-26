@@ -496,35 +496,93 @@ def _candidate_benchmark_figures(records: tuple[Any, ...]) -> tuple[go.Figure, .
         for title in titles[:3]:
             figure = go.Figure()
             figure.update_layout(title=title)
-            figure.add_annotation(text="No matching benchmark candidates", x=0.5, y=0.5, xref="paper", yref="paper", showarrow=False)
+            figure.add_annotation(
+                text="No matching benchmark candidates", x=0.5, y=0.5, xref="paper", yref="paper", showarrow=False
+            )
             figures.append(figure)
         resources = go.Figure()
         resources.update_layout(title=titles[3])
-        resources.add_annotation(text="unavailable: no persisted timing/resource facts", x=0.5, y=0.5, xref="paper", yref="paper", showarrow=False)
+        resources.add_annotation(
+            text="unavailable: no persisted timing/resource facts",
+            x=0.5,
+            y=0.5,
+            xref="paper",
+            yref="paper",
+            showarrow=False,
+        )
         return (*figures, resources)
 
     rows = []
     for record in records:
         for point in record.points:
-            rows.append({"x": point.xyz[0], "y": point.xyz[1], "z": point.xyz[2], "candidate_id": point.candidate_id, "state": point.state_key, "family": point.family, "status": "selected" if point.selected else "valid" if point.actor_valid else "invalid", "lineage": point.candidate_config or "unavailable"})
+            rows.append(
+                {
+                    "x": point.xyz[0],
+                    "y": point.xyz[1],
+                    "z": point.xyz[2],
+                    "candidate_id": point.candidate_id,
+                    "state": point.state_key,
+                    "family": point.family,
+                    "status": "selected" if point.selected else "valid" if point.actor_valid else "invalid",
+                    "lineage": point.candidate_config or "unavailable",
+                }
+            )
     frame = pd.DataFrame(rows)
-    funnel_rows = [{"stage": stage, "count": sum(getattr(family, field) for record in records for family in record.families)} for stage, field in (("attempted", "attempted"), ("actor-valid", "valid"), ("selected", "selected"))]
-    funnel = px.bar(pd.DataFrame(funnel_rows), x="stage", y="count", title="Candidate family attempted → valid → selected funnel")
+    funnel_rows = [
+        {"stage": stage, "count": sum(getattr(family, field) for record in records for family in record.families)}
+        for stage, field in (("attempted", "attempted"), ("actor-valid", "valid"), ("selected", "selected"))
+    ]
+    funnel = px.bar(
+        pd.DataFrame(funnel_rows), x="stage", y="count", title="Candidate family attempted → valid → selected funnel"
+    )
     for trace in funnel.data:
         trace.name = trace.name or "candidate funnel"
-    plane = px.scatter(frame, x="x", y="y", color="family", symbol="status", hover_data=["candidate_id", "state", "lineage"], title="Candidate support (target-normalized ground plane)")
+    plane = px.scatter(
+        frame,
+        x="x",
+        y="y",
+        color="family",
+        symbol="status",
+        hover_data=["candidate_id", "state", "lineage"],
+        title="Candidate support (target-normalized ground plane)",
+    )
     for trace in plane.data:
         trace.name = trace.name or "candidate support"
     support = go.Figure()
-    support.add_trace(go.Scatter3d(x=frame.get("x", []), y=frame.get("y", []), z=frame.get("z", []), mode="markers", name="candidate support", customdata=frame[["candidate_id", "family", "status", "lineage"]].to_numpy() if not frame.empty else [], hovertemplate="candidate=%{customdata[0]}<br>family=%{customdata[1]}<br>status=%{customdata[2]}<br>lineage=%{customdata[3]}<extra></extra>"))
+    support.add_trace(
+        go.Scatter3d(
+            x=frame.get("x", []),
+            y=frame.get("y", []),
+            z=frame.get("z", []),
+            mode="markers",
+            name="candidate support",
+            customdata=frame[["candidate_id", "family", "status", "lineage"]].to_numpy() if not frame.empty else [],
+            hovertemplate="candidate=%{customdata[0]}<br>family=%{customdata[1]}<br>status=%{customdata[2]}<br>lineage=%{customdata[3]}<extra></extra>",
+        )
+    )
     support.update_layout(title="Candidate support (target-normalized 3D)")
     resources = go.Figure()
     timings = [record.timings_ms.get("total_ms") for record in records if record.timings_ms.get("total_ms") is not None]
-    memory = [record.resources.get("gpu_memory_mb") for record in records if record.resources.get("gpu_memory_mb") is not None]
+    memory = [
+        record.resources.get("gpu_memory_mb") for record in records if record.resources.get("gpu_memory_mb") is not None
+    ]
     if timings or memory:
-        resources.add_trace(go.Bar(x=["runtime_ms", "GPU_memory_mb"], y=[sum(timings) if timings else None, sum(memory) if memory else None], name="resource summary"))
+        resources.add_trace(
+            go.Bar(
+                x=["runtime_ms", "GPU_memory_mb"],
+                y=[sum(timings) if timings else None, sum(memory) if memory else None],
+                name="resource summary",
+            )
+        )
     else:
-        resources.add_annotation(text="unavailable: no persisted timing/resource facts", x=0.5, y=0.5, xref="paper", yref="paper", showarrow=False)
+        resources.add_annotation(
+            text="unavailable: no persisted timing/resource facts",
+            x=0.5,
+            y=0.5,
+            xref="paper",
+            yref="paper",
+            showarrow=False,
+        )
     resources.update_layout(title="Candidate benchmark resource and timing summary")
     return funnel, plane, support, resources
 

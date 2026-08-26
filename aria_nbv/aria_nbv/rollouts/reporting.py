@@ -47,7 +47,9 @@ from .inspection import (
 from .zarr_store import RolloutZarrStoreReader, RolloutZarrValidationResult
 
 
-def read_candidate_benchmark_bundle(path: Path | str, *, expected_binding: Mapping[str, str]) -> CandidateBenchmarkBundle:
+def read_candidate_benchmark_bundle(
+    path: Path | str, *, expected_binding: Mapping[str, str]
+) -> CandidateBenchmarkBundle:
     """Read benchmark evidence through the canonical immutable reader."""
 
     return read_bundle(path, expected_binding=expected_binding)
