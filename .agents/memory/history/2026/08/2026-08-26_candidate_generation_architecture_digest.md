@@ -40,8 +40,9 @@ The clean replacement/disposition is [PR #153](https://github.com/JanDuchscherer
   fixed yaw `[-180°,180°]` and pitch `[-90°,90°]`, keeps residuals visible, and
   has no fabricated rectangle.
 - Canonical production profiles retain seminar jitter `60°/30°/0°`; the
-  historical V11 plan delegates to the current writer and therefore does not
-  reproduce the historical zero-jitter candidate contract.
+  historical V11 plan preserves source-manifest/workload shape only. It
+  delegates to the current writer and therefore does not reproduce historical
+  plan/work-unit IDs, generation hashes, or the zero-jitter candidate contract.
 - Proposal identity is keyed by physical selected history, target/task,
   contract, root/proposal replica, family, and draw round; selection identity
   is separate. No global CPU/CUDA RNG mutation or GT/oracle leakage is allowed.

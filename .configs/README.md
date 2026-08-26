@@ -8,9 +8,12 @@ shards remain immutable historical artifacts because they were generated from
 the V8 source manifest; the corrected-V11 campaign is a historical V10-bound
 rollout destination. The writer and LRZ template are the canonical production
 profiles and use seminar view jitter (60° azimuth, 30° elevation, 0° roll).
-The corrected-V11 plan reproduces source/work-unit/lineage identity only. It
+The corrected-V11 plan preserves the V10 source-manifest identity and the
+selected five-snippet/two-profile/four-temperature workload shape only. It
 delegates to the canonical writer, so rerunning it now uses seminar 60°/30°/0°
-and does not exactly reproduce the historical zero-jitter candidate contract.
+and does not reproduce historical plan/work-unit IDs or the historical
+zero-jitter candidate contract. Historical plan/work-unit/generation hashes are
+revision-bound evidence, not current rerun identities.
 That historical zero-jitter fact/config is revision-bound to PR116 commit
 `52e9d262577260074bae25134fbd61c2bfda0533`.
 

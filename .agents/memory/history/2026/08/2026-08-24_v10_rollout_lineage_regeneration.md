@@ -77,6 +77,10 @@ store was available in this isolated checkout, so runtime store validation
 remains a downstream gate. Current candidate generation is governed by the
 replacement program and issues #117--#120.
 The clean replacement/disposition is [PR #153](https://github.com/JanDuchscherer104/ARIA-NBV/pull/153).
+The retained V11 plan preserves the V10 source-manifest identity and selected
+workload shape only; current reruns use the canonical writer and therefore do
+not reproduce historical plan/work-unit IDs or generation hashes. Those IDs
+remain revision-bound to PR116 SHA `52e9d262577260074bae25134fbd61c2bfda0533`.
 
 At the historical commit, tracked rollout-generation configuration named VIN
 V10 as the canonical source and the V11 pilot as the corrected campaign.

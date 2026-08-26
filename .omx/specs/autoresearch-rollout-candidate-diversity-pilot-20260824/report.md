@@ -45,9 +45,11 @@ the final seminar paper and slide deck share a single labeler configuration
 with `view_max_azimuth_deg = 60.0`, `view_max_elevation_deg = 30.0`, and
 `view_roll_jitter_deg = 0.0`. The historical zero-jitter pilot fact/config is
 revision-bound to PR116 commit `52e9d262577260074bae25134fbd61c2bfda0533`.
-The retained corrected-V11 plan preserves source/work-unit/lineage identity
-only; it delegates to the canonical writer, so rerunning now uses seminar
-60°/30°/0° and does not reproduce that historical candidate contract. “View jitter must never be zero” means nonzero azimuth
+The retained corrected-V11 plan preserves the V10 source-manifest identity and
+the selected five-snippet/two-profile/four-temperature workload shape only. It
+delegates to the canonical writer, so rerunning now uses seminar 60°/30°/0° and
+does not reproduce historical plan/work-unit IDs or the historical candidate
+contract. “View jitter must never be zero” means nonzero azimuth
 and elevation; zero roll is intentional for the 5-DoF action space.
 
 Four changes dominate expected return before scale:
@@ -121,11 +123,11 @@ recipe at temperatures `0.5, 1.0, 2.0, 4.0`. A successful unit therefore
 persists four chains. “One snippet per available scene” describes the 100-row
 source population, not the generated pilot coverage.
 
-The V11 plan binds this population with plan hash `303b18f930d60331`, campaign
-config hash `4b968f5a48ce519c`, writer config hash `6039d1c474831647`, and full
+The historical V11 plan recorded plan hash `303b18f930d60331`, campaign config
+hash `4b968f5a48ce519c`, writer config hash `6039d1c474831647`, and full
 portable-manifest SHA-256
 `d6e771d1582394cde9005be3185dc9cfbb875cab5fc004f184922a25dc996f56`.
-Its generation revision records clean commit `52e9d262…`, tree `5d4be416…`,
+Its historical generation revision records clean commit `52e9d262…`, tree `5d4be416…`,
 content-bundle hash `38d2f6e6…`, and revision hash `0474fb6ea2e74792`.
 
 ### Lineage table
