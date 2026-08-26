@@ -14,7 +14,7 @@ touched_owner_paths:
   - scripts/check_graphify_freshness.py
 codex_thread: codex://threads/01a03a4a-114d-7f71-b9ec-140f32b8b20b
 repo_object_format: sha1
-repo_head: 805b4149d6145a5b335b82d5cd65a1848910183f
+repo_head: 470cdf5152bd614b6d087bbbd37afb6aa46a48cd
 repo_branch: "codex/fix-parentless-graphify-setup"
 worktree_kind: linked
 ---
@@ -51,10 +51,18 @@ flat standard-cache entry for deep mode, and records deep-only lookup/save
 namespaces. Guidance now reserves strict state diagnostics for CI and pre-push
 owners rather than ordinary model actions.
 
+The final proof adds an opt-in disposable-worktree integration target. It runs
+the generated Codex TOML bridge with both present and empty source values,
+requires silent setup, performs a real query through the pinned runtime, and
+checks both child cache links resolve beneath the canonical primary `.data`
+root. Standard and deep command-path cache assertions now prove their actual
+mode-specific namespace containment.
+
 ## Commits
 - [cc1a76f301d37aeb7fcb0d4283f66cd86e69b1b8](https://github.com/JanDuchscherer104/ARIA-NBV/commit/cc1a76f301d37aeb7fcb0d4283f66cd86e69b1b8)
 - [ec52c743cebcb8be0151797e151109987b381f25](https://github.com/JanDuchscherer104/ARIA-NBV/commit/ec52c743cebcb8be0151797e151109987b381f25)
 - [805b4149d6145a5b335b82d5cd65a1848910183f](https://github.com/JanDuchscherer104/ARIA-NBV/commit/805b4149d6145a5b335b82d5cd65a1848910183f)
+- [470cdf5152bd614b6d087bbbd37afb6aa46a48cd](https://github.com/JanDuchscherer104/ARIA-NBV/commit/470cdf5152bd614b6d087bbbd37afb6aa46a48cd)
 
 ## Verification
 Focused seed, reconciliation, freshness, session, setup, guidance, governance,
@@ -68,6 +76,9 @@ The pinned Graphify 0.9.48 command-path test also verified warm-standard zero
 dispatch, one-file semantic refresh, deep namespace isolation, cold-deep
 warmup, legacy-flat-cache rejection, and matching lookup/save prompt
 fingerprints.
+
+`make graphify-session-readiness-integration` completed both real explicit and
+parentless disposable worktree paths in 304 seconds on the local host.
 
 ## Canonical Owner Impact
 The setup scripts, seeder, reconciliation owner, freshness helper, maintenance
