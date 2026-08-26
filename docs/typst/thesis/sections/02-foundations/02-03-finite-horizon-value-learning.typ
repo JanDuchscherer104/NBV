@@ -1,84 +1,86 @@
 #import "../../../shared/macros.typ": *
 #import "../../../shared/equations.typ": eqs
 
-== Finite-Horizon Value Learning <sec:thesis-finite-horizon-value-learning>
+== Sequential Decision-Making under Partial Observability <sec:thesis-sequential-decision-foundations>
 
-Bounded lookahead is represented by a family of horizon-indexed values. For
-target $e$, candidate $i$, and requested horizon $h$, the admissible finite
-return and optimal conditional value are
+An egocentric reconstruction system never observes the complete physical scene.
+Its decision can depend on the sequence of earlier actions and observations, not
+only on the latest frame. In a partially observable Markov decision process, a
+belief state is a sufficient statistic of that action--observation history for
+policy choice @POMDPRobotics-lauri2023. ARIA-NBV does not attempt general belief
+inference; the relevant consequence is narrower: any finite representation used
+for view selection is a hypothesis about which parts of the history are
+sufficient for predicting future target improvement.
+
+// evidence:
+// - @POMDPRobotics-lauri2023 -> docs/literature/tex-src/arXiv-POMDP-Robotics-Survey/root.tex:505-505, docs/literature/tex-src/arXiv-POMDP-Robotics-Survey/root.tex:589-606 (history-dependent policies, belief-state sufficiency, and belief updates)
+
+The available actions can also change with the information state. A finite NBV
+method proposes candidates around the current pose and reconstruction, while a
+hierarchical controller conditions the eventual camera position on an earlier
+look-at decision @PB-NBV-jia2025 @Hestia-lu2026. It is therefore useful to write
+the admissible choices abstractly as a state-dependent set $cal(A)(s_t)$. This
+statement excludes unavailable actions from the decision problem; it does not
+require the Foundations chapter to prescribe how a later implementation stores
+or learns that exclusion.
+
+// evidence:
+// - @PB-NBV-jia2025 -> docs/literature/tex-src/arXiv-PB-NBV/sections/related.tex:5-24, docs/literature/tex-src/arXiv-PB-NBV/jzz_2025_ral_resub.tex:55-70 (finite candidates generated and scored at the current reconstruction state)
+// - @Hestia-lu2026 -> docs/literature/tex-src/arXiv-Hestia/sec/3_method.tex:100-118 (look-at-conditioned camera-position decision)
+
+Sequentiality matters when the best immediate view is not the best first step
+of a sequence. For target $e$, candidate $i$, and requested horizon $h$, the
+finite return and corresponding conditional value are
 $
   #eqs.rl.finite_horizon_return
 $
 $
   #eqs.rl.q_h
 $
-Here $cal(Pi)^"act"$ contains continuation policies restricted to each step's
-generated finite candidate set and hard action support. A query with $h>b_t$ is
-rejected or masked, not clamped. If an episode terminates before $h$ rewards
-after termination are zero, so a terminal transition has exact zero
-continuation. Fixed-Horizon TD defines policy-conditioned horizon values by
-bootstrapping horizon $h$ from $h-1$, with $Q_0=0$
-@FixedHorizonTD-deAsis2020. The thesis fixes the greedy finite-support optimum
-as its target estimand; behavior-policy Monte Carlo returns are a different
-estimand. The recursion motivates the mathematical form, not empirical gain for
-ARIA-NBV.
+where continuation policies choose only from the admissible candidates at each
+step. Fixed-Horizon TD defines horizon-indexed predictions with the boundary
+$Q_0=0$ and relates horizon $h$ to the shorter horizon $h-1$
+@FixedHorizonTD-deAsis2020. If an episode ends before all $h$ rewards are
+collected, later rewards are zero. The value thus states the consequence of
+taking a candidate now and then following a named continuation rule; it is not
+an intrinsic property of the camera pose alone.
 
 // evidence:
 // - @FixedHorizonTD-deAsis2020 -> docs/literature/tex-src/arXiv-Fixed-Horizon-TD/AAAI-DeasisK.9337.tex:164-164, docs/literature/tex-src/arXiv-Fixed-Horizon-TD/AAAI-DeasisK.9337.tex:245-290, docs/literature/tex-src/arXiv-Fixed-Horizon-TD/AAAI-DeasisK.9337.tex:331-339 (fixed-horizon returns, shorter-horizon bootstrap, and Q-learning target)
 
-Three quantities must not be conflated. The requested horizon $h$ is the query
-to the value model; the factual remaining budget $b_t$ limits actions that can
-actually be executed; and $H_"max"$ bounds the horizon supported by the model
-and evidence contract. Universal Value Function Approximators show how a
-single approximator can condition on an additional task variable
-@UVFA-schaul2015, while Fixed-Horizon TD shares representations across horizon
-heads @FixedHorizonTD-deAsis2020. Neither source licenses extrapolation to an
-untrained horizon: a result at $h=2$ is not evidence for $h>2$.
+The horizon is distinct from two related bounds. The requested horizon $h$
+states how many future acquisition rewards the query represents; the remaining
+budget $b_t$ limits how many acquisitions are still possible; and $H_"max"$
+marks the largest horizon supported by the chosen model and evidence. Universal
+Value Function Approximators establish the general possibility of conditioning
+one approximator on an additional task variable, while Fixed-Horizon TD shares
+representations across horizon-indexed predictions @UVFA-schaul2015
+@FixedHorizonTD-deAsis2020. Neither result licenses extrapolation beyond the
+horizons actually supported and evaluated.
 
 // evidence:
 // - @UVFA-schaul2015 -> docs/literature/pdf/UVFA.pdf#page=1-2 (single value approximator conditioned on an additional goal variable)
 // - @FixedHorizonTD-deAsis2020 -> docs/literature/tex-src/arXiv-Fixed-Horizon-TD/AAAI-DeasisK.9337.tex:164-164, docs/literature/tex-src/arXiv-Fixed-Horizon-TD/AAAI-DeasisK.9337.tex:245-290 (shared representations and fixed-horizon recursion)
 
-The following conceptual lattice combines fixed-horizon recursion with
-the factual support restrictions required by hard action masks and fixed-batch
-learning @FixedHorizonTD-deAsis2020 @BCQ-fujimoto2019
-@InvalidActionMasking-huang2022.
+Learning such values from a fixed data collection introduces an epistemic
+constraint in addition to the mathematical horizon. Batch-constrained and
+conservative offline reinforcement-learning methods are motivated by the error
+that arises when a learned policy assigns high value to actions outside the
+data distribution @BCQ-fujimoto2019 @CQL-kumar2020. These methods differ in how
+they control that error, but they share the warning relevant here: a longer
+horizon does not create evidence for transitions that the data never resolves.
 
 // evidence:
-// - @FixedHorizonTD-deAsis2020 -> docs/literature/tex-src/arXiv-Fixed-Horizon-TD/AAAI-DeasisK.9337.tex:245-290, docs/literature/tex-src/arXiv-Fixed-Horizon-TD/AAAI-DeasisK.9337.tex:331-339 (horizon recursion and fixed-horizon Q target)
 // - @BCQ-fujimoto2019 -> docs/literature/tex-src/arXiv-BCQ/example_paper.tex:134-163, docs/literature/tex-src/arXiv-BCQ/example_paper.tex:406-426 (batch support and unsupported-action extrapolation)
-// - @InvalidActionMasking-huang2022 -> docs/literature/tex-src/arXiv-Invalid-Action-Masking/formatting-instructions-latex.tex:66-71, docs/literature/tex-src/arXiv-Invalid-Action-Masking/formatting-instructions-latex.tex:150-174 (state-dependent admissible actions and masking scope)
-
-#figure(
-  image("../../figures/qh_evidence_support_lattice.pdf", width: 90%),
-  caption: [Original conceptual lattice for exact finite-horizon supervision. It combines fixed-horizon successor recursion with finite-batch and hard-action support restrictions. Dense one-step labels alone do not certify longer-horizon targets; the diagram reports no empirical result.],
-) <fig:qh-evidence-support-lattice>
-
-Offline value learning adds two independent cautions. Double DQN decouples
-action selection from target evaluation to reduce maximization bias
-@DoubleDQN-vanHasselt2015; BCQ and CQL address distribution shift by
-constraining or conservatively regularizing unsupported actions
-@BCQ-fujimoto2019 @CQL-kumar2020. These methods do not create missing factual
-successors. Every multi-step target still requires an admitted action, a
-resolved transition or terminal outcome, and recursively supported
-successor-side value evidence. Accordingly, a learned Double-Q successor
-maximum is admitted only over rows with both $m_(t+1,i)^"act"=1$ and
-$m_(t+1,i)^(Q,h-1)=1$; this training-support gate is distinct from the
-hard-action-only policy used at evaluation.
-
-// evidence:
-// - @DoubleDQN-vanHasselt2015 -> docs/literature/tex-src/arXiv-Double-DQN/DoubleDQN_aaai2016_total.tex:112-124 (separate action selection and value evaluation)
-// - @BCQ-fujimoto2019 -> docs/literature/tex-src/arXiv-BCQ/example_paper.tex:134-163, docs/literature/tex-src/arXiv-BCQ/example_paper.tex:406-426 (fixed-batch extrapolation and action constraints)
 // - @CQL-kumar2020 -> docs/literature/tex-src/arXiv-CQL/introduction.tex:3-12, docs/literature/tex-src/arXiv-CQL/method.tex:1-20 (offline distribution shift and conservative value learning)
 
-Sequence models offer a different planning factorization. Trajectory
-Transformer performs receding-horizon replanning from predicted sequences,
-whereas Decision Transformer conditions action generation on a desired return
-@TrajectoryTransformer-janner2021 @DecisionTransformer-chen2021. They motivate
-bounded alternatives, not equivalence to exact finite-horizon Q learning; any
-comparison must preserve the same actor information, candidate support, and
-endpoint target-quality evaluation.
+Together, partial observability, state-dependent choices, and finite-horizon
+return define what a non-myopic scorer must predict @POMDPRobotics-lauri2023
+@FixedHorizonTD-deAsis2020. They do not yet determine how the observation
+history, target, and candidate geometry should be represented. That question is
+the next dependency: the representation must retain the distinctions on which
+future target quality actually depends.
 
 // evidence:
-// - @TrajectoryTransformer-janner2021 -> docs/literature/tex-src/arXiv-Trajectory-Transformer/text/method.tex:66-80, docs/literature/tex-src/arXiv-Trajectory-Transformer/text/method.tex:98-122 (offline sequence prediction and first-action replanning)
-// - @DecisionTransformer-chen2021 -> docs/literature/tex-src/arXiv-Decision-Transformer/sections/method.tex:2-29 (return-conditioned sequence modeling and action prediction)
+// - @POMDPRobotics-lauri2023 -> docs/literature/tex-src/arXiv-POMDP-Robotics-Survey/root.tex:505-505, docs/literature/tex-src/arXiv-POMDP-Robotics-Survey/root.tex:589-606 (history and belief-state role under partial observability)
+// - @FixedHorizonTD-deAsis2020 -> docs/literature/tex-src/arXiv-Fixed-Horizon-TD/AAAI-DeasisK.9337.tex:245-290 (horizon-indexed prediction)

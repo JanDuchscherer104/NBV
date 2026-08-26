@@ -1,59 +1,49 @@
 #import "../../../shared/macros.typ": *
 
-== Active Perception and View Utility <sec:thesis-active-perception-utility>
+== Active Perception and the Next-Best-View Problem <sec:thesis-active-perception-nbv>
 
-Next-best-view (NBV) control couples sensing and inference through a repeated
-generate--score--select loop. PB-NBV states this finite-candidate decomposition
-explicitly and replaces extensive candidate ray casting with a projection-based
-coverage score @PB-NBV-jia2025. The decomposition is reusable, but the score is
-part of the scientific objective: sharing a candidate loop does not make two
-utility functions equivalent.
+In active perception, an observation is also an intervention on the future
+information state. A next-best-view (NBV) method operationalizes this idea by
+generating possible viewpoints, estimating the benefit of observing from each
+one, and selecting an action. PB-NBV makes this generate--score--select
+decomposition explicit for a finite candidate set @PB-NBV-jia2025. The
+decomposition identifies three different scientific objects: the proposal
+mechanism determines which views can be considered, the utility determines how
+they are ordered, and the selection rule turns that ordering into an action.
 
 // evidence:
 // - @PB-NBV-jia2025 -> docs/literature/tex-src/arXiv-PB-NBV/sections/related.tex:5-24, docs/literature/tex-src/arXiv-PB-NBV/jzz_2025_ral_resub.tex:55-70 (candidate generation, utility scoring, selection, and projection-based coverage)
 
-Four utility families recur in reconstruction-oriented NBV. Coverage and
-visibility methods estimate newly observed surface, as in SCONE's volumetric
-surface-coverage gain, MACARONS' online coverage anticipation, and Hestia's
-voxel-face visibility memory @SCONE-guedon2022 @MACARONS-guedon2023
-@Hestia-lu2026. Information and uncertainty methods instead value expected
-reduction of model uncertainty; FisherRF derives such a criterion from Fisher
-information for radiance fields @FisherRF-jiang2024. These objectives can be
-useful baselines or features without being direct measures of reconstruction
-quality.
+How those objects are represented varies across NBV systems. Finite-candidate
+methods evaluate a bounded set of poses, whereas learned continuous policies
+predict camera position and orientation directly. GenNBV formulates the latter
+as a five-degree-of-freedom reinforcement-learning problem, while Hestia
+factorizes the continuous action into a look-at point followed by a camera
+position @GenNBV-chen2024 @Hestia-lu2026. A finite set makes the evaluated
+choices explicit and comparable; a continuous or hierarchical policy can
+search a broader space but couples view proposal and control more tightly.
 
 // evidence:
-// - @SCONE-guedon2022 -> docs/literature/tex-src/arXiv-SCONE/camera_ready_1_intro.tex:24-26 (surface-coverage objective from occupancy and visibility fields)
-// - @MACARONS-guedon2023 -> docs/literature/tex-src/arXiv-MACARONS/1_introduction.tex:13-26 (RGB online mapping and surface-coverage-gain anticipation)
-// - @Hestia-lu2026 -> docs/literature/tex-src/arXiv-Hestia/sec/3_method.tex:30-58, docs/literature/tex-src/arXiv-Hestia/sec/3_method.tex:70-93 (voxel-face visibility state and face-coverage reward)
-// - @FisherRF-jiang2024 -> docs/literature/tex-src/arXiv-FisherRF/sec/method.tex:4-19 (Fisher information and active-view information gain)
+// - @GenNBV-chen2024 -> docs/literature/tex-src/arXiv-GenNBV/3-Method.tex:5-25, docs/literature/tex-src/arXiv-GenNBV/3-Method.tex:65-78 (sequential MDP formulation, historical observations, and continuous five-DoF action)
+// - @Hestia-lu2026 -> docs/literature/tex-src/arXiv-Hestia/sec/1_intro.tex:21-42, docs/literature/tex-src/arXiv-Hestia/sec/3_method.tex:100-118 (continuous viewpoint and hierarchical look-at-then-position action)
 
-The following conceptual figure synthesizes the design axes established by
-finite-candidate, coverage, uncertainty, quality-driven, and target-aware NBV
-formulations @PB-NBV-jia2025 @SCONE-guedon2022 @FisherRF-jiang2024
-@VIN-NBV-frahm2025 @ObjectCentricNBV-jeong2026.
-
-// evidence:
-// - @PB-NBV-jia2025 -> docs/literature/tex-src/arXiv-PB-NBV/sections/related.tex:5-24 (finite-candidate NBV decomposition)
-// - @SCONE-guedon2022 -> docs/literature/tex-src/arXiv-SCONE/camera_ready_1_intro.tex:24-26 (coverage utility)
-// - @FisherRF-jiang2024 -> docs/literature/tex-src/arXiv-FisherRF/sec/method.tex:4-19 (information utility)
-// - @VIN-NBV-frahm2025 -> docs/literature/tex-src/arXiv-VIN-NBV/sec/3_methods.tex:18-20, docs/literature/tex-src/arXiv-VIN-NBV/sec/3_methods.tex:36-44 (sampled candidate loop and reconstruction-improvement target)
-// - @ObjectCentricNBV-jeong2026 -> docs/literature/tex-src/arXiv-Instance-NBV/ver3_rpm/3_method_ver3_rpm.tex:123-139, docs/literature/tex-src/arXiv-Instance-NBV/ver3_rpm/3_method_ver3_rpm.tex:249-258 (target-aware information gain and object-confidence gate)
-
-#figure(
-  image("../../figures/nbv_design_space_axes.pdf", width: 100%),
-  caption: [Original conceptual map of the NBV design space synthesized from finite-candidate, coverage, uncertainty, quality-driven, and target-aware formulations. The diagram is a taxonomy, not an empirical result.],
-) <fig:nbv-design-space-axes>
-
-Direct quality objectives evaluate the reconstruction itself. VIN-NBV predicts
-Relative Reconstruction Improvement for sampled query cameras and greedily
-selects the highest predicted candidate @VIN-NBV-frahm2025. Target-specific
-utility narrows this further: object-centric 3DGS view planning associates
-features with Gaussian primitives and gates view utility by the requested
-object @ObjectCentricNBV-jeong2026. ARIA-NBV adopts target-specific endpoint
-quality as the estimand; coverage and uncertainty remain non-equivalent
-diagnostics unless an experiment shows that they improve that endpoint.
+These action formulations do not determine what makes a view useful. PB-NBV,
+for example, accelerates candidate evaluation through projected frontier and
+occupied evidence, so its proposal and scoring mechanism is tied to a coverage
+objective @PB-NBV-jia2025. The same finite candidate table could instead be
+ranked by uncertainty reduction or by reconstruction error. Consequently,
+changing the utility changes the scientific task even when candidate generation
+and selection remain unchanged.
 
 // evidence:
-// - @VIN-NBV-frahm2025 -> docs/literature/tex-src/arXiv-VIN-NBV/sec/3_methods.tex:18-20, docs/literature/tex-src/arXiv-VIN-NBV/sec/3_methods.tex:36-44, docs/literature/tex-src/arXiv-VIN-NBV/sec/3_methods.tex:78-92 (greedy candidate scoring, RRI, and ground-truth reconstruction metric)
-// - @ObjectCentricNBV-jeong2026 -> docs/literature/tex-src/arXiv-Instance-NBV/ver3_rpm/3_method_ver3_rpm.tex:54-86, docs/literature/tex-src/arXiv-Instance-NBV/ver3_rpm/3_method_ver3_rpm.tex:123-139, docs/literature/tex-src/arXiv-Instance-NBV/ver3_rpm/3_method_ver3_rpm.tex:249-258 (object features, target-aware information gain, and confidence gate)
+// - @PB-NBV-jia2025 -> docs/literature/tex-src/arXiv-PB-NBV/sections/method.tex:155-197, docs/literature/tex-src/arXiv-PB-NBV/sections/method.tex:231-253 (projection-based frontier and occupied-evidence score)
+
+The NBV mechanism therefore answers only *how* a sensing choice is made. To
+interpret the choice, the utility must state *which reconstruction consequence*
+is valued and *for which spatial support*. This distinction leads from the
+general active-perception loop to the objective families compared next
+@PB-NBV-jia2025 @GenNBV-chen2024.
+
+// evidence:
+// - @PB-NBV-jia2025 -> docs/literature/tex-src/arXiv-PB-NBV/sections/related.tex:5-24 (finite-candidate NBV stages)
+// - @GenNBV-chen2024 -> docs/literature/tex-src/arXiv-GenNBV/3-Method.tex:5-25, docs/literature/tex-src/arXiv-GenNBV/3-Method.tex:77-101 (sequential action and coverage-reward formulation)
