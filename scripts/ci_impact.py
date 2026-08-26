@@ -27,6 +27,7 @@ SCAFFOLD_PATHS = {
     "scripts/check_graphify_freshness.py",
     "scripts/graphify_worktree_seed.py",
     "scripts/reconcile_graphify_worktree.py",
+    "scripts/setup_codex_worktree_env.sh",
     "scripts/scaffold_audit.py",
     "scripts/scaffold/run_routing_trials.py",
     "scripts/scaffold/fixtures/routing_prompts.jsonl",

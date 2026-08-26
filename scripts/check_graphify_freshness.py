@@ -474,6 +474,10 @@ def _raw_commit_snapshot(
     _regular(manifest, "manifest")
     (snapshot / MANIFEST).parent.mkdir(parents=True, exist_ok=True)
     (snapshot / MANIFEST).write_bytes(manifest.read_bytes())
+    graph = root / GRAPH
+    _regular(graph, "graph")
+    (snapshot / GRAPH).parent.mkdir(parents=True, exist_ok=True)
+    (snapshot / GRAPH).write_bytes(graph.read_bytes())
     return temporary
 
 
@@ -526,6 +530,45 @@ def _detector_stale_sources(
     if len(stale) > MAX_STALE_SOURCES:
         raise ValueError("Graphify detector reported an unbounded stale-source set")
     return sorted(stale)
+
+
+def _detector_sources(
+    root: Path, result: dict[str, Any], accepted: set[str]
+) -> tuple[set[str], dict[str, list[str]]]:
+    """Validate one upstream detector result and return its accepted deltas."""
+    supported_kinds = {"code", "document", "paper", "image", "video"}
+    if result.get("scan_root") != str(root.resolve()):
+        raise ValueError("Graphify detector reported an unexpected scan_root")
+    for key in ("unclassified", "walk_errors", "skipped_sensitive"):
+        values = result.get(key)
+        if not isinstance(values, list):
+            raise ValueError(f"Graphify detector has invalid {key}")
+        if values:
+            raise ValueError(f"Graphify detector reported {key}")
+    new_files = result.get("new_files")
+    if not isinstance(new_files, dict) or set(new_files) != supported_kinds:
+        raise ValueError("Graphify detector has invalid new_files")
+    stale: set[str] = set()
+    for kind, paths in new_files.items():
+        if not isinstance(paths, list) or any(not isinstance(path, str) for path in paths):
+            raise ValueError("Graphify detector has invalid source paths")
+        if kind in accepted:
+            stale.update(_contained_existing(root, path) for path in paths)
+    for key in ("deleted_files", "excluded_files"):
+        values = result.get(key)
+        if not isinstance(values, list) or any(not isinstance(path, str) for path in values):
+            raise ValueError(f"Graphify detector has invalid {key}")
+        if values:
+            raise ValueError(f"Graphify detector reported {key}")
+    files = result.get("files")
+    if not isinstance(files, dict) or set(files) != supported_kinds:
+        raise ValueError("Graphify detector has invalid files")
+    for paths in files.values():
+        if not isinstance(paths, list) or any(not isinstance(path, str) for path in paths):
+            raise ValueError("Graphify detector has invalid source paths")
+    if files["video"]:
+        raise ValueError("Graphify detector reported unsupported video sources")
+    return stale, files
 
 
 def _result(
@@ -598,7 +641,15 @@ def check(root: Path) -> dict[str, Any]:
         graph_ancestor = _is_ancestor(root, graph_revision, head)
         graph_commit_tree = _tree_oid(root, graph_revision, "graph")
         ast, semantic = _detect_incremental(root)
-        overlay_stale = _detector_stale_sources(root, ast, semantic)
+        ast_stale, _ = _detector_sources(root, ast, {"code"})
+        semantic_stale, _ = _detector_sources(
+            root, semantic, {"document", "paper", "image"}
+        )
+        if len(ast_stale) > MAX_STALE_SOURCES:
+            raise ValueError("Graphify detector reported an unbounded stale-source set")
+        if len(semantic_stale) > MAX_STALE_SOURCES:
+            raise ValueError("Graphify detector reported an unbounded stale-source set")
+        overlay_stale = sorted(ast_stale | semantic_stale)
         committed_stale: list[str] = []
         if projection_commit_tree != head_tree or graph_commit_tree != head_tree:
             snapshot = _raw_commit_snapshot(
@@ -608,8 +659,25 @@ def check(root: Path) -> dict[str, Any]:
                 committed_ast, committed_semantic = _detect_incremental(
                     Path(snapshot.name), interpreter_root=root
                 )
-                committed_stale = _detector_stale_sources(
-                    Path(snapshot.name), committed_ast, committed_semantic
+                snapshot_root = Path(snapshot.name)
+                committed_ast_stale, _ = _detector_sources(
+                    snapshot_root, committed_ast, {"code"}
+                )
+                committed_semantic_stale, _ = _detector_sources(
+                    snapshot_root,
+                    committed_semantic,
+                    {"document", "paper", "image"},
+                )
+                if len(committed_ast_stale) > MAX_STALE_SOURCES:
+                    raise ValueError(
+                        "Graphify detector reported an unbounded stale-source set"
+                    )
+                if len(committed_semantic_stale) > MAX_STALE_SOURCES:
+                    raise ValueError(
+                        "Graphify detector reported an unbounded stale-source set"
+                    )
+                committed_stale = sorted(
+                    committed_ast_stale | committed_semantic_stale
                 )
             finally:
                 snapshot.cleanup()
@@ -625,7 +693,10 @@ def check(root: Path) -> dict[str, Any]:
             [*reasons, str(error)],
             next_action,
         )
-    if committed_stale and (not projection_ancestor or not graph_ancestor):
+    if (
+        committed_stale
+        and (not projection_ancestor or not graph_ancestor)
+    ):
         return _result(
             "unusable",
             head,
