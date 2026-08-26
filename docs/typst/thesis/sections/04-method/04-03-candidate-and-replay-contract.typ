@@ -49,6 +49,18 @@ masks. Hard-invalid materialized rows remain useful binary examples for the
 physical feasibility head, but receive neither a fabricated Q target nor
 bootstrap support. Unknown or crossed profile pairs fail closed.
 
+For benchmark reporting, *proposal support* is the persisted set of candidate
+rows that a declared generator attempted, with applicability and validity
+masks retained per family. *Proposal regret* is a descriptive comparison
+between the selected row and the best admissible row under the same persisted
+oracle contract; it is unavailable when no compatible oracle labels exist.
+Scene-paired aggregation first computes state-level quantities and then gives
+each scene equal weight, preventing scenes with more states from dominating a
+macro estimate. An immutable evidence bundle is the hash-bound JSON manifest
+and Parquet projection of these facts. Readers reject incomplete, stale,
+schema-mismatched, fixture, or hash-mismatched bundles; presentation layers
+consume the reader and do not recompute scientific quantities.
+
 === Implemented replay transition
 
 Rollout expansion records the full candidate table, selected valid and shell indices, policy scores and probabilities, selection policy, and random seed. The implemented transition is

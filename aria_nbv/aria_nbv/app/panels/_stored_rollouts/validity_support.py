@@ -10,6 +10,7 @@ import streamlit as st
 
 from ...scientific_labels import TheoryReferences
 from .candidate_generation import (
+    _candidate_benchmark_figures,
     _render_candidate_aggregate_breakdowns,
     _render_candidate_geometry_diagnostics,
     _render_candidate_population_evidence,
@@ -32,6 +33,48 @@ def _render_bounded_candidate_geometry(session_handle: Any, *, limit: int) -> No
         session_handle.trajectory_geometry(),
         total_candidates=int(session_handle.validation.num_candidates),
     )
+
+
+def _render_candidate_benchmark_card(session_handle: Any) -> None:
+    """Render the explicit immutable benchmark card and its four support plots."""
+    benchmark_enabled = st.toggle(
+        "Build immutable candidate benchmark card",
+        value=False,
+        help="Explicitly constructs the validated benchmark bundle and its bounded support plots.",
+    )
+    if not benchmark_enabled:
+        return
+    benchmark_state = st.text_input(
+        "Benchmark state key (optional)",
+        value="",
+        help="Restrict the benchmark to one persisted rollout/step key; leave empty for all states.",
+    ).strip() or None
+    benchmark_limit = int(st.number_input(
+        "Benchmark candidate row limit",
+        min_value=1,
+        max_value=500_000,
+        value=500,
+        step=100,
+    ))
+    records = session_handle.candidate_benchmark_records(
+        state_key=benchmark_state, candidate_limit=benchmark_limit
+    )
+    st.download_button(
+        "Download candidate benchmark bundle",
+        session_handle.candidate_benchmark_export(
+            state_key=benchmark_state, candidate_limit=benchmark_limit
+        ),
+        "candidate-benchmark.zip",
+    )
+    st.markdown("#### Candidate benchmark support")
+    for figure in _candidate_benchmark_figures(records):
+        _render_plot(figure, ScientificExplanation(
+            question="What candidate support does the immutable benchmark contain?",
+            answer="The plot shows only validated, persisted candidate coordinates and IDs.",
+            sections=(ExplanationSection("Availability", "Unavailable metrics remain absent rather than zero-filled."),),
+            evidence_role="derived training data",
+            source_fields=("candidate_benchmark.parquet",),
+        ))
 
 
 def _render_targets_and_support(session_handle: Any) -> None:
@@ -98,6 +141,8 @@ def _render_targets_and_support(session_handle: Any) -> None:
         _render_target_score_diagnostics(targets)
 
     _render_candidate_provenance_flow(session_handle)
+
+    _render_candidate_benchmark_card(session_handle)
 
     masks = pd.DataFrame(session_handle.masks())
     if not masks.empty:

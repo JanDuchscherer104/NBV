@@ -12,13 +12,14 @@ import hashlib
 import json
 import math
 from collections.abc import Iterable, Mapping
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Literal, cast
 
 import numpy as np
 import pandas as pd
 
+from .candidate_benchmark import CandidateBenchmarkBundle, read_bundle
 from .inspection import (
     CANDIDATE_GROUP_FIELDS,
     SchemaValidation,
@@ -44,6 +45,38 @@ from .inspection import (
     validity_waterfall_rows,
 )
 from .zarr_store import RolloutZarrStoreReader, RolloutZarrValidationResult
+
+
+def read_candidate_benchmark_bundle(path: Path | str, *, expected_binding: Mapping[str, str]) -> CandidateBenchmarkBundle:
+    """Read benchmark evidence through the canonical immutable reader."""
+
+    return read_bundle(path, expected_binding=expected_binding)
+
+
+def candidate_benchmark_report_frames(
+    path: Path | str, *, expected_binding: Mapping[str, str]
+) -> dict[str, pd.DataFrame]:
+    """Project an immutable benchmark bundle into report-owned data frames.
+
+    The bundle reader remains the sole authority for validation and DTO
+    decoding.  This adapter is intentionally small so Typst/report exports
+    consume exactly the same canonical records as the Streamlit inspector.
+    """
+
+    bundle = read_candidate_benchmark_bundle(path, expected_binding=expected_binding)
+    records = [record.to_record() for record in bundle.records]
+    families: list[dict[str, Any]] = []
+    points: list[dict[str, Any]] = []
+    for record in bundle.records:
+        for family in record.families:
+            families.append({"scene_key": record.scene_key, "state_key": record.state_key, **asdict(family)})
+        for point in record.points:
+            points.append({"scene_key": record.scene_key, **asdict(point)})
+    return {
+        "records": pd.DataFrame(records),
+        "families": pd.DataFrame(families),
+        "points": pd.DataFrame(points),
+    }
 
 
 class _ManifestSnapshotReader(RolloutZarrStoreReader):
@@ -1577,7 +1610,12 @@ def _is_nonnegative_int(value: Any) -> bool:
     return isinstance(value, int | np.integer) and not isinstance(value, bool) and int(value) >= 0
 
 
-def serialize_thesis_report_bundle(frames: Mapping[str, pd.DataFrame]) -> bytes:
+def serialize_thesis_report_bundle(
+    frames: Mapping[str, pd.DataFrame],
+    *,
+    candidate_benchmark_path: Path | str | None = None,
+    candidate_benchmark_binding: Mapping[str, str] | None = None,
+) -> bytes:
     """Serialize report frames as strict, compact, byte-stable JSON.
 
     The serializer rejects missing or extra tables, column drift, and infinite
@@ -1586,6 +1624,18 @@ def serialize_thesis_report_bundle(frames: Mapping[str, pd.DataFrame]) -> bytes:
     """
 
     _validate_frame_schema(frames)
+    benchmark_attachment = None
+    if candidate_benchmark_path is not None:
+        if candidate_benchmark_binding is None:
+            raise ValueError("candidate_benchmark_binding is required with candidate_benchmark_path")
+        benchmark_attachment = {
+            name: json.loads(frame.to_json(orient="records", date_format="iso", double_precision=15))
+            for name, frame in candidate_benchmark_report_frames(
+                candidate_benchmark_path, expected_binding=candidate_benchmark_binding
+            ).items()
+        }
+    elif candidate_benchmark_binding is not None:
+        raise ValueError("candidate_benchmark_path is required with candidate_benchmark_binding")
     tables: dict[str, dict[str, Any]] = {}
     for name, columns in THESIS_REPORT_TABLE_COLUMNS.items():
         frame = frames[name]
@@ -1602,6 +1652,8 @@ def serialize_thesis_report_bundle(frames: Mapping[str, pd.DataFrame]) -> bytes:
         "schema_version": THESIS_REPORT_BUNDLE_VERSION,
         "tables": tables,
     }
+    if benchmark_attachment is not None:
+        payload["candidate_benchmark"] = benchmark_attachment
     return (
         json.dumps(
             payload,
@@ -1614,12 +1666,22 @@ def serialize_thesis_report_bundle(frames: Mapping[str, pd.DataFrame]) -> bytes:
     )
 
 
-def write_thesis_report_bundle(path: Path | str, frames: Mapping[str, pd.DataFrame]) -> str:
+def write_thesis_report_bundle(
+    path: Path | str,
+    frames: Mapping[str, pd.DataFrame],
+    *,
+    candidate_benchmark_path: Path | str | None = None,
+    candidate_benchmark_binding: Mapping[str, str] | None = None,
+) -> str:
     """Atomically write a thesis-report bundle and return its SHA-256 digest."""
 
     output_path = Path(path).expanduser().resolve()
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    data = serialize_thesis_report_bundle(frames)
+    data = serialize_thesis_report_bundle(
+        frames,
+        candidate_benchmark_path=candidate_benchmark_path,
+        candidate_benchmark_binding=candidate_benchmark_binding,
+    )
     temporary = output_path.with_name(f".{output_path.name}.tmp")
     temporary.write_bytes(data)
     temporary.replace(output_path)
@@ -2151,6 +2213,7 @@ __all__ = [
     "THESIS_REPORT_TABLE_COLUMNS",
     "build_rollout_corpus_summary",
     "build_thesis_report_frames",
+    "candidate_benchmark_report_frames",
     "serialize_thesis_report_bundle",
     "write_thesis_report_bundle",
 ]
