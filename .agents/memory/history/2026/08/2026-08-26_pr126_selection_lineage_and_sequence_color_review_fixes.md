@@ -34,6 +34,7 @@ Focused tests cover direct replay records, Zarr persistence, and Plotly traces.
 
 ## Commits
 - [72316825fdc7d7a730de82758df520274cf2c9e9](https://github.com/JanDuchscherer104/ARIA-NBV/commit/72316825fdc7d7a730de82758df520274cf2c9e9)
+- [ee80271d19](https://github.com/JanDuchscherer104/ARIA-NBV/commit/ee80271d19)
 
 ## Candidate Owner Intent
 <!-- Omit this section unless the agent-behavior candidate-intent branch applies. -->
@@ -46,7 +47,7 @@ Focused tests cover direct replay records, Zarr persistence, and Plotly traces.
 - Ruff format/check passed for all five changed Python/test owners.
 - `pytest -q tests/pose_generation/test_plotting_helpers.py
   tests/rollouts/test_counterfactuals.py tests/rollouts/test_dataset_writer.py`
-  passed: 86 tests.
+  passed: 88 tests after the greedy-seed repair.
 - `git diff --check` passed after the rebase onto `origin/main`.
 
 ## Canonical Owner Impact
