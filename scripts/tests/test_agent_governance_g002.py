@@ -771,6 +771,15 @@ def test_capture_and_routing_contracts() -> None:
     senpai_updates = _read(agent_behavior_path.parent / "references" / "senpai-adoption-updates.md")
     assert "772acc597f29065ccad012c749334a287d89badd" in senpai_updates
     assert "git ls-remote https://github.com/wandb/senpai.git HEAD" in senpai_updates
+    for upstream_skill in (
+        ".agents/skills/bootstrap-target/SKILL.md",
+        ".agents/skills/grilling-autoresearch/SKILL.md",
+        "plugins/senpai/skills/assign-experiment/SKILL.md",
+        "plugins/senpai/skills/review-experiment/SKILL.md",
+        "plugins/senpai/skills/maintain-research-state/SKILL.md",
+        "plugins/senpai/skills/wandb-primary/SKILL.md",
+    ):
+        assert upstream_skill in senpai_updates
 
     intent_reference = _read(
         agent_behavior_path.parent / "references" / "reviewed-intent.md"

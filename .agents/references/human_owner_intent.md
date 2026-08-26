@@ -126,7 +126,7 @@ or repeatable workflows.
   retained slice is provenance evidence, not a distillation or truth owner.
 - Replace the standalone `measured-autoresearch` sidecar with the existing
   `$performance-goal` evaluator-gated lifecycle, using a small immutable-result
-  bridge for optional W&B reporting and read-only inspection.
+  bridge for mandatory W&B publication/read-back and read-only inspection.
 - Keep `agents-db` as the actionable-work owner for now. Keep debriefs concise
   and episodic rather than loading them as default project state. Debriefs
   retain reusable diagnoses, failed approaches, measurements, and handoffs.
