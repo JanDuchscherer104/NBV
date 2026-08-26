@@ -1,0 +1,12 @@
+# Fresh paired pilot bound to the strict-V10 VIN source manifest.
+#
+# V10 campaign artifacts were generated from the historical V8 VIN root. Keep
+# this identity and destination separate so immutable V8 lineage is never
+# relabelled or resumed under the current V10 source contract.
+campaign_id = "cuda-rollouts-v1-pilot-corrected-v11"
+mode = "pilot"
+frozen_profile = "realistic_core_60"
+pilot_scene_count = 5
+temperatures = [0.5, 1.0, 2.0, 4.0]
+writer_config_path = ".configs/build_rollouts_v1_cuda_campaign_writer.toml"
+output_root = ".campaign/cuda-rollouts-v1-pilot-corrected-v11"

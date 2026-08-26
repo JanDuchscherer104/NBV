@@ -1104,9 +1104,9 @@
       "split": "train"
     }
   ],
-  "source_cache_version": "8",
-  "source_manifest_hash": "ef88fa5940221922",
-  "source_store_dir": "vin_offline_rollout_campaign100_v8_rebuilt",
+  "source_cache_version": "10",
+  "source_manifest_hash": "605453ba11869e40",
+  "source_store_dir": "vin_offline_rollout_campaign100_v10_rebuilt",
   "split": "train",
-  "split_manifest_hash": "3e647fe8bbb80b91"
+  "split_manifest_hash": "4780c7cde1b811bf"
 }
