@@ -212,9 +212,11 @@ class SelectionTests(unittest.TestCase):
         self.assertIn("graphify-projection-live-check: _check_python", makefile)
         self.assertIn("graphify-usable-check: _check_python", makefile)
         self.assertIn("graphify-state-check: _check_python", makefile)
+        self.assertIn("skill-source-self-test: _check_python", makefile)
         self.assertIn(
             "scaffold-check: agents-db-validate check-agent-memory "
-            "scaffold-audit scaffold-audit-self-test graphify-state-check",
+            "scaffold-audit scaffold-audit-self-test skill-source-self-test "
+            "graphify-state-check",
             makefile,
         )
         self.assertIn(
@@ -258,6 +260,7 @@ class SelectionTests(unittest.TestCase):
             "scripts/reconcile_graphify_worktree.py": {"scaffold"},
             "scripts/setup_codex_worktree_env.sh": {"scaffold"},
             "scripts/scaffold_audit.py": {"scaffold"},
+            "scripts/skill_sources.py": {"scaffold"},
             "scripts/scaffold/fixtures/routing.json": {"scaffold"},
             "scripts/scaffold/run_routing_trials.py": {"scaffold"},
             "scripts/scaffold/fixtures/routing_prompts.jsonl": {"scaffold"},
@@ -276,6 +279,7 @@ class SelectionTests(unittest.TestCase):
             "scripts/tests/test_reconcile_graphify_worktree.py": {"scaffold"},
             "scripts/tests/test_graphify_session_readiness.py": {"scaffold"},
             "scripts/tests/test_setup_worktree_env.sh": {"scaffold"},
+            "scripts/tests/test_skill_sources.py": {"scaffold"},
             "scripts/tests/test_validate_agent_memory_threads.py": {"scaffold"},
             "docs/literature/sources.jsonl": {"docs"},
             "docs/literature/README.md": {"docs"},

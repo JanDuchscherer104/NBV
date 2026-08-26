@@ -1,0 +1,103 @@
+schema_version = 1
+
+[[sources]]
+id = "senpai-performance-loop"
+title = "W&B SENPAI performance-loop guidance"
+kind = "git-adaptation"
+repository = "https://github.com/wandb/senpai.git"
+tracked_ref = "refs/heads/main"
+reviewed_revision = "772acc597f29065ccad012c749334a287d89badd"
+source_paths = [
+  ".agents/skills/bootstrap-target/SKILL.md",
+  ".agents/skills/grilling-autoresearch/SKILL.md",
+  "plugins/senpai/skills/assign-experiment/SKILL.md",
+  "plugins/senpai/skills/review-experiment/SKILL.md",
+  "plugins/senpai/skills/maintain-research-state/SKILL.md",
+  "plugins/senpai/skills/wandb-primary/SKILL.md",
+]
+consumers = [
+  ".agents/skills/agent-behavior/references/senpai-performance.md",
+]
+
+[[sources]]
+id = "karpathy-autoresearch-program"
+title = "Karpathy autoresearch keep-or-discard loop"
+kind = "git-adaptation"
+repository = "https://github.com/karpathy/autoresearch.git"
+tracked_ref = "refs/heads/master"
+reviewed_revision = "228791fb499afffb54b46200aca536f79142f117"
+source_paths = ["program.md"]
+consumers = [
+  ".agents/skills/agent-behavior/references/senpai-performance.md",
+]
+
+[[sources]]
+id = "matt-writing-modes"
+title = "Matt Pocock writing modes"
+kind = "git-adaptation"
+repository = "https://github.com/mattpocock/skills.git"
+tracked_ref = "refs/heads/main"
+reviewed_revision = "896f14d9c25659f03b24e08e4efc3ee69bbade08"
+source_paths = [
+  "skills/in-progress/writing-fragments/SKILL.md",
+  "skills/in-progress/writing-shape/SKILL.md",
+  "skills/in-progress/writing-beats/SKILL.md",
+]
+consumers = [
+  ".agents/skills/academic-writing/references/upstream-matt-writing.md",
+]
+
+[[sources]]
+id = "matt-scaffold-guidance"
+title = "Matt Pocock scaffold guidance"
+kind = "git-adaptation"
+repository = "https://github.com/mattpocock/skills.git"
+tracked_ref = "refs/heads/main"
+reviewed_revision = "8b78b531ab965735c5dc74f6f7a219e1e37326df"
+source_paths = [
+  "skills/engineering/grill-with-docs/SKILL.md",
+  "skills/productivity/grill-me/SKILL.md",
+  "skills/productivity/grilling/SKILL.md",
+  "skills/engineering/codebase-design/SKILL.md",
+  "skills/engineering/improve-codebase-architecture/SKILL.md",
+  "skills/productivity/writing-for-agents/SKILL.md",
+  "skills/productivity/writing-for-agents/SKILL-MECHANICS.md",
+]
+consumers = [
+  ".agents/skills/aria-grill/references/upstream-mattpocock.md",
+  ".agents/skills/simplification/references/upstream-mattpocock.md",
+]
+
+[[sources]]
+id = "wenyu-academic-writing"
+title = "Wenyu Chiou academic-writing and review guidance"
+kind = "git-adaptation"
+repository = "https://github.com/WenyuChiou/academic-writing-skills.git"
+tracked_ref = "refs/heads/main"
+reviewed_revision = "cb56a7d0175f532a6c628c9829e1df824fa938d7"
+source_paths = [
+  "skills/academic-writing-skills/SKILL.md",
+  "skills/academic-writing-skills/references/lifecycle-and-routing.md",
+  "skills/academic-writing-skills/references/reviewer-red-team-and-release.md",
+  "skills/paper-review/SKILL.md",
+  "skills/paper-review/references/ai-llm-computational.md",
+  "skills/paper-review/references/display-notation-provenance.md",
+]
+consumers = [
+  ".agents/skills/literature-research/references/workflow.md",
+  ".agents/skills/academic-writing/references/change-impact.md",
+  ".agents/skills/scientific-review/references/review-profiles.md",
+]
+
+[[sources]]
+id = "graphify-skill-bundle"
+title = "Graphify Codex skill bundle"
+kind = "byte-identical"
+repository = "https://github.com/safishamsi/graphify.git"
+tracked_ref = "refs/heads/main"
+reviewed_revision = "b2cd36267456c166788c95be6e68574064a92a42"
+source_paths = ["skills/graphify"]
+consumers = [
+  ".agents/skills/graphify",
+  ".agents/skills/aria-nbv-context/references/graphify-aria-boundary.md",
+]

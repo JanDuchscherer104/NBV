@@ -58,5 +58,8 @@ Canonical paper and engineering-source additions remain in
 Mission briefs are evidence snapshots under the performance-goal root and W&B,
 not another repository-wide source catalog.
 
-For adopted upstream mechanics and the standardized update route, read
-[`senpai-adoption-updates.md`](senpai-adoption-updates.md).
+External grounding is registered as `senpai-performance-loop` and
+`karpathy-autoresearch-program` in `.agents/skill-sources.toml`. Those IDs are
+provenance only and never activate upstream maintenance.
+The retained [adoption provenance](senpai-adoption-updates.md) preserves the
+historical debrief path but defines no update procedure.

@@ -5,7 +5,11 @@ from __future__ import annotations
 
 import hashlib
 from pathlib import Path
+import sys
 import unittest
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from skill_sources import load_manifest  # noqa: E402
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -18,7 +22,14 @@ CONTEXT_SKILL = ROOT / ".agents/skills/aria-nbv-context/SKILL.md"
 ARIA_BOUNDARY = (
     ROOT / ".agents/skills/aria-nbv-context/references/graphify-aria-boundary.md"
 )
-UPSTREAM_COMMIT = "b2cd36267456c166788c95be6e68574064a92a42"
+EXPECTED_UPSTREAM_COMMIT = "b2cd36267456c166788c95be6e68574064a92a42"
+GRAPHIFY_SOURCE = next(
+    source for source in load_manifest() if source.id == "graphify-skill-bundle"
+)
+UPSTREAM_COMMIT = GRAPHIFY_SOURCE.reviewed_revision
+assert UPSTREAM_COMMIT == EXPECTED_UPSTREAM_COMMIT
+assert GRAPHIFY_SOURCE.source_paths == ("skills/graphify",)
+assert ".agents/skills/graphify" in GRAPHIFY_SOURCE.consumers
 UPSTREAM_BLOBS = {
     ".graphify_version": "2d72c8d340b915a70b4c553e2a7fe6c8a9b7ea35",
     "SKILL.md": "af3f723c7878b8ca9252af511270511002086ed4",
