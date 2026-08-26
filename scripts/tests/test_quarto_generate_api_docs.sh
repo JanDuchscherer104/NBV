@@ -30,6 +30,11 @@ if [[ "${1:-}" == *"quartodoc_expand_config.py" ]]; then
   done
 fi
 
+if [[ "${1:-}" == *"quartodoc_inject_package_readmes.py" ]]; then
+  : >"${QUARTODOC_README_INJECTED}"
+  exit 0
+fi
+
 if [[ "${1:-}" == "-m" && "${2:-}" == "quartodoc" && "${3:-}" == "build" ]]; then
   if [[ "${PYTHONPATH%%:*}" != "${QUARTODOC_EXPECTED_PACKAGE_ROOT}" ]]; then
     echo "Quartodoc did not receive the current worktree package root first." >&2
@@ -53,9 +58,11 @@ EOF
 chmod +x "${FAKE_PYTHON}"
 
 COUNT_FILE="${SANDBOX}/quartodoc-build-count"
+README_INJECTED="${SANDBOX}/quartodoc-readme-injected"
 OUTPUT="$({
   QUARTO_PYTHON="${FAKE_PYTHON}" \
     QUARTODOC_TEST_COUNT="${COUNT_FILE}" \
+    QUARTODOC_README_INJECTED="${README_INJECTED}" \
     QUARTODOC_EXPECTED_PACKAGE_ROOT="${SANDBOX}/aria_nbv" \
     QUARTODOC_INCREMENTAL=1 \
     QUARTODOC_INTERLINKS=0 \
@@ -63,6 +70,7 @@ OUTPUT="$({
 } 2>&1)"
 
 [[ "$(<"${COUNT_FILE}")" == "2" ]]
+[[ -e "${README_INJECTED}" ]]
 [[ ! -e "${SANDBOX}/docs/reference/stale.symbol.qmd" ]]
 grep -Fq "Pruned stale symbol page:" <<<"${OUTPUT}"
 grep -Fq "Recovered from stale-symbol alias failures during regeneration." <<<"${OUTPUT}"

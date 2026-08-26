@@ -39,6 +39,10 @@ document integration, and diagnosed tool failures to their existing owners.
 - Start from the matching local template or example. Flowcharts use the shared
   `input`, `compute`, `data`, and `output` classes; math-heavy flowcharts use
   the supplied frontmatter.
+- Preserve contrast: every shared semantic `classDef` pins
+  `color:#17202A` with its pale fill. Quarto's dark Mermaid theme otherwise
+  mutes labels; the canonical definitions live in
+  [`aria_mermaid_style.md`](../../../tools/mermaid/references/aria_mermaid_style.md#3-node-classes).
 - Keep labels compact. Every new mathematical symbol must already be in shared
   Typst notation and its Mermaid projection; hand off to `typst-authoring`
   before changing either owner.
