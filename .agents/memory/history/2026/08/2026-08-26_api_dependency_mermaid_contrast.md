@@ -13,7 +13,7 @@ touched_owner_paths:
   - scripts/tests/test_quartodoc_generate_dependency_diagram.py
 codex_thread: codex://threads/01a03a4a-114d-7f71-b9ec-140f32b8b20b
 repo_object_format: sha1
-repo_head: c26f8861c4428e70b999d0358bed86ae13143cbd
+repo_head: 0a95b975e159eae5bef17201d0265533977d4274
 repo_branch: "codex/fix-parentless-graphify-setup"
 worktree_kind: linked
 ---
@@ -36,6 +36,7 @@ and preserves the LR edge-label output contract.
 
 ## Commit
 - [c26f8861c4428e70b999d0358bed86ae13143cbd](https://github.com/JanDuchscherer104/ARIA-NBV/commit/c26f8861c4428e70b999d0358bed86ae13143cbd)
+- [0a95b975e159eae5bef17201d0265533977d4274](https://github.com/JanDuchscherer104/ARIA-NBV/commit/0a95b975e159eae5bef17201d0265533977d4274)
 
 ## Verification
 `make api-docs`, the focused generator test, Ruff, CI-impact test,
