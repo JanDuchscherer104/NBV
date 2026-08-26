@@ -204,6 +204,19 @@ save_manifest(result['files'], manifest_path=manifest, root=root, scan_corpus=co
         self.assertEqual(self.payload()["state"], "fresh")
         self.assertEqual(_graphify_out_bytes(self.root), before)
 
+    def test_missing_projection_owner_is_rebuildable_but_not_admissible(self) -> None:
+        (self.root / self.OWNER).unlink()
+
+        changes = freshness.projection_owner_changes(self.root)
+        payload = self.payload()
+
+        self.assertTrue(
+            any(self.OWNER in change for change in changes),
+            changes,
+        )
+        self.assertEqual(payload["state"], "unusable", payload)
+        self.assertIn("projection owner is unavailable", " ".join(payload["reasons"]))
+
     def test_ast_and_semantic_drift_use_their_respective_upstream_hashes(self) -> None:
         code = self.root / "src/example.py"
         code.write_text("def example(): return 2\n", encoding="utf-8")

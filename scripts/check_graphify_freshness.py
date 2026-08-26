@@ -259,12 +259,23 @@ def _graph_revision(root: Path) -> str:
     return revision
 
 
-def _owner_reasons(root: Path, owners: dict[str, str]) -> list[str]:
+def _owner_reasons(
+    root: Path,
+    owners: dict[str, str],
+    *,
+    missing_is_change: bool = False,
+) -> list[str]:
     reasons: list[str] = []
     for relative, expected in owners.items():
         owner = root / relative
         try:
             resolved = owner.resolve(strict=True)
+        except FileNotFoundError as error:
+            reason = f"projection owner is unavailable: {relative}: {error}"
+            if missing_is_change and not owner.is_symlink():
+                reasons.append(reason)
+                continue
+            raise ValueError(reason) from error
         except (OSError, RuntimeError) as error:
             raise ValueError(
                 f"projection owner is unavailable: {relative}: {error}"
@@ -293,7 +304,7 @@ def projection_owner_changes(root: Path) -> list[str]:
     _, _, owner_state, owners = _projection_metadata(root / PROJECTION_INDEX)
     if owner_state == "dirty":
         raise ValueError("projection was built from a dirty owner worktree")
-    return _owner_reasons(root, owners)
+    return _owner_reasons(root, owners, missing_is_change=True)
 
 
 def _graphify_interpreter(root: Path) -> str:
