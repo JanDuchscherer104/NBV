@@ -241,6 +241,44 @@ def test_rollout_zarr_persists_pair_provenance_columns(tmp_path) -> None:
     assert reader.array("candidates/gaze_variant_id")[:count].tolist() == [0] * count
 
 
+def test_rollout_zarr_legacy_missing_pair_columns_read_as_sentinels(tmp_path) -> None:
+    result = write_rollout_zarr_store(
+        tmp_path / "legacy.zarr", build_rollout_records(horizon=1, num_samples=4, seed=23)
+    )
+    root = zarr.open_group(store=zarr.storage.LocalStore(str(result.store_dir)), mode="a")
+    del root["candidates/position_pair_id"]
+    del root["candidates/gaze_variant_id"]
+
+    reader = RolloutZarrStoreReader(result.store_dir)
+    assert reader.array("candidates/position_pair_id").shape == (result.num_candidates,)
+    assert reader.array("candidates/gaze_variant_id").shape == (result.num_candidates,)
+    assert np.all(reader.array("candidates/position_pair_id") == -1)
+    assert np.all(reader.array("candidates/gaze_variant_id") == -1)
+    validation = validate_rollout_zarr_store(result.store_dir)
+    assert validation.ok, validation.errors
+
+
+@pytest.mark.parametrize(
+    ("field", "values", "match"),
+    [
+        ("gaze_variant_id", [2, -1, -1, -1], "unsupported values"),
+        ("position_pair_id", [0, -1, -1, -1], "share the -1 sentinel"),
+    ],
+)
+def test_rollout_zarr_rejects_malformed_pair_provenance(tmp_path, field, values, match) -> None:
+    records = build_rollout_records(horizon=1, num_samples=4, seed=29)
+    result = write_rollout_zarr_store(tmp_path / f"invalid-{field}.zarr", records)
+    root = zarr.open_group(store=zarr.storage.LocalStore(str(result.store_dir)), mode="a")
+    array = root[f"candidates/{field}"]
+    malformed = np.full(array.shape, -1, dtype=array.dtype)
+    malformed[: len(values)] = np.asarray(values, dtype=array.dtype)
+    array[:] = malformed
+
+    validation = validate_rollout_zarr_store(result.store_dir)
+    assert not validation.ok
+    assert any(match in error for error in validation.errors)
+
+
 def test_rollout_zarr_dense_valid_contract_is_proven_by_persisted_support(tmp_path) -> None:
     records = build_rollout_records(horizon=2, num_samples=8, seed=7)
     result = write_rollout_zarr_store(

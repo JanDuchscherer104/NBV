@@ -18,6 +18,7 @@ from aria_nbv.pose_generation import (
     CandidateMixtureViewGenerator,
     CandidateMixtureViewGeneratorConfig,
     CandidatePositionMode,
+    CandidateViewGenerator,
     CandidateViewGeneratorConfig,
     SamplingStrategy,
     ViewDirectionMode,
@@ -73,7 +74,7 @@ def _base_cfg() -> CandidateViewGeneratorConfig:
     )
 
 
-def _run_generate(cfg: CandidateMixtureViewGeneratorConfig):
+def _run_generate(cfg: CandidateMixtureViewGeneratorConfig, *, seed: int | None = None):
     mesh, verts, faces = _mesh_triplet(cfg.device)
     return CandidateMixtureViewGenerator(cfg).generate(
         reference_pose=_identity_pose(device=cfg.device),
@@ -83,6 +84,7 @@ def _run_generate(cfg: CandidateMixtureViewGeneratorConfig):
         camera_calib_template=_dummy_camera(cfg.device),
         occupancy_extent=torch.tensor([-10.0, 10.0, -10.0, 10.0, -10.0, 10.0], dtype=torch.float32),
         runtime_context=CandidateGenerationRuntimeContext(descriptor=_descriptor()),
+        seed=seed,
     )
 
 
@@ -139,6 +141,50 @@ def test_paired_variants_keep_original_component_id() -> None:
     assert result.gaze_variant_id is not None
     assert result.position_pair_id.tolist() == [0, 1, 0, 1, -1, -1]
     assert result.gaze_variant_id.tolist() == [0, 0, 1, 1, -1, -1]
+
+
+def test_paired_seed_is_derived_from_resolved_component_seed_for_direct_and_replay(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from aria_nbv.rollouts.replay.policy import derive_component_seed
+
+    cfg = CandidateMixtureViewGeneratorConfig(
+        base=_base_cfg(),
+        components=[
+            CandidateMixtureComponentConfig(
+                name="pair",
+                count=2,
+                view_mode=ViewDirectionMode.TARGET_POINT,
+                paired_view_mode=ViewDirectionMode.FORWARD_RIG,
+                position_mode=CandidatePositionMode.TARGET_BEARING_LOCAL,
+            )
+        ],
+    )
+    observed: list[int | None] = []
+    original_generate = CandidateViewGenerator.generate
+    original_generate_from_centers = CandidateViewGenerator.generate_from_centers
+
+    def record_generate(self, *args, **kwargs):
+        observed.append(self.config.seed)
+        return original_generate(self, *args, **kwargs)
+
+    def record_generate_from_centers(self, *args, **kwargs):
+        observed.append(self.config.seed)
+        return original_generate_from_centers(self, *args, **kwargs)
+
+    monkeypatch.setattr(CandidateViewGenerator, "generate", record_generate)
+    monkeypatch.setattr(CandidateViewGenerator, "generate_from_centers", record_generate_from_centers)
+
+    _run_generate(cfg)
+    direct_primary, direct_paired = observed
+    assert direct_primary == cfg.base.seed
+    assert direct_paired == derive_component_seed(direct_primary, "pair__paired_forward_rig")
+
+    observed.clear()
+    _run_generate(cfg, seed=41)
+    replay_primary, replay_paired = observed
+    assert replay_primary == derive_component_seed(41, "pair")
+    assert replay_paired == derive_component_seed(replay_primary, "pair__paired_forward_rig")
 
 
 def test_target_point_component_requires_runtime_target_context() -> None:

@@ -542,7 +542,13 @@ class RolloutZarrStoreReader:
 
     def array(self, path: str) -> np.ndarray:
         """Read an array by slash-separated Zarr path."""
-
+        if path in {"candidates/position_pair_id", "candidates/gaze_variant_id"}:
+            group = self.root["candidates"]
+            name = path.rsplit("/", maxsplit=1)[-1]
+            if name not in group:
+                dtype = np.int64 if name == "position_pair_id" else np.int8
+                count = int(np.asarray(group["candidate_row_id"]).shape[0])
+                return np.full((count,), -1, dtype=dtype)
         return np.asarray(self.root[path])
 
     def validate(self, *, validate_selected_depth_payload: bool = True) -> RolloutZarrValidationResult:
@@ -1095,6 +1101,27 @@ class _RolloutZarrValidator:
             self.errors.append("Selected candidates must be actor-selectable.")
         if np.any(actor_action_mask & (np.asarray(self.root["candidates/position_id"]) < 0)):
             self.errors.append("Actor-selectable candidates require non-placeholder position_id.")
+
+        candidate_group = self.root["candidates"]
+        candidate_count = int(candidate_row_id.shape[0])
+        if "position_pair_id" in candidate_group:
+            position_pair_id = np.asarray(candidate_group["position_pair_id"], dtype=np.int64).reshape(-1)
+            if np.dtype(candidate_group["position_pair_id"].dtype) != np.dtype(np.int64):
+                self.errors.append("candidates/position_pair_id must use int64 dtype.")
+        else:
+            position_pair_id = np.full((candidate_count,), -1, dtype=np.int64)
+        if "gaze_variant_id" in candidate_group:
+            gaze_variant_id = np.asarray(candidate_group["gaze_variant_id"], dtype=np.int64).reshape(-1)
+            if np.dtype(candidate_group["gaze_variant_id"].dtype) != np.dtype(np.int8):
+                self.errors.append("candidates/gaze_variant_id must use int8 dtype.")
+        else:
+            gaze_variant_id = np.full((candidate_count,), -1, dtype=np.int64)
+        if position_pair_id.shape != (candidate_count,) or gaze_variant_id.shape != (candidate_count,):
+            self.errors.append("Paired gaze provenance arrays must align with candidate rows.")
+        if np.any(~np.isin(gaze_variant_id, (-1, 0, 1))):
+            self.errors.append("candidates/gaze_variant_id contains unsupported values; expected -1, 0, or 1.")
+        if np.any((position_pair_id < 0) != (gaze_variant_id < 0)):
+            self.errors.append("candidates/position_pair_id and gaze_variant_id must share the -1 sentinel.")
 
         rollout_split_id = np.asarray(self.root["rollouts/split_id"])
         if np.unique(rollout_split_id).shape[0] > 1:
@@ -3406,7 +3433,17 @@ def _read_tables_from_root(root: Any, *, include_selected_depth: bool = True) ->
 
 
 def _read_group_table(root: Any, schema: _TableSchema) -> dict[str, np.ndarray]:
-    return {field.name: np.asarray(root[f"{schema.name}/{field.name}"]) for field in schema.fields}
+    group = root[schema.name]
+    values = {}
+    for table_field in schema.fields:
+        if table_field.name in group:
+            values[table_field.name] = np.asarray(group[table_field.name])
+        elif schema.name == "candidates" and table_field.name in {"position_pair_id", "gaze_variant_id"}:
+            row_count = int(np.asarray(group["candidate_row_id"]).shape[0])
+            values[table_field.name] = np.full((row_count,), -1, dtype=table_field.dtype)
+        else:
+            raise KeyError(f"Missing required {schema.name}/{table_field.name} array")
+    return values
 
 
 def _read_selected_depth_table(root: Any) -> dict[str, np.ndarray]:
