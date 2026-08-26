@@ -78,6 +78,12 @@ class _StoredChain:
     store_index: int
     rollout_row_id: int
     target_row_id: int
+    configured_horizon: int
+    candidate_width_min: int
+    candidate_width_max: int
+    candidate_config_hash: str
+    rollout_config_hash: str
+    selection_policy: str
     source_ref: _QhSourceRef
 
 
@@ -158,6 +164,51 @@ class QhDataContract:
 
 
 @dataclass(frozen=True, slots=True)
+class QhRolloutChainIdentity:
+    """Metadata-only identity and support facts for one admitted rollout chain.
+
+    The identity is available without decoding candidate poses, oracle labels,
+    or actor-store tensors. It therefore supports deterministic corpus census
+    and bounded diagnostic selection without creating a second scorer input
+    path. Candidate widths describe materialized finite-action support, not a
+    planning-tree branching axis.
+    """
+
+    store_index: int
+    """Zero-based store ordinal in the reader's ordered store tuple."""
+
+    rollout_row_id: int
+    """Persistent rollout-chain row identifier inside the source store."""
+
+    source_sample_index: int
+    """Immutable VIN actor-store row referenced by the rollout chain."""
+
+    scene_id: str
+    """ASE scene identifier validated through the source record."""
+
+    target_row_id: int
+    """Persistent target row identifier inside the source store."""
+
+    configured_horizon: int
+    """Fixed acquisition budget used to generate this factual chain."""
+
+    candidate_width_min: int
+    """Smallest materialized candidate-table width across realized states."""
+
+    candidate_width_max: int
+    """Largest materialized candidate-table width across realized states."""
+
+    candidate_config_hash: str
+    """Exact candidate-generator configuration digest bound by lineage."""
+
+    rollout_config_hash: str
+    """Exact rollout-recipe configuration digest bound by lineage."""
+
+    selection_policy: str
+    """Persisted factual behavior-policy identifier."""
+
+
+@dataclass(frozen=True, slots=True)
 class _StoreFacts:
     path: Path
     manifest_hash: str
@@ -178,6 +229,8 @@ class _ChainRef:
     target_row_id: int
     source_sample_index: int
     configured_horizon: int
+    candidate_width_min: int
+    candidate_width_max: int
     candidate_config_hash: str
     rollout_config_hash: str
     selection_policy: str
@@ -261,6 +314,42 @@ class QhRolloutReader:
             self._source_ref_lookup[chain.source_sample_index],
             store_path=self._stores[chain.store_index].path,
             include_selected_depth=self.include_selected_depth,
+        )
+
+    def chain_identity(self, index: int) -> QhRolloutChainIdentity:
+        """Return bounded-selection metadata without materializing a chain.
+
+        Args:
+            index: Zero-based admitted-chain index; negative indices follow
+                standard Python sequence semantics.
+
+        Returns:
+            Immutable source, target, candidate-support, and behavior-lineage
+            identity for stratified diagnostics. No actor or oracle tensor is
+            read through this method.
+
+        Raises:
+            IndexError: If ``index`` is outside the admitted corpus.
+        """
+
+        if index < 0:
+            index += len(self)
+        if index < 0 or index >= len(self):
+            raise IndexError(f"Q_H chain index {index} is outside corpus length {len(self)}.")
+        chain = self._chains[index]
+        source = self._source_ref_lookup[chain.source_sample_index]
+        return QhRolloutChainIdentity(
+            store_index=chain.store_index,
+            rollout_row_id=chain.rollout_row_id,
+            source_sample_index=chain.source_sample_index,
+            scene_id=source.scene_id,
+            target_row_id=chain.target_row_id,
+            configured_horizon=chain.configured_horizon,
+            candidate_width_min=chain.candidate_width_min,
+            candidate_width_max=chain.candidate_width_max,
+            candidate_config_hash=chain.candidate_config_hash,
+            rollout_config_hash=chain.rollout_config_hash,
+            selection_policy=chain.selection_policy,
         )
 
     @property
@@ -761,6 +850,8 @@ def _read_chain_refs(
                 target_row_id=int(target_id),
                 source_sample_index=source_ref.source_sample_index,
                 configured_horizon=int(horizon),
+                candidate_width_min=int(candidate_widths[state_start:state_stop].min()),
+                candidate_width_max=int(candidate_widths[state_start:state_stop].max()),
                 candidate_config_hash=config_values[int(candidate_config_id)],
                 rollout_config_hash=config_values[int(rollout_config_id)],
                 selection_policy=policy_values[int(policy_id)],
@@ -995,6 +1086,12 @@ def _read_chain(
         store_index=chain.store_index,
         rollout_row_id=chain.rollout_row_id,
         target_row_id=chain.target_row_id,
+        configured_horizon=chain.configured_horizon,
+        candidate_width_min=chain.candidate_width_min,
+        candidate_width_max=chain.candidate_width_max,
+        candidate_config_hash=chain.candidate_config_hash,
+        rollout_config_hash=chain.rollout_config_hash,
+        selection_policy=chain.selection_policy,
         source_ref=source_ref,
     )
 
@@ -1117,5 +1214,6 @@ __all__ = [
     "QhDataContract",
     "QhLabelSupportSemantics",
     "QhOracleQueryMode",
+    "QhRolloutChainIdentity",
     "QhRolloutReader",
 ]

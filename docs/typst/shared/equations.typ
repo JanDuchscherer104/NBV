@@ -125,6 +125,8 @@
   (key: "rl.qh_masked_argmax", tex: "a_t^\\theta=\\operatorname*{argmax}_{i:m_{t,i}=1}Q_{H,\\theta,i}", description: "", thesis_list: false, order: 9999),
   (key: "rl.qh_doubleq_index", tex: "B_t^{(h,e)}=Q_{h-1,\\theta^-}(s_{t+1},\\operatorname*{argmax}_{i:m_{t+1,i}=1}Q_{h-1,\\theta}(s_{t+1},i))", description: "", thesis_list: false, order: 9999),
   (key: "rl.qh_doubleq_target", tex: "y_t^{(h,e)}=r_t^e+\\gamma B_t^{(h,e)}", description: "", thesis_list: false, order: 9999),
+  (key: "rl.qh_exact_q2_target", tex: "y_t^{(2,\\mathrm{exact})}=r_t^e+\\gamma_t\\max_{j:m_{t+1,j}^{\\mathrm{train}}=1}r_{t+1,j}^e", description: "Factual dense-successor exact-Q2 control.", thesis_list: false, order: 9999),
+  (key: "rl.qh_exact_q2_error", tex: "\\varepsilon_t^{(2)}=|y_t^{(2,\\mathrm{recursive})}-y_t^{(2,\\mathrm{exact})}|\\leq\\tau_{\\mathrm{abs}}+\\tau_{\\mathrm{rel}}|y_t^{(2,\\mathrm{exact})}|", description: "Versioned absolute-plus-relative learned-recursion agreement gate.", thesis_list: false, order: 9999),
   (key: "rl.qh_uncentered_residual", tex: "Q_{H,\\theta,i}=b_{\\psi,i}+\\delta_{\\theta,i}^H", description: "", thesis_list: false, order: 9999),
   (key: "rl.replay_transition", tex: "(x_{t+1},\\boldsymbol{H}_{t+1},b_{t+1},\\mathcal{Q}_{t+1})=\\operatorname{Step}(x_t,\\boldsymbol{H}_t,b_t,q_{t,a_t},\\xi_t)", description: "", thesis_list: false, order: 9999),
   (key: "scene.actor_state_read", tex: "\\boldsymbol{h}_{t,e,i}=\\operatorname{Read}(\\boldsymbol{\\Phi}_t^{\\mathrm{scene}},\\boldsymbol{h}_e^{\\mathrm{tgt}},q_{t,i},\\boldsymbol{H}_t,t,H)", description: "", thesis_list: false, order: 9999),

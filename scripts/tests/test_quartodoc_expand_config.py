@@ -16,6 +16,7 @@ def test_qh_modules_are_discovered_for_api_generation() -> None:
         "lightning.qh_datamodule",
         "lightning.qh_experiment",
         "lightning.qh_module",
+        "lightning.qh_q2_certification",
         "rollouts.qh_geometry",
         "rollouts.qh_reader",
     }

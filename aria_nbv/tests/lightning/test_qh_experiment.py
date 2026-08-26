@@ -10,20 +10,25 @@ import subprocess
 import sys
 from dataclasses import FrozenInstanceError, replace
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 import torch
 
+import aria_nbv.lightning.qh_experiment as qh_experiment_module
 from aria_nbv.lightning.lit_trainer_factory import TrainerFactoryConfig
 from aria_nbv.lightning.qh_datamodule import QhLearningContract
 from aria_nbv.lightning.qh_experiment import (
     QH_INFERENCE_BUNDLE_SCHEMA_VERSION,
     QhCheckpointSelectionSpec,
+    QhExactQ2CertificationRequest,
+    QhExactQ2CertificationSpec,
     QhExperiment,
     QhExperimentConfig,
     QhFitRequest,
     QhHeldOutEvaluationRequest,
     QhInferenceBundleRef,
+    _headroom_diagnostic,
     _manifest_hash,
 )
 from aria_nbv.lightning.qh_module import QhLightningModuleConfig
@@ -94,6 +99,52 @@ def _a0_experiment() -> QhExperiment:
         update={"state_fusion": QhIndependentMlpStateFusionConfig()},
     )
     return base.model_copy(deep=True, update={"scorer": scorer}).setup_target()
+
+
+def test_headroom_diagnostic_accepts_any_positive_included_cohort(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class _Reader:
+        def __init__(self, store_dir: Path) -> None:
+            self.store_dir = store_dir
+
+        def validate(self, *, validate_selected_depth_payload: bool) -> SimpleNamespace:
+            assert validate_selected_depth_payload is False
+            return SimpleNamespace(
+                ok=True,
+                errors=(),
+                store_dir=self.store_dir,
+                num_rollouts=2,
+                num_steps=4,
+                num_candidates=12,
+            )
+
+        def manifest(self) -> dict[str, object]:
+            return {"root_attrs": {"manifest_sha256": "manifest"}}
+
+    evidence = {
+        "evidence_status": "diagnostic_only",
+        "metric_source": "oracle",
+        "endpoint_kind": "terminal_proxy",
+        "independent_endpoint_evaluation": False,
+        "contrast_rows": [
+            {"contrast": "delta_look", "status": "included", "value": 0.25},
+            {"contrast": "delta_look", "status": "included", "value": -0.10},
+        ],
+        "summary_rows": [],
+    }
+    monkeypatch.setattr(qh_experiment_module, "RolloutZarrStoreReader", _Reader)
+    monkeypatch.setattr(
+        qh_experiment_module,
+        "oracle_headroom_evidence",
+        lambda _reader, *, threshold: evidence,
+    )
+
+    diagnostic = _headroom_diagnostic(tmp_path / "headroom.zarr", threshold=0.0)
+
+    assert diagnostic["positive_lookahead_headroom"] is True
+    assert diagnostic["delta_look_values"] == [0.25, -0.10]
 
 
 def _bundle(tmp_path) -> tuple[QhExperiment, QhInferenceBundleRef]:
@@ -560,7 +611,21 @@ class _DatasetConfig:
 
 
 def _dense_dataset(scene: str, offset: int) -> _ChainDataset:
-    dataset = _ChainDataset([_chain(steps=2, width=3, offset=offset)], scene=scene)
+    chain = _chain(steps=2, width=3, offset=offset)
+    chain = replace(
+        chain,
+        key=replace(
+            chain.key,
+            scene_id=scene,
+            configured_horizon=2,
+            candidate_width_min=3,
+            candidate_width_max=3,
+            candidate_config_hash="candidate-test-v1",
+            rollout_config_hash="rollout-test-v1",
+            selection_policy="q_h",
+        ),
+    )
+    dataset = _ChainDataset([chain], scene=scene)
     dataset.contract = QhDataContract(
         schema_version="qh-v1",
         target_protocol="v1_observed",
@@ -570,6 +635,9 @@ def _dense_dataset(scene: str, offset: int) -> _ChainDataset:
         discount_gamma=0.95,
         reason_code_version="reasons-v1",
         actor_store_version="vin-v1",
+        candidate_config_hashes=("candidate-test-v1",),
+        rollout_config_hashes=("rollout-test-v1",),
+        selection_policies=("q_h",),
         oracle_query_mode="dense_valid",
         label_support_semantics="equals_action_on_realized_steps_v1",
     )
@@ -671,6 +739,47 @@ def test_qh_fit_publishes_new_bundle_and_hashed_receipts(tmp_path) -> None:
     held_out_receipt = json.loads(held_out.receipt_path.read_text(encoding="utf-8"))
     assert held_out_receipt["diagnostic_only"] is True
     assert held_out_receipt["endpoint_policy_evidence"] is False
+
+    certification = experiment.certify_exact_q2(
+        QhExactQ2CertificationRequest(
+            bundle=result.bundle,
+            test=request.test,
+            spec=QhExactQ2CertificationSpec(
+                absolute_tolerance=1e-5,
+                relative_tolerance=1e-5,
+                minimum_independent_units=5,
+                minimum_exact_rows_per_independent_unit=1,
+                independent_unit_aggregation="all_units_v1",
+                minimum_population_coverage=1.0,
+            ),
+            output_receipt_path=tmp_path / "exact-q2.json",
+        )
+    )
+    certification_receipt = json.loads(certification.receipt_path.read_text(encoding="utf-8"))
+    assert certification_receipt["bundle_manifest_sha256"] == result.bundle.manifest_sha256
+    assert certification_receipt["exact_q2"]["population_census"]["near_exhaustive"] is True
+    assert certification_receipt["exact_q2"]["aggregate"]["factual_selected_action_exact_q2_row_count"] == 1
+    assert certification_receipt["schema_version"] == "qh-exact-q2-certification-receipt-v2"
+    assert certification_receipt["exact_q2"]["independent_unit_gate"]["selected_independent_unit_count"] == 1
+    assert certification_receipt["exact_q2"]["independent_unit_gate"]["minimum_independent_units_met"] is False
+    assert certification_receipt["oracle_headroom"]["available"] is False
+    assert certification_receipt["longer_horizon_gate"]["independent_positive_headroom"] is False
+    assert certification_receipt["longer_horizon_gate"]["passed"] is False
+    with pytest.raises(FileExistsError, match="already exists"):
+        experiment.certify_exact_q2(
+            QhExactQ2CertificationRequest(
+                bundle=result.bundle,
+                test=request.test,
+                spec=QhExactQ2CertificationSpec(
+                    absolute_tolerance=1e-5,
+                    relative_tolerance=1e-5,
+                    minimum_independent_units=5,
+                    minimum_exact_rows_per_independent_unit=1,
+                    independent_unit_aggregation="all_units_v1",
+                ),
+                output_receipt_path=certification.receipt_path,
+            )
+        )
     with pytest.raises(FileExistsError, match="already exists"):
         experiment.fit(request)
 

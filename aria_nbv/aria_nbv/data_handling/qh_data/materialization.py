@@ -127,6 +127,12 @@ def _tensor_chain(
             source_sample_index=stored.source_ref.source_sample_index,
             scene_id=stored.source_ref.scene_id,
             target_row_id=stored.target_row_id,
+            configured_horizon=stored.configured_horizon,
+            candidate_width_min=stored.candidate_width_min,
+            candidate_width_max=stored.candidate_width_max,
+            candidate_config_hash=stored.candidate_config_hash,
+            rollout_config_hash=stored.rollout_config_hash,
+            selection_policy=stored.selection_policy,
         ),
         audit=audit,
     )

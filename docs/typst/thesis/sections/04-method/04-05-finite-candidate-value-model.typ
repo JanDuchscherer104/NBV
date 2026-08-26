@@ -17,9 +17,9 @@
   implementation: "partial",
   evidence: "pending",
   citation: [@VIN-NBV-frahm2025 @CORAL-cao2019 @DoubleDQN-vanHasselt2015],
-  source: "aria_nbv/aria_nbv/vin/models/target_finite_horizon.py; aria_nbv/aria_nbv/lightning/qh_module.py; aria_nbv/aria_nbv/oracle/pipelines/online_qh.py; aria_nbv/tests/vin/test_target_finite_horizon.py",
-  gate: [retain the one-step scorer as a matched control, certify exact Q2, and require held-out oracle-rescored policy evidence],
-)[The modular A0/A1--S0-pose--root-moments finite-horizon scorer, typed output, scalar horizon query, feasibility auxiliary, regression/CORAL value decoders, fitted-Q learner, and hard-masked online adapter are implemented. A1 remains the default and A0 its identical-feature interaction control; scientific policy evidence is pending.]
+  source: "aria_nbv/aria_nbv/vin/models/target_finite_horizon.py; aria_nbv/aria_nbv/lightning/qh_module.py; aria_nbv/aria_nbv/lightning/qh_q2_certification.py; aria_nbv/aria_nbv/oracle/pipelines/online_qh.py; aria_nbv/tests/lightning/test_qh_q2_certification.py",
+  gate: [retain the one-step scorer as a matched control, populate a held-out exact-Q2 receipt, and require independent oracle-rescored policy evidence],
+)[The modular A0/A1--S0-pose--root-moments finite-horizon scorer, typed output, scalar horizon query, feasibility auxiliary, regression/CORAL value decoders, fitted-Q learner, bounded exact-Q2 certifier, and hard-masked online adapter are implemented. A1 remains the default and A0 its identical-feature interaction control; scientific policy evidence is pending.]
 
 The actor DTO carries root semidense evidence, GT-derived target pose and extent, root-relative candidate geometry, selected-pose history, remaining budget, and candidate materialization support. It deliberately excludes supervision and audit lineage from scorer inputs. The current model makes this an executable `S0-pose` baseline, but neither a trained checkpoint nor task-sufficient reconstruction state follows from interface tests alone.
 
@@ -87,9 +87,28 @@ where the lower-horizon prediction is detached, frozen, or supplied by a delayed
 
 The stored evidence gives a particularly strong base case. Every candidate admitted by `q_train_mask` can supervise continuous one-step root-normalized gain. If a selected first action has a successor table with dense one-step labels, then the exact finite-support H=2 target is
 
-#eqs.rl.finite_horizon_return
+#eqs.rl.qh_exact_q2_target
 
-This exact target is the required recursion check and H=2 control. Longer-horizon interpretation remains gated until fitted Q2 matches this factual target on held-out supported rows and oracle lookahead shows positive headroom.
+The implemented certification surface distinguishes two claims. A unit-level
+implementation control injects exact one-step values and proves that the
+recursive tensor path reproduces this target. A frozen-bundle population run
+instead measures the learned recursion error
+
+#eqs.rl.qh_exact_q2_error
+
+on held-out supported rows. That second quantity includes the learned $Q_1$
+approximation and is therefore model evidence, not another implementation
+parity test. The population is censused without actor-tensor materialization,
+stratified by scene and target identity, configured horizon, candidate-width
+bin, candidate generator, rollout recipe, and behavior policy, then selected
+by a deterministic balanced hash under explicit global and per-stratum bounds.
+The receipt reports chain coverage, exact-row support, per-stratum error,
+numeric tolerances, and—when CORAL is used—outer-class occupancy and values
+outside the fixed representative support. Longer-horizon interpretation remains
+gated until this learned $Q_2$ error passes its frozen support and tolerance
+contract and independent held-out endpoint evaluation establishes positive
+oracle-lookahead headroom. The existing persisted terminal-step contrast is a
+diagnostic proxy and cannot satisfy that endpoint gate.
 
 Double Q is an optional estimator for the learned successor maximum. It uses the online scorer to select
 

@@ -15,7 +15,7 @@ from typing import Any
 from pydantic import Field, field_validator
 from torch.utils.data import Dataset
 
-from ...rollouts.qh_reader import QhDataContract, QhRolloutReader, _QhSourceRef
+from ...rollouts.qh_reader import QhDataContract, QhRolloutChainIdentity, QhRolloutReader, _QhSourceRef
 from ...rollouts.shard_manifest import build_rollout_split_manifest_hash
 from ...utils import Stage, TargetConfig
 from ...utils.fingerprints import stable_msgspec_hash
@@ -236,6 +236,16 @@ class QhDataset(Dataset[QhChain]):
             if self.include_audit
             else None,
         )
+
+    def chain_identity(self, index: int) -> QhRolloutChainIdentity:
+        """Return metadata-only chain identity for bounded diagnostics.
+
+        This pass-through deliberately bypasses actor-store reads and tensor
+        materialization. It is suitable for deterministic population census
+        and selection, but it is not part of the scorer's actor-visible state.
+        """
+
+        return self.rollout_reader.chain_identity(index)
 
     @cached_property
     def scenes(self) -> frozenset[str]:

@@ -20,7 +20,9 @@ from pydantic import Field
 
 from ..data_handling.qh_data import QhDatasetConfig
 from ..data_handling.qh_data.views import QhActorStateContract
+from ..rollouts.inspection import oracle_headroom_evidence
 from ..rollouts.qh_reader import QhDataContract
+from ..rollouts.zarr_store import RolloutZarrStoreReader
 from ..utils import BaseConfig, TargetConfig
 from ..utils.fingerprints import stable_config_hash, stable_msgspec_hash
 from ..vin.models.target_finite_horizon import (
@@ -32,6 +34,11 @@ from .lit_trainer_callbacks import TrainerCallbacksConfig
 from .lit_trainer_factory import TrainerFactoryConfig
 from .qh_datamodule import QhDataModule, QhLearningContract
 from .qh_module import QhLightningModule, QhLightningModuleConfig
+from .qh_q2_certification import (
+    QhDecoderSupport,
+    QhExactQ2CertificationSpec,
+    QhExactQ2Certifier,
+)
 
 _MANIFEST_FILENAME = "manifest.json"
 _SCORER_STATE_FILENAME = "scorer-state.pt"
@@ -142,6 +149,43 @@ class QhHeldOutEvaluationResult:
 
     receipt_path: Path
     """Receipt containing diagnostic fitted-Q aggregates."""
+
+    receipt_sha256: str
+    """Digest of :attr:`receipt_path`."""
+
+
+@dataclass(frozen=True, slots=True)
+class QhExactQ2CertificationRequest:
+    """Immutable request for bounded held-out learned-recursion evidence.
+
+    Args:
+        bundle: Verified scorer bundle whose frozen weights are evaluated.
+        test: Exact held-out dataset configuration already bound by the bundle
+            manifest; a different population is rejected.
+        spec: Numeric tolerances and deterministic stratified selection bounds.
+        output_receipt_path: New JSON destination; existing paths are rejected.
+        device: Torch device used for scorer evaluation. Dataset census and
+            materialization remain CPU-owned until each selected batch moves.
+        headroom_store_dir: Optional validated rollout store from which the
+            existing exact-role oracle-headroom diagnostic is summarized. This
+            diagnostic is a persisted terminal-step proxy, not independent
+            endpoint evaluation, and can never satisfy the longer-horizon gate.
+    """
+
+    bundle: QhInferenceBundleRef
+    test: QhDatasetConfig
+    spec: QhExactQ2CertificationSpec
+    output_receipt_path: Path
+    device: str = "cpu"
+    headroom_store_dir: Path | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class QhExactQ2CertificationResult:
+    """Immutable reference to one exact-``Q_2`` certification receipt."""
+
+    receipt_path: Path
+    """JSON receipt containing bound census, row, and gate evidence."""
 
     receipt_sha256: str
     """Digest of :attr:`receipt_path`."""
@@ -427,6 +471,132 @@ class QhExperiment:
         output.parent.mkdir(parents=True, exist_ok=True)
         _write_json(output, receipt)
         return QhHeldOutEvaluationResult(output, _sha256_file(output))
+
+    def certify_exact_q2(self, request: QhExactQ2CertificationRequest) -> QhExactQ2CertificationResult:
+        r"""Certify learned recursive ``Q_2`` targets on the frozen test corpus.
+
+        This operation evaluates the selected bundle but does not fit it. The
+        exact control replaces the learned successor value with the maximum
+        persisted one-step reward at the factual successor. Consequently the
+        reported discrepancy isolates the bundle's learned ``Q_1`` path inside
+        the two-step recursion; it does not re-test tensor-indexing parity and
+        it does not estimate endpoint-policy headroom.
+
+        Hard-invalid rows remain excluded by the Lightning owner's
+        ``selected_train_mask`` and ``successor_backup_mask``. The certifier
+        never consults feasibility logits, never multiplies probability by Q,
+        and never widens support beyond the frozen action/label masks.
+
+        Args:
+            request: Frozen bundle, exact test population, stratified-selection
+                and tolerance contract, new output path, execution device, and
+                optional diagnostic headroom store.
+
+        Returns:
+            Receipt reference whose content binds the scorer, state fusion,
+            decoder, actor/source profile, learning semantics, test provenance,
+            row selection, tolerances, and optional headroom diagnostic.
+
+        Raises:
+            FileExistsError: If the receipt destination already exists.
+            ValueError: If bundle, dataset, device, lineage, or diagnostic store
+                identity is invalid or has drifted from the frozen manifest.
+
+        Notes:
+            ``longer_horizon_gate_passed`` requires both learned-recursion
+            agreement and positive independent held-out endpoint headroom. The
+            optional store diagnostic explicitly declares that it is not an
+            independent endpoint evaluation, so a certification receipt cannot
+            promote ``h>2`` claims by itself.
+        """
+
+        output = request.output_receipt_path.expanduser().resolve()
+        if output.exists():
+            raise FileExistsError(f"Q_H exact-Q2 certification receipt already exists: {output}.")
+        manifest = self._read_verified_manifest(request.bundle)
+        expected_test = manifest["identity"]["datasets"]["test"]
+        if expected_test != _jsonable(request.test):
+            raise ValueError("Q_H exact-Q2 population does not match the frozen bundle test identity.")
+        test = request.test.setup_target()
+        identity = manifest["identity"]
+        module_config = QhLightningModuleConfig.model_validate(manifest["module_config"])
+        objective_profile = identity["learning_contract"].get("objective_profile")
+        if objective_profile != "qh_dense_valid_fitted_q_v1":
+            raise ValueError("Q_H exact-Q2 certification requires the dense-valid fitted-Q objective profile.")
+        data = QhDataModule(
+            train=test,
+            batch_size=int(self.config.batch_size),
+            num_workers=int(self.config.num_workers),
+            pin_memory=bool(self.config.pin_memory),
+            persistent_workers=bool(self.config.persistent_workers),
+            seed=int(manifest["identity"]["seed"]),
+            experiment_profile=module_config.experiment_profile,
+            objective_profile=objective_profile,
+        )
+        if data.learning_contract_hash != identity["learning_contract_hash"]:
+            raise ValueError("Q_H exact-Q2 test learning contract drifted from the bundle.")
+        if data.actor_state_contract_hash != identity["actor_state_contract_hash"]:
+            raise ValueError("Q_H exact-Q2 test actor-state contract drifted from the bundle.")
+        if data.geometry_contract_hash != identity["geometry_contract_hash"]:
+            raise ValueError("Q_H exact-Q2 test geometry contract drifted from the bundle.")
+        expected_provenance = identity["dataset_provenance"]["test"]
+        if _jsonable(test.provenance) != expected_provenance:
+            raise ValueError("Q_H exact-Q2 test provenance drifted from the bundle.")
+
+        device = _certification_device(request.device)
+        runtime = self.load_for_inference(request.bundle, device=device)
+        module = QhLightningModule(module_config, scorer=runtime.scorer)
+        module.target_scorer.load_state_dict(module.online_scorer.state_dict(), strict=True)
+        q2_evidence = QhExactQ2Certifier(request.spec).certify(
+            module=module,
+            dataset=test,
+            device=device,
+            ordered_store_manifest_sha256=_json_payload_hash(identity["ordered_store_manifests"]["test"]),
+            decoder_support=_decoder_support(manifest["scorer_config"]),
+        )
+        headroom = _headroom_diagnostic(
+            request.headroom_store_dir,
+            threshold=float(request.spec.positive_headroom_threshold),
+        )
+        independent_positive_headroom = bool(
+            headroom.get("independent_endpoint_evaluation", False)
+            and headroom.get("positive_lookahead_headroom", False)
+        )
+        receipt = {
+            "schema_version": "qh-exact-q2-certification-receipt-v2",
+            "historical_compatibility": {
+                "qh-exact-q2-certification-receipt-v1": "inspection_only_not_promotable",
+            },
+            "bundle_manifest_sha256": request.bundle.manifest_sha256,
+            "test_population_sha256": _json_payload_hash(request.test),
+            "test_provenance_sha256": _json_payload_hash(test.provenance),
+            "execution_device": str(device),
+            "bound_contract": {
+                "scorer_config_hash": manifest["scorer_config_hash"],
+                "scorer_config": manifest["scorer_config"],
+                "module_config": manifest["module_config"],
+                "learning_contract_hash": identity["learning_contract_hash"],
+                "learning_contract": identity["learning_contract"],
+                "actor_state_contract_hash": identity["actor_state_contract_hash"],
+                "actor_state_contract": identity["actor_state_contract"],
+                "geometry_contract_hash": identity["geometry_contract_hash"],
+                "action_mask_semantics": identity["action_mask_semantics"],
+                "representation_semantics": identity["representation_semantics"],
+                "ordered_test_store_manifests": identity["ordered_store_manifests"]["test"],
+                "ordered_test_store_paths": identity["ordered_store_paths"]["test"],
+            },
+            "exact_q2": q2_evidence,
+            "oracle_headroom": headroom,
+            "longer_horizon_gate": {
+                "learned_recursion_passed": q2_evidence["learned_recursion_passed"],
+                "independent_positive_headroom": independent_positive_headroom,
+                "passed": bool(q2_evidence["learned_recursion_passed"] and independent_positive_headroom),
+                "claim_scope": "h>2",
+            },
+        }
+        output.parent.mkdir(parents=True, exist_ok=True)
+        _write_json(output, receipt)
+        return QhExactQ2CertificationResult(output, _sha256_file(output))
 
     @classmethod
     def load_for_inference(
@@ -916,6 +1086,99 @@ def _json_payload_hash(value: Any) -> str:
     return hashlib.sha256(encoded).hexdigest()
 
 
+def _certification_device(value: str) -> torch.device:
+    """Resolve one explicit certification device and fail closed on CUDA drift."""
+
+    try:
+        device = torch.device(value)
+    except (RuntimeError, ValueError) as error:
+        raise ValueError(f"Q_H exact-Q2 certification received invalid device {value!r}.") from error
+    if device.type not in {"cpu", "cuda"}:
+        raise ValueError("Q_H exact-Q2 certification supports only CPU or CUDA devices.")
+    if device.type == "cuda" and not torch.cuda.is_available():
+        raise ValueError("Q_H exact-Q2 certification requested CUDA, but CUDA is unavailable.")
+    return device
+
+
+def _decoder_support(scorer_config: object) -> QhDecoderSupport | None:
+    """Extract fixed CORAL support from the verified scorer configuration."""
+
+    if not isinstance(scorer_config, dict):
+        raise ValueError("Q_H exact-Q2 scorer configuration is malformed.")
+    decoder = scorer_config.get("value_decoder")
+    if not isinstance(decoder, dict) or not isinstance(decoder.get("kind"), str):
+        raise ValueError("Q_H exact-Q2 value-decoder configuration is malformed.")
+    kind = str(decoder["kind"])
+    if kind == "regression":
+        return None
+    if kind != "coral":
+        raise ValueError(f"Q_H exact-Q2 received unsupported value decoder {kind!r}.")
+    edges = decoder.get("bin_edges")
+    values = decoder.get("bin_values")
+    if not isinstance(edges, list) or not isinstance(values, list) or not edges or not values:
+        raise ValueError("Q_H exact-Q2 CORAL support is incomplete.")
+    return QhDecoderSupport(
+        kind="coral",
+        lower_representative=float(values[0]),
+        upper_representative=float(values[-1]),
+        lower_edge=float(edges[0]),
+        upper_edge=float(edges[-1]),
+    )
+
+
+def _headroom_diagnostic(store_dir: Path | None, *, threshold: float) -> dict[str, object]:
+    """Summarize the existing exact-role terminal-step headroom diagnostic.
+
+    The rollout inspection owner explicitly labels this evidence as a proxy and
+    records ``independent_endpoint_evaluation=False``. This adapter preserves
+    that boundary, binds the validated store manifest, and reports whether any
+    exact-role ``delta_look`` contrast is positive without promoting the proxy
+    to the independent held-out endpoint evidence required for ``h>2``.
+    """
+
+    if store_dir is None:
+        return {
+            "available": False,
+            "reason": "no_headroom_store_supplied",
+            "independent_endpoint_evaluation": False,
+            "positive_lookahead_headroom": False,
+        }
+    reader = RolloutZarrStoreReader(store_dir)
+    validation = reader.validate(validate_selected_depth_payload=False)
+    if not validation.ok:
+        raise ValueError(f"Q_H exact-Q2 headroom store validation failed: {validation.errors}.")
+    evidence = oracle_headroom_evidence(reader, threshold=threshold)
+    included = [
+        row
+        for row in evidence["contrast_rows"]
+        if row.get("contrast") == "delta_look" and row.get("status") == "included"
+    ]
+    values = [float(row["value"]) for row in included if row.get("value") is not None]
+    manifest = reader.manifest()
+    root_attrs = manifest.get("root_attrs")
+    root_attrs = root_attrs if isinstance(root_attrs, dict) else {}
+    return {
+        "available": True,
+        "evidence_status": evidence["evidence_status"],
+        "metric_source": evidence["metric_source"],
+        "endpoint_kind": evidence["endpoint_kind"],
+        "independent_endpoint_evaluation": evidence["independent_endpoint_evaluation"],
+        "positive_lookahead_headroom": any(value > threshold for value in values),
+        "positive_threshold": threshold,
+        "included_delta_look_count": len(values),
+        "delta_look_values": values,
+        "summary_rows": evidence["summary_rows"],
+        "store": {
+            "path": str(validation.store_dir),
+            "manifest_sha256": root_attrs.get("manifest_sha256"),
+            "num_rollouts": validation.num_rollouts,
+            "num_steps": validation.num_steps,
+            "num_candidates": validation.num_candidates,
+        },
+        "full_evidence_sha256": _json_payload_hash(evidence),
+    }
+
+
 def _sha256_file(path: Path) -> str:
     digest = hashlib.sha256()
     try:
@@ -936,6 +1199,9 @@ __all__ = [
     "QhCheckpointSelectionSpec",
     "QhExperiment",
     "QhExperimentConfig",
+    "QhExactQ2CertificationRequest",
+    "QhExactQ2CertificationResult",
+    "QhExactQ2CertificationSpec",
     "QhFitRequest",
     "QhFitResult",
     "QhHeldOutEvaluationRequest",
