@@ -3,6 +3,10 @@
 Use this as reference-only inspiration from `mattpocock/skills`; do not activate
 Matt grilling skills as ARIA defaults.
 
+External grounding is registered as `matt-scaffold-guidance` in
+`.agents/skill-sources.toml`. The ID is provenance only and never activates
+upstream maintenance.
+
 Borrow:
 
 - facts before questions;

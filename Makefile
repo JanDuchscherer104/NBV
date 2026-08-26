@@ -1,5 +1,5 @@
 .DEFAULT_GOAL := help
-.PHONY: help ci ci-impact-self-test ownership-consolidation-contract typst-authoring-contract thesis-literature-provenance graphify-skill-upstream-self-test graphify-projection-self-test graphify-projection-live-check graphify-usable-check graphify-state-check scaffold-check agents-db-validate package-smoke qh-ci replay-oracle-golden docs-render-core quarto-docs-ci typst-paper-ci thesis-pdf-ci thesis-marker-contract ruff-full ruff-targeted mypy-contract mypy-full mypy-targeted coverage-targeted agent-status
+.PHONY: help ci ci-impact-self-test ownership-consolidation-contract typst-authoring-contract thesis-literature-provenance skill-source-self-test graphify-skill-upstream-self-test graphify-projection-self-test graphify-projection-live-check graphify-usable-check graphify-state-check scaffold-check agents-db-validate package-smoke qh-ci replay-oracle-golden docs-render-core quarto-docs-ci typst-paper-ci thesis-pdf-ci thesis-marker-contract ruff-full ruff-targeted mypy-contract mypy-full mypy-targeted coverage-targeted agent-status
 .PHONY: api-docs-self-test
 .PHONY: context-qmd-tree qmd-frontmatter-check
 .PHONY: context-index context-get context-contracts context-modules context-classes context-functions
@@ -285,7 +285,11 @@ scaffold-audit-self-test: _check_python ## 🧭 Run negative probes for scaffold
 	@$(PYTHON_INTERPRETER) scripts/scaffold_audit.py --self-test
 	@$(PYTHON_INTERPRETER) scripts/tests/test_agent_governance_g002.py
 
-scaffold-check: agents-db-validate check-agent-memory scaffold-audit scaffold-audit-self-test graphify-state-check ## 🧭 Run the strict local agent-scaffold gate
+scaffold-check: agents-db-validate check-agent-memory scaffold-audit scaffold-audit-self-test skill-source-self-test graphify-state-check ## 🧭 Run the strict local agent-scaffold gate
+
+skill-source-self-test: _check_python ## 🔗 Validate explicit upstream skill-source metadata and tooling
+	@$(PYTHON_INTERPRETER) scripts/skill_sources.py validate
+	@$(PYTHON_INTERPRETER) -m pytest -q scripts/tests/test_skill_sources.py
 
 graphify-skill-upstream-self-test: _check_python ## 🕸️ Verify the project Graphify skill is byte-identical to upstream
 	@$(PYTHON_INTERPRETER) scripts/tests/test_graphify_upstream_skill.py
@@ -863,7 +867,7 @@ coverage-targeted: ## Run branch coverage for explicitly supplied tests (set COV
 	done; \
 	cd $(PKG_DIR) && uv run --extra dev pytest --import-mode=importlib --cov $(COVERAGE_JSON_FLAG) $$normalized
 
-ci: agents-db-validate ownership-consolidation-contract qmd-frontmatter-check check-agent-memory graphify-skill-upstream-self-test api-docs-self-test package-smoke docs-render-core ## Run the root CI contract
+ci: agents-db-validate ownership-consolidation-contract qmd-frontmatter-check check-agent-memory skill-source-self-test graphify-skill-upstream-self-test api-docs-self-test package-smoke docs-render-core ## Run the root CI contract
 
 #  ═══════════════════════════════════════════════════════════════════════
 #  ℹ️  Help

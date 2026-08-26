@@ -1,6 +1,7 @@
 ---
 kind: plan
-status: current
+status: superseded
+superseded_by: .omx/plans/performance-goal-wandb-bridge.md
 ---
 
 # Measured Autoresearch Sidecar — Implementation Plan

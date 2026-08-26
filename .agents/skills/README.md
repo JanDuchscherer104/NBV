@@ -42,6 +42,8 @@ chain through a second index. Convert weak plain reference-name inventories into
 concise Markdown pointers where practical. Put branch-specific commands, lookup
 tables, examples, version details, and longer procedures in those references.
 Do not create a registry that mirrors the skill set or source ownership.
+`.agents/skill-sources.toml` is a narrow external-provenance dependency map; it
+does not register, own, or activate skills.
 When moving guidance behind a pointer, preserve a direct activation condition
 and a reachable leaf; test both the positive route and its near-miss.
 

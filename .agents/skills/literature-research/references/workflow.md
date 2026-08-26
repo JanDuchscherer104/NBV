@@ -40,4 +40,5 @@ decide the final narrative or write thesis prose.
 This workflow selectively adapts source-screening and comparison mechanics from
 [WenyuChiou/academic-writing-skills at
 `cb56a7d`](https://github.com/WenyuChiou/academic-writing-skills/tree/cb56a7d0175f532a6c628c9829e1df824fa938d7).
-The linked upstream skill is reference-only.
+The reference-only grounding is registered as `wenyu-academic-writing` in
+`.agents/skill-sources.toml` and never activates upstream maintenance.

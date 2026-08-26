@@ -77,6 +77,9 @@ explicit.
   capability, use the `simplification` workflow and preserve the outcome until
   comparative evidence supports its retained, replaced, removed, deferred, or
   open status.
+- **SENPAI:** For external-harness adoption or a formal measured experiment,
+  read [`references/senpai-performance.md`](references/senpai-performance.md).
+  It selects the adoption or evaluator-gated W&B reporting mode.
 - **Unknown local owner:** Route to `aria-nbv-context` for hierarchical owner
   localization before editing.
 - **Ambiguous high-impact decision:** Route to `aria-grill` before choosing a
