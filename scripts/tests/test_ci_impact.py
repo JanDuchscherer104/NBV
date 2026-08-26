@@ -239,6 +239,7 @@ class SelectionTests(unittest.TestCase):
                 "scaffold",
             },
             ".agents/skills/academic-writing/SKILL.md": {"docs", "scaffold"},
+            ".agents/skills/literature-research/SKILL.md": {"docs", "scaffold"},
             ".agents/skills/scientific-review/SKILL.md": {"docs", "scaffold"},
             "aria_nbv/aria_nbv/__init__.py": {"package"},
             "aria_nbv/aria_nbv/pose_generation/candidate_generation.py": {"package"},
