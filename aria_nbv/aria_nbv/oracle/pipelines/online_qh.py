@@ -10,6 +10,7 @@ from typing import Any, Literal
 
 import torch
 
+from ...data_handling.qh_data import QhActorTensors
 from ...data_handling.qh_data.batching import move_qh_actor_tensors
 from ...rollouts.replay.policy import RolloutPolicySpec
 from ...rollouts.replay.types import CandidateScores
@@ -35,19 +36,23 @@ class _QhCandidateScoreAdapter:
 
         actor = context.to_qh_actor()
         _validate_runtime_context(self.runtime, context)
+        _validate_trained_horizon_support(self.runtime, actor)
         candidates = context.candidates
         if not bool(torch.as_tensor(candidates.mask_valid, dtype=torch.bool).any()):
             raise ValueError("Online Q_H scoring requires at least one hard-valid candidate row.")
         scorer_device = _module_device(self.runtime.scorer)
         actor = move_qh_actor_tensors(actor, scorer_device)
         with torch.inference_mode():
-            values = self.runtime.scorer(actor)
+            output = self.runtime.scorer(
+                actor,
+                requested_horizon=actor.horizon_remaining,
+            )
         realized = torch.nonzero(actor.step_mask[0], as_tuple=False).reshape(-1)
         if realized.numel() == 0:
             raise ValueError("Online Q_H scoring requires one realized actor state.")
         state_index = int(realized[-1].item())
         action_mask = actor.action_mask[0, state_index]
-        valid_values = values[0, state_index][action_mask]
+        valid_values = output.conditional_q[0, state_index][action_mask]
         device = candidates.poses_world_cam().t.device
         dtype = candidates.poses_world_cam().t.dtype
         return CandidateScores.from_valid_values(
@@ -90,6 +95,20 @@ def _validate_runtime_context(runtime: QhInferenceRuntime, context: OracleDecisi
         mismatches.append("representation_semantics")
     if mismatches:
         raise ValueError(f"Q_H inference runtime rejects decision inputs: {', '.join(mismatches)} mismatch.")
+
+
+def _validate_trained_horizon_support(runtime: QhInferenceRuntime, actor: QhActorTensors) -> None:
+    """Reject syntactically valid scalar queries absent from bundle evidence."""
+
+    horizon = actor.horizon_remaining.reshape(-1)
+    step_mask = actor.step_mask.reshape(-1)
+    if horizon.numel() != step_mask.numel():
+        raise ValueError("Q_H inference actor horizon and realized-step axes are misaligned.")
+    realized_horizons = horizon[step_mask]
+    trained = torch.as_tensor(runtime.trained_horizons, dtype=realized_horizons.dtype, device=realized_horizons.device)
+    if trained.numel() == 0 or bool((~torch.isin(realized_horizons, trained)).any()):
+        missing = sorted({int(value) for value in realized_horizons.tolist()} - set(runtime.trained_horizons))
+        raise ValueError(f"Q_H inference runtime has no manifest-bound training support for horizons {missing}.")
 
 
 @dataclass(frozen=True, slots=True)

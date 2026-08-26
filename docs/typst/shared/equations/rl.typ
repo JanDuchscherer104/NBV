@@ -192,7 +192,8 @@
   finite_horizon_return: $
     G_(t,e)^((h))
     =
-    sum_(k=0)^(min(h, b_t) - 1) #symb.rl.gamma^k r_(t+k)^e
+    sum_(k=0)^(h - 1) #symb.rl.gamma^k r_(t+k)^e,
+    quad 1 <= h <= b_t <= #symb.rl.H_max
   $,
   q_h: $
     Q_(h,e) (s_t, i)
@@ -201,9 +202,37 @@
     quad
     i in cal(A)_t,
     quad
-    1 <= h <= b_t,
+    1 <= h <= b_t <= #symb.rl.H_max,
     quad
     Q_(0,e) (s, i) = 0
+  $,
+  qh_scorer_interface: $
+    (#symb.rl.conditional_q, #symb.rl.feasibility_logits)
+    =
+    f_theta (s_t, e, q_(t,i), h),
+    quad
+    h = #symb.rl.budget "in implemented V1";
+    quad
+    1 <= b_t <= #symb.rl.H_max
+  $,
+  qh_conditional_mask_independence: $
+    (#symb.rl.conditional_q, #symb.rl.feasibility_logits)
+    (s_t,e,q_(t,i),h, bold(m)_t)
+    =
+    (#symb.rl.conditional_q, #symb.rl.feasibility_logits)
+    (s_t,e,q_(t,i),h,bold(m)'_t)
+  $,
+  qh_huber_loss: $
+    cal(L)_Q
+    =
+    (1)/(N_Q)
+    sum_(n in cal(D)_Q)
+    rho_1 (Q_(n)^"cond" - y_n),
+    quad
+    rho_1(e) = cases(
+      0.5 e^2 & "if" abs(e) <= 1,
+      abs(e) - 0.5 & "otherwise"
+    )
   $,
   qh_residual_decomposition: $
     b_(psi,i)
@@ -221,18 +250,28 @@
     delta_(theta,t,e,i)^h
   $,
   qh_coral_interface: $
-    p_(t,i,k)^"CORAL"
+    #symb.rl.coral_q_label
     &=
-    sigma(o_(t,i,k)^"CORAL"),
-    quad k=0,dots,K-2 \
-    pi_(t,i,k)^"CORAL"
+    sum_(k=0)^(K - 2) bb(1)[y_n > #symb.rl.coral_q_edge],
+    quad
+    l_(n,k)=bb(1)[#symb.rl.coral_q_label > k] \
+    cal(L)_Q^"CORAL"
     &=
-    p_(t,i,k-1)^"CORAL" - p_(t,i,k)^"CORAL",
-    quad p_(t,i,-1)^"CORAL"=1,
-    quad p_(t,i,K-1)^"CORAL"=0 \
-    hat(r)_psi^e (#symb.rl.s_cf0, #symb.entity.target_desc, #symb.rl.candidate_qti)
+    -sum_n sum_(k=0)^(K - 2)
+    (l_(n,k) log p_(n,k) + (1-l_(n,k)) log(1-p_(n,k))),
+    quad p_(n,k)=sigma(o_(n,k)) \
+    pi_(n,k)^"raw"
     &=
-    sum_(k=0)^(K - 1) pi_(t,i,k)^"CORAL" u_k
+    p_(n,k-1)-p_(n,k),
+    quad p_(n,-1)=1,
+    quad p_(n,K-1)=0 \
+    tilde(pi)_(n,k)
+    &=
+    (max(pi_(n,k)^"raw",0)) /
+    (sum_(j=0)^(K - 1) max(pi_(n,j)^"raw",0) + epsilon) \
+    Q_n^"cond"
+    &=
+    sum_(k=0)^(K - 1) tilde(pi)_(n,k) #symb.rl.coral_q_value
   $,
   qh_uncentered_residual: $
     Q_(h,theta,e,i)
@@ -282,6 +321,31 @@
     +
     gamma
     B_t^((h,e))
+  $,
+  qh_exact_q2_target: $
+    #symb.rl.exact_q2_target
+    =
+    r_t^e
+    +
+    gamma_t
+    max_(j : m_(t+1,j)^"train" = 1)
+    r_(t+1,j)^e
+  $,
+  qh_exact_q2_error: $
+    #symb.rl.q2_recursion_error
+    =
+    abs(
+      y_t^((2,"recursive"))
+      -
+      #symb.rl.exact_q2_target
+    ),
+    quad
+    #symb.rl.q2_recursion_error
+    <=
+    tau_"abs"
+    +
+    tau_"rel"
+    abs(#symb.rl.exact_q2_target)
   $,
   qh_loss: $
     #symb.rl.q_loss

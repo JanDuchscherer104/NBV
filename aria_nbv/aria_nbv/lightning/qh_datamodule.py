@@ -1,17 +1,20 @@
 """Stage admission and deterministic loaders for ``Q_H`` chain datasets.
 
 Construction is a hard admission boundary: configured stages must be nonempty,
-share one :class:`~aria_nbv.rollouts.qh_reader.QhDataContract`, and have
-disjoint scene sets.  Once admitted, loaders preserve the dataset's padded
-candidate width, seed each DataLoader's torch generator from the configured
-module seed, and derive Python/NumPy worker seeds from each worker's
+share one population-independent fitted-Q semantics projection, and have
+disjoint scene sets. Candidate-generator, rollout-recipe, and behavior-policy
+vocabularies may differ by stage because they identify the sampled population,
+not the Bellman problem; the experiment bundle retains each stage's full
+provenance. Once admitted, loaders preserve the dataset's padded candidate
+width, seed each DataLoader's torch generator from the configured module seed,
+and derive Python/NumPy worker seeds from each worker's
 ``torch.initial_seed()``.
 """
 
 from __future__ import annotations
 
 import random
-from dataclasses import dataclass, fields
+from dataclasses import dataclass, fields, replace
 from functools import partial
 from typing import Protocol, cast
 
@@ -26,7 +29,7 @@ from ..data_handling.qh_data.views import QhActorStateContract, QhExperimentProf
 from ..rollouts.qh_reader import QhDataContract
 from ..utils.fingerprints import stable_msgspec_hash
 
-QH_HORIZON_WEIGHTING = "uniform-admitted-selected-row-huber-mean-v1"
+QH_HORIZON_WEIGHTING = "uniform-horizon-state-balanced-dense-q1-selected-recursion-v2"
 
 
 @dataclass(frozen=True, slots=True)
@@ -34,16 +37,30 @@ class QhLearningContract:
     """Complete identity of replay semantics used to optimize and evaluate ``Q_H``."""
 
     data_contract: QhDataContract
-    """Exact persisted rollout semantics and replay-support identity."""
+    """Training-stage semantics and population identity bound into the model."""
 
     max_horizon: int
     """Largest acquisition horizon shared by the admitted stages."""
 
     horizon_weighting: str = QH_HORIZON_WEIGHTING
-    """Selected-row loss aggregation identity."""
+    """Candidate-within-state, state-within-horizon, equal-horizon aggregation identity."""
 
     objective_profile: QhObjectiveProfile = "legacy_selected_rows_v1"
     """Closed fitted-Q support and padding semantics."""
+
+    def learning_semantics(self) -> "QhLearningContract":
+        """Return the population-independent optimization contract.
+
+        The complete training contract remains the model and bundle identity.
+        This projection is only for compatibility checks against validation or
+        held-out stages whose candidate-generator, rollout-recipe, and
+        behavior-policy vocabularies may intentionally differ. Reward, target,
+        mask, actor-source, horizon, weighting, and objective semantics remain
+        exact; stage artifact identity remains separately bound by dataset
+        configuration and provenance hashes.
+        """
+
+        return replace(self, data_contract=self.data_contract.learning_semantics())
 
 
 class _QhDataset(Protocol):
@@ -68,7 +85,17 @@ class _QhDataset(Protocol):
 
 
 class QhDataModule(pl.LightningDataModule):
-    """Admit compatible stage datasets and build their DataLoaders."""
+    """Admit semantically compatible, scene-disjoint fitted-Q populations.
+
+    Equality of the full :class:`QhDataContract` would accidentally require
+    train, validation, and test to contain the same candidate-generator,
+    rollout-recipe, and behavior-policy vocabularies. Those vocabularies are
+    distribution provenance and may intentionally differ to measure population
+    shift. Admission therefore compares :meth:`QhDataContract.learning_semantics`
+    while the resulting :class:`QhLearningContract` binds the full training
+    contract. :class:`QhExperiment` separately serializes every stage's full
+    provenance, so this relaxation does not erase or conflate artifact identity.
+    """
 
     def __init__(
         self,
@@ -102,8 +129,9 @@ class QhDataModule(pl.LightningDataModule):
         empty = [name for name, dataset in stages.items() if len(dataset) == 0]
         if empty:
             raise ValueError(f"Q_H configured corpus stages must contain at least one chain: {empty}.")
-        if any(dataset.contract != train.contract for dataset in stages.values()):
-            raise ValueError("Q_H corpus stages have incompatible learning contracts.")
+        train_semantics = train.contract.learning_semantics()
+        if any(dataset.contract.learning_semantics() != train_semantics for dataset in stages.values()):
+            raise ValueError("Q_H corpus stages have incompatible learning semantics.")
         horizon_mismatches = {
             name: dataset.max_horizon for name, dataset in stages.items() if dataset.max_horizon != train.max_horizon
         }

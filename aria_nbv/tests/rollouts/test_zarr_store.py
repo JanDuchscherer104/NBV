@@ -216,6 +216,74 @@ def test_rollout_zarr_store_writes_reads_and_validates_records(tmp_path) -> None
             assert np.array_equal(actual, expected)
 
 
+def test_rollout_zarr_dense_valid_contract_is_proven_by_persisted_support(tmp_path) -> None:
+    records = build_rollout_records(horizon=2, num_samples=8, seed=7)
+    result = write_rollout_zarr_store(
+        tmp_path / "dense-valid.zarr",
+        records,
+        oracle_query_mode="dense_valid",
+        label_support_semantics="equals_action_on_realized_steps_v1",
+    )
+
+    reader = RolloutZarrStoreReader(result.store_dir)
+    q_h = reader.q_h_view()
+    assert reader.root.attrs["oracle_query_mode"] == "dense_valid"
+    assert reader.root.attrs["label_support_semantics"] == "equals_action_on_realized_steps_v1"
+    assert np.array_equal(q_h["q_train_mask"], q_h["valid_action_mask"])
+    validation = reader.validate()
+    assert validation.ok, validation.errors
+
+
+def test_rollout_zarr_dense_valid_contract_rejects_subset_support(tmp_path) -> None:
+    records = build_rollout_records(horizon=1, num_samples=6, seed=25)[:1]
+    records[0].lineage.target.target_protocol_version = "v1-observed"
+    records[0].lineage.target.target_row_id = 11
+    records[0].lineage.target.target_id = "target-invalid"
+    records[0].lineage.target.target_invalid_reason_bitset = 1 << 10
+    records[0].lineage.target.target_primary_invalid_reason = 10
+    records[0].lineage.target.gt_match_status = "unmatched_gt"
+
+    with pytest.raises(ValueError, match="dense-valid.*q_train_mask"):
+        write_rollout_zarr_store(
+            tmp_path / "invalid-dense-valid.zarr",
+            records,
+            target_protocol_version="v1-observed",
+            oracle_query_mode="dense_valid",
+            label_support_semantics="equals_action_on_realized_steps_v1",
+        )
+
+
+def test_rollout_zarr_validation_rejects_dense_support_tampering(tmp_path) -> None:
+    records = build_rollout_records(horizon=2, num_samples=8, seed=19)
+    result = write_rollout_zarr_store(
+        tmp_path / "tampered-dense-valid.zarr",
+        records,
+        oracle_query_mode="dense_valid",
+        label_support_semantics="equals_action_on_realized_steps_v1",
+    )
+
+    root = zarr.open_group(result.store_dir, mode="a")
+    q_train_mask = np.asarray(root["q_h/q_train_mask"][:], dtype=np.bool_)
+    tampered_row = tuple(int(index) for index in np.argwhere(q_train_mask)[0])
+    root["q_h/q_train_mask"][tampered_row] = False
+
+    validation = validate_rollout_zarr_store(result.store_dir)
+    assert not validation.ok
+    assert any("dense-valid q_train_mask" in error for error in validation.errors)
+
+
+def test_rollout_zarr_rejects_mixed_query_and_support_profiles(tmp_path) -> None:
+    records = build_rollout_records(horizon=1, num_samples=6, seed=31)[:1]
+
+    with pytest.raises(ValueError, match="must be declared together"):
+        write_rollout_zarr_store(
+            tmp_path / "mixed-profile.zarr",
+            records,
+            oracle_query_mode="dense_valid",
+            label_support_semantics="subset_of_action_v1",
+        )
+
+
 def test_rollout_zarr_rejects_stale_schema_version(tmp_path) -> None:
     records = build_rollout_records(horizon=1, num_samples=6, seed=11)[:1]
     result = write_rollout_zarr_store(tmp_path / "rollouts.zarr", records)

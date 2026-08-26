@@ -10,4 +10,10 @@
   candidate_validity_token: $bold(h)_(t,i)^"valid"$,
   // Candidate source/provenance embedding kept separate from geometry.
   candidate_provenance_token: $bold(h)_(t,i)^"prov"$,
+  // Selected pose j encoded from the current camera at decision state t.
+  history_pose_feature: $bold(p)_(t,j)^"hist"$,
+  // Relative age of selected pose j at decision state t.
+  history_relative_age: $a_(t,j)^"hist"$,
+  // Fixed-width causal selected-pose history token.
+  history_token: $bold(h)_t^"hist"$,
 )

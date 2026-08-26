@@ -14,25 +14,25 @@
   citation: [@EFM3D-straub2024],
   source: "aria_nbv/aria_nbv/data_handling/qh_data/views.py; aria_nbv/aria_nbv/rollouts/qh_reader.py; aria_nbv/tests/lightning/test_qh_module.py",
   gate: [retain actor/oracle provenance checks and name the admitted state protocol in every run],
-)[The replay carrier, actor/supervision separation, and scorer-independent fitted-Q adapter are implemented. No production finite-horizon scorer or task-sufficient dynamic reconstruction memory is implemented, and frozen scientific validation remains pending.]
+)[The replay carrier, actor/supervision separation, scalar requested-horizon scorer, fitted-Q adapter, and privileged `S1-points` selected-surface control are implemented. The deployable `S0-pose` root-moments state and privileged S1 state are deliberately incomplete; task-sufficient ray memory and frozen scientific validation remain pending.]
 
 The implemented one-step scorer consumes an actor-visible snippet view, a row-aligned candidate table, a reference rig pose, calibrated candidate cameras, and optionally cached @egocentric-voxel-lifting:short output. Oracle @relative-reconstruction-improvement:short labels enter the loss after prediction and are not scorer inputs. The current oracle target descriptor contains semantic identity, pose, positive metric extents, and reference-relative pose in an actor-safe shape, but its values are derived from privileged @ground-truth:short target tasks. A deployable claim therefore still requires observed or predicted target fields with explicit provenance.
 
-The implemented `QhActorTensors` contract can carry root semidense evidence, oracle-derived target geometry, root-relative candidate poses, selected-pose history, and remaining budget to an injected scorer. This is an information boundary, not an implemented model architecture. Candidate regeneration changes pose, history, budget, and the finite action table; a future scorer must still define how causal selected observations update its scene representation.
+The implemented `QhActorTensors` contract carries root semidense evidence, target geometry admitted by the declared target-input protocol, root-relative candidate poses, selected-pose history, and remaining budget to the finite-horizon scorer. The non-deployable `v0_gt_input` protocol derives that geometry from Oracle GT tasks; deployable `v1_observed` instead requires an actor-visible descriptor whose source, construction provenance, and descriptor hash are bound in training and held-out receipts. The current model reduces root evidence to global moments and selected history to a causal pose summary. Candidate regeneration changes pose, history, budget, and the finite action table; richer models must still define how causal selected observations update scene memory without widening this actor/oracle boundary.
 
 Three boundaries are invariant. Invalidity is a hard mask with versioned reason codes, not a small value. GT meshes, target crops, current all-candidate renders, associations, and returns remain oracle or audit fields. Previously selected GT-mesh depth may enter a later state only under an explicitly privileged `CF-GT` protocol; the corresponding sensor-like or observed variants must use distinct provenance. Candidate rows remain tied to stable shell identities and documented coordinate frames.
 
 === Task-sufficient actor state
 
 #thesis_status(
-  implementation: "planned",
+  implementation: "partial",
   evidence: "pending",
   citation: [@GeometricDeepLearning-bronstein2021 @DeepSets-zaheer2017],
-  source: "docs/contents/theory/efm3d_scene_embeddings.qmd; docs/contents/theory/candidate_view_dependence.qmd",
+  source: "aria_nbv/aria_nbv/vin/modules/qh_scene_encoders.py; aria_nbv/aria_nbv/rendering/unproject.py; aria_nbv/tests/vin/test_qh_scene_encoders.py; docs/contents/theory/efm3d_scene_embeddings.qmd; docs/contents/theory/candidate_view_dependence.qmd",
   gate: [selected-observation reader, deterministic fusion, source-dropout tests, and held-out target-RRI ranking],
-)[The canonical state separates immutable root context from a causal dynamic memory. Particular scene carriers are promoted only when they preserve the information boundary and improve target-conditioned decisions.]
+)[The canonical state separates immutable root context from causal dynamic memory. A bounded, privileged identity-start S1 selected-surface residual is executable behind the scene-carrier seam. Its first five-chain comparison is development evidence because it informed subsequent initialization design and has no immutable run receipt; S1 remains unpromoted and S2 free/unknown memory remains planned.]
 
-ARIA-NBV does not require one universal reconstruction format. It requires an actor-visible state from which a model can compare a target $e$ and candidate $q_(t,i)$ at decision step $t$. The following information contract includes the requested residual horizon $h$ only for the explicit-horizon design candidate; the current fixed-horizon direction instead derives time-to-go from the bounded task and remaining budget:
+ARIA-NBV does not require one universal reconstruction format. It requires an actor-visible state from which a model can compare a target $e$ and candidate $q_(t,i)$ at decision step $t$. The frozen scorer interface includes the scalar requested residual horizon $h$ in addition to the factual remaining budget $b_t$:
 
 $
   #eqs.scene.actor_state_read
@@ -57,8 +57,8 @@ The selected-pose history $bold(H)_t$ remains explicit unless a promoted memory 
     toprule(),
     table.header([*State protocol*], [*Dynamic evidence*], [*Interpretation*]),
     midrule(),
-    [`S0-pose`], [selected poses only], [Planned first scorer baseline over the implemented replay tensors; not a complete reconstruction state.],
-    [`S1-points`], [causally fused selected surface points], [Minimum geometry-updated counterfactual state; does not distinguish observed free from unknown space.],
+    [`S0-pose`], [selected poses only], [Implemented feature-matched A0/A1 root-moments controls over replay tensors; not a complete reconstruction state.],
+    [`S1-points`], [causally fused selected surface points], [Implemented privileged identity-start, fixed-width residual over current-camera point sets; confirmatory evidence remains pending and observed free is not distinguished from unknown space.],
     [`S2-ray`], [surface, free, unknown, support, recency], [Canonical planned dynamic state for candidate-frustum and target-support queries.],
     [Privileged / sensor-like / actor-visible], [source tag on selected observations], [Orthogonal information protocol: privileged mesh depth, declared sensor-like simulation, or actor-visible observation.],
     bottomrule(),
@@ -66,7 +66,7 @@ The selected-pose history $bold(H)_t$ remains explicit unless a promoted memory 
   caption: [Counterfactual state and source protocols. Scene carrier, information source, interaction architecture, and learning objective are orthogonal experimental choices.],
 ) <tab:thesis-counterfactual-state-protocols>
 
-A useful representation must preserve distinctions that can change target-specific return, distinguish missing evidence from predicted free space, and admit a causal update after selection. Candidate queries should read the same memory in target-local, candidate-local, and ray-relative coordinates. A common world translation or yaw convention must not change physical candidate values, while gravity, scale, target extent, camera direction, occlusion, and temporal order remain observable task variables. Exact global $op("SE")(3)$ invariance is therefore neither required nor claimed.
+A useful representation must preserve distinctions that can change target-specific return, distinguish missing evidence from predicted free space, and admit a causal update after selection. The implemented S1 control deliberately stops earlier: it backprojects only selected $j<t$ depth, expresses points from the factual current camera, applies one shared point map, and mean/max pools the union into a root-width residual. It is point-order invariant but density weighted—each valid strided pixel contributes one set element—and retains only explicit point, pixel-support, and view-support summaries. Candidate queries do not yet read candidate-relative points. Zeroing only S1's final residual projection makes fresh S1 predictions exactly equal to matched H0, lets that projection move on the first backward pass, and delays task gradients into the point map until the residual path opens. The initial five-chain comparison was inspected during architecture development, so it is not an untouched test and supports neither an identity-start improvement nor a geometry-attribution claim. Candidate-local point relations remain unpromoted; S2 must additionally preserve ray/free/unknown evidence. A common world translation or yaw convention must not change physical candidate values, while gravity, scale, target extent, camera direction, occlusion, and temporal order remain observable task variables. Exact global $op("SE")(3)$ invariance is therefore neither required nor claimed.
 
 === Local EFM3D evidence and the coverage gap
 
@@ -76,7 +76,7 @@ A useful representation must preserve distinctions that can change target-specif
   citation: [@EFM3D-straub2024 @EVL-Doc-2025],
   source: "docs/literature/tex-src/arXiv-EFM3D/method.tex, Sec. Egocentric Voxel Lifting, lines 2--44; docs/contents/literature/efm3d.qmd; docs/contents/theory/efm3d_scene_embeddings.qmd; aria_nbv/aria_nbv/data_handling/vin_store/writer.py",
   gate: [report target and candidate support against the persisted voxel pose and extent],
-)[EFM3D fields, their voxel pose, and finite extent are persisted. No finite-horizon scorer currently consumes them, and their sufficiency as the only long-horizon scene representation remains pending.]
+)[EFM3D fields, their voxel pose, and finite extent are persisted. The current finite-horizon scorer consumes lossy global field moments; their sufficiency as the only long-horizon scene representation remains pending.]
 
 EFM3D encodes logged RGB frames before lifting selected evidence into a finite gravity-aligned voxel field anchored to a snippet pose. The stored voxel transform and extent define the support of lifted features and dense heads. They must not be interpreted as a global volume containing every region observed by the trajectory. A target or candidate outside this support can remain physically valid; it has missing local-EVL evidence rather than an ordinary zero feature or automatically invalid action.
 
@@ -98,9 +98,9 @@ The coverage limitation motivates a layered interface rather than repeated infer
     toprule(),
     table.header([*Carrier*], [*Status*], [*Inductive benefit*], [*Cost and promotion gate*]),
     midrule(),
-    [Root semidense moments], [planned first scorer carrier], [Cheap root-level context for contract and optimization tests.], [No spatial support or causal update; never interpret as task-sufficient state.],
-    [Persisted EVL and snippet evidence], [available root carrier], [Aria-native local features, OBB hypotheses, calibrated cameras, and explicit extent.], [Not consumed by a finite-horizon scorer; limited spatial support and requires coverage metadata.],
-    [Semidense or fused point memory], [first dynamic control], [Observed surfaces follow trajectory and selected-view extent.], [No free/unknown state; test density and visibility sensitivity.],
+    [Root semidense moments], [implemented S0 control], [Cheap root-level context for contract and optimization tests.], [No spatial support or causal update; never interpret as task-sufficient state.],
+    [Persisted EVL and snippet evidence], [available; lossy moments consumed], [Aria-native local fields, OBB hypotheses, calibrated cameras, and explicit extent.], [The scorer consumes global moments rather than spatial EVL fields; limited support still requires coverage metadata.],
+    [Selected-surface point memory], [implemented privileged identity-start control; unpromoted], [Strictly causal surfaces follow selected views; fixed width and a zero-output residual preserve matched H0 initialization.], [Confirmatory comparison requires an immutable receipt and untouched scene-disjoint test manifest.],
     [Sparse ray-aware memory], [planned primary extension], [Separates surface, free, unknown, support, uncertainty, and causal updates.], [Requires deterministic fusion and counterfactual-source masks.],
     [Target-centred EVL re-lifting], [adaptation ablation], [Reuses logged frame features when the target lies outside the root field.], [Domain shift in the 3D neck; compare against simple logged-feature pooling.],
     [DINO-on-point], [appearance ablation], [Extends logged appearance to observed points beyond the EVL grid.], [Needs visibility gating, compression, and missing-descriptor masks.],

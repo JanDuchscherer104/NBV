@@ -30,44 +30,25 @@ from torch import Tensor
 
 from ...rollouts.qh_geometry import QhGeometryContract  # noqa: F401
 from ...vin.types import FreeInputProvenance
+from ..qh_contracts import (
+    QhExperimentProfile,
+    QhRootEvlProfile,
+    QhSelectedObservationProtocol,
+    validate_experiment_profile,  # noqa: F401 - compatibility re-export
+    validate_selected_observation_prefix,  # noqa: F401 - compatibility re-export
+)
 from ..vin_store.views import VinSnippetView
 
 if TYPE_CHECKING:
     from efm3d.aria.camera import CameraTW
     from efm3d.aria.pose import PoseTW
 
-QhRootEvlProfile = Literal["none", "evl_v1"]
-QhSelectedObservationProtocol = Literal["none", "cf_gt"]
-QhExperimentProfile = Literal["qh_cf0_v1", "qh_cfplus_gt_depth_v1"]
 QhActionMaskSemantics = Literal[
     "oracle_action_mask_v1",
     "actor_observed_action_mask_v1",
     "learned_feasibility_v1",
 ]
 QhRepresentationSemantics = Literal["root_moments_v1"]
-
-
-def validate_experiment_profile(
-    profile: QhExperimentProfile,
-    *,
-    root_evl_profile: QhRootEvlProfile,
-    selected_observation_protocol: QhSelectedObservationProtocol,
-    target_protocol: str | None = None,
-    privileged: bool = False,
-) -> None:
-    """Validate one named Q_H profile before dataset or scorer construction."""
-
-    if selected_observation_protocol == "cf_gt" and profile != "qh_cfplus_gt_depth_v1":
-        raise ValueError("Q_H selected_observation_protocol='cf_gt' requires qh_cfplus_gt_depth_v1.")
-    if root_evl_profile != "evl_v1":
-        raise ValueError(f"Q_H profile {profile!r} requires compact root EVL profile 'evl_v1'.")
-    expected_observation = "none" if profile == "qh_cf0_v1" else "cf_gt"
-    if selected_observation_protocol != expected_observation:
-        raise ValueError(f"Q_H profile {profile!r} requires selected_observation_protocol={expected_observation!r}.")
-    if profile == "qh_cfplus_gt_depth_v1" and not privileged:
-        raise ValueError("Deployable Q_H configuration rejects privileged qh_cfplus_gt_depth_v1.")
-    if profile == "qh_cf0_v1" and target_protocol is not None and target_protocol != "v1_observed":
-        raise ValueError("Deployable qh_cf0_v1 requires target_protocol='v1_observed'.")
 
 
 @dataclass(frozen=True, slots=True)
@@ -268,7 +249,13 @@ class QhSupervision:
 
 @dataclass(frozen=True, slots=True)
 class QhChainKey:
-    """CPU-only identity for one joined rollout chain and actor-store sample."""
+    """CPU-only identity and generation support for one joined rollout chain.
+
+    These fields remain outside :class:`QhActorTensors`: they may stratify
+    diagnostics and bind receipts, but must never become learned scorer inputs.
+    Candidate widths describe realized finite tables rather than nodes in a
+    planning tree.
+    """
 
     store_index: int
     """Zero-based ordinal of the rollout store within the configured reader sequence."""
@@ -284,6 +271,24 @@ class QhChainKey:
 
     target_row_id: int
     """Persistent target-entity row identifier for this chain within the rollout record."""
+
+    configured_horizon: int = 0
+    """Acquisition budget configured for this factual rollout chain."""
+
+    candidate_width_min: int = 0
+    """Smallest materialized candidate-table width across realized states."""
+
+    candidate_width_max: int = 0
+    """Largest materialized candidate-table width across realized states."""
+
+    candidate_config_hash: str = ""
+    """Exact persisted candidate-generator configuration digest."""
+
+    rollout_config_hash: str = ""
+    """Exact persisted rollout-recipe configuration digest."""
+
+    selection_policy: str = ""
+    """Factual behavior-policy identifier used to collect the chain."""
 
 
 @dataclass(frozen=True, slots=True)

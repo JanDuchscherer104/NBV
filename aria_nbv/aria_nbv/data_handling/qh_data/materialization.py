@@ -29,6 +29,7 @@ from .views import (
     QhSelectedObservationProtocol,
     QhStaticContext,
     QhSupervision,
+    validate_selected_observation_prefix,
 )
 
 if TYPE_CHECKING:
@@ -127,6 +128,12 @@ def _tensor_chain(
             source_sample_index=stored.source_ref.source_sample_index,
             scene_id=stored.source_ref.scene_id,
             target_row_id=stored.target_row_id,
+            configured_horizon=stored.configured_horizon,
+            candidate_width_min=stored.candidate_width_min,
+            candidate_width_max=stored.candidate_width_max,
+            candidate_config_hash=stored.candidate_config_hash,
+            rollout_config_hash=stored.rollout_config_hash,
+            selection_policy=stored.selection_policy,
         ),
         audit=audit,
     )
@@ -233,13 +240,19 @@ def _selected_observation_prefix(
         prefix_depth[state, :state] = _from_numpy(depth[:state], torch.float16)
         prefix_valid[state, :state] = _from_numpy(valid[:state], torch.bool)
         prefix_camera[state, :state] = cameras.tensor()[:state]
-    return QhSelectedObservationPrefix(
+    prefix = QhSelectedObservationPrefix(
         depth_m=prefix_depth,
         valid_mask=prefix_valid,
         camera=CameraTW(prefix_camera),
         camera_pose_relative_root=history_pose,
         prefix_mask=history_mask,
     )
+    validate_selected_observation_prefix(
+        prefix,
+        history_mask=history_mask,
+        step_mask=torch.ones(steps, dtype=torch.bool),
+    )
+    return prefix
 
 
 def _linear_camera_rows(focal: np.ndarray, principal: np.ndarray, image_size_hw: np.ndarray) -> CameraTW:

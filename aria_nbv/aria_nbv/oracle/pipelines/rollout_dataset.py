@@ -893,6 +893,8 @@ class RolloutDatasetWriter:
             q_h_chunk_states=self.config.store.q_h_chunk_states,
             target_eval_crop_max_points=self.config.store.target_eval_crop_max_points,
             target_eval_crops_enabled=self.config.store.target_eval_crops_enabled,
+            oracle_query_mode=self.config.store.oracle_query_mode,
+            label_support_semantics=self.config.store.label_support_semantics,
         )
         self.stats.rollouts_written = int(result.num_rollouts)
         validation = validate_rollout_zarr_store(result.store_dir)

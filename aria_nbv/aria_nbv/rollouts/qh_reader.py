@@ -78,6 +78,12 @@ class _StoredChain:
     store_index: int
     rollout_row_id: int
     target_row_id: int
+    configured_horizon: int
+    candidate_width_min: int
+    candidate_width_max: int
+    candidate_config_hash: str
+    rollout_config_hash: str
+    selection_policy: str
     source_ref: _QhSourceRef
 
 
@@ -156,6 +162,75 @@ class QhDataContract:
     action_mask_semantics: str = "oracle_action_mask_v1"
     """Meaning of actor-valid support; current generated stores use Oracle hard-valid masks."""
 
+    def learning_semantics(self) -> "QhDataContract":
+        """Return the population-independent fitted-Q compatibility contract.
+
+        Candidate-generator, rollout-recipe, and behavior-policy hashes describe
+        which populations a stage contains. They are valuable provenance and
+        remain bound in each dataset and bundle, but they are not mathematical
+        reward, mask, target, horizon, or replay semantics. Removing only these
+        three vocabularies lets scene-disjoint validation and test stages probe
+        controlled population shift without pretending their artifacts are the
+        training corpus.
+
+        Returns:
+            A value-equal contract projection suitable only for cross-stage
+            compatibility checks. The original stage contract remains the
+            training and provenance owner.
+        """
+
+        return replace(
+            self,
+            candidate_config_hashes=(),
+            rollout_config_hashes=(),
+            selection_policies=(),
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class QhRolloutChainIdentity:
+    """Metadata-only identity and support facts for one admitted rollout chain.
+
+    The identity is available without decoding candidate poses, oracle labels,
+    or actor-store tensors. It therefore supports deterministic corpus census
+    and bounded diagnostic selection without creating a second scorer input
+    path. Candidate widths describe materialized finite-action support, not a
+    planning-tree branching axis.
+    """
+
+    store_index: int
+    """Zero-based store ordinal in the reader's ordered store tuple."""
+
+    rollout_row_id: int
+    """Persistent rollout-chain row identifier inside the source store."""
+
+    source_sample_index: int
+    """Immutable VIN actor-store row referenced by the rollout chain."""
+
+    scene_id: str
+    """ASE scene identifier validated through the source record."""
+
+    target_row_id: int
+    """Persistent target row identifier inside the source store."""
+
+    configured_horizon: int
+    """Fixed acquisition budget used to generate this factual chain."""
+
+    candidate_width_min: int
+    """Smallest materialized candidate-table width across realized states."""
+
+    candidate_width_max: int
+    """Largest materialized candidate-table width across realized states."""
+
+    candidate_config_hash: str
+    """Exact candidate-generator configuration digest bound by lineage."""
+
+    rollout_config_hash: str
+    """Exact rollout-recipe configuration digest bound by lineage."""
+
+    selection_policy: str
+    """Persisted factual behavior-policy identifier."""
+
 
 @dataclass(frozen=True, slots=True)
 class _StoreFacts:
@@ -178,6 +253,8 @@ class _ChainRef:
     target_row_id: int
     source_sample_index: int
     configured_horizon: int
+    candidate_width_min: int
+    candidate_width_max: int
     candidate_config_hash: str
     rollout_config_hash: str
     selection_policy: str
@@ -263,6 +340,42 @@ class QhRolloutReader:
             include_selected_depth=self.include_selected_depth,
         )
 
+    def chain_identity(self, index: int) -> QhRolloutChainIdentity:
+        """Return bounded-selection metadata without materializing a chain.
+
+        Args:
+            index: Zero-based admitted-chain index; negative indices follow
+                standard Python sequence semantics.
+
+        Returns:
+            Immutable source, target, candidate-support, and behavior-lineage
+            identity for stratified diagnostics. No actor or oracle tensor is
+            read through this method.
+
+        Raises:
+            IndexError: If ``index`` is outside the admitted corpus.
+        """
+
+        if index < 0:
+            index += len(self)
+        if index < 0 or index >= len(self):
+            raise IndexError(f"Q_H chain index {index} is outside corpus length {len(self)}.")
+        chain = self._chains[index]
+        source = self._source_ref_lookup[chain.source_sample_index]
+        return QhRolloutChainIdentity(
+            store_index=chain.store_index,
+            rollout_row_id=chain.rollout_row_id,
+            source_sample_index=chain.source_sample_index,
+            scene_id=source.scene_id,
+            target_row_id=chain.target_row_id,
+            configured_horizon=chain.configured_horizon,
+            candidate_width_min=chain.candidate_width_min,
+            candidate_width_max=chain.candidate_width_max,
+            candidate_config_hash=chain.candidate_config_hash,
+            rollout_config_hash=chain.rollout_config_hash,
+            selection_policy=chain.selection_policy,
+        )
+
     @property
     def source_refs(self) -> tuple[_QhSourceRef, ...]:
         """Return unique private source identities admitted during preflight."""
@@ -303,6 +416,60 @@ class QhRolloutReader:
             ],
             "contract": self.contract,
         }
+
+    @property
+    def target_descriptor_identity(self) -> dict[str, object]:
+        """Return the admitted target-descriptor identities for experiment receipts.
+
+        This metadata-only projection binds each materialized target table row
+        to its target-input protocol and actor-facing descriptor construction.
+        It is audit lineage, never a scorer input: values are read directly
+        from the immutable rollout store and retain the store-manifest hashes
+        returned by :attr:`provenance`.
+        """
+
+        by_store: dict[int, tuple[_ChainRef, ...]] = {
+            store_index: tuple(chain for chain in self._chains if chain.store_index == store_index)
+            for store_index in range(len(self._stores))
+        }
+        stores: list[dict[str, object]] = []
+        for store_index, store in enumerate(self._stores):
+            chains = by_store[store_index]
+            if not chains:
+                continue
+            root = self._root(store_index)
+            target = root["targets"]
+            positions = sorted({chain.target_position for chain in chains})
+            descriptor_sources = _decode_dictionary(root, "descriptor_source")
+            descriptor_provenances = _decode_dictionary(root, "descriptor_provenance")
+            descriptor_hashes = _decode_dictionary(root, "descriptor_hash")
+            target_rows = np.asarray(target["target_row_id"], dtype=np.int64).reshape(-1)
+            source_ids = np.asarray(target["descriptor_source_id"], dtype=np.int64).reshape(-1)
+            provenance_ids = np.asarray(target["descriptor_provenance_id"], dtype=np.int64).reshape(-1)
+            hash_ids = np.asarray(target["descriptor_hash_id"], dtype=np.int64).reshape(-1)
+            descriptors = [
+                {
+                    "target_row_id": int(target_rows[position]),
+                    "descriptor_source": _dictionary_value(
+                        descriptor_sources, source_ids[position], field="descriptor_source"
+                    ),
+                    "descriptor_provenance": _dictionary_value(
+                        descriptor_provenances, provenance_ids[position], field="descriptor_provenance"
+                    ),
+                    "descriptor_hash": _dictionary_value(
+                        descriptor_hashes, hash_ids[position], field="descriptor_hash"
+                    ),
+                }
+                for position in positions
+            ]
+            stores.append(
+                {
+                    "manifest_sha256": store.manifest_hash,
+                    "target_protocol_version": str(root.attrs["target_protocol_version"]),
+                    "descriptors": descriptors,
+                }
+            )
+        return {"schema_version": "qh-target-descriptor-identity-v1", "stores": stores}
 
     def __getstate__(self) -> dict[str, Any]:
         """Drop process-owned Zarr handles before worker pickling."""
@@ -761,6 +928,8 @@ def _read_chain_refs(
                 target_row_id=int(target_id),
                 source_sample_index=source_ref.source_sample_index,
                 configured_horizon=int(horizon),
+                candidate_width_min=int(candidate_widths[state_start:state_stop].min()),
+                candidate_width_max=int(candidate_widths[state_start:state_stop].max()),
                 candidate_config_hash=config_values[int(candidate_config_id)],
                 rollout_config_hash=config_values[int(rollout_config_id)],
                 selection_policy=policy_values[int(policy_id)],
@@ -995,6 +1164,12 @@ def _read_chain(
         store_index=chain.store_index,
         rollout_row_id=chain.rollout_row_id,
         target_row_id=chain.target_row_id,
+        configured_horizon=chain.configured_horizon,
+        candidate_width_min=chain.candidate_width_min,
+        candidate_width_max=chain.candidate_width_max,
+        candidate_config_hash=chain.candidate_config_hash,
+        rollout_config_hash=chain.rollout_config_hash,
+        selection_policy=chain.selection_policy,
         source_ref=source_ref,
     )
 
@@ -1093,6 +1268,17 @@ def _decode_referenced_dictionary_values(
     return tuple(sorted({dictionary[int(value_id)] for value_id in value_ids if dictionary[int(value_id)]}))
 
 
+def _dictionary_value(dictionary: tuple[str, ...], value_id: int, *, field: str) -> str:
+    """Decode one required target-lineage dictionary value with bounds checking."""
+
+    if value_id < 0 or value_id >= len(dictionary):
+        raise ValueError(f"targets/{field}_id contains an out-of-range dictionary id.")
+    value = dictionary[value_id]
+    if not value:
+        raise ValueError(f"targets/{field}_id references an empty target-lineage value.")
+    return value
+
+
 def _find_sorted_row(array: zarr.Array, value: int) -> int:
     low = 0
     high = int(array.shape[0])
@@ -1117,5 +1303,6 @@ __all__ = [
     "QhDataContract",
     "QhLabelSupportSemantics",
     "QhOracleQueryMode",
+    "QhRolloutChainIdentity",
     "QhRolloutReader",
 ]

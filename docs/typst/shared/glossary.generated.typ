@@ -9,6 +9,7 @@
   (id: "candidate-view", label: "Candidate View", short: "candidate", anchor: "term-candidate-view"),
   (id: "central-pupil-frame", label: "Central Pupil Frame", short: "CPF", anchor: "term-central-pupil-frame"),
   (id: "chamfer-distance", label: "Chamfer Distance", short: "CD", anchor: "term-chamfer-distance"),
+  (id: "coral-q-decoder", label: "CORAL Q-Value Decoder", short: "Q-CORAL", anchor: "term-coral-q-decoder"),
   (id: "counterfactual-transition", label: "Counterfactual Transition", short: "transition", anchor: "term-counterfactual-transition"),
   (id: "coverage-ratio", label: "Coverage Ratio", short: "CR", anchor: "term-coverage-ratio"),
   (id: "degrees-of-freedom", label: "Degrees of Freedom", short: "DoF", anchor: "term-degrees-of-freedom"),
@@ -113,6 +114,7 @@
   - *candidate - Candidate View*: Proposed camera pose whose expected reconstruction utility is evaluated before selecting the next observation.
   - *CPF - Central Pupil Frame*: Coordinate frame placed at the midpoint between the left and right eye boxes of Project Aria glasses.
   - *CD - Chamfer Distance*: Historical bidirectional distance family used to compare reconstructed points against reference geometry.
+  - *Q-CORAL - CORAL Q-Value Decoder*: Ordinal ablation over the same continuous fitted-Q target as direct regression.
   - *transition - Counterfactual Transition*: Replayable state update after selecting a candidate index.
   - *CR - Coverage Ratio*: Fraction of a target surface, scene, or region treated as observed under a chosen visibility or distance threshold.
   - *DoF - Degrees of Freedom*: Number of independent pose parameters available to a camera, object, or action representation.
