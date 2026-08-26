@@ -423,7 +423,21 @@ def _raw_commit_snapshot(
     root: Path, commit: str, projection: Path
 ) -> tempfile.TemporaryDirectory[str]:
     """Materialize ``commit`` from Git blobs without applying worktree filters."""
-    temporary = tempfile.TemporaryDirectory(prefix="aria-graphify-head-")
+    git_dir = subprocess.run(
+        ["git", "rev-parse", "--absolute-git-dir"],
+        cwd=root,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if git_dir.returncode or not git_dir.stdout.strip():
+        raise ValueError("Git administrative directory is unavailable")
+    temporary_root = Path(git_dir.stdout.strip()).resolve()
+    if not temporary_root.is_dir():
+        raise ValueError("Git administrative directory is unavailable")
+    temporary = tempfile.TemporaryDirectory(
+        prefix="aria-graphify-head-", dir=temporary_root
+    )
     snapshot = Path(temporary.name)
     result = subprocess.run(
         ["git", "ls-tree", "-r", "-z", "--full-tree", commit],

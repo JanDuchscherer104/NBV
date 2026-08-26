@@ -623,6 +623,7 @@ save_manifest(result['files'], manifest_path=manifest, root=root, scan_corpus=co
             self.root / "graphify-input",
         )
         try:
+            self.assertEqual(Path(snapshot.name).parent, self.root / ".git")
             self.assertEqual((Path(snapshot.name) / asset.name).read_bytes(), pointer)
             self.assertFalse((Path(snapshot.name) / "linked-asset").exists())
             self.assertFalse(marker.exists())
