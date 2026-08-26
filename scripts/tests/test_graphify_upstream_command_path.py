@@ -5,6 +5,7 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 import io
+from importlib.metadata import version
 from pathlib import Path
 import shutil
 import sys
@@ -33,6 +34,7 @@ except ImportError as error:  # pragma: no cover - depends on test environment
 
 class PinnedGraphifyCommandPathTests(unittest.TestCase):
     def setUp(self) -> None:
+        self.assertEqual(version("graphifyy"), "0.9.48")
         self.lookup: list[dict] = []
         self.saves: list[dict] = []
         self.dispatches: list[dict] = []
@@ -132,12 +134,25 @@ class PinnedGraphifyCommandPathTests(unittest.TestCase):
         root = self.project()
         with self.command(root):
             pass
+        legacy = graphify_cache.cache_dir(root, "semantic") / (
+            f"{graphify_cache.file_hash(root / 'docs/a.md', root)}.json"
+        )
+        legacy.parent.mkdir(parents=True, exist_ok=True)
+        legacy.write_text(
+            '{"nodes": [{"id": "legacy", "source_file": "docs/a.md"}], '
+            '"edges": [], "hyperedges": []}',
+            encoding="utf-8",
+        )
         self.dispatches.clear()
         self.lookup.clear()
         self.saves.clear()
         with self.command(root, mode="deep"):
             pass
         self.assertTrue(self.dispatches)
+        self.assertEqual(
+            {path for dispatch in self.dispatches for path in dispatch["paths"]},
+            {str((root / "docs/a.md").resolve()), str((root / "docs/b.md").resolve())},
+        )
         self.assertEqual({item["deep"] for item in self.dispatches}, {True})
         self.assertEqual({item["mode"] for item in self.lookup}, {"deep"})
         self.assertEqual({item["mode"] for item in self.saves}, {"deep"})
@@ -147,9 +162,12 @@ class PinnedGraphifyCommandPathTests(unittest.TestCase):
         )
         self.dispatches.clear()
         self.lookup.clear()
+        self.saves.clear()
         with self.command(root, mode="deep"):
             pass
         self.assertEqual(self.dispatches, [])
+        self.assertEqual({item["mode"] for item in self.lookup}, {"deep"})
+        self.assertEqual(self.saves, [])
 
 
 if __name__ == "__main__":

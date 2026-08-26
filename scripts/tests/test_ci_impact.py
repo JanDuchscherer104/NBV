@@ -339,7 +339,8 @@ class SelectionTests(unittest.TestCase):
             graphify_branch,
         )
         self.assertNotIn("scripts/check_graphify_freshness.py", boundary_guidance)
-        self.assertIn("make graphify-state-check", boundary_guidance)
+        self.assertNotIn("make graphify-state-check", boundary_guidance)
+        self.assertIn("internal CI and pre-push", boundary_guidance)
         self.assertIn("scripts/setup_worktree_env.sh", boundary_guidance)
         self.assertIn("graphify hook install", boundary_guidance)
         self.assertIn("## Upstream Lifecycle And Hooks", boundary_guidance)

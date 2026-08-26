@@ -1280,7 +1280,7 @@ def test_active_skills_use_context7_plugin_not_docker_mcp() -> None:
     for graphify_seed in (
         "query, path, and explain command selection and output contracts",
         "post-commit and post-checkout hook installation behavior",
-        "incremental code and Markdown quick-scan behavior versus explicit semantic refresh",
+        "upstream AST maintenance and changed semantic-input dispatch versus explicit semantic refresh",
     ):
         assert graphify_seed in context7_registry
 

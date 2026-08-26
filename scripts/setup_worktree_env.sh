@@ -8,7 +8,26 @@ set -euo pipefail
 unset GIT_DIR GIT_WORK_TREE
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-repo_git_dir="$(git -C "$repo_root" rev-parse --absolute-git-dir)"
+
+git_dir_for_worktree() {
+  local worktree="$1" marker gitdir
+  marker="$worktree/.git"
+  if [[ -d "$marker" ]]; then
+    printf '%s\n' "$marker"
+    return 0
+  fi
+  [[ -f "$marker" ]] || return 1
+  IFS= read -r gitdir <"$marker" || return 1
+  [[ "$gitdir" == "gitdir: "* ]] || return 1
+  gitdir="${gitdir#gitdir: }"
+  [[ "$gitdir" = /* ]] || gitdir="$worktree/$gitdir"
+  cd "$gitdir" && pwd -P
+}
+
+repo_git_dir="$(git_dir_for_worktree "$repo_root")" || {
+  printf 'error: destination Git metadata is unavailable\n' >&2
+  exit 1
+}
 shared_root="${ARIA_NBV_SHARED_ROOT:-}"
 canonical_primary="${ARIA_NBV_CANONICAL_PRIMARY:-}"
 check_only=false
@@ -44,16 +63,16 @@ realpath_portable() {
 }
 
 git_in_worktree() {
-  git --git-dir="$repo_git_dir" --work-tree="$repo_root" "$@"
+  git -c core.worktree="$repo_root" --git-dir="$repo_git_dir" --work-tree="$repo_root" "$@"
 }
 
 [[ -n "$shared_root" ]] || fail "ARIA_NBV_SHARED_ROOT must identify the parent worktree"
 [[ -d "$shared_root" ]] || fail "shared root does not exist: $shared_root"
 shared_root="$(cd "$shared_root" && pwd -P)"
 [[ "$shared_root" != "$repo_root" ]] || fail "shared root must be another worktree"
-source_git_dir="$(git -C "$shared_root" rev-parse --absolute-git-dir 2>/dev/null)" || \
+source_git_dir="$(git_dir_for_worktree "$shared_root")" || \
   fail "shared root is not a Git worktree; cannot seed Graphify"
-source_common_dir="$(git --git-dir="$source_git_dir" --work-tree="$shared_root" \
+source_common_dir="$(git -c core.worktree="$shared_root" --git-dir="$source_git_dir" --work-tree="$shared_root" \
   rev-parse --git-common-dir 2>/dev/null)" || fail "shared root Git metadata is unavailable"
 destination_common_dir="$(git_in_worktree rev-parse --git-common-dir)" || \
   fail "destination Git metadata is unavailable"
@@ -68,7 +87,7 @@ registered_destination=false
 while IFS= read -r worktree_line; do
   [[ "$worktree_line" == "worktree $shared_root" ]] && registered_source=true
   [[ "$worktree_line" == "worktree $repo_root" ]] && registered_destination=true
-done < <(git --git-dir="$source_git_dir" --work-tree="$shared_root" worktree list --porcelain)
+done < <(git -c core.worktree="$shared_root" --git-dir="$source_git_dir" --work-tree="$shared_root" worktree list --porcelain)
 [[ "$registered_source" == true && "$registered_destination" == true ]] || \
   fail "source and destination must both be registered Git worktrees"
 
@@ -78,9 +97,9 @@ done < <(git --git-dir="$source_git_dir" --work-tree="$shared_root" worktree lis
 [[ -n "$canonical_primary" && -d "$canonical_primary" ]] || \
   fail "canonical primary worktree is unavailable"
 canonical_primary="$(cd "$canonical_primary" && pwd -P)"
-canonical_git_dir="$(git -C "$canonical_primary" rev-parse --absolute-git-dir 2>/dev/null)" || \
+canonical_git_dir="$(git_dir_for_worktree "$canonical_primary")" || \
   fail "canonical primary worktree is not a Git worktree"
-canonical_common_dir="$(git --git-dir="$canonical_git_dir" --work-tree="$canonical_primary" \
+canonical_common_dir="$(git -c core.worktree="$canonical_primary" --git-dir="$canonical_git_dir" --work-tree="$canonical_primary" \
   rev-parse --git-common-dir 2>/dev/null)" || fail "canonical primary Git metadata is unavailable"
 [[ "$canonical_common_dir" = /* ]] || canonical_common_dir="$canonical_primary/$canonical_common_dir"
 canonical_common_dir="$(cd "$canonical_common_dir" && pwd -P)"
@@ -89,7 +108,7 @@ canonical_common_dir="$(cd "$canonical_common_dir" && pwd -P)"
 registered_primary=false
 while IFS= read -r worktree_line; do
   [[ "$worktree_line" == "worktree $canonical_primary" ]] && registered_primary=true
-done < <(git --git-dir="$canonical_git_dir" --work-tree="$canonical_primary" worktree list --porcelain)
+done < <(git -c core.worktree="$canonical_primary" --git-dir="$canonical_git_dir" --work-tree="$canonical_primary" worktree list --porcelain)
 [[ "$registered_primary" == true ]] || fail "canonical primary worktree is not registered"
 canonical_cache_root="$canonical_primary/.data/graphify-semantic-cache"
 for cache_path in "$canonical_primary/.data" "$canonical_cache_root" \

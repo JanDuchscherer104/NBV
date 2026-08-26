@@ -62,8 +62,8 @@ extractor for every declared active mode. A
 receipt, matching semantic counts, or matching Git commit never substitutes for
 the pinned upstream detector and ancestry checks. A parent whose detector result
 is unbounded or otherwise unusable requires a factual semantic refresh before a
-new session can start. `make graphify-state-check` remains
-strict for scaffold and pre-push validation. A Git HEAD mismatch alone is not staleness when the
+new session can start. Strict state diagnostics are internal CI and pre-push
+owners, not ordinary model actions. A Git HEAD mismatch alone is not staleness when the
 recorded graph and projection revisions are ancestors and indexed bytes still
 match. Semantic refreshes use `fork_turns="none"` and account for every
 dispatched file. Incomplete or unreconciled semantic refreshes remain strict-gate
