@@ -14,11 +14,11 @@
   citation: [@EFM3D-straub2024],
   source: "aria_nbv/aria_nbv/data_handling/qh_data/views.py; aria_nbv/aria_nbv/rollouts/qh_reader.py; aria_nbv/tests/lightning/test_qh_module.py",
   gate: [retain actor/oracle provenance checks and name the admitted state protocol in every run],
-)[The replay carrier, actor/supervision separation, and scorer-independent fitted-Q adapter are implemented. No production finite-horizon scorer or task-sufficient dynamic reconstruction memory is implemented, and frozen scientific validation remains pending.]
+)[The replay carrier, actor/supervision separation, scalar requested-horizon scorer, and fitted-Q adapter are implemented. The current `S0-pose` root-moments state is deliberately compact; task-sufficient dynamic reconstruction memory and frozen scientific validation remain pending.]
 
 The implemented one-step scorer consumes an actor-visible snippet view, a row-aligned candidate table, a reference rig pose, calibrated candidate cameras, and optionally cached @egocentric-voxel-lifting:short output. Oracle @relative-reconstruction-improvement:short labels enter the loss after prediction and are not scorer inputs. The current oracle target descriptor contains semantic identity, pose, positive metric extents, and reference-relative pose in an actor-safe shape, but its values are derived from privileged @ground-truth:short target tasks. A deployable claim therefore still requires observed or predicted target fields with explicit provenance.
 
-The implemented `QhActorTensors` contract can carry root semidense evidence, oracle-derived target geometry, root-relative candidate poses, selected-pose history, and remaining budget to an injected scorer. This is an information boundary, not an implemented model architecture. Candidate regeneration changes pose, history, budget, and the finite action table; a future scorer must still define how causal selected observations update its scene representation.
+The implemented `QhActorTensors` contract carries root semidense evidence, oracle-derived target geometry, root-relative candidate poses, selected-pose history, and remaining budget to the finite-horizon scorer. The current model reduces root evidence to global moments and selected history to a causal pose summary. Candidate regeneration changes pose, history, budget, and the finite action table; richer models must still define how causal selected observations update scene memory without widening this actor/oracle boundary.
 
 Three boundaries are invariant. Invalidity is a hard mask with versioned reason codes, not a small value. GT meshes, target crops, current all-candidate renders, associations, and returns remain oracle or audit fields. Previously selected GT-mesh depth may enter a later state only under an explicitly privileged `CF-GT` protocol; the corresponding sensor-like or observed variants must use distinct provenance. Candidate rows remain tied to stable shell identities and documented coordinate frames.
 
@@ -32,7 +32,7 @@ Three boundaries are invariant. Invalidity is a hard mask with versioned reason 
   gate: [selected-observation reader, deterministic fusion, source-dropout tests, and held-out target-RRI ranking],
 )[The canonical state separates immutable root context from a causal dynamic memory. Particular scene carriers are promoted only when they preserve the information boundary and improve target-conditioned decisions.]
 
-ARIA-NBV does not require one universal reconstruction format. It requires an actor-visible state from which a model can compare a target $e$ and candidate $q_(t,i)$ at decision step $t$. The following information contract includes the requested residual horizon $h$ only for the explicit-horizon design candidate; the current fixed-horizon direction instead derives time-to-go from the bounded task and remaining budget:
+ARIA-NBV does not require one universal reconstruction format. It requires an actor-visible state from which a model can compare a target $e$ and candidate $q_(t,i)$ at decision step $t$. The frozen scorer interface includes the scalar requested residual horizon $h$ in addition to the factual remaining budget $b_t$:
 
 $
   #eqs.scene.actor_state_read
@@ -57,7 +57,7 @@ The selected-pose history $bold(H)_t$ remains explicit unless a promoted memory 
     toprule(),
     table.header([*State protocol*], [*Dynamic evidence*], [*Interpretation*]),
     midrule(),
-    [`S0-pose`], [selected poses only], [Planned first scorer baseline over the implemented replay tensors; not a complete reconstruction state.],
+    [`S0-pose`], [selected poses only], [Implemented A1 root-moments control over replay tensors; not a complete reconstruction state.],
     [`S1-points`], [causally fused selected surface points], [Minimum geometry-updated counterfactual state; does not distinguish observed free from unknown space.],
     [`S2-ray`], [surface, free, unknown, support, recency], [Canonical planned dynamic state for candidate-frustum and target-support queries.],
     [Privileged / sensor-like / actor-visible], [source tag on selected observations], [Orthogonal information protocol: privileged mesh depth, declared sensor-like simulation, or actor-visible observation.],
@@ -76,7 +76,7 @@ A useful representation must preserve distinctions that can change target-specif
   citation: [@EFM3D-straub2024 @EVL-Doc-2025],
   source: "docs/literature/tex-src/arXiv-EFM3D/method.tex, Sec. Egocentric Voxel Lifting, lines 2--44; docs/contents/literature/efm3d.qmd; docs/contents/theory/efm3d_scene_embeddings.qmd; aria_nbv/aria_nbv/data_handling/vin_store/writer.py",
   gate: [report target and candidate support against the persisted voxel pose and extent],
-)[EFM3D fields, their voxel pose, and finite extent are persisted. No finite-horizon scorer currently consumes them, and their sufficiency as the only long-horizon scene representation remains pending.]
+)[EFM3D fields, their voxel pose, and finite extent are persisted. The current finite-horizon scorer consumes lossy global field moments; their sufficiency as the only long-horizon scene representation remains pending.]
 
 EFM3D encodes logged RGB frames before lifting selected evidence into a finite gravity-aligned voxel field anchored to a snippet pose. The stored voxel transform and extent define the support of lifted features and dense heads. They must not be interpreted as a global volume containing every region observed by the trajectory. A target or candidate outside this support can remain physically valid; it has missing local-EVL evidence rather than an ordinary zero feature or automatically invalid action.
 

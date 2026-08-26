@@ -21,8 +21,8 @@ cannot replace its owner.
   narrative and claims; question and development-gate files own narrower
   contracts; `docs/typst/thesis/sections/` owns active claim placement.
 - **Literature:** `docs/literature/sources.jsonl` owns source
-  acquisition/relevance metadata; `docs/references.bib` and
-  `docs/references-qh.bib` own citation identities; `docs/contents/literature/`
+  acquisition/relevance metadata; `docs/references.bib` owns citation identities;
+  `docs/contents/literature/`
   owns review synthesis.
 - **Executable system:** the nearest package `AGENTS.md`, source, tests, and
   active configuration own behavior and proof.

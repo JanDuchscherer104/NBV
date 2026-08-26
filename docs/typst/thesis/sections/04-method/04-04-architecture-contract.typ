@@ -16,9 +16,9 @@
   implementation: "partial",
   evidence: "pending",
   citation: [@GeometricDeepLearning-bronstein2021 @DeepSets-zaheer2017 @SetTransformer-lee2019 @FixedHorizonTD-deAsis2020],
-  source: "aria_nbv/aria_nbv/data_handling/qh_data/views.py; aria_nbv/tests/lightning/test_qh_module.py; aria_nbv/tests/rollouts/test_qh_reader.py",
-  gate: [production scorer plus end-to-end permutation, mask, duplicate, frame, source, and horizon tests for every admitted state protocol],
-)[The replay and fitted-Q infrastructure covers row-aligned masks, local-frame tensors, selected-transition admission, and deterministic Double-Q selection for an injected scorer. No candidate-to-state architecture or scorer-level equivariance contract is implemented.]
+  source: "aria_nbv/aria_nbv/vin/models/target_finite_horizon.py; aria_nbv/aria_nbv/lightning/qh_module.py; aria_nbv/tests/vin/test_target_finite_horizon.py; aria_nbv/tests/lightning/test_qh_module.py",
+  gate: [retain permutation, subset, duplicate, padding, mask-independence, frame, source, and horizon tests for every admitted state protocol],
+)[The implemented A1 scorer uses independent candidate queries, candidate-relative target/current-pose geometry, scalar requested horizons, and adapter-owned hard masks. Permutation, duplicate, invalid-row isolation, mask independence, and horizon bounds are unit-tested; scientific policy evidence and richer state protocols remain pending.]
 
 Candidate order carries no task meaning. For a per-candidate scorer $f_theta$, jointly permuting row-aligned inputs by $Pi$ must permute outputs by the same amount:
 
@@ -32,7 +32,7 @@ $
   #eqs.rl.candidate_mask_isolation
 $
 
-Mask ownership depends on the interaction. In the candidate-to-state design candidate, candidates are queries and scene, target, history, and time context are keys and values. The action mask therefore sanitizes candidate queries, gates output selection, and gates supervised losses; it is not a key-padding mask for the shared state tokens. Candidate masks become attention-key masks only in candidate-as-key architectures such as DeepSets context or a masked Set Transformer. Padding masks, action-validity masks, training masks, and modality-presence masks must remain separate; a horizon-availability mask is added only if explicit horizon queries are selected.
+Mask ownership depends on the interaction. In the implemented candidate-to-state scorer, materialized candidates are queries and scene, target, history, budget, and requested-horizon context are keys and values. `candidate_mask` sanitizes padding before encoding. The scorer does not read `action_mask`; Lightning uses it for Q-loss and bootstrap support, and online inference uses it for the final selectable set. Candidate masks become attention-key masks only in candidate-as-key architectures such as DeepSets context or a masked Set Transformer. Padding, action validity, Q-label support, feasibility-label support, and modality presence remain separate.
 
 Duplicate-row and valid-count tests are required because candidate-set pooling or per-set normalization can otherwise change the absolute value of an unchanged physical candidate. A duplicate row may duplicate an output, but it must not silently change another row's value unless the tested architecture explicitly models candidate-set context.
 
@@ -40,7 +40,7 @@ Coordinate handling is deliberately weaker than exact $op("SE")(3)$ equivariance
 
 Actor/oracle provenance is the final acceptance condition. Target gains, GT associations, mesh distances, current candidate renders, and target crops may supervise or audit a model but may not enter its actor graph. Previously selected GT depth may enter only a `CF-GT` state branch. Source-dropout tests must show that removing an unavailable optional carrier changes only its masked branch.
 
-If the explicit requested-horizon interface is selected, it adds its own acceptance contract: the boundary query $h=0$ has value zero; an $h=1$ target contains no bootstrap; $h>b_t$ is rejected or masked rather than clamped; and a target for $h>1$ may depend only on a successor value requested at $h-1$ @FixedHorizonTD-deAsis2020. Vectorizing a horizon axis must reproduce independent calls for every admissible $h$ without exposing future observations. The fixed-H alternative instead requires separate tests across configured horizons and remaining budgets. Neither design assumes monotonicity such as $Q_(h+1)>=Q_h$ because valid actions may have negative immediate gain.
+The scalar requested-horizon interface adds its own acceptance contract: the mathematical boundary $Q_0=0$ is represented only by padded rows in the executable call; an $h=1$ target contains no bootstrap; $h>b_t$ is rejected rather than clamped; and a target for $h>1$ may depend only on a successor value requested at $h-1$ @FixedHorizonTD-deAsis2020. Public vectorization remains gated on real atomic callers, measured inadequacy of private batching, and scalar/vector parity tests. No monotonicity such as $Q_(h+1)>=Q_h$ is assumed because valid actions may have negative immediate gain.
 
 === Orthogonal architecture ladder
 
@@ -49,10 +49,10 @@ If the explicit requested-horizon interface is selected, it adds its own accepta
   evidence: "pending",
   citation: [@DeepSets-zaheer2017 @SetTransformer-lee2019 @zhou2023query @EGNN-satorras2021 @SE3Transformer-fuchs2020 @GATr-brehmer2023 @UVFA-schaul2015],
   source: "aria_nbv/aria_nbv/data_handling/qh_data/views.py; docs/contents/theory/candidate_view_dependence.qmd",
-  gate: [freeze the scorer time-query contract, then promote a level only after lower interaction controls pass on the same scene carrier and target/source protocol],
-)[No level in the interaction ladder is implemented for finite-horizon scoring. Scene-carrier choice, fixed-H versus requested-horizon conditioning, and candidate interaction are orthogonal decisions to test after the scorer boundary is frozen.]
+  gate: [measure the identical-feature A0 control, then promote a level only after lower interaction controls pass on the same scene carrier and target/source protocol],
+)[A1 candidate-to-state cross-attention is implemented with the `S0-pose` root-moments carrier. The identical-feature A0 MLP control, richer scene carriers, and candidate interaction remain orthogonal measurements.]
 
-The proposed A1 query contains candidate-local pose, candidate--target relation, and candidate-local support reads. Target, scene, ordered history, and remaining-budget context are supplied once as shared state tokens. The requested-horizon design candidate additionally embeds $h$; the fixed-H alternative does not. Candidate provenance and generator-family identity are audit-only by default. Shared conditional and separate-horizon models remain alternatives for the source-owner decision rather than a frozen architecture @UVFA-schaul2015.
+The implemented A1 query contains root- and current-relative candidate pose, an explicit candidate--target transform, and global root-scene moments. Target, scene, causal pose-history summary, remaining budget, and requested horizon are supplied as shared state tokens. The physical trunk and feasibility head precede target/horizon conditioning. Candidate provenance and generator-family identity remain audit-only by default. Ordered history tokens and spatial scene memory replace internal representations behind the same scorer interface when their ablations justify the added capacity @UVFA-schaul2015.
 
 #figure(
   text(size: 8.2pt, table(
@@ -60,7 +60,7 @@ The proposed A1 query contains candidate-local pose, candidate--target relation,
     toprule(),
     table.header([*Level*], [*Interaction model*], [*Scientific role*]),
     midrule(),
-    [A0], [Independent masked MLP], [Locks target/candidate descriptors, masks, time context, and label learnability for a fixed scene carrier.],
+    [A0], [Independent per-row MLP], [Locks target/candidate descriptors, time context, and label learnability for a fixed scene carrier; adapters retain hard masks.],
     [A1], [Candidate-to-state cross-attention], [Each candidate query independently reads shared target, scene, history, and budget context.],
     [A2], [DeepSets candidate context], [Tests whether an unordered summary of valid candidates adds information without pairwise attention.],
     [A3], [Masked Set Transformer], [Tests candidate--candidate interaction while preserving row equivariance and mask isolation.],
@@ -70,7 +70,7 @@ The proposed A1 query contains candidate-local pose, candidate--target relation,
     [A7+], [Exact-equivariant or graph interaction], [Escalates only after local-frame controls reveal a symmetry-related failure.],
     bottomrule(),
   )),
-  caption: [Planned interaction-architecture ladder. Scene carrier, target/source protocol, time-query contract, and learning target are frozen independently for each comparison.],
+  caption: [Interaction-architecture ladder. A1 is implemented; scene carrier, target/source protocol, time-query contract, and learning target stay fixed for each comparison.],
 ) <tab:geometric-learning-ladder>
 
-Candidate-to-candidate attention is not required by the core task. It may improve relative policy context or diversity, but unrelated sampled rows must not silently redefine the absolute value of candidate $q_(t,i)$. Exact equivariant layers are similarly scoped to diagnosed support encoders or candidate graphs after local-frame scalar controls. This ordering favors reusable context encodings and keeps optional requested-horizon conditioning separate from candidate-set interaction.
+Candidate-to-candidate attention is not required by the core task. It may improve relative policy context or diversity, but unrelated sampled rows must not silently redefine the absolute value of candidate $q_(t,i)$. Exact equivariant layers are similarly scoped to diagnosed support encoders or candidate graphs after local-frame scalar controls. This ordering favors reusable context encodings and keeps scalar requested-horizon conditioning separate from candidate-set interaction.

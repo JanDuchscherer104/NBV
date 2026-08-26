@@ -242,6 +242,12 @@ return {
       description = "Planning or rollout horizon length.",
       thesis_list = true,
     },
+    ["rl.H_max"] = {
+      tex = "H_{\\mathrm{max}}",
+      typst = "#symb.rl.H_max",
+      description = "Maximum residual horizon admitted by a scorer/data contract.",
+      thesis_list = true,
+    },
     ["rl.a"] = {
       tex = "a",
       typst = "#symb.rl.a",
@@ -284,10 +290,22 @@ return {
       description = "Finite candidate-view table at rollout step t.",
       thesis_list = true,
     },
+    ["rl.conditional_q"] = {
+      tex = "Q_{h,\\theta,e,i}^{\\mathrm{cond}}",
+      typst = "#symb.rl.conditional_q",
+      description = "Action-mask-independent conditional candidate value emitted by the scorer.",
+      thesis_list = true,
+    },
     ["rl.feasibility_label_mask"] = {
       tex = "m_{t,i}^{F}",
       typst = "#symb.rl.feasibility_label_mask",
       description = "Availability of a trustworthy feasibility label for candidate i.",
+      thesis_list = true,
+    },
+    ["rl.feasibility_logits"] = {
+      tex = "\\ell_{t,i}^{\\mathrm{feas}}",
+      typst = "#symb.rl.feasibility_logits",
+      description = "Physical or observed feasibility logit emitted by the scorer's feasibility head.",
       thesis_list = true,
     },
     ["rl.gamma"] = {
@@ -300,12 +318,6 @@ return {
       tex = "\\rho_{t,i}",
       typst = "#symb.rl.invalid_reason",
       description = "Invalid-action reason code for candidate i at rollout step t.",
-      thesis_list = true,
-    },
-    ["rl.max_horizon"] = {
-      tex = "H_{\\max}",
-      typst = "#symb.rl.max_horizon",
-      description = "Maximum horizon supported by the model and training data contract.",
       thesis_list = true,
     },
     ["rl.mdp_nbv"] = {
@@ -335,7 +347,7 @@ return {
     ["rl.requested_horizon"] = {
       tex = "h",
       typst = "#symb.rl.requested_horizon",
-      description = "Requested residual horizon for a finite-horizon value query.",
+      description = "Scalar residual horizon requested for one scorer query; it must satisfy 1 <= h <= b_t <= H_max.",
       thesis_list = true,
     },
     ["rl.return_h"] = {
@@ -868,6 +880,12 @@ return {
       description = "",
       thesis_list = false,
     },
+    ["rl.qh_conditional_mask_independence"] = {
+      tex = "(Q^{\\mathrm{cond}},\\ell^{\\mathrm{feas}})(s_t,e,q_{t,i},h,\\boldsymbol{m}_t)=(Q^{\\mathrm{cond}},\\ell^{\\mathrm{feas}})(s_t,e,q_{t,i},h,\\boldsymbol{m}'_t)",
+      typst = "#eqs.rl.qh_conditional_mask_independence",
+      description = "Raw scorer outputs do not depend on the authoritative action mask.",
+      thesis_list = false,
+    },
     ["rl.qh_coral_interface"] = {
       tex = "\\begin{gathered}p_{t,i,k}^{\\mathrm{CORAL}}=\\sigma(o_{t,i,k}^{\\mathrm{CORAL}}),\\quad k=0,\\ldots,K-2;\\\\ \\pi_{t,i,k}^{\\mathrm{CORAL}}=p_{t,i,k-1}^{\\mathrm{CORAL}}-p_{t,i,k}^{\\mathrm{CORAL}},\\quad p_{t,i,-1}^{\\mathrm{CORAL}}=1,\\quad p_{t,i,K-1}^{\\mathrm{CORAL}}=0;\\\\ \\hat{r}_\\psi^e(s_t^{\\mathrm{cf0}},\\boldsymbol{\\phi}_e,q_{t,i})=\\sum_{k=0}^{K-1}\\pi_{t,i,k}^{\\mathrm{CORAL}}u_k\\end{gathered}",
       typst = "#eqs.rl.qh_coral_interface",
@@ -896,6 +914,12 @@ return {
       tex = "Q_{H,\\theta,i}=b_{\\psi,i}+\\delta_{\\theta,i}^{H}",
       typst = "#eqs.rl.qh_residual_decomposition",
       description = "",
+      thesis_list = false,
+    },
+    ["rl.qh_scorer_interface"] = {
+      tex = "(Q_{h,\\theta,e,i}^{\\mathrm{cond}},\\ell_{t,i}^{\\mathrm{feas}})=f_\\theta(s_t,e,q_{t,i},h),\\quad h=b_t\\ \\mathrm{if\\ omitted},\\quad 1\\le h\\le b_t\\le H_{\\mathrm{max}}",
+      typst = "#eqs.rl.qh_scorer_interface",
+      description = "Mask-independent scorer output and scalar horizon contract.",
       thesis_list = false,
     },
     ["rl.qh_supported_successor_set"] = {

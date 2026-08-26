@@ -54,6 +54,7 @@ from aria_nbv.targets.selection import ObservedTargetDescriptor
 from aria_nbv.utils import Stage
 from aria_nbv.utils.fingerprints import stable_msgspec_hash
 from aria_nbv.utils.rich_summary import capture_tree, rich_summary, summarize
+from aria_nbv.vin.models.target_finite_horizon import QhScoreOutput
 from aria_nbv.vin.types import EvlBackboneOutput
 from tests.data_handling.test_vin_offline_store import _write_test_store
 from tests.rollout_fixtures import build_rollout_records
@@ -198,8 +199,15 @@ def test_named_profile_batch_and_module_admission_preserve_actor_allowlist(
     assert not hasattr(batch.actor, "one_step_target_rri")
 
     class _Scorer(torch.nn.Module):
-        def forward(self, actor: QhActorTensors) -> torch.Tensor:
-            return torch.zeros_like(actor.action_mask, dtype=torch.float32)
+        def forward(
+            self,
+            actor: QhActorTensors,
+            *,
+            requested_horizon: torch.Tensor | None = None,
+        ) -> QhScoreOutput:
+            del requested_horizon
+            values = torch.zeros_like(actor.action_mask, dtype=torch.float32)
+            return QhScoreOutput(conditional_q=values, feasibility_logits=values)
 
     module = QhLightningModule(
         QhLightningModuleConfig(

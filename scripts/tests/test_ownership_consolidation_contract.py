@@ -28,7 +28,6 @@ CONTEXT_INITIALIZATION_OWNERS = (
     "docs/typst/glossary/",
     "docs/literature/sources.jsonl",
     "docs/references.bib",
-    "docs/references-qh.bib",
     "docs/contents/literature/",
     "docs/typst/thesis/sections/",
 )
@@ -411,10 +410,7 @@ def test_scientific_sources_keep_glossary_renderer_and_bibliography_owners_disti
     glossary_source = ROOT / "docs/typst/shared/glossary.typ"
     glossary_renderer = ROOT / "docs/contents/glossary.qmd"
     acquisition_owner = ROOT / "docs/literature/sources.jsonl"
-    citation_owners = (
-        ROOT / "docs/references.bib",
-        ROOT / "docs/references-qh.bib",
-    )
+    citation_owners = (ROOT / "docs/references.bib",)
     synthesis_owner = ROOT / "docs/contents/literature"
     claim_owner = ROOT / "docs/typst/thesis/sections"
     assert glossary_source.is_file()
@@ -425,7 +421,7 @@ def test_scientific_sources_keep_glossary_renderer_and_bibliography_owners_disti
     assert claim_owner.is_dir()
     assert glossary_source != glossary_renderer
     assert acquisition_owner not in citation_owners
-    assert len(set(citation_owners)) == 2
+    assert len(set(citation_owners)) == 1
     assert "Canonical ARIA-NBV glossary source" in glossary_source.read_text(encoding="utf-8")
     assert "Generated" in glossary_renderer.read_text(encoding="utf-8")
     assert acquisition_owner.suffix == ".jsonl"
@@ -437,7 +433,6 @@ def test_scientific_sources_keep_glossary_renderer_and_bibliography_owners_disti
     for owner in (
         "docs/literature/sources.jsonl",
         "docs/references.bib",
-        "docs/references-qh.bib",
         "docs/contents/literature/",
         "docs/typst/thesis/sections/",
     ):

@@ -49,8 +49,8 @@ Use the repository's current owner paths for implementation and scientific
 claims. A pointer identifies where to look; it does not make the pointer's
 target authoritative over the source owner. In scientific documentation,
 `docs/typst/shared/glossary.typ` owns durable terms; `docs/typst/glossary/` is
-rendered/modular output; `docs/references.bib` and `docs/references-qh.bib` own
-citation identities; `docs/literature/sources.jsonl` owns acquisition and
+rendered/modular output; `docs/references.bib` owns citation identities;
+`docs/literature/sources.jsonl` owns acquisition and
 relevance metadata; `docs/contents/literature/` owns review synthesis; and
 `docs/typst/thesis/sections/` owns active claim placement.
 

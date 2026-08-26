@@ -129,10 +129,7 @@ class Fixture:
         )
         self.write(
             "docs/references.bib",
-            "@misc{PaperA, title={{Complex, Nested} Title}, eprint={2406.10224v2}}\n",
-        )
-        self.write(
-            "docs/references-qh.bib",
+            "@misc{PaperA, title={{Complex, Nested} Title}, eprint={2406.10224v2}}\n"
             "@article{QhPaper, doi={10.1609/AAAI.V34I04.5784}}\n",
         )
         rows = [
@@ -247,10 +244,7 @@ class Fixture:
             repo_root=self.root,
             thesis_root=Path("docs/typst/thesis/main.typ"),
             style_path=Path("docs/typst/shared/style.typ"),
-            bibliography_paths=(
-                Path("docs/references.bib"),
-                Path("docs/references-qh.bib"),
-            ),
+            bibliography_paths=(Path("docs/references.bib"),),
             manifest_path=Path("docs/literature/sources.jsonl"),
             tex_root=Path("docs/literature/tex-src"),
             pdf_root=Path("docs/literature/pdf"),
@@ -470,7 +464,8 @@ class ProjectionTests(unittest.TestCase):
         self.fixture.write(
             "docs/references.bib",
             "@misc{PaperA, eprint={2406.10224v2}}\n"
-            "@misc{AppendixPaper, title={Appendix}}\n",
+            "@misc{AppendixPaper, title={Appendix}}\n"
+            "@article{QhPaper, doi={10.1609/AAAI.V34I04.5784}}\n",
         )
         self.fixture.runner.citations.append({"key": "AppendixPaper"})
 
@@ -497,7 +492,6 @@ class ProjectionTests(unittest.TestCase):
             "docs/typst/thesis/sections/a.typ",
             "docs/typst/shared/style.typ",
             "docs/references.bib",
-            "docs/references-qh.bib",
             "docs/literature/sources.jsonl",
         )
         for index, relative in enumerate(readable_owners):
@@ -523,8 +517,8 @@ class ProjectionTests(unittest.TestCase):
 
     def test_duplicate_bibliography_key_fails(self) -> None:
         self.fixture.write(
-            "docs/references-qh.bib",
-            "@article{PaperA, doi={10.1/duplicate}}\n",
+            "docs/references.bib",
+            "@misc{PaperA, title={duplicate}}\n@article{PaperA, doi={10.1/duplicate}}\n",
         )
         with self.assertRaisesRegex(
             ProjectionError, r"duplicate.*PaperA|PaperA.*duplicate"
@@ -534,7 +528,8 @@ class ProjectionTests(unittest.TestCase):
     def test_parenthesized_bibtex_entry_is_supported(self) -> None:
         self.fixture.write(
             "docs/references.bib",
-            "@misc(PaperA, title={Parenthesized}, eprint={2406.10224v2})\n",
+            "@misc(PaperA, title={Parenthesized}, eprint={2406.10224v2})\n"
+            "@article{QhPaper, doi={10.1609/AAAI.V34I04.5784}}\n",
         )
 
         rendered = self.rendered(self.build())

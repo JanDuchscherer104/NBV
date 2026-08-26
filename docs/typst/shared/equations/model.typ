@@ -11,8 +11,19 @@
       bold(b)_t,
       t,
       #symb.rl.H,
-      {#symb.model.candidate_row, #symb.spatial.relation_rpe, m_(t,i), bold(rho)_(t,i)}_(i=1)^(#symb.shape.Nq)
+      {#symb.model.candidate_row, #symb.spatial.relation_rpe}_(i=1)^(#symb.shape.Nq)
     )
+  $,
+  qh_frozen_interface: $
+    f_theta(
+      #symb.rl.s_pose,
+      #symb.entity.target_desc,
+      {q_(t,i)}_(i=1)^(#symb.shape.Nq),
+      #symb.rl.requested_horizon
+    )
+    ->
+    ({Q_(h,theta,e,i)^"cond"}_(i=1)^(#symb.shape.Nq),
+     {ell_(t,i)^"feas"}_(i=1)^(#symb.shape.Nq))
   $,
   qh_target_token: $
     #symb.model.target_token

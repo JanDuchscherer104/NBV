@@ -13,6 +13,7 @@ import torch
 from aria_nbv.data_handling.qh_data import collate_qh_chains
 from aria_nbv.lightning.qh_datamodule import QhDataModule
 from aria_nbv.lightning.qh_module import QhLightningModule, QhLightningModuleConfig
+from aria_nbv.vin.models.target_finite_horizon import QhScoreOutput
 from tests.data_handling.test_qh import _chain
 from tests.lightning.test_qh_fast_dev_run import _trainer
 from tests.lightning.test_qh_module import (
@@ -24,9 +25,12 @@ from tests.lightning.test_qh_module import (
 
 
 class _UnsupportedNanScorer(_TableScorer):
-    def forward(self, actor):
-        values = super().forward(actor)
-        return values.masked_fill(~actor.action_mask, torch.nan)
+    def forward(self, actor, *, requested_horizon=None):
+        output = super().forward(actor, requested_horizon=requested_horizon)
+        return QhScoreOutput(
+            conditional_q=output.conditional_q.masked_fill(~actor.action_mask, torch.nan),
+            feasibility_logits=output.feasibility_logits,
+        )
 
 
 def main() -> None:

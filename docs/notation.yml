@@ -266,6 +266,18 @@ symbols:
     description: 'Finite-horizon candidate-value function.'
     thesis_list: true
     order: 350
+  rl.conditional_q:
+    tex: 'Q_{h,\theta,e,i}^{\mathrm{cond}}'
+    typst: '#symb.rl.conditional_q'
+    description: 'Action-mask-independent conditional candidate value emitted by the scorer.'
+    thesis_list: true
+    order: 351
+  rl.feasibility_logits:
+    tex: '\ell_{t,i}^{\mathrm{feas}}'
+    typst: '#symb.rl.feasibility_logits'
+    description: 'Physical or observed feasibility logit emitted by the scorer''s feasibility head.'
+    thesis_list: true
+    order: 352
   rl.gamma:
     tex: '\gamma'
     typst: '#symb.rl.gamma'
@@ -278,16 +290,16 @@ symbols:
     description: 'Planning or rollout horizon length.'
     thesis_list: true
     order: 370
+  rl.H_max:
+    tex: 'H_{\mathrm{max}}'
+    typst: '#symb.rl.H_max'
+    description: 'Maximum residual horizon admitted by a scorer/data contract.'
+    thesis_list: true
+    order: 371
   rl.requested_horizon:
     tex: 'h'
     typst: '#symb.rl.requested_horizon'
-    description: 'Requested residual horizon for a finite-horizon value query.'
-    thesis_list: true
-    order: 371
-  rl.max_horizon:
-    tex: 'H_{\max}'
-    typst: '#symb.rl.max_horizon'
-    description: 'Maximum horizon supported by the model and training data contract.'
+    description: 'Scalar residual horizon requested for one scorer query; it must satisfy 1 <= h <= b_t <= H_max.'
     thesis_list: true
     order: 372
   rl.validity_mask:
@@ -794,6 +806,18 @@ equations:
     tex: 'Q_{h,e}^{\star}(s_t,i)=\sup_{\pi\in\Pi^{\mathrm{act}}}\mathbb{E}_{\pi}\left[G_{t,e}^{(h)}\mid s_t,a_t=i\right],\quad 1\le h\le b_t\le H_{\max},\quad Q_{0,e}^{\star}=0'
     typst: '#eqs.rl.q_h'
     description: 'Optimal continuation value within the generated finite candidate sets and hard-action support.'
+    thesis_list: false
+    order: 9999
+  rl.qh_scorer_interface:
+    tex: '(Q_{h,\theta,e,i}^{\mathrm{cond}},\ell_{t,i}^{\mathrm{feas}})=f_\theta(s_t,e,q_{t,i},h),\quad h=b_t\ \mathrm{if\ omitted},\quad 1\le h\le b_t\le H_{\mathrm{max}}'
+    typst: '#eqs.rl.qh_scorer_interface'
+    description: 'Mask-independent scorer output and scalar horizon contract.'
+    thesis_list: false
+    order: 9999
+  rl.qh_conditional_mask_independence:
+    tex: '(Q^{\mathrm{cond}},\ell^{\mathrm{feas}})(s_t,e,q_{t,i},h,\boldsymbol{m}_t)=(Q^{\mathrm{cond}},\ell^{\mathrm{feas}})(s_t,e,q_{t,i},h,\boldsymbol{m}''_t)'
+    typst: '#eqs.rl.qh_conditional_mask_independence'
+    description: 'Raw scorer outputs do not depend on the authoritative action mask.'
     thesis_list: false
     order: 9999
   rl.reward_geom:

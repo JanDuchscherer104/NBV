@@ -49,8 +49,7 @@ submission render and are easy to audit with repository tools. A development
 macro may display parsed provenance, but it must remain a derived view rather
 than a second source of truth. Projection tooling may parse these blocks into
 derived Graphify edges after resolving the bibliography key through
-`docs/references.bib`, `docs/references-qh.bib`, and
-`docs/literature/sources.jsonl`.
+`docs/references.bib` and `docs/literature/sources.jsonl`.
 
 ## Evidence Gate
 

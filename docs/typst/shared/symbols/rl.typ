@@ -22,8 +22,8 @@
   H: $H$,
   // Requested residual horizon supplied to a finite-horizon value query.
   requested_horizon: $h$,
-  // Maximum horizon supported by the model and training data contract.
-  max_horizon: $H_"max"$,
+  // Maximum supported residual horizon in the scorer/data contract.
+  H_max: $H_"max"$,
   // Temporal discount factor.
   gamma: $gamma$,
   // Markov decision process specialized to NBV selection.
@@ -60,6 +60,10 @@
   return_h: $G_t^((H))$,
   // Horizon-conditioned action-value function.
   qh: $Q_H$,
+  // Action-mask-independent conditional candidate value emitted by the scorer.
+  conditional_q: $Q_(h,theta,e,i)^"cond"$,
+  // Physical or observed feasibility logit emitted by the scorer's feasibility head.
+  feasibility_logits: $ell_(t,i)^"feas"$,
   // Learned horizon-conditioned Q function with parameters theta.
   qh_theta: $Q_(H,theta)$,
   // Reserved lagged target-network Q; no direct authored use in the 2026-08-14 audit.

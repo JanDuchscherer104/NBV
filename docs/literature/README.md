@@ -60,8 +60,7 @@ By default the script writes extracted source trees into `docs/literature/tex-sr
 
 ## Graphify projection
 
-The exact literature owners remain `sources.jsonl`, `docs/references.bib`,
-`docs/references-qh.bib`, the active Typst thesis,
+The exact literature owners remain `sources.jsonl`, `docs/references.bib`, the active Typst thesis,
 `docs/typst/shared/style.typ` for thesis-to-code link syntax, and the local
 files under `pdf/` and `tex-src/`. Graphify is a derived navigation view and
 never changes or supersedes those sources.

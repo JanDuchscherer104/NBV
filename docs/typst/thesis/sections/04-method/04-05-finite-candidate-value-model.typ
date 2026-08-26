@@ -6,34 +6,38 @@
 == Target-Conditioned Finite-Horizon Value Model
 
 #prune_todo(
-  [Choose and implement one horizon semantics and one primary learning objective before submission. The current fixed-budget, requested-horizon, exact-horizon-two, recursive fitted-value, and control variants cannot all read as the thesis method.],
+  [Retain scalar requested-horizon conditional Q with direct continuous Huber regression as the core. Keep exact horizon two, CORAL, residual, behavior-return, and alternative estimator variants explicitly labelled as diagnostics or ablations.],
   source: [this section; aria_nbv/aria_nbv/lightning/qh_module.py],
   gate: [a frozen scorer interface, training objective, checkpoint, and matched policy evaluation],
 )
 
-=== Implemented training infrastructure and planned scorer
+=== Implemented scorer and training interface
 
 #thesis_status(
   implementation: "partial",
   evidence: "pending",
   citation: [@VIN-NBV-frahm2025 @CORAL-cao2019 @DoubleDQN-vanHasselt2015],
-  source: "aria_nbv/aria_nbv/vin/models/target_myopic.py; aria_nbv/aria_nbv/lightning/qh_module.py; aria_nbv/aria_nbv/data_handling/qh_data/views.py",
-  gate: [retain the one-step scorer as a matched control and implement the first finite-horizon scorer only after its interface decision],
-)[The one-step VIN/CORAL scorer remains the historical myopic control. Replay-chain tensors and a selected-transition Double-Q trainer for an injected scorer are implemented. No deterministic H=2, candidate-to-state, or other production finite-horizon scorer is implemented.]
+  source: "aria_nbv/aria_nbv/vin/models/target_finite_horizon.py; aria_nbv/aria_nbv/lightning/qh_module.py; aria_nbv/aria_nbv/oracle/pipelines/online_qh.py; aria_nbv/tests/vin/test_target_finite_horizon.py",
+  gate: [retain the one-step scorer as a matched control, certify exact Q2, and require held-out oracle-rescored policy evidence],
+)[The A1--S0-pose--root-moments finite-horizon scorer, typed output, scalar horizon query, feasibility auxiliary, fitted-Q learner, and hard-masked online adapter are implemented. The one-step VIN/CORAL scorer remains historical evidence and a myopic control; scientific policy evidence is pending.]
 
-The implemented actor DTO can carry root semidense evidence, GT-derived target pose and extent, root-relative candidate geometry, selected-pose history, and remaining budget. It deliberately excludes supervision and audit lineage from scorer inputs. These tensors make an `S0-pose` baseline possible, but they do not establish an architecture, checkpoint, or task-sufficient reconstruction state.
+The actor DTO carries root semidense evidence, GT-derived target pose and extent, root-relative candidate geometry, selected-pose history, remaining budget, and candidate materialization support. It deliberately excludes supervision and audit lineage from scorer inputs. The current model makes this an executable `S0-pose` baseline, but neither a trained checkpoint nor task-sufficient reconstruction state follows from interface tests alone.
 
-Any injected scorer must emit one continuous value per candidate row, while the Lightning adapter owns hard-mask admission, Double-Q target construction, loss, and target synchronization. Candidate-to-state attention, candidate--candidate interaction, and the representation carrier remain production-scorer design choices.
+The scorer emits a typed pair before policy masking:
 
-=== Requested-horizon scorer design candidate
+#eqs.rl.qh_scorer_interface
+
+`conditional_q` is finite for every materialized row and is trained only where hard validity and Q-label support admit a target. `feasibility_logits` is produced by a target-, horizon-, and action-mask-independent physical trunk and may receive binary supervision on labelled materialized rows. Lightning owns hard-mask admission, Huber loss, optional feasibility BCE, exact $h arrow.l h-1$ recursion checks, Double-Q targets, and target synchronization. Online inference compacts conditional values only through the authoritative hard mask.
+
+=== Scalar requested-horizon scorer
 
 #thesis_status(
-  implementation: "planned",
+  implementation: "implemented",
   evidence: "pending",
   citation: [@FittedQIteration-ernst2005 @FixedHorizonTD-deAsis2020 @UVFA-schaul2015 @DeepSets-zaheer2017 @SetTransformer-lee2019 @zhou2023query],
   source: "docs/typst/thesis/sections/04-method/04-01-scene-representation-requirements.typ; docs/typst/thesis/sections/04-method/04-02-descriptor-and-encoding-plan.typ; aria_nbv/aria_nbv/lightning/qh_module.py",
-  gate: [fixed-H versus requested-horizon source-owner decision, dynamic-state reader, A0/A1 controls, horizon tests, and held-out oracle policy comparison],
-)[An explicit requested-horizon query is one candidate design for sharing scene, target, and candidate encoders across horizons. The current canonical direction remains fixed-H with remaining budget in state until the source-owner gate selects and documents an interface.]
+  gate: [exact-Q2 certification, A0/A1 controls, per-horizon support tests, and held-out oracle policy comparison],
+)[One scalar $h$ per state is implemented. Omitting the query uses factual remaining budget; public horizon vectorization remains evidence-gated.]
 
 For target $e$, the return over exactly the requested residual horizon $h$ is
 
@@ -47,27 +51,31 @@ $
   #eqs.rl.q_h
 $
 
-The notation $Q_H$ names a bounded finite-horizon family. If the explicit requested-horizon design is selected, one model query would be
+The notation $Q_H$ names a bounded finite-horizon family. One model query is
 
-#eqs.rl.q_h
+#eqs.model.qh_frozen_interface
 
-rather than a value from a separately configured fixed-H model. The maximum $H$ is a dataset contract and later a model/checkpoint contract. In this candidate design, requested residual horizon $h$ is a model input and remaining budget $b_t$ determines whether the query is admissible. In the fixed-H alternative, $h$ is implicit and $b_t$ remains state context. The step index $t$ stays lineage unless a named non-stationarity ablation uses it.
+rather than a value from a separately configured fixed-H model. The maximum $H_"max"$ is a dataset, model, and checkpoint contract. Requested residual horizon $h$ is a model input and remaining budget $b_t$ determines whether the query is admissible. The step index $t$ stays lineage unless a named non-stationarity ablation uses it.
 
-In the requested-horizon candidate design, one candidate row is one geometric query. Candidate pose, candidate--target relation, and candidate-local support are encoded once, and a lightweight horizon embedding turns that candidate into a horizon--candidate query:
+One candidate row is one geometric query. Candidate pose, candidate--target relation, and root-scene support are encoded once, and a lightweight horizon embedding turns that candidate into a horizon--candidate query:
 
 #eqs.model.qh_candidate_state_cross_attention
 
-followed by one shared per-row value head. This conditioning follows the general principle of a shared value approximator queried by an explicit task variable @UVFA-schaul2015. Fixed-H models and separate $Q_1,dots,Q_H$ heads remain competing designs until the source-owner decision is complete.
+followed by one shared per-row value head. This conditioning follows the general principle of a shared value approximator queried by an explicit task variable @UVFA-schaul2015. Fixed-H models and separate $Q_1,dots,Q_H$ heads remain ablations rather than competing public interfaces.
 
-This candidate could score one $h$ and return $[B,N_q]$, or vectorize admissible horizons and return $[B,L,N_q]$. Static encodings would be reused across the horizon axis. Such queries must receive only the causal state available at step $t$; the learning target, not future scorer input, determines how many rewards the value represents.
+The public interface scores one $h$ per state and returns $[B,S,N_q]$. Multiple horizons use separate calls; private batching may reuse encodings. A public $L$ axis is introduced only after two real atomic callers, measured inadequacy of private batching, and scalar/vector parity tests exist. Every query receives only the causal state available at step $t$; the learning target, not future scorer input, determines how many rewards the value represents.
 
-The valid-action mask sanitizes candidate rows, gates the masked policy argmax, and gates every supervised or bootstrap maximum. It becomes an attention key mask only in architectures where candidate rows themselves are keys. Target-independent root encodings may be reused across targets, but target-dependent candidate generators require per-target tables or a union table with an explicit target--candidate availability mask.
+The candidate materialization mask sanitizes padding. Changing only the valid-action mask cannot change raw conditional Q or feasibility logits:
+
+#eqs.rl.qh_conditional_mask_independence
+
+The valid-action mask instead gates the policy argmax, Q supervision, and every bootstrap maximum. Target-independent root encodings may be reused across targets, but target-dependent candidate generators require per-target tables or a union table with an explicit target--candidate availability mask.
 
 The value family is defined relative to a frozen state and source protocol. An `S0-pose` value, a privileged `CF-GT` selected-depth value, and a deployable observed-state value are different functions even when their tensors have similar shapes. Likewise, “optimal” means optimal continuation only within the generated finite candidate support, hard-validity contract, represented state, and transition distribution. A pose-only state cannot be promoted to a task-sufficient reconstruction value merely by requesting a longer horizon.
 
 === Horizon-recursive offline learning
 
-Batch fitted Q iteration learns a greedy action-value function from a fixed transition collection through successive supervised regression problems; it does not require online interaction @FittedQIteration-ernst2005. If the requested-horizon design is selected, one candidate lower-horizon recursion is
+Batch fitted Q iteration learns a greedy action-value function from a fixed transition collection through successive supervised regression problems; it does not require online interaction @FittedQIteration-ernst2005. The frozen lower-horizon recursion is
 
 #eqs.rl.target_root_gain_reward
 
@@ -81,7 +89,7 @@ The stored evidence gives a particularly strong base case. Every candidate admit
 
 #eqs.rl.finite_horizon_return
 
-This exact target is a useful recursion check and H=2 control. Whether the production learner is one requested-horizon scorer or a fixed-H family remains open at the source-owner gate.
+This exact target is the required recursion check and H=2 control. Longer-horizon interpretation remains gated until fitted Q2 matches this factual target on held-out supported rows and oracle lookahead shows positive headroom.
 
 Double Q is an optional estimator for the learned successor maximum. The
 nonterminal bootstrap first intersects hard action support with factual support
@@ -93,7 +101,7 @@ The online scorer then selects
 
 #eqs.rl.qh_doubleq_index
 
-and a delayed scorer to evaluate that row. This may reduce overestimation from maximizing noisy learned values @DoubleDQN-vanHasselt2015. It is neither a requirement for offline learning nor the definition of the requested-horizon design candidate. It cannot repair unsupported long-horizon actions, an aliased actor state, or missing selected-observation evidence.
+and a delayed scorer to evaluate that row. This may reduce overestimation from maximizing noisy learned values @DoubleDQN-vanHasselt2015. It is neither a requirement for offline learning nor the definition of the frozen scalar requested-horizon interface. It cannot repair unsupported long-horizon actions, an aliased actor state, or missing selected-observation evidence.
 
 Complete stored chains also permit regression to truncated Monte-Carlo returns. Those targets estimate the continuation of the behavior policy that generated each chain, $Q^mu$, rather than the greedy finite-support value $Q^star$ unless that behavior policy is itself the specified target policy. They are therefore useful controls and diagnostics, but they must not be mixed with optimal Bellman targets without naming the estimand.
 
@@ -101,7 +109,7 @@ The objective-design comparison is therefore:
 
 1. dense continuous $Q_1$ supervision on every candidate admitted by `q_train_mask`;
 2. exact selected-action $Q_2$ supervision as a base-case certification;
-3. fixed-H fitted models versus one explicitly horizon-conditioned model for $h=1,dots,H$;
+3. the shared scalar-horizon model versus fixed-H or separate-head ablations for $h=1,dots,H_"max"$;
 4. Double-Q selector/evaluator backups as a max-bias ablation;
 5. behavior-policy Monte-Carlo return regression as a separate estimand;
 6. an uncentred one-step-plus-residual decomposition.

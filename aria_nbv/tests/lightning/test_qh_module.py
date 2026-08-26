@@ -25,6 +25,7 @@ from aria_nbv.lightning.qh_module import QhLightningModule, QhLightningModuleCon
 from aria_nbv.rollouts.qh_geometry import QhGeometryContract
 from aria_nbv.rollouts.qh_reader import QhDataContract
 from aria_nbv.utils.fingerprints import stable_msgspec_hash
+from aria_nbv.vin.models.target_finite_horizon import QhScoreOutput
 from tests.data_handling.test_qh import _chain, _snippet
 
 
@@ -33,21 +34,35 @@ class _TableScorer(nn.Module):
         super().__init__()
         self.current = nn.Parameter(torch.tensor([1.0, 2.0, 3.0, 4.0]))
         self.next = nn.Parameter(torch.tensor([1.0, 3.0, 2.0, 4.0]))
+        self.feasibility = nn.Parameter(torch.zeros(4))
         self.calls = 0
 
-    def forward(self, actor: QhActorTensors) -> torch.Tensor:
+    def forward(
+        self,
+        actor: QhActorTensors,
+        *,
+        requested_horizon: torch.Tensor | None = None,
+    ) -> QhScoreOutput:
         self.calls += 1
         width = actor.action_mask.shape[-1]
         current = self.current[:width].view(1, 1, width)
         successor = self.next[:width].view(1, 1, width)
-        return torch.where(actor.horizon_remaining.unsqueeze(-1).eq(1), successor, current).expand(
-            *actor.action_mask.shape
-        )
+        horizon = actor.horizon_remaining if requested_horizon is None else requested_horizon
+        conditional_q = torch.where(horizon.unsqueeze(-1).eq(1), successor, current).expand(*actor.action_mask.shape)
+        feasibility_logits = self.feasibility[:width].view(1, 1, width).expand(*actor.action_mask.shape)
+        return QhScoreOutput(conditional_q=conditional_q, feasibility_logits=feasibility_logits)
 
 
 class _BadShapeScorer(nn.Module):
-    def forward(self, actor: QhActorTensors) -> torch.Tensor:
-        return torch.zeros((*actor.action_mask.shape[:2], actor.action_mask.shape[-1] + 1))
+    def forward(
+        self,
+        actor: QhActorTensors,
+        *,
+        requested_horizon: torch.Tensor | None = None,
+    ) -> QhScoreOutput:
+        del requested_horizon
+        wrong = torch.zeros((*actor.action_mask.shape[:2], actor.action_mask.shape[-1] + 1))
+        return QhScoreOutput(conditional_q=wrong, feasibility_logits=wrong)
 
 
 _CONTRACT = QhDataContract("qh-v1", "v1_observed", "reward", "return", "td", 0.95, "reasons-v1", "vin-v1")
@@ -112,10 +127,11 @@ def _batch(*, bootstrap: bool = True) -> QhBatch:
     return collate_qh_chains([_training_chain(bootstrap=bootstrap)])
 
 
-def _module(sync_interval: int = 2) -> QhLightningModule:
+def _module(sync_interval: int = 2, *, feasibility_loss_weight: float = 0.0) -> QhLightningModule:
     return QhLightningModule(
         QhLightningModuleConfig(
             target_sync_interval=sync_interval,
+            feasibility_loss_weight=feasibility_loss_weight,
             lr_scheduler=None,
             actor_state_contract_hash=_CF0_ACTOR_HASH,
             learning_contract_hash=_LEARNING_CONTRACT_HASH,
@@ -306,6 +322,7 @@ def test_predict_start_uses_the_same_exact_datamodule_admission() -> None:
             "actor_state_contract_hash": _CF0_ACTOR_HASH,
             "learning_contract_hash": _LEARNING_CONTRACT_HASH,
             "geometry_contract_hash": None,
+            "learning_contract": type("LearningContract", (), {"data_contract": _CONTRACT})(),
         },
     )()
     trainer = type("Trainer", (), {"datamodule": data})()
@@ -359,6 +376,7 @@ def test_cfplus_geometry_hash_survives_config_reload_and_rejects_drift() -> None
                 "actor_state_contract_hash": stable_msgspec_hash(actor),
                 "learning_contract_hash": _LEARNING_CONTRACT_HASH,
                 "geometry_contract_hash": "geom-v1",
+                "learning_contract": type("LearningContract", (), {"data_contract": _CONTRACT})(),
             },
         )()
     )
@@ -372,6 +390,7 @@ def test_cfplus_geometry_hash_survives_config_reload_and_rejects_drift() -> None
                     "actor_state_contract_hash": stable_msgspec_hash(actor),
                     "learning_contract_hash": _LEARNING_CONTRACT_HASH,
                     "geometry_contract_hash": "tampered",
+                    "learning_contract": type("LearningContract", (), {"data_contract": _CONTRACT})(),
                 },
             )()
         )
@@ -394,11 +413,12 @@ def test_forward_consumes_actor_tensors_and_requires_exact_batch_shape() -> None
     batch = collate_qh_chains([_cf0_chain(_chain(steps=1, width=3)), _cf0_chain(_chain(steps=2, width=3, offset=10))])
     module = _module()
 
-    values = module(batch.actor)
+    output = module(batch.actor)
 
-    assert values.shape == (2, 2, 3)
+    assert output.conditional_q.shape == (2, 2, 3)
+    assert output.feasibility_logits.shape == (2, 2, 3)
     assert module.online_scorer.calls == 1
-    with pytest.raises(ValueError, match=r"must return shape \(2, 2, 3\)"):
+    with pytest.raises(ValueError, match=r"conditional_q must have shape \(2, 2, 3\)"):
         QhLightningModule(module.config, scorer=_BadShapeScorer())(batch.actor)
 
 
@@ -466,6 +486,36 @@ def test_exact_double_q_target_and_huber_loss() -> None:
     assert loss.item() == pytest.approx(8.25)
 
 
+def test_recursive_q2_target_matches_dense_successor_exact_q2_control() -> None:
+    module = _module()
+    module.online_scorer.next.data.copy_(torch.tensor([2.0, 0.0, 0.0, 0.0]))
+    module.target_scorer.next.data.copy_(torch.tensor([2.0, 0.0, 0.0, 0.0]))
+    batch = _batch()
+
+    _loss, recursive_targets, _admitted = module.compute_fitted_q_loss(batch)
+    exact_targets, exact_support = module.compute_exact_q2_targets(batch)
+
+    assert exact_support.tolist() == [[True, False]]
+    assert recursive_targets[exact_support].item() == pytest.approx(2.3)
+    assert torch.equal(recursive_targets[exact_support], exact_targets[exact_support])
+
+
+def test_exact_q2_rejects_incomplete_hard_valid_successor_labels() -> None:
+    batch = _batch()
+    label_mask = batch.supervision.label_mask.clone()
+    label_mask[:, 1, 0] = False
+    batch = replace(
+        batch,
+        supervision=replace(batch.supervision, label_mask=label_mask),
+    )
+
+    exact_targets, exact_support = _module().compute_exact_q2_targets(batch)
+
+    assert batch.successor_present.tolist() == [[True, False]]
+    assert exact_support.tolist() == [[False, False]]
+    assert exact_targets[0, 0].item() == pytest.approx(0.5)
+
+
 def test_terminal_rows_do_not_bootstrap() -> None:
     batch = _batch(bootstrap=False)
 
@@ -475,6 +525,85 @@ def test_terminal_rows_do_not_bootstrap() -> None:
         -1, batch.supervision.selected_index.unsqueeze(-1)
     ).squeeze(-1)
     assert torch.equal(targets, selected_reward)
+
+
+def test_explicit_horizon_one_rows_do_not_bootstrap() -> None:
+    batch = _batch()
+    batch = replace(
+        batch,
+        actor=replace(batch.actor, horizon_remaining=torch.ones_like(batch.actor.horizon_remaining)),
+    )
+
+    _loss, targets, admitted = _module().compute_fitted_q_loss(batch)
+
+    selected_reward = batch.supervision.candidate_reward.gather(
+        -1, batch.supervision.selected_index.unsqueeze(-1)
+    ).squeeze(-1)
+    assert admitted.tolist() == [[True, True]]
+    assert torch.equal(targets, selected_reward)
+
+
+def test_recursive_backup_rejects_successor_horizon_other_than_h_minus_one() -> None:
+    batch = _batch()
+    horizon = batch.actor.horizon_remaining.clone()
+    horizon[:, 1] = horizon[:, 0]
+    batch = replace(batch, actor=replace(batch.actor, horizon_remaining=horizon))
+
+    with pytest.raises(ValueError, match="h-1 exactly"):
+        _module().compute_fitted_q_loss(batch)
+
+
+def test_exact_q2_rejects_successor_horizon_other_than_one() -> None:
+    batch = _batch()
+    horizon = batch.actor.horizon_remaining.clone()
+    horizon[:, 1] = 2
+    batch = replace(batch, actor=replace(batch.actor, horizon_remaining=horizon))
+
+    with pytest.raises(ValueError, match="h-1 exactly"):
+        _module().compute_exact_q2_targets(batch)
+
+
+def test_feasibility_bce_backpropagates_on_valid_and_invalid_materialized_rows() -> None:
+    batch = _batch()
+    action_mask = batch.actor.action_mask.clone()
+    action_mask[..., -1] = False
+    batch = replace(batch, actor=replace(batch.actor, action_mask=action_mask))
+    module = _module(feasibility_loss_weight=1.0)
+
+    loss, support = module.compute_feasibility_loss(batch)
+    loss.backward()
+
+    assert support.equal(batch.actor.candidate_mask & batch.actor.step_mask.unsqueeze(-1))
+    assert bool((support & batch.actor.action_mask).any())
+    assert bool((support & ~batch.actor.action_mask).any())
+    feasibility_grad = module.online_scorer.feasibility.grad
+    assert feasibility_grad is not None
+    assert bool(feasibility_grad[:2].abs().sum() > 0)
+    assert bool(feasibility_grad[2].abs() > 0)
+    assert module.online_scorer.current.grad is None
+    assert module.online_scorer.next.grad is None
+
+
+def test_fitted_q_loss_has_no_gradient_for_invalid_unlabelled_rows() -> None:
+    batch = _batch()
+    action_mask = batch.actor.action_mask.clone()
+    label_mask = batch.supervision.label_mask.clone()
+    action_mask[..., -1] = False
+    label_mask[..., -1] = False
+    batch = replace(
+        batch,
+        actor=replace(batch.actor, action_mask=action_mask),
+        supervision=replace(batch.supervision, label_mask=label_mask),
+    )
+    module = _module()
+
+    loss, _targets, _admitted = module.compute_fitted_q_loss(batch)
+    loss.backward()
+
+    assert module.online_scorer.current.grad is not None
+    assert module.online_scorer.next.grad is not None
+    assert module.online_scorer.current.grad[-1] == 0
+    assert module.online_scorer.next.grad[-1] == 0
 
 
 def test_bootstrap_argmax_uses_shifted_action_and_label_support() -> None:
