@@ -51,6 +51,8 @@ def _relative_path(value: object, field: str, source_id: str) -> str:
     path = PurePosixPath(value)
     if path.is_absolute() or any(part in {"", ".", ".."} for part in path.parts):
         raise ManifestError(f"{source_id}: unsafe {field} path: {value}")
+    if path.parts[0] == ".git":
+        raise ManifestError(f"{source_id}: Git metadata is not a valid {field} path")
     return value
 
 

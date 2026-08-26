@@ -13,7 +13,7 @@ touched_owner_paths:
   - scripts/tests/test_skill_sources.py
 codex_thread: codex://threads/01a03d93-b37f-7643-be5d-b3afb21284be
 repo_object_format: sha1
-repo_head: c564b98dc7df29554110051477b822a01d50e7e6
+repo_head: c564b98dc7f9e6271135968d339e90dda479fdf6
 repo_branch: codex/skill-source-updates
 worktree_kind: linked
 ---
@@ -58,4 +58,4 @@ introduced.
 
 ## Commits
 
-- [c564b98dc7df29554110051477b822a01d50e7e6](https://github.com/JanDuchscherer104/ARIA-NBV/commit/c564b98dc7df29554110051477b822a01d50e7e6)
+- [c564b98dc7f9e6271135968d339e90dda479fdf6](https://github.com/JanDuchscherer104/ARIA-NBV/commit/c564b98dc7f9e6271135968d339e90dda479fdf6)
