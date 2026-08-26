@@ -24,6 +24,7 @@ from ..rollouts.qh_reader import QhDataContract
 from ..utils import BaseConfig, TargetConfig
 from ..utils.fingerprints import stable_config_hash, stable_msgspec_hash
 from ..vin.models.target_finite_horizon import (
+    TargetFiniteHorizonScorer,
     TargetFiniteHorizonScorerConfig,
 )
 from ..vin.qh_bundle import QH_INFERENCE_BUNDLE_SCHEMA_VERSION, QhInferenceBundleRef, QhInferenceRuntime
@@ -445,6 +446,7 @@ class QhExperiment:
             raise ValueError("Q_H scorer-state payload hash does not match the bundle manifest.")
         state = torch.load(state_path, map_location="cpu", weights_only=True)
         scorer.load_state_dict(state, strict=True)
+        scorer.validate_value_decoder_state(require_publishable=True)
         scorer.to(device=device)
         scorer.eval()
         identity = manifest["identity"]
@@ -469,7 +471,7 @@ class QhExperiment:
     def _publish_bundle(
         self,
         bundle_dir: Path,
-        scorer: torch.nn.Module,
+        scorer: TargetFiniteHorizonScorer,
         *,
         module_config: QhLightningModuleConfig,
         identity: dict[str, Any],
@@ -482,6 +484,9 @@ class QhExperiment:
         state_path = bundle_dir / _SCORER_STATE_FILENAME
         if state_path.exists() or (bundle_dir / _MANIFEST_FILENAME).exists():
             raise FileExistsError(f"Q_H bundle payload already exists in {bundle_dir}.")
+        if stable_config_hash(scorer.config, length=64) != stable_config_hash(self.config.scorer, length=64):
+            raise ValueError("Q_H scorer runtime configuration does not match the experiment configuration.")
+        scorer.validate_value_decoder_state(require_publishable=True)
         torch.save(scorer.state_dict(), state_path)
         artifacts = {
             _SCORER_STATE_FILENAME: {
@@ -613,6 +618,7 @@ class QhExperiment:
         state_path = _verified_artifact_path(ref.bundle_path, manifest, _SCORER_STATE_FILENAME)
         state = torch.load(state_path, map_location="cpu", weights_only=True)
         scorer.load_state_dict(state, strict=True)
+        scorer.validate_value_decoder_state(require_publishable=True)
         return QhInferenceBundleRef(ref.bundle_path, ref.schema_version, ref.manifest_sha256)
 
     @staticmethod

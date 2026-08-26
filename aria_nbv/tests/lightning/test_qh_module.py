@@ -24,8 +24,11 @@ from aria_nbv.data_handling.qh_data.views import QhActorStateContract, QhStaticC
 from aria_nbv.lightning.qh_module import QhLightningModule, QhLightningModuleConfig
 from aria_nbv.rollouts.qh_geometry import QhGeometryContract
 from aria_nbv.rollouts.qh_reader import QhDataContract
+from aria_nbv.utils import Stage
 from aria_nbv.utils.fingerprints import stable_msgspec_hash
 from aria_nbv.vin.models.target_finite_horizon import QhScoreOutput
+from aria_nbv.vin.modules.qh_value_decoders import QhCoralAuxiliary
+from aria_nbv.vin.ordinal import coral_loss
 from tests.data_handling.test_qh import _chain, _snippet
 
 
@@ -63,6 +66,68 @@ class _BadShapeScorer(nn.Module):
         del requested_horizon
         wrong = torch.zeros((*actor.action_mask.shape[:2], actor.action_mask.shape[-1] + 1))
         return QhScoreOutput(conditional_q=wrong, feasibility_logits=wrong)
+
+
+class _CoralTableScorer(_TableScorer):
+    """Expose fixed per-candidate ordinal logits beside scalar backup values."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.coral_logits = nn.Parameter(
+            torch.tensor(
+                [
+                    [0.2, -0.3],
+                    [0.5, -0.7],
+                    [-0.4, 0.1],
+                    [0.0, 0.0],
+                ]
+            )
+        )
+        self.register_buffer("coral_edges", torch.tensor([1.0, 10.0]))
+        self.register_buffer("coral_values", torch.tensor([0.0, 5.0, 10.0]))
+
+    def forward(
+        self,
+        actor: QhActorTensors,
+        *,
+        requested_horizon: torch.Tensor | None = None,
+    ) -> QhScoreOutput:
+        """Return continuous Q for backup and CORAL logits for supervision."""
+
+        scalar = super().forward(actor, requested_horizon=requested_horizon)
+        width = actor.action_mask.shape[-1]
+        logits = self.coral_logits[:width].view(1, 1, width, 2).expand(*actor.action_mask.shape, 2)
+        return QhScoreOutput(
+            conditional_q=scalar.conditional_q,
+            feasibility_logits=scalar.feasibility_logits,
+            value_auxiliary=QhCoralAuxiliary(
+                logits=logits,
+                bin_edges=self.coral_edges,
+                bin_values=self.coral_values,
+            ),
+        )
+
+
+class _BadCoralShapeScorer(_TableScorer):
+    """Return malformed ordinal metadata to exercise the fail-closed seam."""
+
+    def forward(
+        self,
+        actor: QhActorTensors,
+        *,
+        requested_horizon: torch.Tensor | None = None,
+    ) -> QhScoreOutput:
+        scalar = super().forward(actor, requested_horizon=requested_horizon)
+        wrong = torch.zeros((*actor.action_mask.shape[:2], actor.action_mask.shape[-1] + 1, 2))
+        return QhScoreOutput(
+            conditional_q=scalar.conditional_q,
+            feasibility_logits=scalar.feasibility_logits,
+            value_auxiliary=QhCoralAuxiliary(
+                logits=wrong,
+                bin_edges=torch.tensor([1.0, 10.0]),
+                bin_values=torch.tensor([0.0, 5.0, 10.0]),
+            ),
+        )
 
 
 _CONTRACT = QhDataContract("qh-v1", "v1_observed", "reward", "return", "td", 0.95, "reasons-v1", "vin-v1")
@@ -137,6 +202,21 @@ def _module(sync_interval: int = 2, *, feasibility_loss_weight: float = 0.0) -> 
             learning_contract_hash=_LEARNING_CONTRACT_HASH,
         ),
         scorer=_TableScorer(),
+    )
+
+
+def _coral_module() -> QhLightningModule:
+    """Return the table fixture with CORAL selected-action supervision."""
+
+    return QhLightningModule(
+        QhLightningModuleConfig(
+            target_sync_interval=2,
+            feasibility_loss_weight=0.0,
+            lr_scheduler=None,
+            actor_state_contract_hash=_CF0_ACTOR_HASH,
+            learning_contract_hash=_LEARNING_CONTRACT_HASH,
+        ),
+        scorer=_CoralTableScorer(),
     )
 
 
@@ -484,6 +564,115 @@ def test_exact_double_q_target_and_huber_loss() -> None:
     assert admitted.tolist() == [[True, True]]
     assert torch.allclose(targets, torch.tensor([[18.5, 2.0]]))
     assert loss.item() == pytest.approx(8.25)
+
+
+def test_coral_loss_uses_the_same_continuous_fitted_q_targets() -> None:
+    module = _coral_module()
+    module.target_scorer.next.data.copy_(torch.tensor([10.0, 20.0, 30.0, 40.0]))
+
+    loss, targets, admitted = module.compute_fitted_q_loss(_batch())
+    selected_logits = torch.stack(
+        (
+            module.online_scorer.coral_logits[1],
+            module.online_scorer.coral_logits[0],
+        )
+    )
+    labels = torch.bucketize(targets[admitted], module.online_scorer.coral_edges)
+    expected = coral_loss(selected_logits, labels, num_classes=3)
+
+    assert targets.tolist() == [[18.5, 2.0]]
+    assert labels.tolist() == [2, 1]
+    assert torch.equal(loss, expected)
+
+
+def test_coral_loss_has_gradients_only_on_selected_supported_candidates() -> None:
+    module = _coral_module()
+    batch = _batch()
+    action_mask = batch.actor.action_mask.clone()
+    label_mask = batch.supervision.label_mask.clone()
+    action_mask[..., -1] = False
+    label_mask[..., -1] = False
+    batch = replace(
+        batch,
+        actor=replace(batch.actor, action_mask=action_mask),
+        supervision=replace(batch.supervision, label_mask=label_mask),
+    )
+
+    loss, _targets, _admitted = module.compute_fitted_q_loss(batch)
+    loss.backward()
+
+    gradient = module.online_scorer.coral_logits.grad
+    assert gradient is not None
+    assert bool(gradient[0].abs().sum() > 0)
+    assert bool(gradient[1].abs().sum() > 0)
+    assert torch.equal(gradient[2:], torch.zeros_like(gradient[2:]))
+    assert module.online_scorer.current.grad is None
+    assert module.online_scorer.next.grad is None
+
+
+def test_coral_metrics_expose_target_support_saturation(monkeypatch: pytest.MonkeyPatch) -> None:
+    module = _coral_module()
+    module.target_scorer.next.data.copy_(torch.tensor([10.0, 20.0, 30.0, 40.0]))
+    batch = _batch()
+    _losses, targets, admitted, output, _target = module._fitted_q_components(batch)  # noqa: SLF001
+    logged: dict[str, torch.Tensor] = {}
+    monkeypatch.setattr(module, "log", lambda name, value, **kwargs: logged.__setitem__(name, value.detach()))
+
+    module._log_coral_metrics(  # noqa: SLF001
+        Stage.VAL,
+        batch=batch,
+        output=output,
+        targets=targets,
+        admitted=admitted,
+    )
+
+    assert logged["val/coral_target_below_support_fraction"].item() == 0.0
+    assert logged["val/coral_target_above_support_fraction"].item() == 0.5
+    assert logged["val/coral_outer_class_fraction"].item() == 0.5
+    assert 0.0 <= logged["val/coral_monotonicity_violation_rate"].item() <= 1.0
+
+
+def test_coral_metrics_all_reduce_on_a_locally_empty_training_rank(monkeypatch: pytest.MonkeyPatch) -> None:
+    module = _coral_module()
+    batch = _batch()
+    output = module(batch.actor)
+    admitted = torch.zeros_like(batch.selected_train_mask)
+    targets = torch.zeros_like(batch.supervision.discount)
+    reductions: list[torch.Tensor] = []
+    logged: list[str] = []
+    monkeypatch.setattr(module, "_distributed", lambda: True)
+    monkeypatch.setattr(
+        torch.distributed,
+        "all_reduce",
+        lambda values, **kwargs: reductions.append(values.detach().clone()),
+    )
+    monkeypatch.setattr(module, "log", lambda name, *args, **kwargs: logged.append(name))
+
+    module._log_coral_metrics(  # noqa: SLF001
+        Stage.TRAIN,
+        batch=batch,
+        output=output,
+        targets=targets,
+        admitted=admitted,
+    )
+
+    assert len(reductions) == 1
+    assert reductions[0].tolist() == [0.0] * 6
+    assert logged == []
+
+
+def test_module_rejects_malformed_coral_payload_before_training() -> None:
+    module = QhLightningModule(
+        QhLightningModuleConfig(
+            lr_scheduler=None,
+            actor_state_contract_hash=_CF0_ACTOR_HASH,
+            learning_contract_hash=_LEARNING_CONTRACT_HASH,
+        ),
+        scorer=_BadCoralShapeScorer(),
+    )
+
+    with pytest.raises(ValueError, match="CORAL logits must have shape"):
+        module(_batch().actor)
 
 
 def test_recursive_q2_target_matches_dense_successor_exact_q2_control() -> None:

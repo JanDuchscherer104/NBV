@@ -296,6 +296,24 @@ return {
       description = "Action-mask-independent conditional candidate value emitted by the scorer.",
       thesis_list = true,
     },
+    ["rl.coral_q_edge"] = {
+      tex = "e_k^Q",
+      typst = "#symb.rl.coral_q_edge",
+      description = "Fixed continuous fitted-Q boundary between adjacent CORAL classes.",
+      thesis_list = true,
+    },
+    ["rl.coral_q_label"] = {
+      tex = "c_n^Q",
+      typst = "#symb.rl.coral_q_label",
+      description = "Ordinal class assigned to one continuous fitted-Q target.",
+      thesis_list = true,
+    },
+    ["rl.coral_q_value"] = {
+      tex = "u_k^Q",
+      typst = "#symb.rl.coral_q_value",
+      description = "Fixed continuous-Q representative used to decode one CORAL class.",
+      thesis_list = true,
+    },
     ["rl.feasibility_label_mask"] = {
       tex = "m_{t,i}^{F}",
       typst = "#symb.rl.feasibility_label_mask",
@@ -772,6 +790,12 @@ return {
       description = "",
       thesis_list = false,
     },
+    ["model.qh_frozen_interface"] = {
+      tex = "f_\\theta(s_t^{\\mathrm{S0-pose}},\\boldsymbol{\\phi}_e,\\{q_{t,i}\\}_{i=1}^{N_q},h)\\to(\\{Q_{h,\\theta,e,i}^{\\mathrm{cond}}\\}_{i=1}^{N_q},\\{\\ell_{t,i}^{\\mathrm{feas}}\\}_{i=1}^{N_q})",
+      typst = "#eqs.model.qh_frozen_interface",
+      description = "Frozen scalar requested-horizon scorer interface.",
+      thesis_list = false,
+    },
     ["model.qh_input_contract"] = {
       tex = "\\mathcal{I}_{t,e}=(\\boldsymbol{h}_e^{\\mathrm{tgt}},\\boldsymbol{\\Phi}_t^{\\mathrm{scene}},\\boldsymbol{H}_t,\\boldsymbol{b}_t,t,H,\\{\\boldsymbol{x}_{t,i},\\boldsymbol{e}_{a\\mid i}^{\\mathrm{rel}},m_{t,i},\\boldsymbol{\\rho}_{t,i}\\}_{i=1}^{N_q})",
       typst = "#eqs.model.qh_input_contract",
@@ -791,7 +815,7 @@ return {
       thesis_list = false,
     },
     ["rl.candidate_row_equivariance"] = {
-      tex = "f_\\theta(\\Pi X_t,\\Pi m_t^{\\mathrm{cand}})=\\Pi f_\\theta(X_t,m_t^{\\mathrm{cand}})",
+      tex = "f_\\theta(\\Pi X_t,\\Pi m_t)=\\Pi f_\\theta(X_t,m_t)",
       typst = "#eqs.rl.candidate_row_equivariance",
       description = "",
       thesis_list = false,
@@ -827,9 +851,9 @@ return {
       thesis_list = false,
     },
     ["rl.finite_horizon_return"] = {
-      tex = "G_{t,e}^{(h)}=\\sum_{k=0}^{h-1}\\gamma^k r_{t+k}^e",
+      tex = "G_t^{(H)}=\\sum_{k=0}^{H-1}\\gamma^k r_{t+k}^e",
       typst = "#eqs.rl.finite_horizon_return",
-      description = "Admissible finite-horizon return; post-terminal rewards are zero under the absorbing-terminal convention.",
+      description = "",
       thesis_list = false,
     },
     ["rl.marginal_target_rri"] = {
@@ -839,7 +863,7 @@ return {
       thesis_list = true,
     },
     ["rl.masked_candidate_selection"] = {
-      tex = "\\mathcal{A}_t=\\{i:m_{t,i}^{\\mathrm{act}}=1\\},\\quad a_t^\\theta=\\operatorname*{argmax}_{i\\in\\mathcal{A}_t} Q_{h,\\theta,e}(s_t,i)",
+      tex = "\\mathcal{A}_t=\\{i:m_{t,i}=1\\},\\quad a_t^\\theta=\\operatorname*{argmax}_{i\\in\\mathcal{A}_t} f_{\\theta,i}(X_t,m_t)",
       typst = "#eqs.rl.masked_candidate_selection",
       description = "",
       thesis_list = false,
@@ -869,9 +893,9 @@ return {
       thesis_list = false,
     },
     ["rl.q_h"] = {
-      tex = "Q_{h,e}^{\\star}(s_t,i)=\\sup_{\\pi\\in\\Pi^{\\mathrm{act}}}\\mathbb{E}_{\\pi}\\left[G_{t,e}^{(h)}\\mid s_t,a_t=i\\right],\\quad 1\\le h\\le b_t\\le H_{\\max},\\quad Q_{0,e}^{\\star}=0",
+      tex = "Q_H(s_t^{\\mathrm{cf0}},a_t)=\\mathbb{E}\\left[G_t^{(H)}\\mid s_t=s_t^{\\mathrm{cf0}},a_t\\right]",
       typst = "#eqs.rl.q_h",
-      description = "Optimal continuation value within the generated finite candidate sets and hard-action support.",
+      description = "",
       thesis_list = false,
     },
     ["rl.qh_candidate_token"] = {
@@ -887,9 +911,9 @@ return {
       thesis_list = false,
     },
     ["rl.qh_coral_interface"] = {
-      tex = "\\begin{gathered}p_{t,i,k}^{\\mathrm{CORAL}}=\\sigma(o_{t,i,k}^{\\mathrm{CORAL}}),\\quad k=0,\\ldots,K-2;\\\\ \\pi_{t,i,k}^{\\mathrm{CORAL}}=p_{t,i,k-1}^{\\mathrm{CORAL}}-p_{t,i,k}^{\\mathrm{CORAL}},\\quad p_{t,i,-1}^{\\mathrm{CORAL}}=1,\\quad p_{t,i,K-1}^{\\mathrm{CORAL}}=0;\\\\ \\hat{r}_\\psi^e(s_t^{\\mathrm{cf0}},\\boldsymbol{\\phi}_e,q_{t,i})=\\sum_{k=0}^{K-1}\\pi_{t,i,k}^{\\mathrm{CORAL}}u_k\\end{gathered}",
+      tex = "\\begin{gathered}c_n^Q=\\sum_{k=0}^{K-2}\\mathbb{1}[y_n>e_k^Q],\\quad l_{n,k}=\\mathbb{1}[c_n^Q>k];\\\\ \\mathcal{L}_Q^{\\mathrm{CORAL}}=-\\sum_n\\sum_{k=0}^{K-2}\\left(l_{n,k}\\log p_{n,k}+(1-l_{n,k})\\log(1-p_{n,k})\\right),\\quad p_{n,k}=\\sigma(o_{n,k});\\\\ \\pi_{n,k}^{\\mathrm{raw}}=p_{n,k-1}-p_{n,k},\\quad \\widetilde{\\pi}_{n,k}=\\frac{\\max(\\pi_{n,k}^{\\mathrm{raw}},0)}{\\sum_j\\max(\\pi_{n,j}^{\\mathrm{raw}},0)+\\varepsilon},\\quad Q_n^{\\mathrm{cond}}=\\sum_{k=0}^{K-1}\\widetilde{\\pi}_{n,k}u_k^Q\\end{gathered}",
       typst = "#eqs.rl.qh_coral_interface",
-      description = "",
+      description = "Fixed-support CORAL loss and continuous conditional-Q decoding.",
       thesis_list = false,
     },
     ["rl.qh_doubleq_index"] = {

@@ -251,18 +251,28 @@
     delta_(theta,t,e,i)^h
   $,
   qh_coral_interface: $
-    p_(t,i,k)^"CORAL"
+    #symb.rl.coral_q_label
     &=
-    sigma(o_(t,i,k)^"CORAL"),
-    quad k=0,dots,K-2 \
-    pi_(t,i,k)^"CORAL"
+    sum_(k=0)^(K - 2) bb(1)[y_n > #symb.rl.coral_q_edge],
+    quad
+    l_(n,k)=bb(1)[#symb.rl.coral_q_label > k] \
+    cal(L)_Q^"CORAL"
     &=
-    p_(t,i,k-1)^"CORAL" - p_(t,i,k)^"CORAL",
-    quad p_(t,i,-1)^"CORAL"=1,
-    quad p_(t,i,K-1)^"CORAL"=0 \
-    hat(r)_psi^e (#symb.rl.s_cf0, #symb.entity.target_desc, #symb.rl.candidate_qti)
+    -sum_n sum_(k=0)^(K - 2)
+    (l_(n,k) log p_(n,k) + (1-l_(n,k)) log(1-p_(n,k))),
+    quad p_(n,k)=sigma(o_(n,k)) \
+    pi_(n,k)^"raw"
     &=
-    sum_(k=0)^(K - 1) pi_(t,i,k)^"CORAL" u_k
+    p_(n,k-1)-p_(n,k),
+    quad p_(n,-1)=1,
+    quad p_(n,K-1)=0 \
+    tilde(pi)_(n,k)
+    &=
+    (max(pi_(n,k)^"raw",0)) /
+    (sum_(j=0)^(K - 1) max(pi_(n,j)^"raw",0) + epsilon) \
+    Q_n^"cond"
+    &=
+    sum_(k=0)^(K - 1) tilde(pi)_(n,k) #symb.rl.coral_q_value
   $,
   qh_uncentered_residual: $
     Q_(h,theta,e,i)

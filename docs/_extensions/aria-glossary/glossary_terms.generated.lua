@@ -41,6 +41,11 @@ return {
     short = "CD",
     anchor = "term-chamfer-distance",
   },
+  ["coral-q-decoder"] = {
+    label = "CORAL Q-Value Decoder",
+    short = "Q-CORAL",
+    anchor = "term-coral-q-decoder",
+  },
   ["counterfactual-transition"] = {
     label = "Counterfactual Transition",
     short = "transition",

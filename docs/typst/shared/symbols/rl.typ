@@ -64,6 +64,12 @@
   conditional_q: $Q_(h,theta,e,i)^"cond"$,
   // Physical or observed feasibility logit emitted by the scorer's feasibility head.
   feasibility_logits: $ell_(t,i)^"feas"$,
+  // Fixed boundary assigning a continuous fitted-Q target to CORAL classes.
+  coral_q_edge: $e_k^Q$,
+  // Fixed continuous-Q representative used to decode CORAL class mass.
+  coral_q_value: $u_k^Q$,
+  // Ordinal class assigned to one fitted-Q target.
+  coral_q_label: $c_n^Q$,
   // Learned horizon-conditioned Q function with parameters theta.
   qh_theta: $Q_(H,theta)$,
   // Reserved lagged target-network Q; no direct authored use in the 2026-08-14 audit.
