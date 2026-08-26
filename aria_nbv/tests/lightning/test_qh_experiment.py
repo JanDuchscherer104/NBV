@@ -918,6 +918,14 @@ def test_qh_fit_publishes_new_bundle_and_hashed_receipts(tmp_path) -> None:
     training_receipt = json.loads(result.training_receipt_path.read_text(encoding="utf-8"))
     assert training_receipt["warm_start_parent_manifest_sha256"] is None
     assert "test_loss" not in training_receipt
+    assert training_receipt["target_descriptor_identity"] == {
+        stage: dataset.target_descriptor_identity
+        for stage, dataset in {
+            "train": train_dataset,
+            "validation": validation_dataset,
+            "test": test_dataset,
+        }.items()
+    }
 
     held_out = experiment.evaluate_held_out(
         QhHeldOutEvaluationRequest(
@@ -929,6 +937,7 @@ def test_qh_fit_publishes_new_bundle_and_hashed_receipts(tmp_path) -> None:
     held_out_receipt = json.loads(held_out.receipt_path.read_text(encoding="utf-8"))
     assert held_out_receipt["diagnostic_only"] is True
     assert held_out_receipt["endpoint_policy_evidence"] is False
+    assert held_out_receipt["target_descriptor_identity"] == test_dataset.target_descriptor_identity
     assert (
         held_out_receipt["test_provenance_sha256"]
         == hashlib.sha256(

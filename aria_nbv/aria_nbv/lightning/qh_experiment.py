@@ -351,7 +351,7 @@ class QhExperiment:
             _write_json(selection_path, selection_receipt)
 
             training_receipt = {
-                "schema_version": "qh-training-receipt-v2",
+                "schema_version": "qh-training-receipt-v3",
                 "seed": int(request.seed),
                 "warm_start_parent_manifest_sha256": (
                     None if warm_start_parent is None else warm_start_parent.manifest_sha256
@@ -360,6 +360,11 @@ class QhExperiment:
                 "train_provenance": _jsonable(train.provenance),
                 "validation_provenance": _jsonable(validation.provenance),
                 "test_provenance": _jsonable(test.provenance),
+                "target_descriptor_identity": {
+                    "train": _jsonable(train.target_descriptor_identity),
+                    "validation": _jsonable(validation.target_descriptor_identity),
+                    "test": _jsonable(test.target_descriptor_identity),
+                },
                 "learning_contract_hash": data.learning_contract_hash,
                 "actor_state_contract_hash": data.actor_state_contract_hash,
                 "trained_horizon_support": trained_horizon_support,
@@ -497,12 +502,13 @@ class QhExperiment:
         )
         trainer_config.setup_target().test(module, datamodule=data)
         receipt = {
-            "schema_version": "qh-held-out-diagnostic-receipt-v2",
+            "schema_version": "qh-held-out-diagnostic-receipt-v3",
             "diagnostic_only": True,
             "endpoint_policy_evidence": False,
             "bundle_manifest_sha256": request.bundle.manifest_sha256,
             "test_population_sha256": _json_payload_hash(request.test),
             "test_provenance_sha256": _json_payload_hash(test.provenance),
+            "target_descriptor_identity": _jsonable(test.target_descriptor_identity),
             "ordered_store_manifest_sha256s": _ordered_store_manifest_hashes(test.provenance),
             "ordered_store_manifests_sha256": _json_payload_hash(_ordered_store_manifest_hashes(test.provenance)),
             "bound_contract": {
