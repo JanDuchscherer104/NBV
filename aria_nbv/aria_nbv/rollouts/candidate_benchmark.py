@@ -25,6 +25,7 @@ import pandas as pd
 SCHEMA_ID = "aria-nbv-candidate-benchmark-v1"
 MANIFEST_NAME = "manifest.json"
 DATA_NAME = "candidates.parquet"
+MULTI_STORE_BINDING_ALGORITHM = "sha256-canonical-json-v1"
 BINDING_KEYS = (
     "source_sha256",
     "scene_split_sha256",
@@ -84,6 +85,28 @@ def sha256_bytes(value: bytes) -> str:
     """Return a SHA-256 hex digest."""
 
     return hashlib.sha256(value).hexdigest()
+
+
+def aggregate_store_content_sha256(store_seals: Mapping[str, str]) -> str:
+    """Bind an ordered set of promoted store identities and content seals."""
+
+    if not store_seals:
+        raise ValueError("multi-store benchmark binding requires at least one store seal")
+    stores = []
+    for store_id, seal in sorted(store_seals.items()):
+        if not store_id:
+            raise ValueError("multi-store benchmark binding requires non-empty store identities")
+        if not re.fullmatch(r"[0-9a-f]{64}", seal) or set(seal) == {"0"}:
+            raise ValueError(f"store {store_id!r} has no nonzero SHA-256 content seal")
+        stores.append({"store_id": store_id, "rollout_store_content_sha256": seal})
+    return sha256_bytes(
+        canonical_json_bytes(
+            {
+                "algorithm": MULTI_STORE_BINDING_ALGORITHM,
+                "stores": stores,
+            }
+        )
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -234,14 +257,14 @@ def reduce_candidate_records(records: list[Mapping[str, Any]]) -> tuple[Candidat
 
 
 def benchmarks_from_reader(
-    reader: Any, *, state_key: str | None = None, candidate_limit: int = 500
+    reader: Any, *, state_key: str | None = None, candidate_limit: int | None = 500
 ) -> tuple[CandidateBenchmark, ...]:
     """Build state-keyed facts from the canonical inspection candidate rows."""
 
     from .inspection import candidate_audit_rows
 
     grouped: dict[tuple[str, str], dict[str, list[Mapping[str, Any]]]] = {}
-    if candidate_limit <= 0:
+    if candidate_limit is not None and candidate_limit <= 0:
         raise ValueError("candidate_limit must be positive")
     if state_key is None:
         audit_rows = candidate_audit_rows(reader, limit=candidate_limit)
@@ -401,8 +424,6 @@ def benchmark_binding_from_manifest(manifest_payload: Mapping[str, Any]) -> dict
     coverage = coverage if isinstance(coverage, Mapping) else {}
     root_attrs = manifest_payload.get("root_attrs", {})
     root_attrs = root_attrs if isinstance(root_attrs, Mapping) else {}
-    counts = manifest.get("counts", {})
-    counts = counts if isinstance(counts, Mapping) else {}
     source = _existing_sha256(manifest, "source_sha256", "source_manifest_sha256") or sha256_bytes(
         canonical_json_bytes(coverage)
     )
@@ -414,9 +435,11 @@ def benchmark_binding_from_manifest(manifest_payload: Mapping[str, Any]) -> dict
             {"split": root_attrs.get("split_manifest_hash"), "scenes": coverage.get("scene_counts", {})}
         )
     )
-    store = _existing_sha256(manifest, "store_content_sha256", "content_sha256") or sha256_bytes(
-        canonical_json_bytes({"root_attrs": root_attrs, "counts": counts})
+    store = _existing_sha256(manifest_payload, "store_content_sha256", "content_sha256") or _existing_sha256(
+        manifest, "store_content_sha256", "content_sha256"
     )
+    if store is None:
+        raise ValueError("rollout manifest has no content hash; derive benchmark binding from the store reader")
     config = _existing_sha256(generation, "config_sha256", "writer_config_sha256") or sha256_bytes(
         canonical_json_bytes(writer)
     )
@@ -436,6 +459,47 @@ def benchmark_binding_from_manifest(manifest_payload: Mapping[str, Any]) -> dict
         "evidence_class": "candidate_benchmark",
         "completion": "complete",
     }
+
+
+def benchmark_binding_from_reader(reader: Any, manifest_payload: Mapping[str, Any] | None = None) -> dict[str, str]:
+    """Derive bindings from a validated reader and its promoted store seal."""
+
+    payload = dict(manifest_payload or reader.manifest())
+    store_dir = getattr(reader, "store_dir", None)
+    if store_dir is None:
+        raise ValueError("candidate benchmark binding requires a reader with a store_dir")
+    root = Path(store_dir).expanduser().resolve()
+    seals = []
+    for name in ("_SUCCESS.json", "_owner.json"):
+        seal = root / name
+        if seal.is_file():
+            try:
+                parsed = json.loads(seal.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError) as exc:
+                raise ValueError(f"invalid promoted store seal: {name}") from exc
+            value = parsed.get("rollout_store_content_sha256") if isinstance(parsed, Mapping) else None
+            if not isinstance(value, str) or not re.fullmatch(r"[0-9a-f]{64}", value) or set(value) == {"0"}:
+                raise ValueError(f"promoted store seal {name} has no nonzero content hash")
+            seals.append(value)
+    if seals:
+        if len(seals) != 2 or seals[0] != seals[1]:
+            raise ValueError("promoted store seals disagree on rollout_store_content_sha256")
+        payload["store_content_sha256"] = seals[0]
+    elif (root / "_SUCCESS.json").exists() or (root / "_owner.json").exists():
+        raise ValueError("promoted store requires both valid content seals")
+    elif root.is_dir():
+        digest = hashlib.sha256()
+        for path in sorted(
+            (item for item in root.rglob("*") if item.is_file()), key=lambda item: item.relative_to(root).as_posix()
+        ):
+            relative = path.relative_to(root).as_posix().encode("utf-8")
+            content = path.read_bytes()
+            digest.update(len(relative).to_bytes(8, "big"))
+            digest.update(relative)
+            digest.update(len(content).to_bytes(8, "big"))
+            digest.update(content)
+        payload["store_content_sha256"] = digest.hexdigest()
+    return benchmark_binding_from_manifest(payload)
 
 
 def serialize_bundle_bytes(records: tuple[CandidateBenchmark, ...], *, provenance: Mapping[str, str]) -> bytes:

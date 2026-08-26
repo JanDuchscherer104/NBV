@@ -64,7 +64,7 @@ def _render_candidate_benchmark_card(session_handle: Any) -> None:
     records = session_handle.candidate_benchmark_records(state_key=benchmark_state, candidate_limit=benchmark_limit)
     st.download_button(
         "Download candidate benchmark bundle",
-        session_handle.candidate_benchmark_export(state_key=benchmark_state, candidate_limit=benchmark_limit),
+        session_handle.candidate_benchmark_export(state_key=benchmark_state),
         "candidate-benchmark.zip",
     )
     st.markdown("#### Candidate benchmark support")

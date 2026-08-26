@@ -309,7 +309,7 @@ def test_benchmark_panel_dispatches_only_after_toggle_and_propagates_state_and_l
     assert not any(kind in {"records", "export"} for kind, _ in calls)
     validity_support._render_targets_and_support(Session())
     assert ("records", {"state_key": "state-1", "candidate_limit": 123}) in calls
-    assert ("export", {"state_key": "state-1", "candidate_limit": 123}) in calls
+    assert ("export", {"state_key": "state-1"}) in calls
     assert sum(kind == "plot" for kind, _ in calls) == 4
     assert sum(kind == "download" for kind, _ in calls) == 1
 

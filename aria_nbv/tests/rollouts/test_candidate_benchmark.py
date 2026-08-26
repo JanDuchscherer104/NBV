@@ -8,7 +8,9 @@ import pytest
 
 from aria_nbv.rollouts.candidate_benchmark import (
     BINDING_KEYS,
+    MULTI_STORE_BINDING_ALGORITHM,
     CandidateFamilyCounts,
+    aggregate_store_content_sha256,
     canonical_json_bytes,
     read_bundle,
     reduce_candidate_records,
@@ -95,6 +97,25 @@ def test_committed_html_reports_canonical_bundle_counts() -> None:
     assert sum(len(record.points) for record in bundle.records) == 960
 
 
+def test_committed_smoke_bundle_binds_both_promoted_store_seals() -> None:
+    root = Path(__file__).parents[3] / "docs/contents/evidence"
+    manifest = json.loads((root / "candidate_benchmark_wp01_smoke/manifest.json").read_text())
+    metadata = json.loads((root / "candidate_benchmark_wp01_smoke_metadata.json").read_text())
+    summary = json.loads((root / "candidate_benchmark_wp01_smoke.json").read_text())
+    seals = {store["identity"]: store["rollout_store_content_sha256"] for store in metadata["stores"]}
+
+    assert metadata["multi_store_binding"]["algorithm"] == MULTI_STORE_BINDING_ALGORITHM
+    aggregate = aggregate_store_content_sha256(seals)
+    assert aggregate == "5ee02217d1c49efa44a1296d11ba35e5f63ea563992bb4a3e7e921610b238677"
+    assert manifest["provenance"]["store_content_sha256"] == aggregate
+    assert metadata["multi_store_binding"]["store_content_sha256"] == aggregate
+    assert summary["multi_store_binding"] == {
+        "algorithm": MULTI_STORE_BINDING_ALGORITHM,
+        "store_content_sha256": aggregate,
+        "stores": seals,
+    }
+
+
 def test_dto_rejects_duplicate_or_misaligned_candidates() -> None:
     from aria_nbv.rollouts.candidate_benchmark import CandidateBenchmark, CandidatePoint
 
@@ -108,3 +129,67 @@ def test_dto_rejects_duplicate_or_misaligned_candidates() -> None:
             coordinates=((0.0, 0.0, 0.0), (0.0, 0.0, 0.0)),
             points=(point, point),
         )
+
+
+def test_benchmark_reader_keeps_selected_scan_bounded(monkeypatch: pytest.MonkeyPatch) -> None:
+    import aria_nbv.rollouts.inspection as inspection
+
+    calls: list[dict[str, object]] = []
+
+    def fake_rows(reader: object, **kwargs: object) -> list[dict[str, object]]:
+        calls.append(kwargs)
+        return []
+
+    monkeypatch.setattr(inspection, "candidate_audit_rows", fake_rows)
+    from aria_nbv.rollouts.candidate_benchmark import benchmarks_from_reader
+
+    assert benchmarks_from_reader(object(), state_key="rollout:9/step:17", candidate_limit=3) == ()
+    assert calls == [{"rollout_row_id": 9, "step_row_id": 17, "limit": 3}]
+
+
+def test_benchmark_reader_invalid_state_does_not_scan(monkeypatch: pytest.MonkeyPatch) -> None:
+    import aria_nbv.rollouts.inspection as inspection
+
+    monkeypatch.setattr(inspection, "candidate_audit_rows", lambda *_args, **_kwargs: pytest.fail("scan"))
+    from aria_nbv.rollouts.candidate_benchmark import benchmarks_from_reader
+
+    assert benchmarks_from_reader(object(), state_key="not-a-state", candidate_limit=3) == ()
+
+
+def test_reader_binding_changes_when_promoted_seal_changes(tmp_path: Path) -> None:
+    from aria_nbv.rollouts.candidate_benchmark import benchmark_binding_from_reader
+
+    class Reader:
+        store_dir = tmp_path
+
+        @staticmethod
+        def manifest() -> dict[str, object]:
+            return {"manifest": {"generation": {"writer_config": {}}, "source_coverage": {}}}
+
+    import hashlib
+
+    seal_hash = hashlib.sha256(b"persisted-content").hexdigest()
+    (tmp_path / "_SUCCESS.json").write_text(json.dumps({"rollout_store_content_sha256": seal_hash}), encoding="utf-8")
+    (tmp_path / "_owner.json").write_text(json.dumps({"rollout_store_content_sha256": seal_hash}), encoding="utf-8")
+    benchmark_binding_from_reader(Reader())
+    (tmp_path / "_owner.json").write_text(json.dumps({"rollout_store_content_sha256": "1" * 64}), encoding="utf-8")
+    with pytest.raises(ValueError, match="disagree"):
+        benchmark_binding_from_reader(Reader())
+
+
+def test_unpromoted_reader_binding_changes_with_persisted_content(tmp_path: Path) -> None:
+    from aria_nbv.rollouts.candidate_benchmark import benchmark_binding_from_reader
+
+    class Reader:
+        store_dir = tmp_path
+
+        @staticmethod
+        def manifest() -> dict[str, object]:
+            return {"manifest": {"generation": {"writer_config": {}}, "source_coverage": {}}}
+
+    payload = tmp_path / "candidates.bin"
+    payload.write_bytes(b"first")
+    first = benchmark_binding_from_reader(Reader())
+    payload.write_bytes(b"second")
+    second = benchmark_binding_from_reader(Reader())
+    assert first["store_content_sha256"] != second["store_content_sha256"]

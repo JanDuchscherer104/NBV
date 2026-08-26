@@ -21,6 +21,7 @@ import typer
 from ..data_handling.identifiers import compact_ase_atek_identifiers
 from ..utils.cli_format import cli_console, counts_table, distribution_table, key_value_panel
 from ..utils.typer_cli import run_typer_app
+from .candidate_benchmark import benchmark_binding_from_reader
 from .inspection import build_compact_statistics, runtime_storage_statistics
 from .reporting import (
     THESIS_REPORT_BUNDLE_ROLE,
@@ -168,6 +169,9 @@ def info_command(
                         "--candidate-benchmark-binding-json is required with --candidate-benchmark-bundle"
                     )
                 binding = json.loads(candidate_benchmark_binding_json.read_text(encoding="utf-8"))
+                derived_binding = benchmark_binding_from_reader(reader, payload)
+                if binding != derived_binding:
+                    raise typer.BadParameter("candidate benchmark binding does not match the selected rollout store")
             elif candidate_benchmark_binding_json is not None:
                 raise typer.BadParameter(
                     "--candidate-benchmark-bundle is required with --candidate-benchmark-binding-json"

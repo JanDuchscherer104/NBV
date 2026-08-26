@@ -15,13 +15,14 @@ from aria_nbv.rollouts.candidate_benchmark import (
     CandidateBenchmark,
     CandidateFamilyCounts,
     CandidatePoint,
+    benchmark_binding_from_reader,
     read_bundle_bytes,
     serialize_bundle_bytes,
     sha256_bytes,
     write_bundle,
 )
 from aria_nbv.rollouts.info_cli import app as rollouts_info_app
-from aria_nbv.rollouts.zarr_store import write_rollout_zarr_store
+from aria_nbv.rollouts.zarr_store import RolloutZarrStoreReader, write_rollout_zarr_store
 from tests.rollout_fixtures import build_rollout_records
 
 
@@ -109,7 +110,7 @@ def test_candidate_benchmark_card_is_lazy_and_renders_real_plots_and_download(tm
     app = app.run()
     assert not app.exception
     assert app.session_state["benchmark_records_calls"] == [{"state_key": "state-1", "candidate_limit": 123}]
-    assert app.session_state["benchmark_export_calls"] == [{"state_key": "state-1", "candidate_limit": 123}]
+    assert app.session_state["benchmark_export_calls"] == [{"state_key": "state-1"}]
     assert len(app.get("plotly_chart")) == 4
     titles = [json.loads(chart.proto.spec)["layout"]["title"]["text"] for chart in app.get("plotly_chart")]
     assert titles == [
@@ -128,7 +129,9 @@ def test_cli_requires_binding_and_attaches_validated_candidate_bundle(tmp_path: 
     store = write_rollout_zarr_store(
         tmp_path / "rollouts.zarr", build_rollout_records(horizon=1, num_samples=2, seed=19)[:1]
     )
-    benchmark = write_bundle(tmp_path / "benchmark", (_record(),), provenance=_binding())
+    reader = RolloutZarrStoreReader(store.store_dir)
+    binding = benchmark_binding_from_reader(reader, reader.manifest())
+    benchmark = write_bundle(tmp_path / "benchmark", (_record(),), provenance=binding)
     output = tmp_path / "thesis.json"
     runner = CliRunner()
     missing = runner.invoke(
@@ -148,6 +151,25 @@ def test_cli_requires_binding_and_attaches_validated_candidate_bundle(tmp_path: 
     assert "candidate-benchmark-binding-json" in missing.output
     binding_path = tmp_path / "binding.json"
     binding_path.write_text(json.dumps(_binding()), encoding="utf-8")
+    mismatched = runner.invoke(
+        rollouts_info_app,
+        [
+            "--store",
+            str(store.store_dir),
+            "--thesis-bundle-output",
+            str(output),
+            "--thesis-evidence-status",
+            "pilot",
+            "--candidate-benchmark-bundle",
+            str(benchmark),
+            "--candidate-benchmark-binding-json",
+            str(binding_path),
+        ],
+    )
+    assert mismatched.exit_code != 0
+    assert "candidate benchmark binding does not match the selected" in mismatched.output
+    assert "rollout store" in mismatched.output
+    binding_path.write_text(json.dumps(binding), encoding="utf-8")
     attached = runner.invoke(
         rollouts_info_app,
         [
