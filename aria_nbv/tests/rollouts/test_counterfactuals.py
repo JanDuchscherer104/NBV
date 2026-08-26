@@ -980,6 +980,9 @@ def test_temperature_softmax_masks_invalid_candidates_and_reproduces_selection()
     assert step_a.selection_probabilities.shape[0] == int(step_a.candidates.mask_valid.sum().item())
     assert step_a.selection_temperature == pytest.approx(1.0)
     assert step_a.selected_log_probability is not None
+    expected_seed = derive_selection_seed(0, ())
+    assert step_a.selection_rng_seed == expected_seed
+    assert step_b.selection_rng_seed == expected_seed
 
 
 def test_temperature_softmax_branch_factor_samples_distinct_candidates() -> None:

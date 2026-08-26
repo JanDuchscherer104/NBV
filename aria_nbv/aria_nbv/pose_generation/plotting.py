@@ -1292,6 +1292,10 @@ def plot_proposal_sequence_support(candidates: "CandidateSamplingResult") -> go.
         else np.zeros(offsets_np.shape[0], dtype=np.int64)
     )
     components = np.asarray(candidates.component_name or tuple("candidate" for _ in range(offsets_np.shape[0])))
+    sequence_min = float(np.nanmin(sequence_np)) if sequence_np.size else 0.0
+    sequence_max = float(np.nanmax(sequence_np)) if sequence_np.size else 1.0
+    if sequence_min == sequence_max:
+        sequence_max = sequence_min + 1.0
 
     fig = go.Figure()
     for is_valid, symbol, label in ((True, "circle", "valid"), (False, "x", "invalid")):
@@ -1310,9 +1314,7 @@ def plot_proposal_sequence_support(candidates: "CandidateSamplingResult") -> go.
                 name=label,
                 marker={
                     "color": sequence_np[mask],
-                    "colorscale": "Viridis",
-                    "colorbar": {"title": "sequence index"},
-                    "showscale": is_valid,
+                    "coloraxis": "coloraxis",
                     "size": 9,
                     "symbol": symbol,
                     "opacity": 0.85,
@@ -1337,6 +1339,12 @@ def plot_proposal_sequence_support(candidates: "CandidateSamplingResult") -> go.
     )
     fig.update_layout(
         title="Candidate proposal sequence in the reference ground plane",
+        coloraxis={
+            "colorscale": "Viridis",
+            "cmin": sequence_min,
+            "cmax": sequence_max,
+            "colorbar": {"title": "sequence index"},
+        },
         xaxis={"title": "forward / m", "scaleanchor": "y", "scaleratio": 1},
         yaxis={"title": "left / m"},
         legend_title="hard validity",

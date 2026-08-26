@@ -116,6 +116,10 @@ def test_plot_proposal_sequence_support_encodes_order_replica_and_validity() -> 
     assert {trace.name for trace in fig.data} == {"valid", "invalid", "reference pose"}
     assert list(fig.data[0].marker.color) == [4, 6]
     assert fig.data[0].customdata[0].tolist() == [4, 2, "forward"]
+    assert fig.data[0].marker.coloraxis == "coloraxis"
+    assert fig.data[1].marker.coloraxis == "coloraxis"
+    assert fig.layout.coloraxis.cmin == pytest.approx(4.0)
+    assert fig.layout.coloraxis.cmax == pytest.approx(6.0)
     assert fig.layout.xaxis.scaleanchor == "y"
 
 

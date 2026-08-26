@@ -669,7 +669,14 @@ class CounterfactualPoseGenerator:
 
         if not selected:
             selected.append(int(torch.nonzero(finite_scores, as_tuple=False).reshape(-1)[0].item()))
-        return [self._one_hot_selection_record(scores=ranked_scores, valid_index=index) for index in selected]
+        return [
+            self._one_hot_selection_record(
+                scores=ranked_scores,
+                valid_index=index,
+                selection_rng_seed=selection_seed,
+            )
+            for index in selected
+        ]
 
     def _sample_valid_candidates(
         self,
@@ -734,6 +741,7 @@ class CounterfactualPoseGenerator:
                 replace(
                     distribution,
                     valid_index=selected_index,
+                    selection_rng_seed=selection_seed,
                     selected_log_probability=float(
                         distribution.log_probabilities[selected_index].detach().cpu().item()
                     ),
@@ -761,6 +769,7 @@ class CounterfactualPoseGenerator:
         *,
         scores: torch.Tensor,
         valid_index: int,
+        selection_rng_seed: int | None = None,
     ) -> CounterfactualSelectionRecord:
         probabilities = torch.zeros_like(scores)
         probabilities[valid_index] = 1.0
@@ -773,6 +782,7 @@ class CounterfactualPoseGenerator:
             log_probabilities=log_probabilities,
             entropy=0.0,
             selected_log_probability=0.0,
+            selection_rng_seed=selection_rng_seed,
         )
 
     def _branch_factor_for_step(self, step_index: int) -> int:
