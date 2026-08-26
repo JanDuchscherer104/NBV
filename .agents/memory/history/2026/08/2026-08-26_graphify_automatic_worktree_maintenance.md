@@ -14,7 +14,7 @@ touched_owner_paths:
   - scripts/check_graphify_freshness.py
 codex_thread: codex://threads/01a03a4a-114d-7f71-b9ec-140f32b8b20b
 repo_object_format: sha1
-repo_head: cc1a76f301d37aeb7fcb0d4283f66cd86e69b1b8
+repo_head: ec52c743cebcb8be0151797e151109987b381f25
 repo_branch: "codex/fix-parentless-graphify-setup"
 worktree_kind: linked
 ---
@@ -39,8 +39,14 @@ parent's cache links. Reconciliation rebuilds the projection only for changed
 projection owners and invokes the upstream incremental extractor for the
 declared standard/deep consumers.
 
+The follow-up keeps that extractor active even for an equal Git tree, so dirty
+inputs and cold deep mode remain upstream-detector decisions. Linked maintenance
+validates its current owned seed and canonical cache links before reconciliation;
+the mutating seed path safely migrates older owned cache links to the primary.
+
 ## Commits
 - [cc1a76f301d37aeb7fcb0d4283f66cd86e69b1b8](https://github.com/JanDuchscherer104/ARIA-NBV/commit/cc1a76f301d37aeb7fcb0d4283f66cd86e69b1b8)
+- [ec52c743cebcb8be0151797e151109987b381f25](https://github.com/JanDuchscherer104/ARIA-NBV/commit/ec52c743cebcb8be0151797e151109987b381f25)
 
 ## Verification
 Focused seed, reconciliation, freshness, session, setup, guidance, governance,
@@ -49,6 +55,10 @@ maintenance, and strict Graphify state checks passed. Fresh disposable explicit
 and empty-source setup both emitted no output, produced query-admissible graphs,
 answered a real Graphify query, and linked both semantic caches under the
 canonical primary checkout.
+
+The pinned Graphify 0.9.48 command-path test also verified warm-standard zero
+dispatch, one-file semantic refresh, deep namespace isolation, cold-deep
+warmup, and matching lookup/save prompt fingerprints.
 
 ## Canonical Owner Impact
 The setup scripts, seeder, reconciliation owner, freshness helper, maintenance
