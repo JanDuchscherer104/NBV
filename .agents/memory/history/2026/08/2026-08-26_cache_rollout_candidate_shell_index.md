@@ -31,7 +31,7 @@ The cache preserves candidate ids and shell order while removing repeated
 whole-table candidate metadata reads for the same reader instance.
 
 ## Commits
-- [a56db79587431170ca3295d4ea30e0f652d5a2df](https://github.com/JanDuchscherer104/ARIA-NBV/commit/a56db79587431170ca3295d4ea30e0f652d5a2df)
+- [a56db795875e92c3bf16ff3d3f674a876928dcb2](https://github.com/JanDuchscherer104/ARIA-NBV/commit/a56db795875e92c3bf16ff3d3f674a876928dcb2)
 
 ## Verification
 Ruff format and lint passed. The full read-model suite passed (12 tests),
