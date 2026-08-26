@@ -16,6 +16,7 @@ from typing import Any
 
 import numpy as np
 
+import aria_nbv as _aria_nbv_package
 from aria_nbv.rollouts import RolloutZarrStoreReader
 from aria_nbv.rollouts.manifest import ROLLOUT_MANIFEST_VERSION
 from aria_nbv.rollouts.zarr_store import (
@@ -23,10 +24,36 @@ from aria_nbv.rollouts.zarr_store import (
     validate_rollout_zarr_store,
     write_rollout_zarr_store,
 )
+import tests.rollout_fixtures as _rollout_fixtures_module
 from tests.rollout_fixtures import build_rollout_records
 
 _ROOT = Path(__file__).resolve().parents[1]
 _GOLDEN = _ROOT / "aria_nbv" / "tests" / "fixtures" / "replay_oracle_golden.json"
+
+
+def _assert_import_provenance() -> None:
+    """Reject editable installs that resolve replay inputs outside this checkout."""
+
+    expected_roots = {
+        "aria_nbv": (_ROOT / "aria_nbv").resolve(),
+        "tests.rollout_fixtures": (_ROOT / "aria_nbv" / "tests").resolve(),
+    }
+    imported_files = {
+        "aria_nbv": _aria_nbv_package.__file__,
+        "tests.rollout_fixtures": _rollout_fixtures_module.__file__,
+    }
+    for name, imported_file in imported_files.items():
+        if imported_file is None:
+            raise RuntimeError(f"Replay golden import provenance is missing for {name}.")
+        resolved_file = Path(imported_file).resolve()
+        if not resolved_file.is_relative_to(expected_roots[name]):
+            raise RuntimeError(
+                f"Replay golden import provenance mismatch for {name}: "
+                f"{resolved_file} is outside {expected_roots[name]}."
+            )
+
+
+_assert_import_provenance()
 
 
 def _json_array(value: Any) -> Any:
