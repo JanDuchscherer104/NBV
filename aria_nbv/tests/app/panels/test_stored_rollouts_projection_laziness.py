@@ -304,7 +304,8 @@ def test_q_h_render_wires_progress_and_chunk_boundary_cancellation(monkeypatch: 
     session_state: dict[str, Any] = {}
     monkeypatch.setattr(st, "session_state", session_state)
     monkeypatch.setattr(st, "markdown", lambda *_args, **_kwargs: None)
-    monkeypatch.setattr(st, "toggle", lambda *_args, **_kwargs: True)
+    toggles = iter((True, False))
+    monkeypatch.setattr(st, "toggle", lambda *_args, **_kwargs: next(toggles))
     monkeypatch.setattr(
         st,
         "number_input",
@@ -773,6 +774,7 @@ def test_stored_rollout_session_clear_invalidates_every_matrix_owner_once(monkey
         "_cached_depth_summary",
         "_cached_proposal_geometry",
         "_cached_trajectory_geometry",
+        "_cached_s2_direction_histogram",
         "_cached_topology_cached",
         "_cached_failures_cached",
         "_cached_evidence_bundle_cached",

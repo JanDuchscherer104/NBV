@@ -6664,6 +6664,52 @@ class GeometryProjection:
 
 
 @dataclass(frozen=True, slots=True)
+class S2DirectionHistogram:
+    r"""Complete factual selected-action directions in target-object coordinates.
+
+    The movement channel retains one selected transition per factual rollout
+    step.  If ``p_{t-1}`` and ``p_t`` are camera centres in world metres, and
+    ``R_W^e`` is the target-object-to-world rotation, the recorded direction is
+
+    $$
+    \hat{\delta}_t^e =
+    \frac{(R_W^e)^\mathsf{T}(p_t-p_{t-1}) / r_e}
+         {\lVert (R_W^e)^\mathsf{T}(p_t-p_{t-1}) / r_e \rVert_2},
+    \qquad r_e=(a_x a_y a_z)^{1/3}.
+    $$
+
+    ``(a_x, a_y, a_z)`` are the positive persisted target OBB extents.  The
+    geometric mean is the volume-equivalent characteristic length, so it does
+    not privilege one OBB axis.  The final S² projection is scale invariant,
+    but retaining ``r_e`` in the movement definition keeps the diagnostic
+    compatible with the target-relative translation descriptor planned for S2
+    memory.  View directions use the selected camera's local ``+Z`` optical
+    axis, transformed by ``(R_W^e)^T`` and normalized in the same target frame.
+
+    ``movement_counts`` and ``view_direction_counts`` have shape
+    ``ndarray["Z A", int64]``.  ``Z`` bins target-frame ``z`` uniformly and
+    ``A`` bins azimuth uniformly; because ``dΩ=dφ dz``, every cell has equal
+    solid angle.  The two ``*_projection`` arrays are bounded, deterministic
+    display samples only; the count arrays always include the complete factual
+    selected-action population.
+    """
+
+    movement_counts: NDArray[np.int64]
+    view_direction_counts: NDArray[np.int64]
+    movement_projection: NDArray[np.float32]
+    movement_projection_normalized_lengths: NDArray[np.float32]
+    view_direction_projection: NDArray[np.float32]
+    movement_count: int
+    view_direction_count: int
+    movement_skipped_zero_count: int
+    rollout_count: int
+    azimuth_bins: int
+    elevation_bins: int
+    projection_limit: int
+    issues: tuple[GeometryIssue, ...]
+
+
+@dataclass(frozen=True, slots=True)
 class _GeometryStep:
     """Bounded factual shell used by geometry projections.
 
@@ -7019,6 +7065,216 @@ def rollout_trajectory_geometry(
     return GeometryProjection("rollout_trajectory", tuple(points), tuple(frames), tuple(issues))
 
 
+def s2_target_direction_histogram(
+    reader: RolloutZarrStoreReader,
+    *,
+    azimuth_bins: int = 36,
+    elevation_bins: int = 18,
+    projection_limit: int = 2_000,
+) -> S2DirectionHistogram:
+    r"""Aggregate factual movement and camera-forward directions on S².
+
+    The reducer reads only each factual rollout root and its referenced selected
+    candidate shells; it never materializes the full candidate table.  For a
+    target object frame ``e``, selected camera centres are transformed with
+    ``(R_W^e)^T``.  Consecutive translations are normalized by the geometric
+    mean of the target OBB extents before their unit-sphere projection, while
+    the selected camera local ``+Z`` optical axis supplies the view direction.
+
+    Args:
+        reader: Validated read-only rollout store.
+        azimuth_bins: Positive number of uniform target-frame azimuth bins.
+        elevation_bins: Positive number of uniform target-frame ``z`` bins.
+            Uniform ``z`` rather than uniform polar angle gives equal-solid-
+            angle S² cells.
+        projection_limit: Maximum deterministic reservoir samples retained per
+            channel for a Plotly point overlay.  Counts remain complete.
+
+    Returns:
+        `S2DirectionHistogram` containing complete equal-solid-angle count
+        grids, bounded target-frame projection samples, and explicit exclusions.
+
+    Notes:
+        A degenerate movement has no direction and is counted separately.
+        Missing, non-rigid, or non-positive target OBB geometry excludes only
+        that rollout and leaves the reason visible to presentation clients.
+    """
+
+    if azimuth_bins <= 0:
+        raise ValueError("azimuth_bins must be positive.")
+    if elevation_bins <= 0:
+        raise ValueError("elevation_bins must be positive.")
+    if projection_limit <= 0:
+        raise ValueError("projection_limit must be positive.")
+
+    movement_counts = np.zeros((elevation_bins, azimuth_bins), dtype=np.int64)
+    view_counts = np.zeros((elevation_bins, azimuth_bins), dtype=np.int64)
+    movement_projection: list[np.ndarray] = []
+    movement_projection_lengths: list[float] = []
+    view_projection: list[np.ndarray] = []
+    movement_rng = np.random.default_rng(0)
+    view_rng = np.random.default_rng(1)
+    movement_count = 0
+    view_count = 0
+    movement_skipped_zero_count = 0
+    rollout_count = 0
+    issues: list[GeometryIssue] = []
+    targets = {target.target_row_id: target for target in target_rows(reader)}
+    total_rollouts = int(reader.root["rollouts"]["rollout_row_id"].shape[0])
+
+    for rollout_position in range(total_rollouts):
+        rollout = rollout_at(reader, rollout_position)
+        target = targets.get(rollout.target_row_id)
+        if target is None:
+            issues.append(
+                GeometryIssue(
+                    "missing_target",
+                    "Rollout has no persisted observed-target geometry.",
+                    rollout_row_id=rollout.rollout_row_id,
+                )
+            )
+            continue
+        try:
+            target_pose = _geometry_pose(target.pose_world_object, role="observed target")
+            object_radius_m = _target_obb_geometric_mean_radius(target.extents)
+            root_pose = _geometry_pose(rollout.root_pose_world, role="rollout root")
+            steps = _bounded_geometry_steps(reader, rollout)
+            _validate_factual_steps(rollout.rollout_row_id, steps)
+        except ValueError as error:
+            issues.append(
+                GeometryIssue(
+                    "invalid_target_frame_or_path",
+                    str(error),
+                    rollout_row_id=rollout.rollout_row_id,
+                )
+            )
+            continue
+
+        target_rotation = target_pose[:9].reshape(3, 3)
+        prior_center = root_pose[9:12]
+        rollout_count += 1
+        for step in steps:
+            selected_pose = _selected_pose(step)
+            selected_center = selected_pose[9:12]
+            movement_target = target_rotation.T @ (selected_center - prior_center) / object_radius_m
+            normalized_movement = _unit_direction(movement_target)
+            if normalized_movement is None:
+                movement_skipped_zero_count += 1
+            else:
+                movement_count += 1
+                _increment_s2_count(movement_counts, normalized_movement)
+                _reservoir_append(
+                    movement_projection,
+                    movement_projection_lengths,
+                    normalized_movement,
+                    float(np.linalg.norm(movement_target)),
+                    seen=movement_count,
+                    limit=projection_limit,
+                    rng=movement_rng,
+                )
+
+            view_target = target_rotation.T @ selected_pose[:9].reshape(3, 3)[:, 2]
+            normalized_view = _unit_direction(view_target)
+            if normalized_view is not None:
+                view_count += 1
+                _increment_s2_count(view_counts, normalized_view)
+                _reservoir_append(
+                    view_projection,
+                    None,
+                    normalized_view,
+                    None,
+                    seen=view_count,
+                    limit=projection_limit,
+                    rng=view_rng,
+                )
+            prior_center = selected_center
+
+    return S2DirectionHistogram(
+        movement_counts=movement_counts,
+        view_direction_counts=view_counts,
+        movement_projection=_stack_s2_samples(movement_projection),
+        movement_projection_normalized_lengths=np.asarray(movement_projection_lengths, dtype=np.float32),
+        view_direction_projection=_stack_s2_samples(view_projection),
+        movement_count=movement_count,
+        view_direction_count=view_count,
+        movement_skipped_zero_count=movement_skipped_zero_count,
+        rollout_count=rollout_count,
+        azimuth_bins=azimuth_bins,
+        elevation_bins=elevation_bins,
+        projection_limit=projection_limit,
+        issues=tuple(issues),
+    )
+
+
+def _target_obb_geometric_mean_radius(extents: np.ndarray) -> float:
+    """Return the volume-equivalent target OBB length in metres.
+
+    The OBB extent vector is required to be finite and strictly positive.  Its
+    geometric mean is used rather than an arithmetic mean because scaling each
+    OBB axis by a common factor scales this characteristic length by that same
+    factor and preserves the box volume's linear scale.
+    """
+
+    axes = np.asarray(extents, dtype=np.float64).reshape(3)
+    if not np.isfinite(axes).all() or np.any(axes <= _GEOMETRY_EPSILON):
+        raise ValueError("Target OBB extents must be finite and strictly positive.")
+    return float(np.exp(np.mean(np.log(axes))))
+
+
+def _unit_direction(vector: np.ndarray) -> NDArray[np.float64] | None:
+    """Return one finite unit vector, or ``None`` when its direction is undefined."""
+
+    value = np.asarray(vector, dtype=np.float64).reshape(3)
+    norm = float(np.linalg.norm(value))
+    if not np.isfinite(norm) or norm <= _GEOMETRY_EPSILON:
+        return None
+    return value / norm
+
+
+def _increment_s2_count(counts: NDArray[np.int64], direction: NDArray[np.float64]) -> None:
+    """Add one target-frame unit direction to an equal-solid-angle S² grid."""
+
+    elevation_bins, azimuth_bins = counts.shape
+    z = float(np.clip(direction[2], -1.0, 1.0))
+    azimuth = float(np.arctan2(direction[1], direction[0]))
+    elevation_index = min(int((z + 1.0) * 0.5 * elevation_bins), elevation_bins - 1)
+    azimuth_index = min(int((azimuth + np.pi) / (2.0 * np.pi) * azimuth_bins), azimuth_bins - 1)
+    counts[elevation_index, azimuth_index] += 1
+
+
+def _reservoir_append(
+    samples: list[np.ndarray],
+    magnitudes: list[float] | None,
+    direction: NDArray[np.float64],
+    magnitude: float | None,
+    *,
+    seen: int,
+    limit: int,
+    rng: np.random.Generator,
+) -> None:
+    """Keep an unbiased bounded display sample without weakening complete counts."""
+
+    if len(samples) < limit:
+        samples.append(np.asarray(direction, dtype=np.float32))
+        if magnitudes is not None and magnitude is not None:
+            magnitudes.append(float(magnitude))
+        return
+    replacement_index = int(rng.integers(0, seen))
+    if replacement_index >= limit:
+        return
+    samples[replacement_index] = np.asarray(direction, dtype=np.float32)
+    if magnitudes is not None and magnitude is not None:
+        magnitudes[replacement_index] = float(magnitude)
+
+
+def _stack_s2_samples(samples: list[np.ndarray]) -> NDArray[np.float32]:
+    """Return bounded S² samples as a stable ``ndarray[\"N 3\", float32]``."""
+
+    if not samples:
+        return np.empty((0, 3), dtype=np.float32)
+    return np.asarray(samples, dtype=np.float32).reshape(-1, 3)
+
+
 def _validate_factual_steps(rollout_row_id: int, steps: tuple[Any, ...]) -> None:
     indices = [int(step.step_index) for step in steps]
     if indices != list(range(len(indices))):
@@ -7170,6 +7426,7 @@ __all__ = [
     "GeometryProjection",
     "ProposalAlignment",
     "RolloutSuspiciousQueryConfig",
+    "S2DirectionHistogram",
     "candidate_audit_rows",
     "candidate_flow_rows",
     "candidate_group_summary_rows",
@@ -7200,6 +7457,7 @@ __all__ = [
     "runtime_storage_statistics",
     "rollout_step_objective_rows",
     "rollout_trajectory_geometry",
+    "s2_target_direction_histogram",
     "rollout_endpoint_metric_summary",
     "selected_candidate_rank_rows",
     "selected_depth_preview",

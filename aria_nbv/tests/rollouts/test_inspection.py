@@ -58,6 +58,7 @@ from aria_nbv.rollouts.inspection import (
     rollout_trajectory_geometry,
     rollout_tree_summary_rows,
     root_relative_candidate_rows,
+    s2_target_direction_histogram,
     selected_candidate_rank_rows,
     selected_depth_preview,
     selected_depth_summary_rows,
@@ -141,6 +142,56 @@ def test_geometry_projections_keep_complete_shells_and_factual_selected_path(
     assert trajectory.view == "rollout_trajectory"
     assert [point.role for point in trajectory.points] == ["root", "selected_action", "selected_action"]
     assert [point.path_order for point in trajectory.points] == [0, 1, 2]
+
+
+def test_target_s2_histogram_uses_object_coordinates_and_geometric_obb_scale(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A real selected path lands on S² after target-frame rotation and OBB normalization."""
+
+    result = write_rollout_zarr_store(
+        tmp_path / "target-s2.zarr",
+        build_rollout_records(horizon=2, num_samples=6, seed=734)[:1],
+    )
+    reader = RolloutZarrStoreReader(result.store_dir)
+    target = read_target_rows(reader)[0]
+    target_rotation = np.asarray([[0.0, -1.0, 0.0], [1.0, 0.0, 0.0], [0.0, 0.0, 1.0]], dtype=np.float32)
+    target_pose = np.asarray(target.pose_world_object, dtype=np.float32).copy()
+    target_pose[:9] = target_rotation.reshape(-1)
+    target = replace(
+        target,
+        extents=np.asarray([1.0, 4.0, 9.0], dtype=np.float32),
+        pose_world_object=target_pose,
+    )
+    monkeypatch.setattr("aria_nbv.rollouts.inspection.target_rows", lambda _reader: (target,))
+
+    histogram = s2_target_direction_histogram(reader, azimuth_bins=12, elevation_bins=6, projection_limit=10)
+    rollout = inspection_module.rollout_at(reader, 0)
+    first_selected = inspection_module._selected_pose(inspection_module._bounded_geometry_steps(reader, rollout)[0])
+    root = inspection_module._geometry_pose(rollout.root_pose_world, role="test root")
+    scale = inspection_module._target_obb_geometric_mean_radius(target.extents)
+    expected_movement = target_rotation.T @ (first_selected[9:12] - root[9:12]) / scale
+    expected_movement /= np.linalg.norm(expected_movement)
+    expected_view = target_rotation.T @ first_selected[:9].reshape(3, 3)[:, 2]
+    expected_view /= np.linalg.norm(expected_view)
+
+    assert scale == pytest.approx(36.0 ** (1.0 / 3.0))
+    assert histogram.rollout_count == 1
+    assert histogram.movement_count == histogram.view_direction_count == 2
+    assert int(histogram.movement_counts.sum()) == 2
+    assert int(histogram.view_direction_counts.sum()) == 2
+    assert np.allclose(histogram.movement_projection[0], expected_movement)
+    assert histogram.movement_projection_normalized_lengths[0] == pytest.approx(
+        np.linalg.norm(target_rotation.T @ (first_selected[9:12] - root[9:12]) / scale)
+    )
+    assert np.allclose(histogram.view_direction_projection[0], expected_view)
+
+
+def test_target_s2_histogram_rejects_nonpositive_obb_axes() -> None:
+    """A target OBB must provide one finite positive scale per object axis."""
+
+    with pytest.raises(ValueError, match="strictly positive"):
+        inspection_module._target_obb_geometric_mean_radius(np.asarray([1.0, 0.0, 2.0]))
 
 
 def test_geometry_projection_bounds_candidate_reads_to_referenced_shells(
