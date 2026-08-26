@@ -30,7 +30,7 @@ import numpy as np
 import torch
 import zarr
 from efm3d.aria.pose import PoseTW
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 from zarr.codecs import BloscCname, BloscCodec, BloscShuffle
 from zarr.storage import LocalStore
 
@@ -506,7 +506,23 @@ class RolloutZarrStoreConfig(BaseConfig):
     target_eval_crops_enabled: bool = False
     """Persist oracle/eval target crop point payloads for sampled audit shards."""
 
+    oracle_query_mode: Literal["legacy_unspecified", "dense_valid"] = "legacy_unspecified"
+    """Persisted hard-oracle candidate-query profile for Q_H supervision."""
+
+    label_support_semantics: Literal[
+        "subset_of_action_v1",
+        "equals_action_on_realized_steps_v1",
+    ] = "subset_of_action_v1"
+    """Persisted relation between actor-valid rows and finite Q labels."""
+
     _resolve_store_dir = field_validator("store_dir", mode="before")(resolve_cache_artifact_dir)
+
+    @model_validator(mode="after")
+    def _validate_qh_support_profile(self) -> "RolloutZarrStoreConfig":
+        """Require query and label-support semantics to form one closed profile."""
+
+        _validate_qh_support_profile(self.oracle_query_mode, self.label_support_semantics)
+        return self
 
 
 class RolloutZarrStoreReader:
@@ -732,6 +748,7 @@ class _RolloutZarrWriteSession:
             raise ValueError(f"Unsupported label_support_semantics={label_support_semantics!r}.")
         self.oracle_query_mode = oracle_query_mode
         self.label_support_semantics = label_support_semantics
+        _validate_qh_support_profile(self.oracle_query_mode, self.label_support_semantics)
         if self.selected_depth_width_px < 1 or self.selected_depth_height_px < 1:
             raise ValueError("selected_depth_width_px and selected_depth_height_px must be positive.")
         if self.selected_depth_chunk_steps < 1:
@@ -764,6 +781,11 @@ class _RolloutZarrWriteSession:
         )
         q_h_horizon = _table_horizon(table)
         q_h_arrays = _build_q_h_arrays(table, gamma=self.discount_gamma)
+        _validate_dense_valid_support(
+            q_h_arrays,
+            oracle_query_mode=self.oracle_query_mode,
+            label_support_semantics=self.label_support_semantics,
+        )
         effective_split_manifest_hash = _effective_split_manifest_hash(
             table.sources, dictionaries, fallback=self.split_manifest_hash
         )
@@ -931,6 +953,13 @@ class _RolloutZarrValidator:
                 f"expected {ROLLOUT_ZARR_SCHEMA_VERSION!r}."
             )
         self._validate_manifest_contract()
+        try:
+            _validate_qh_support_profile(
+                str(self.root.attrs.get("oracle_query_mode", "legacy_unspecified")),
+                str(self.root.attrs.get("label_support_semantics", "subset_of_action_v1")),
+            )
+        except ValueError as exc:
+            self.errors.append(str(exc))
         for group_name in _required_groups():
             if group_name not in self.root:
                 self.errors.append(f"Missing required group {group_name!r}.")
@@ -1011,6 +1040,12 @@ class _RolloutZarrValidator:
             self.errors.append("Q_H candidate_row_id contains ids not present in candidates/candidate_row_id.")
         if np.any(q_train_mask & (~valid_action_mask)):
             self.errors.append("Q_H q_train_mask is true for invalid candidates.")
+        if (
+            self.root.attrs.get("oracle_query_mode") == "dense_valid"
+            and self.root.attrs.get("label_support_semantics") == "equals_action_on_realized_steps_v1"
+            and not np.array_equal(q_train_mask, valid_action_mask)
+        ):
+            self.errors.append("Q_H dense-valid q_train_mask must equal valid_action_mask on every realized state.")
         if np.any(q_train_mask & (~np.isfinite(one_step_target_root_gain))):
             self.errors.append("Q_H q_train_mask is true without a finite explicit target-root-gain reward.")
         if np.any(q_train_mask & (~np.isfinite(one_step_target_rri))):
@@ -3252,6 +3287,41 @@ def _build_q_h_arrays(tables: _RolloutTables, *, gamma: float) -> dict[str, np.n
     q["one_step_target_rri"][~q["valid_action_mask"]] = np.nan
     q["one_step_target_root_gain"][~q["valid_action_mask"]] = np.nan
     return q
+
+
+def _validate_qh_support_profile(oracle_query_mode: str, label_support_semantics: str) -> None:
+    """Validate the two closed Q_H supervision profiles.
+
+    ``legacy_unspecified`` deliberately carries only subset support. A
+    ``dense_valid`` claim is stronger: every hard-valid materialized row on a
+    realized state must carry finite oracle supervision. Keeping the two facts
+    paired prevents metadata from asserting dense collection while retaining a
+    weaker label contract, or vice versa.
+    """
+
+    profiles = {
+        ("legacy_unspecified", "subset_of_action_v1"),
+        ("dense_valid", "equals_action_on_realized_steps_v1"),
+    }
+    if (oracle_query_mode, label_support_semantics) not in profiles:
+        raise ValueError("Q_H oracle_query_mode and label_support_semantics must be declared together")
+
+
+def _validate_dense_valid_support(
+    q_h: dict[str, np.ndarray],
+    *,
+    oracle_query_mode: str,
+    label_support_semantics: str,
+) -> None:
+    """Reject a dense-valid claim unless persisted masks prove exact support."""
+
+    if (oracle_query_mode, label_support_semantics) != (
+        "dense_valid",
+        "equals_action_on_realized_steps_v1",
+    ):
+        return
+    if not np.array_equal(q_h["q_train_mask"], q_h["valid_action_mask"]):
+        raise ValueError("Q_H dense-valid q_train_mask must equal valid_action_mask on every realized state")
 
 
 def _table_horizon(tables: _RolloutTables) -> int:

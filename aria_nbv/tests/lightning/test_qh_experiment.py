@@ -196,6 +196,7 @@ def test_qh_bundle_round_trip_preserves_values_and_ranking(tmp_path) -> None:
     assert runtime.scorer.training is False
     assert runtime.scorer_state_sha256 == manifest["artifacts"]["scorer-state.pt"]["sha256"]
     assert runtime.representation_semantics == "root_moments_v1"
+    assert runtime.trained_horizons == (1, 2)
     assert torch.equal(actual.conditional_q, expected.conditional_q)
     assert torch.equal(actual.feasibility_logits, expected.feasibility_logits)
     assert torch.equal(
@@ -475,6 +476,28 @@ def test_qh_bundle_rejects_learning_horizon_beyond_scorer_capacity(tmp_path) -> 
         QhExperiment.load_for_inference(tampered_ref, device="cpu")
 
 
+@pytest.mark.parametrize(
+    "support",
+    [
+        {},
+        {"2": {"state_count": 1, "candidate_count": 1}},
+        {"1": {"state_count": 2, "candidate_count": 1}},
+        {"1": {"state_count": 1, "candidate_count": 1}, "5": {"state_count": 1, "candidate_count": 1}},
+    ],
+)
+def test_qh_bundle_rejects_invalid_trained_horizon_support(tmp_path, support: dict[str, object]) -> None:
+    _experiment_instance, ref = _bundle(tmp_path)
+    manifest_path = ref.bundle_path / "manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["identity"]["trained_horizon_support"] = support
+    manifest["manifest_sha256"] = _manifest_hash(manifest)
+    manifest_path.write_text(json.dumps(manifest, sort_keys=True, indent=2) + "\n", encoding="utf-8")
+    tampered_ref = replace(ref, manifest_sha256=manifest["manifest_sha256"])
+
+    with pytest.raises(ValueError, match="trained horizon|h=1 training support"):
+        QhExperiment.load_for_inference(tampered_ref, device="cpu")
+
+
 def test_qh_bundle_rejects_learned_feasibility_from_deployable_core(tmp_path) -> None:
     _experiment_instance, ref = _bundle(tmp_path)
     manifest_path = ref.bundle_path / "manifest.json"
@@ -660,6 +683,7 @@ def _publish_contracts(experiment: QhExperiment) -> tuple[QhLightningModuleConfi
             "actor_state_contract_hash": actor_hash,
             "learning_contract_hash": learning_hash,
             "geometry_contract_hash": actor_contract.geometry_contract_hash,
+            "max_horizon": experiment.config.scorer.max_horizon,
         },
     )
     stages = {"train": {"kind": "test"}, "validation": {"kind": "test"}, "test": {"kind": "test"}}
@@ -676,6 +700,10 @@ def _publish_contracts(experiment: QhExperiment) -> tuple[QhLightningModuleConfi
         "warm_start_parent_manifest_sha256": None,
         "action_mask_semantics": dataset.contract.action_mask_semantics,
         "representation_semantics": experiment.config.scorer.representation_semantics,
+        "trained_horizon_support": {
+            "1": {"state_count": 2, "candidate_count": 6},
+            "2": {"state_count": 1, "candidate_count": 1},
+        },
         "seed": 0,
     }
 
@@ -707,10 +735,21 @@ def test_qh_fit_publishes_new_bundle_and_hashed_receipts(tmp_path) -> None:
         callbacks=base.trainer.callbacks,
     )
     experiment = base.model_copy(deep=True, update={"trainer": trainer}).setup_target()
+    train_dataset = _dense_dataset("train", 0)
+    validation_dataset = _dense_dataset("val", 20)
+    validation_dataset.contract = replace(
+        validation_dataset.contract,
+        rollout_config_hashes=("rollout-validation-v1",),
+    )
+    test_dataset = _dense_dataset("test", 40)
+    test_dataset.contract = replace(
+        test_dataset.contract,
+        rollout_config_hashes=("rollout-test-v1",),
+    )
     request = QhFitRequest(
-        train=_DatasetConfig(tmp_path / "train.zarr", _dense_dataset("train", 0)),  # type: ignore[arg-type]
-        validation=_DatasetConfig(tmp_path / "val.zarr", _dense_dataset("val", 20)),  # type: ignore[arg-type]
-        test=_DatasetConfig(tmp_path / "test.zarr", _dense_dataset("test", 40)),  # type: ignore[arg-type]
+        train=_DatasetConfig(tmp_path / "train.zarr", train_dataset),  # type: ignore[arg-type]
+        validation=_DatasetConfig(tmp_path / "val.zarr", validation_dataset),  # type: ignore[arg-type]
+        test=_DatasetConfig(tmp_path / "test.zarr", test_dataset),  # type: ignore[arg-type]
         warm_start_from=None,
         checkpoint_selection=QhCheckpointSelectionSpec(),
         seed=23,
@@ -739,6 +778,18 @@ def test_qh_fit_publishes_new_bundle_and_hashed_receipts(tmp_path) -> None:
     held_out_receipt = json.loads(held_out.receipt_path.read_text(encoding="utf-8"))
     assert held_out_receipt["diagnostic_only"] is True
     assert held_out_receipt["endpoint_policy_evidence"] is False
+    assert (
+        held_out_receipt["test_provenance_sha256"]
+        == hashlib.sha256(
+            json.dumps(test_dataset.provenance, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        ).hexdigest()
+    )
+    assert held_out_receipt["ordered_store_manifest_sha256s"] == []
+    assert held_out_receipt["bound_contract"] == {
+        "learning_contract_hash": training_receipt["learning_contract_hash"],
+        "actor_state_contract_hash": training_receipt["actor_state_contract_hash"],
+        "geometry_contract_hash": test_dataset.actor_state_contract.geometry_contract_hash,
+    }
 
     certification = experiment.certify_exact_q2(
         QhExactQ2CertificationRequest(
@@ -793,3 +844,15 @@ def test_qh_fit_publishes_new_bundle_and_hashed_receipts(tmp_path) -> None:
     repeated_receipt = json.loads(repeated.training_receipt_path.read_text(encoding="utf-8"))
     assert repeated_receipt["warm_start_parent_manifest_sha256"] == result.bundle.manifest_sha256
     assert repeated_receipt["optimizer_updates"] == training_receipt["optimizer_updates"]
+
+    test_dataset.provenance = {"scene": "same-path-replacement"}
+    drift_receipt = tmp_path / "held-out-after-replacement.json"
+    with pytest.raises(ValueError, match="held-out diagnostic test provenance drifted"):
+        experiment.evaluate_held_out(
+            QhHeldOutEvaluationRequest(
+                bundle=result.bundle,
+                test=request.test,
+                output_receipt_path=drift_receipt,
+            )
+        )
+    assert not drift_receipt.exists()

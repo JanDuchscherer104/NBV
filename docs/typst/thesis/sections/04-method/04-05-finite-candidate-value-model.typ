@@ -19,7 +19,7 @@
   citation: [@VIN-NBV-frahm2025 @CORAL-cao2019 @DoubleDQN-vanHasselt2015],
   source: "aria_nbv/aria_nbv/vin/models/target_finite_horizon.py; aria_nbv/aria_nbv/lightning/qh_module.py; aria_nbv/aria_nbv/lightning/qh_q2_certification.py; aria_nbv/aria_nbv/oracle/pipelines/online_qh.py; aria_nbv/tests/lightning/test_qh_q2_certification.py",
   gate: [retain the one-step scorer as a matched control, populate a held-out exact-Q2 receipt, and require independent oracle-rescored policy evidence],
-)[The modular A0/A1--S0-pose--root-moments finite-horizon scorer, typed output, scalar horizon query, feasibility auxiliary, regression/CORAL value decoders, fitted-Q learner, bounded exact-Q2 certifier, and hard-masked online adapter are implemented. A1 remains the default and A0 its identical-feature interaction control; scientific policy evidence is pending.]
+)[The modular A0/A1--S0-pose--root-moments finite-horizon scorer, typed output, scalar horizon query, feasibility auxiliary, regression/CORAL value decoders, fitted-Q learner, bounded exact-Q2 certifier, hard-masked online adapter, and dense-valid data path are implemented. Both decoders complete a one-epoch GPU fit on a real bounded corpus. A1 remains the default and A0 its identical-feature interaction control; the learned exact-Q2 and scientific policy gates remain unmet.]
 
 The actor DTO carries root semidense evidence, GT-derived target pose and extent, root-relative candidate geometry, selected-pose history, remaining budget, and candidate materialization support. It deliberately excludes supervision and audit lineage from scorer inputs. The current model makes this an executable `S0-pose` baseline, but neither a trained checkpoint nor task-sufficient reconstruction state follows from interface tests alone.
 
@@ -85,7 +85,7 @@ and, for $h>1$,
 
 where the lower-horizon prediction is detached, frozen, or supplied by a delayed target copy. The essential structural rule for this candidate is $Q_h arrow.l Q_(h-1)$: no horizon value bootstraps from itself. Fixed-horizon TD motivates this recursion and shows that horizon-indexed values can share parameters and be updated in parallel, although a staged $h=1$ to $H$ schedule remains the clearest initial control @FixedHorizonTD-deAsis2020.
 
-The stored evidence gives a particularly strong base case. Every candidate admitted by `q_train_mask` can supervise continuous one-step root-normalized gain. If a selected first action has a successor table with dense one-step labels, then the exact finite-support H=2 target is
+The stored evidence gives a particularly strong base case. The executable objective queries $h=1$ for every realized state and supervises every finite hard-valid candidate with continuous one-step root-normalized gain. Candidate losses are averaged within state before state means are averaged within horizon; non-empty horizons then receive equal weight. Selected-transition recursion is disjoint and begins at $h>1$. This prevents large candidate tables and abundant Q1 labels from silently dominating longer horizons. The bundle records the realized state/candidate support by horizon and online inference rejects a requested horizon absent from that support. If a selected first action has a successor table with dense one-step labels, then the exact finite-support H=2 target is
 
 #eqs.rl.qh_exact_q2_target
 
@@ -110,6 +110,14 @@ contract and independent held-out endpoint evaluation establishes positive
 oracle-lookahead headroom. The existing persisted terminal-step contrast is a
 diagnostic proxy and cannot satisfy that endpoint gate.
 
+The census denominator is the complete eligible held-out chain population,
+not only chains that happen to contain an exact horizon-two row. A chain that
+terminates or becomes unsupported before factual $h=2$ contributes zero exact
+rows and therefore lowers support coverage. It must not disappear through
+post-hoc filtering. Consequently, an executable one-epoch fit, a valid bundle,
+or even low error on a few supported rows cannot promote $h>2$ when the frozen
+minimum-row, coverage, or tolerance predicate fails.
+
 Double Q is an optional estimator for the learned successor maximum. It uses the online scorer to select
 
 #eqs.rl.qh_doubleq_index
@@ -128,7 +136,7 @@ The objective-design comparison is therefore:
 6. behavior-policy Monte-Carlo return regression as a separate estimand;
 7. an uncentred one-step-plus-residual decomposition.
 
-Because dense one-step rows vastly outnumber selected transitions at longer horizons, training and evaluation must report support, loss, calibration, ranking, and selected-action regret separately by horizon under either interface. If requested horizons share one learner, their sampling or weighting must be explicit; an aggregate loss must not allow $Q_1$ to hide longer-horizon failure.
+Because dense one-step rows vastly outnumber selected transitions at longer horizons, training and evaluation report state-normalized loss and continuous-unit mean absolute calibration error separately by horizon. Dense $h=1$ additionally reports within-state pairwise ranking accuracy over unequal-target candidate pairs and greedy selected-action regret. The factual selected-transition labels at $h>1$ do not identify either counterfactual quantity, so their per-horizon ranking-pair and regret-state support remains explicitly zero instead of fabricating a metric. Exact or independently oracle-rescored longer-horizon candidate tables are required before those fields can become nonzero. If requested horizons share one learner, their sampling or weighting must be explicit; an aggregate loss must not allow $Q_1$ to hide longer-horizon failure.
 
 === Modular continuous-value decoding
 

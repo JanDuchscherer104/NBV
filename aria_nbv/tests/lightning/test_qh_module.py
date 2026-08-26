@@ -628,6 +628,111 @@ def test_coral_loss_has_gradients_only_on_selected_supported_candidates() -> Non
     assert module.online_scorer.next.grad is None
 
 
+def test_learning_objective_uses_every_dense_q1_candidate_and_selected_h2() -> None:
+    module = _module()
+    module.target_scorer.next.data.copy_(torch.tensor([10.0, 20.0, 30.0, 40.0]))
+
+    objective = module.compute_learning_objective(_batch())
+
+    assert objective.dense_q1_support.tolist() == [[[True, True, True], [True, True, True]]]
+    assert objective.recursive_support.tolist() == [[True, False]]
+    assert objective.state_count_by_horizon.tolist() == [2, 1, 0, 0, 0]
+    assert objective.candidate_count_by_horizon.tolist() == [6, 1, 0, 0, 0]
+    assert objective.loss.item() == pytest.approx((17.0 / 12.0 + 16.0) / 2.0)
+
+
+def test_learning_objective_reports_state_clustered_horizon_metrics() -> None:
+    """Dense Q1 owns ranking/regret; selected recursion owns calibration only."""
+
+    objective = _module().compute_learning_objective(_batch())
+
+    assert objective.absolute_error_sum_by_horizon.tolist() == pytest.approx([5.5 / 3.0 + 2.0, 1.2, 0.0, 0.0, 0.0])
+    assert objective.ranking_accuracy_sum_by_horizon.tolist() == pytest.approx([1.0, 0.0, 0.0, 0.0, 0.0])
+    assert objective.ranking_state_count_by_horizon.tolist() == [2, 0, 0, 0, 0]
+    assert objective.ranking_pair_count_by_horizon.tolist() == [4, 0, 0, 0, 0]
+    assert objective.selected_regret_sum_by_horizon.tolist() == pytest.approx([2.0, 0.0, 0.0, 0.0, 0.0])
+    assert objective.selected_regret_state_count_by_horizon.tolist() == [2, 0, 0, 0, 0]
+
+
+def test_coral_and_regression_report_metrics_in_the_same_continuous_units() -> None:
+    """Decoder-specific losses do not change decoded-Q evaluation semantics."""
+
+    regression = _module().compute_learning_objective(_batch())
+    coral = _coral_module().compute_learning_objective(_batch())
+
+    for field in (
+        "absolute_error_sum_by_horizon",
+        "ranking_accuracy_sum_by_horizon",
+        "ranking_state_count_by_horizon",
+        "ranking_pair_count_by_horizon",
+        "selected_regret_sum_by_horizon",
+        "selected_regret_state_count_by_horizon",
+    ):
+        assert torch.equal(getattr(coral, field), getattr(regression, field)), field
+
+
+def test_dense_q1_is_candidate_mean_then_state_mean() -> None:
+    batch = _batch()
+    action_mask = batch.actor.action_mask.clone()
+    label_mask = batch.supervision.label_mask.clone()
+    action_mask[:, 1, 1:] = False
+    label_mask[:, 1, 1:] = False
+    batch = replace(
+        batch,
+        actor=replace(batch.actor, action_mask=action_mask),
+        supervision=replace(batch.supervision, label_mask=label_mask),
+    )
+    module = _module()
+
+    objective = module.compute_learning_objective(batch)
+
+    # State 0 contributes mean([0.5, 2.0, 1.5]) = 4/3; state 1
+    # contributes its sole supported 0.5-loss candidate. The h=1 loss is the
+    # mean of those state means, not the mean over four candidate rows.
+    assert objective.loss_sum_by_horizon[0].item() == pytest.approx(11.0 / 6.0)
+    assert objective.state_count_by_horizon[0].item() == 2
+    assert objective.candidate_count_by_horizon[0].item() == 4
+
+
+def test_dense_q1_gradients_cover_valid_candidates_only() -> None:
+    batch = _batch()
+    action_mask = batch.actor.action_mask.clone()
+    label_mask = batch.supervision.label_mask.clone()
+    action_mask[..., -1] = False
+    label_mask[..., -1] = False
+    batch = replace(
+        batch,
+        actor=replace(batch.actor, action_mask=action_mask),
+        supervision=replace(batch.supervision, label_mask=label_mask),
+    )
+    module = _module()
+
+    objective = module.compute_learning_objective(batch)
+    objective.loss.backward()
+
+    dense_gradient = module.online_scorer.next.grad
+    recursive_gradient = module.online_scorer.current.grad
+    assert dense_gradient is not None
+    assert recursive_gradient is not None
+    assert bool(dense_gradient[:2].abs().sum() > 0)
+    assert dense_gradient[2].item() == 0.0
+    assert recursive_gradient[0].item() == 0.0
+    assert recursive_gradient[1].item() != 0.0
+    assert recursive_gradient[2].item() == 0.0
+
+
+def test_dense_q1_coral_gradients_cover_every_supported_candidate() -> None:
+    module = _coral_module()
+
+    objective = module.compute_learning_objective(_batch())
+    objective.loss.backward()
+
+    gradient = module.online_scorer.coral_logits.grad
+    assert gradient is not None
+    assert bool((gradient[:3].abs().sum(dim=-1) > 0).all())
+    assert torch.equal(gradient[3], torch.zeros_like(gradient[3]))
+
+
 def test_coral_metrics_expose_target_support_saturation(monkeypatch: pytest.MonkeyPatch) -> None:
     module = _coral_module()
     module.target_scorer.next.data.copy_(torch.tensor([10.0, 20.0, 30.0, 40.0]))
@@ -906,10 +1011,11 @@ def test_nonfinite_unsupported_successor_values_are_ignored() -> None:
     assert torch.isfinite(targets[admitted]).all()
 
 
-def test_all_unsupported_batch_is_exact_optimizer_noop_with_diagnostic(
+def test_unsupported_recursive_backup_still_trains_dense_q1(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     module = _module()
+    _install_manual_step(module, monkeypatch)
     batch = _batch()
     labels = batch.supervision.label_mask.clone()
     labels[:, 1] = False
@@ -919,10 +1025,11 @@ def test_all_unsupported_batch_is_exact_optimizer_noop_with_diagnostic(
 
     result = module.training_step(batch, 0)
 
-    assert result is None
-    assert module.online_scorer.calls == 0
-    assert module.target_scorer.calls == 0
-    assert module.optimizer_updates.item() == 0
+    assert result is not None
+    assert torch.isfinite(result)
+    assert module.online_scorer.calls == 1
+    assert module.target_scorer.calls == 1
+    assert module.optimizer_updates.item() == 1
     assert logged["train/unsupported_backup_rows"].item() == 1
     assert logged["train/unsupported_backup_fraction"].item() == 1
 
@@ -959,8 +1066,12 @@ def test_single_device_validation_logs_exact_weighted_loss_and_only_infrastructu
     module.validation_step(_batch(), 0)
     module.on_validation_epoch_end()
 
-    assert logged["val/loss"].item() == pytest.approx(8.25)
+    assert logged["val/loss"].item() == pytest.approx((17.0 / 12.0 + 16.0) / 2.0)
     assert logged["val/admitted_rows"].item() == 2
+    assert logged["val/h1_calibration_mae"].item() == pytest.approx((5.5 / 3.0 + 2.0) / 2.0)
+    assert logged["val/h1_pairwise_ranking_accuracy"].item() == pytest.approx(0.5)
+    assert logged["val/h1_selected_action_regret"].item() == pytest.approx(1.0)
+    assert logged["val/h2_calibration_mae"].item() == pytest.approx(16.5)
     assert set(logged) == {
         "val/loss",
         "val/admitted_rows",
@@ -970,6 +1081,22 @@ def test_single_device_validation_logs_exact_weighted_loss_and_only_infrastructu
         "val/nonfinite_valid_values",
         "val/unsupported_backup_rows",
         "val/unsupported_backup_fraction",
+        "val/h1_loss",
+        "val/h1_calibration_mae",
+        "val/h1_state_count",
+        "val/h1_candidate_count",
+        "val/h1_ranking_pair_count",
+        "val/h1_ranking_state_count",
+        "val/h1_selected_regret_state_count",
+        "val/h1_pairwise_ranking_accuracy",
+        "val/h1_selected_action_regret",
+        "val/h2_loss",
+        "val/h2_calibration_mae",
+        "val/h2_state_count",
+        "val/h2_candidate_count",
+        "val/h2_ranking_pair_count",
+        "val/h2_ranking_state_count",
+        "val/h2_selected_regret_state_count",
     }
 
 

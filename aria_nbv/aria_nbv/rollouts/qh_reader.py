@@ -162,6 +162,30 @@ class QhDataContract:
     action_mask_semantics: str = "oracle_action_mask_v1"
     """Meaning of actor-valid support; current generated stores use Oracle hard-valid masks."""
 
+    def learning_semantics(self) -> "QhDataContract":
+        """Return the population-independent fitted-Q compatibility contract.
+
+        Candidate-generator, rollout-recipe, and behavior-policy hashes describe
+        which populations a stage contains. They are valuable provenance and
+        remain bound in each dataset and bundle, but they are not mathematical
+        reward, mask, target, horizon, or replay semantics. Removing only these
+        three vocabularies lets scene-disjoint validation and test stages probe
+        controlled population shift without pretending their artifacts are the
+        training corpus.
+
+        Returns:
+            A value-equal contract projection suitable only for cross-stage
+            compatibility checks. The original stage contract remains the
+            training and provenance owner.
+        """
+
+        return replace(
+            self,
+            candidate_config_hashes=(),
+            rollout_config_hashes=(),
+            selection_policies=(),
+        )
+
 
 @dataclass(frozen=True, slots=True)
 class QhRolloutChainIdentity:

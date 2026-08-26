@@ -10,7 +10,7 @@
   evidence: "pending",
   source: "aria_nbv/aria_nbv/rollouts/replay/types.py; aria_nbv/aria_nbv/rollouts/replay/engine.py; aria_nbv/aria_nbv/rollouts/zarr_store.py; aria_nbv/aria_nbv/rollouts/qh_reader.py; aria_nbv/tests/rollouts/test_qh_reader.py",
   gate: [preserve deterministic shell identity, source roles, and selected-transition validation],
-)[Finite candidate tables, hard masks, lineage, selected transitions, selected-depth persistence, and the derived `q_h/` view are implemented and schema-tested. Frozen scientific store evidence remains pending.]
+)[Finite candidate tables, hard masks, lineage, selected transitions, selected-depth persistence, the derived `q_h/` view, and a fail-closed dense-valid supervision profile are implemented and schema-tested. Frozen scientific policy evidence remains pending.]
 
 At step $t$, candidate generation returns a finite full-shell table #symb.rl.candidate_table with a hard-valid mask $bold(m)_t$ and versioned invalid-reason bitsets. Scores are stored compactly only for hard-valid rows and are bound back to stable shell indices before selection. The admissible action set is
 
@@ -30,6 +30,18 @@ jitter changes proposal support but does not bypass hard validity rules.
 
 Invalid rows remain available for diagnostics and dense replay, but cannot be selected. A row enters the training mask only when it is actor-selectable and has a finite oracle target. Invalid rows have false masks and undefined labels; scene RRI is never substituted for a missing target-specific label. `valid_action_mask`, `q_train_mask`, padding, and any deployable feasibility estimate are distinct fields with distinct owners.
 
+The persisted supervision profile makes label density an auditable contract
+rather than an inference from array shape. Historical stores declare
+`legacy_unspecified` together with `subset_of_action_v1`: their Q-label support
+may be any subset of hard-valid materialized rows and cannot establish dense
+one-step supervision. A fitted-Q store may instead declare `dense_valid`
+together with `equals_action_on_realized_steps_v1`. The writer then proves,
+and the reader revalidates, exact equality between `q_train_mask` and
+`valid_action_mask` on every realized state. Padding is excluded from both
+masks. Hard-invalid materialized rows remain useful binary examples for the
+physical feasibility head, but receive neither a fabricated Q target nor
+bootstrap support. Unknown or crossed profile pairs fail closed.
+
 === Implemented replay transition
 
 Rollout expansion records the full candidate table, selected valid and shell indices, policy scores and probabilities, selection policy, and random seed. The implemented transition is
@@ -43,6 +55,18 @@ where $x_t$ is the current reference pose, $bold(H)_t$ the selected-pose history
 This transition is deliberately a replay-control transition, not yet a complete reconstruction-state update. It changes pose, selected-pose history, budget, lineage, and action support. It does not imply that the actor has received a new RGB observation, recomputed EFM3D field, or fused the selected depth into a spatial memory. Any implementation that consumes only these fields must be labelled `S0-pose`.
 
 The persisted factual tables retain source and target identity, lineage hashes, step order, selected rows, masks, reasons, sampler provenance, rewards, selected-depth calibration, and support diagnostics. The derived `q_h/` view right-pads states, stores one-step and target-root-gain labels, and exposes only the factual selected transition needed for a temporal-difference backup. It does not create counterfactual labels for unselected actions or make privileged selected depth actor-visible.
+
+Training, validation, and test stores must share the same learning semantics:
+reward definition, mask meanings, target and actor-state protocols, horizon
+support, and label-support profile. They need not share a candidate-generator
+hash, rollout-recipe hash, or behavior-policy label. Those fields identify the
+sampled population rather than the value function, so each stage binds its own
+population provenance into the experiment bundle while the training contract
+remains the model identity. This permits a genuinely held-out distribution
+without weakening semantic checks. Stage acquisition is deterministic and
+scene-disjoint: complete eligible units are hash-ranked within each requested
+split, input-feasibility rejections are recorded, and no unit is replaced or
+selected using its oracle labels or model error.
 
 === Selected observation and planned scene-state transition
 
