@@ -1267,6 +1267,93 @@ def plot_view_jitter_support(candidates: "CandidateSamplingResult") -> go.Figure
     return fig
 
 
+def plot_proposal_sequence_support(candidates: "CandidateSamplingResult") -> go.Figure:
+    """Plot full-shell ground-plane support against deterministic draw order.
+
+    Colour exposes the within-shell sequence index, while marker shape exposes
+    hard validity. This makes clumping, ordering artefacts, and independent
+    proposal replicas visible without conflating them with action selection.
+    """
+
+    offsets = candidates.shell_offsets_ref
+    if offsets is None:
+        offsets, _ = candidates.get_offsets_and_dirs_ref()
+    offsets_np = offsets.detach().cpu().numpy().reshape(-1, 3)
+    valid_np = candidates.mask_valid.detach().cpu().numpy().reshape(-1).astype(bool, copy=False)
+    sequence = candidates.extras.get("proposal_sequence_index")
+    if isinstance(sequence, torch.Tensor):
+        sequence_np = sequence.detach().cpu().numpy().reshape(-1)
+    else:
+        sequence_np = np.arange(offsets_np.shape[0], dtype=np.int64)
+    replica = candidates.extras.get("proposal_replica")
+    replica_np = (
+        replica.detach().cpu().numpy().reshape(-1)
+        if isinstance(replica, torch.Tensor)
+        else np.zeros(offsets_np.shape[0], dtype=np.int64)
+    )
+    components = np.asarray(candidates.component_name or tuple("candidate" for _ in range(offsets_np.shape[0])))
+    sequence_min = float(np.nanmin(sequence_np)) if sequence_np.size else 0.0
+    sequence_max = float(np.nanmax(sequence_np)) if sequence_np.size else 1.0
+    if sequence_min == sequence_max:
+        sequence_max = sequence_min + 1.0
+
+    fig = go.Figure()
+    for is_valid, symbol, label in ((True, "circle", "valid"), (False, "x", "invalid")):
+        mask = valid_np == is_valid
+        if not mask.any():
+            continue
+        customdata = np.empty((int(mask.sum()), 3), dtype=object)
+        customdata[:, 0] = sequence_np[mask]
+        customdata[:, 1] = replica_np[mask]
+        customdata[:, 2] = components[mask]
+        fig.add_trace(
+            go.Scatter(
+                x=offsets_np[mask, 2],
+                y=offsets_np[mask, 0],
+                mode="markers",
+                name=label,
+                marker={
+                    "color": sequence_np[mask],
+                    "coloraxis": "coloraxis",
+                    "size": 9,
+                    "symbol": symbol,
+                    "opacity": 0.85,
+                },
+                customdata=customdata,
+                hovertemplate=(
+                    "forward=%{x:.3f} m<br>left=%{y:.3f} m"
+                    "<br>sequence=%{customdata[0]}<br>replica=%{customdata[1]}"
+                    "<br>component=%{customdata[2]}<extra></extra>"
+                ),
+            )
+        )
+    fig.add_trace(
+        go.Scatter(
+            x=[0.0],
+            y=[0.0],
+            mode="markers",
+            marker={"color": "white", "size": 11, "symbol": "cross"},
+            name="reference pose",
+            hoverinfo="skip",
+        )
+    )
+    fig.update_layout(
+        title="Candidate proposal sequence in the reference ground plane",
+        coloraxis={
+            "colorscale": "Viridis",
+            "cmin": sequence_min,
+            "cmax": sequence_max,
+            "colorbar": {"title": "sequence index"},
+        },
+        xaxis={"title": "forward / m", "scaleanchor": "y", "scaleratio": 1},
+        yaxis={"title": "left / m"},
+        legend_title="hard validity",
+        height=620,
+        margin={"l": 70, "r": 30, "t": 70, "b": 60},
+    )
+    return fig
+
+
 def plot_radius_hist(
     offsets: np.ndarray,
     *,

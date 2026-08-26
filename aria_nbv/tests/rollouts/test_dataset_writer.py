@@ -46,7 +46,7 @@ from aria_nbv.pose_generation import CandidateMixtureViewGeneratorConfig
 from aria_nbv.rendering import CandidateDepthRendererConfig
 from aria_nbv.rollouts.manifest import RolloutStoreManifestContext, manifest_sha256
 from aria_nbv.rollouts.replay.engine import CounterfactualPoseGeneratorConfig
-from aria_nbv.rollouts.replay.policy import RolloutPolicySpec
+from aria_nbv.rollouts.replay.policy import RolloutPolicySpec, derive_selection_seed
 from aria_nbv.rollouts.shard_manifest import (
     RolloutShardCampaignBinding,
     RolloutShardEntry,
@@ -58,7 +58,7 @@ from aria_nbv.rollouts.shard_manifest import (
     write_rollout_shard_manifest,
     write_rollout_source_manifest,
 )
-from aria_nbv.rollouts.zarr_store import validate_rollout_zarr_store, write_rollout_zarr_store
+from aria_nbv.rollouts.zarr_store import RolloutZarrStoreReader, validate_rollout_zarr_store, write_rollout_zarr_store
 from aria_nbv.targets import ObservedTargetDescriptor, TargetDescriptor
 from aria_nbv.targets.protocol import TargetInputProtocol
 from aria_nbv.utils.fingerprints import stable_config_hash, stable_msgspec_hash
@@ -243,6 +243,22 @@ def test_direct_v0_writer_keeps_physical_split_out_of_campaign_hash(tmp_path: Pa
     )
     validation = validate_rollout_zarr_store(result.store_dir)
     assert validation.ok, validation.errors
+
+
+@pytest.mark.parametrize("record_index", [0, 1])
+def test_zarr_round_trip_persists_state_keyed_selection_seed(tmp_path: Path, record_index: int) -> None:
+    record = build_rollout_records(horizon=2, num_samples=6, seed=51)[record_index]
+    result = write_rollout_zarr_store(tmp_path / "selection-seed.zarr", [record])
+
+    persisted = RolloutZarrStoreReader(result.store_dir).array("steps/selection_seed")
+    trajectory = record.evaluated.result.trajectories[0]
+    state_path: tuple[int, ...] = ()
+    expected: list[int] = []
+    for step in trajectory.steps:
+        expected.append(derive_selection_seed(51, state_path))
+        state_path += (step.selected_shell_index,)
+
+    assert persisted.tolist() == expected
 
 
 def test_campaign_split_is_serialized_and_bound_into_v3_source_hash() -> None:

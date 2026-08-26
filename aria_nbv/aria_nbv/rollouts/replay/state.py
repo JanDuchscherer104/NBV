@@ -187,6 +187,11 @@ class CounterfactualTrajectory:
 
         return self.pose_chain_world().t.reshape(-1, 3)
 
+    def selected_shell_path(self) -> tuple[int, ...]:
+        """Return the stable full-shell action history identifying this state."""
+
+        return tuple(step.selected_shell_index for step in self.steps)
+
     def reference_pose_world(self, step_index: int) -> PoseTW:
         """Return the pose from which ``step_index`` expands."""
 

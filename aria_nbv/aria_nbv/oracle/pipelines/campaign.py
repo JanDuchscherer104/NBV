@@ -1177,6 +1177,13 @@ class CudaRolloutCampaign:
                         scene_split=split_by_scene[scene],
                         seed_lineage={
                             "unit": derive_campaign_seed(self.config.seed, "unit", sample, target, profile.name),
+                            "proposal": derive_campaign_seed(
+                                self.config.seed,
+                                "proposal",
+                                sample,
+                                target,
+                                profile.name,
+                            ),
                             "recipe": derive_campaign_seed(self.config.seed, "recipe", sample, target, profile.name),
                         },
                         campaign_split=split_by_scene[scene],
@@ -1788,6 +1795,7 @@ class CudaRolloutCampaign:
                                 beam_width=recipe["beam"],
                                 selection_temperature=temperature,
                                 seed=(unit.seed_lineage or {}).get("recipe", self.config.seed),
+                                proposal_seed=(unit.seed_lineage or {}).get("proposal", self.config.seed),
                             ),
                         )
                         for temperature in temperatures

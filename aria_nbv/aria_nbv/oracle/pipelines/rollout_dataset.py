@@ -215,10 +215,11 @@ class ExplicitRolloutTargetConfig(BaseConfig):
 class RolloutRecipeConfig(BaseConfig):
     """One rollout policy recipe materialized into the replay store.
 
-    Recipes control both candidate-set sampling and action selection. The first
-    supported policies cover random valid selection, greedy oracle selection,
-    retained-beam oracle lookahead, and temperature-softmax records for rollout
-    diversity.
+    Recipes control action selection and may select an explicit independent
+    proposal replica. Proposal roots are otherwise shared across recipe and
+    temperature comparisons. The first supported policies cover random valid
+    selection, greedy oracle selection, retained-beam oracle lookahead, and
+    temperature-softmax records for rollout diversity.
     """
 
     name: str

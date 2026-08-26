@@ -5,6 +5,8 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+import pytest
+
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts"))
 
@@ -29,3 +31,10 @@ def test_discrete_scalars_are_exact_and_bool_is_not_an_integer() -> None:
     assert _compare({"id": "abc", "index": 3, "valid": True}, {"id": "abc", "index": 3, "valid": True}) == []
     assert _compare({"id": "abc"}, {"id": "abd"})
     assert _compare({"index": 1}, {"index": True})
+
+
+def test_import_provenance_rejects_an_unrelated_editable_checkout(monkeypatch) -> None:
+    monkeypatch.setattr(golden._aria_nbv_package, "__file__", "/tmp/unrelated/aria_nbv/__init__.py")
+
+    with pytest.raises(RuntimeError, match="import provenance mismatch"):
+        golden._assert_import_provenance()

@@ -64,7 +64,11 @@ from aria_nbv.rollouts import (
     CounterfactualTrajectory,
     RolloutPolicySpec,
 )
-from aria_nbv.rollouts.replay.policy import CounterfactualSelectionPolicy
+from aria_nbv.rollouts.replay.policy import (
+    CounterfactualSelectionPolicy,
+    derive_candidate_seed,
+    derive_selection_seed,
+)
 from aria_nbv.rollouts.trace import PolicyLineage, RolloutLineage, SourceLineage
 from aria_nbv.targets import TargetDescriptor
 from aria_nbv.utils.data_plotting import get_frustum_segments
@@ -77,6 +81,17 @@ def _identity_pose(device: torch.device | str = "cpu") -> PoseTW:
             device=device,
         )
     )
+
+
+def test_proposal_and_selection_streams_are_state_keyed_and_independent() -> None:
+    state_path = (7, 3)
+
+    proposal = derive_candidate_seed(11, state_path, proposal_replica=0)
+
+    assert proposal == derive_candidate_seed(11, state_path, proposal_replica=0)
+    assert proposal != derive_candidate_seed(11, state_path, proposal_replica=1)
+    assert proposal != derive_candidate_seed(11, (3, 7), proposal_replica=0)
+    assert proposal != derive_selection_seed(11, state_path)
 
 
 def _dummy_camera(device: torch.device | str = "cpu") -> CameraTW:
@@ -712,6 +727,14 @@ def test_rollout_engine_accepts_minimal_candidate_scores() -> None:
 
     assert rollouts.score_label == "minimal_scores"
     assert all(trajectory.steps[0].selection_score_label == "minimal_scores" for trajectory in rollouts.trajectories)
+    candidates = rollouts.trajectories[0].steps[0].candidates
+    assert torch.equal(
+        candidates.extras["proposal_sequence_index"],
+        torch.arange(candidates.mask_valid.numel(), dtype=torch.int64, device=candidates.mask_valid.device),
+    )
+    assert torch.equal(
+        candidates.extras["proposal_replica"], torch.zeros_like(candidates.mask_valid, dtype=torch.int64)
+    )
 
 
 def _expected_frustum_trace(cam: CameraTW, pose: PoseTW, *, scale: float) -> np.ndarray:
@@ -734,6 +757,15 @@ def test_counterfactual_rollout_greedy_length_and_step_radius() -> None:
     positions = trajectory.pose_chain_world().t
     step_lengths = torch.linalg.norm(positions[1:] - positions[:-1], dim=1)
     assert torch.allclose(step_lengths, torch.full_like(step_lengths, 0.5), atol=1e-4)
+
+
+def test_counterfactual_greedy_selection_persists_state_keyed_seed() -> None:
+    rollouts = _run_rollouts(horizon=2, branch_factor=1)
+    trajectory = rollouts.trajectories[0]
+    assert [step.selection_rng_seed for step in trajectory.steps] == [
+        derive_selection_seed(0, ()),
+        derive_selection_seed(0, (trajectory.steps[0].selected_shell_index,)),
+    ]
 
 
 def test_counterfactual_rollout_beam_width_caps_frontier() -> None:
@@ -957,6 +989,9 @@ def test_temperature_softmax_masks_invalid_candidates_and_reproduces_selection()
     assert step_a.selection_probabilities.shape[0] == int(step_a.candidates.mask_valid.sum().item())
     assert step_a.selection_temperature == pytest.approx(1.0)
     assert step_a.selected_log_probability is not None
+    expected_seed = derive_selection_seed(0, ())
+    assert step_a.selection_rng_seed == expected_seed
+    assert step_b.selection_rng_seed == expected_seed
 
 
 def test_temperature_softmax_branch_factor_samples_distinct_candidates() -> None:

@@ -29,6 +29,7 @@ from ...pose_generation.plotting import (
     plot_path_collision_segments,
     plot_position_polar,
     plot_position_sphere,
+    plot_proposal_sequence_support,
     plot_radius_hist,
     plot_rule_masks,
     plot_rule_rejection_bar,
@@ -338,6 +339,14 @@ def _render_live_candidates_page(
             "sampling contract; crosses are proposals rejected by downstream hard rules."
         )
         st.plotly_chart(plot_view_jitter_support(candidates), width="stretch")
+
+    with st.container(border=True):
+        st.subheader("Sampling behavior: proposal sequence")
+        st.caption(
+            "Ground-plane candidate centres are coloured by deterministic within-shell draw order. "
+            "Circles are hard-valid actions, crosses are retained rejected proposals, and the white cross is the reference pose."
+        )
+        st.plotly_chart(plot_proposal_sequence_support(candidates), width="stretch")
 
     with st.expander("Frame orthonormality", expanded=False):
         _info_popover(
