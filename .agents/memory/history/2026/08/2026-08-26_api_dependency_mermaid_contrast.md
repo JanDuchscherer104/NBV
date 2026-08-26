@@ -27,8 +27,8 @@ The global Quarto Mermaid dark theme supplied a light default node-label color
 to the generated pale package nodes. The generator now emits local base-theme
 frontmatter with explicit dark primary text, line, and edge-label background
 colors, and its sole package class supplies the matching label color and
-semibold weight. After rebasing, the package-specific contrast remains layered
-with the shared input/output/compute/data definitions now owned by `main`.
+semibold weight. The stale unused input/output/compute/data class definitions
+were removed.
 
 `make api-docs` regenerated the diagram and dependency JSON. Its unrelated
 sidebar churn was excluded. A focused generator test locks the local styling

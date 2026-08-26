@@ -107,10 +107,6 @@ def render_mermaid(packages: list[str], edges: list[tuple[str, str, int]]) -> st
     lines.extend(
         [
             "",
-            "  classDef input fill:#D5E8D4,stroke:#82B366,color:#17202A,stroke-width:1.5px,rx:0,ry:0;",
-            "  classDef output fill:#F8CECC,stroke:#B85450,color:#17202A,stroke-width:1.5px,rx:0,ry:0;",
-            "  classDef compute fill:#E1D5E7,stroke:#9673A6,color:#17202A,stroke-width:1.5px,rx:8,ry:8;",
-            "  classDef data fill:#F5F5F5,stroke:#9E9E9E,color:#17202A,stroke-width:1.2px,rx:0,ry:0;",
             "  classDef package fill:#E1D5E7,stroke:#9673A6,color:#1F2937,font-weight:600,stroke-width:1.5px,rx:6,ry:6;",
             f"  class {','.join(packages)} package;",
             "",
