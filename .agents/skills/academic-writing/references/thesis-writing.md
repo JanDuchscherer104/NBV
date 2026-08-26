@@ -51,17 +51,17 @@ evidence gaps into a scratch pile. Do not write final thesis claims directly
 from fragments; first classify scope, strength, evidence, limitation, and
 terminology.
 
-`shape-pass`: use when the input pile is fixed. Start from scoped
-claims/evidence, establish what the reader already knows, and draft paragraph
-by paragraph. Each paragraph must ground any new concept before later prose
-depends on it. If the pile lacks an example, citation, metric, or limitation
-the paragraph needs, mark the gap instead of fabricating.
+`shape-pass`: use when the input pile is fixed. Arrange scoped claims and
+evidence using the section contract and
+[`reader-centred-exposition.md`](reader-centred-exposition.md). If the pile
+lacks an example, citation, metric, or limitation, mark the gap instead of
+fabricating.
 
-`beat-pass`: use to improve reader journey, transitions, and narrative rhythm.
-Advance one reader move at a time: motivation, gap, method consequence,
-evidence, limitation, or transition. This is useful for introductions, related
-work transitions, discussion, limitations, and advisor summaries; it must not
-override method-section contracts, notation rules, or evidence gates.
+`beat-pass`: use to improve the reader-state transitions defined in
+[`reader-centred-exposition.md`](reader-centred-exposition.md). This is useful
+for introductions, Related Work transitions, discussion, limitations, and
+advisor summaries; it must not override method-section contracts, notation
+rules, or evidence gates.
 
 ## Proposal And Thesis Rhetoric
 
@@ -88,10 +88,9 @@ Introduction: establish why interactive NBV matters, state the limitation of
 geometry-only or scene-level framing, introduce ARIA-NBV, and end with precise
 contributions.
 
-Related work: organize by intellectual dependency, not a shopping list:
-classical NBV, learned NBV, reconstruction-quality proxies/oracle labels,
-entity-aware reconstruction, and why the thesis combination remains
-non-trivial.
+Related work: use [`literature-synthesis.md`](literature-synthesis.md) to teach
+the conceptual machinery that makes the method's requirements and choices
+understandable.
 
 Method/system design: specify input/output contracts, frame conventions,
 symbol/equation references, learned vs deterministic components, online vs
@@ -128,14 +127,14 @@ limitation, or planned experiment instead of a result.
 
 ## Paragraph Unit Test
 
-For each paragraph, ask:
+Use the reader-centred exposition contract for paragraph order and information
+flow. Then ask:
 
 1. What is the paragraph's single job?
 2. What concrete claim does it make?
 3. What evidence supports it?
 4. Which term or symbol must stay consistent with the shared library?
-5. Does the last sentence set up the next paragraph?
-6. Would a skeptical reader know the scope, evidence, and uncertainty level?
+5. Would a skeptical reader know the scope, evidence, and uncertainty level?
 
 If the answer is unclear, rewrite before polishing.
 

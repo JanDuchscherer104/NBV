@@ -41,7 +41,11 @@ use `scientific-review`.
      [`empirical-reporting-and-reproducibility.md`](../academic-writing/references/empirical-reporting-and-reproducibility.md).
 3. Make the smallest source edit. Shared notation, glossary terms, equations,
    bibliography identities, and active thesis content remain with their exact
-   owners.
+   owners. For multi-paragraph accepted content, preserve the dependency order,
+   paragraph jobs, takeaways, and main/appendix boundary recorded by
+   [`reader-centred exposition`](../academic-writing/references/reader-centred-exposition.md).
+   Return fitting, splitting, moving, or compression that changes those
+   contracts to `academic-writing`; do not solve an argument problem as layout.
 4. Move `ready-for-realization` content to `realized` only after changing its
    exact Typst owner and completing the required proof. Compile and inspect
    affected output when layout or meaning can change; report any skipped proof.

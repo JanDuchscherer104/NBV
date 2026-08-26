@@ -1371,6 +1371,14 @@ def test_academic_owner_split_retains_typst_links_and_scientific_contract() -> N
         / "references"
         / "claim-citation-discipline.md"
     )
+    reader_exposition = _read(
+        ROOT
+        / ".agents"
+        / "skills"
+        / "academic-writing"
+        / "references"
+        / "reader-centred-exposition.md"
+    )
 
     assert "Typst source edits" in typst_skill
     assert "references/workflow.md" in typst_skill
@@ -1382,6 +1390,7 @@ def test_academic_owner_split_retains_typst_links_and_scientific_contract() -> N
     assert "ready-for-realization" in academic_skill
     assert "obtain scientific-review findings before marking" in academic_skill
     assert "literature-research" in academic_skill
+    assert "references/reader-centred-exposition.md" in academic_skill
     assert "academic work phase transition" in academic_skill
     assert (
         "references/empirical-reporting-and-reproducibility.md"
@@ -1399,6 +1408,19 @@ def test_academic_owner_split_retains_typst_links_and_scientific_contract() -> N
         "mathematical, notation, or theoretical consistency",
     ):
         assert review_route in scientific_skill
+    assert (
+        "reader-centred-exposition.md#completion-and-review-lens"
+        in scientific_skill
+    )
+    assert "reader-centred-exposition.md" in typst_skill
+    for contract_term in (
+        "epistemic dependency",
+        "context-content-conclusion",
+        "topic position",
+        "main text self-contained",
+        "takeaway density",
+    ):
+        assert contract_term in reader_exposition
     skill_guide = _read(ROOT / ".agents" / "skills" / "README.md")
     for phase in (
         "`proposed`",
@@ -1416,6 +1438,8 @@ def test_academic_owner_split_retains_typst_links_and_scientific_contract() -> N
     assert (
         ROOT / ".agents" / "skills" / "literature-research" / "SKILL.md"
     ).is_file()
+    assert not (ROOT / ".agents" / "skills" / "scientific-writing").exists()
+    assert not (ROOT / ".agents" / "skills" / "reader-centred-writing").exists()
     assert "prose-draft" not in thesis_writing
     assert "prose-polish" not in thesis_writing
     assert "generated context artifact" not in claim_discipline
