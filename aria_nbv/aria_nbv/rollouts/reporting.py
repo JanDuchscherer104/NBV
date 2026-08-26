@@ -1767,7 +1767,7 @@ def _append_store_rows(
     rows["validity"].extend(_with_store_id(store_id, validity_waterfall_rows(reader)))
     step_rows = rollout_step_objective_rows(reader)
     rows["steps"].extend(_with_store_id(store_id, step_rows))
-    rows["rollout_tree"].extend(_with_store_id(store_id, rollout_tree_summary_rows(reader)))
+    rows["rollout_tree"].extend(_with_store_id(store_id, rollout_tree_summary_rows(reader, step_rows=step_rows)))
     rows["selected_depth"].extend(_with_store_id(store_id, selected_depth_summary_rows(reader, limit=None)))
     storage = runtime_storage_statistics(store_path, candidate_count=int(counts.get("candidates") or 0))
     rows["runtime_storage"].append(

@@ -17,6 +17,7 @@ import zarr
 from pandas.testing import assert_frame_equal
 from typer.testing import CliRunner
 
+import aria_nbv.rollouts.inspection as inspection
 import aria_nbv.rollouts.reporting as reporting
 
 pytest.importorskip("efm3d")
@@ -922,6 +923,37 @@ def test_report_groups_materialize_candidate_audit_once_per_store(
     frames = build_thesis_report_frames([result.store_dir], evidence_status="pilot")
     assert calls == 1
     assert len(frames["candidate_groups"]) > 0
+
+
+def test_report_frames_reuse_step_projection_for_rollout_tree(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Tree aggregation must not re-read the same per-step store projection."""
+
+    result = write_rollout_zarr_store(
+        tmp_path / "rollouts.zarr", build_rollout_records(horizon=2, num_samples=6, seed=711)
+    )
+    original = reporting.rollout_step_objective_rows
+    calls = 0
+
+    def spy(reader: Any) -> Any:
+        nonlocal calls
+        calls += 1
+        return original(reader)
+
+    def fail_if_tree_reloads_steps(_reader: Any) -> Any:
+        raise AssertionError("rollout_tree_summary_rows must use supplied step_rows")
+
+    monkeypatch.setattr(reporting, "rollout_step_objective_rows", spy)
+    monkeypatch.setattr(inspection, "rollout_step_objective_rows", fail_if_tree_reloads_steps)
+
+    frames = build_thesis_report_frames([result.store_dir], evidence_status="pilot")
+
+    assert calls == 1
+    reader = RolloutZarrStoreReader(result.store_dir)
+    expected = rollout_tree_summary_rows(reader, step_rows=original(reader))
+    store_id = str(frames["stores"].iloc[0]["store_id"])
+    actual = _sorted_expected_frame("rollout_tree", frames["rollout_tree"].to_dict(orient="records"))
+    reference = _sorted_expected_frame("rollout_tree", [{"store_id": store_id, **row} for row in expected])
+    assert_frame_equal(actual, reference, check_like=False)
 
 
 def test_rollout_statistics_match_cli_stats_payload(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:

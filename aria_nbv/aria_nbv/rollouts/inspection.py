@@ -5072,13 +5072,24 @@ def rollout_step_objective_rows(
     return rows
 
 
-def rollout_tree_summary_rows(reader: RolloutZarrStoreReader) -> list[dict[str, Any]]:
+def rollout_tree_summary_rows(
+    reader: RolloutZarrStoreReader,
+    *,
+    step_rows: Iterable[Mapping[str, Any]] | None = None,
+) -> list[dict[str, Any]]:
     """Summarize selected rollout-tree provenance by policy, step, and family.
 
     Rollout stores persist factual selected chains, not a full parent-edge tree.
     This helper therefore reports the observed branching/provenance distribution
     across selected steps: policy/recipe parameters, candidate family, fanout,
     invalidity, and selected objective values.
+
+    Args:
+        reader: Read-only rollout-store adapter used when ``step_rows`` is not
+            supplied.
+        step_rows: Optional already-materialized rows from
+            :func:`rollout_step_objective_rows`. Reusing the exact projection
+            avoids a duplicate rollout-store traversal in report builders.
     """
 
     metric_sources = {
@@ -5090,7 +5101,8 @@ def rollout_tree_summary_rows(reader: RolloutZarrStoreReader) -> list[dict[str, 
         "selected_entropy": "selected_entropy",
     }
     groups: dict[tuple[Any, ...], dict[str, float]] = {}
-    for row in rollout_step_objective_rows(reader):
+    source_rows = rollout_step_objective_rows(reader) if step_rows is None else step_rows
+    for row in source_rows:
         key = (
             row.get("policy", ""),
             row.get("horizon"),
