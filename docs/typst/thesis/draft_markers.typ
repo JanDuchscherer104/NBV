@@ -10,8 +10,48 @@
 }
 
 // Development-only material is omitted from submission output while retaining
-// a single, explicit guard at every draft-content boundary.
-#let development_only(body) = if thesis_mode == "development" { body() }
+// a single, explicit guard at every draft-content boundary. In development
+// output, the left rail and label make the editorial layer visible without
+// turning the thesis into a collection of dashboard-like cards.
+#let development_rail = rgb("#8B4B78")
+#let development_label(label) = text(
+  size: 7.8pt,
+  weight: 700,
+  fill: development_rail,
+)[▌ #h(0.35em) DEVELOPMENT ONLY · #label]
+#let development_boundary(
+  body,
+  label: [Development material],
+  breakable: true,
+) = block(
+  above: 0.7em,
+  below: 0.8em,
+  breakable: breakable,
+  stroke: (left: 1.25pt + development_rail),
+  inset: (left: 9pt, right: 2pt, top: 3pt, bottom: 3pt),
+)[
+  #development_label(label)
+  #v(3pt)
+  #body
+]
+
+#let development_subitem(body, label) = block(
+  above: 0.35em,
+  below: 0.35em,
+  breakable: false,
+  stroke: (left: 0.65pt + development_rail),
+  inset: (left: 6pt, right: 2pt, top: 2pt, bottom: 2pt),
+)[
+  #text(size: 7.6pt, weight: 700, fill: development_rail)[#label]
+  #v(2pt)
+  #body
+]
+
+#let development_only(body) = if thesis_mode == "development" {
+  // Keep the body uncontained: development sections may contain pagebreaks.
+  development_label([Development material]) + v(3pt) + body()
+}
+#let _development_guard(body) = if thesis_mode == "development" { body() }
 #let submission_only(body) = if thesis_mode == "submission" { body() }
 
 #let promotion_dispositions = ("candidate", "blocked", "deferred", "rejected")
@@ -22,36 +62,45 @@
   value
 }
 
-#let promotion_entry(summary, source: none, target-section: none, gate: none, disposition: none) = development_only(() => {
+#let promotion_entry(summary, source: none, target-section: none, gate: none, disposition: none) = _development_guard(() => {
   let summary = _required_promotion_field("summary", summary)
   let source = _required_promotion_field("source", source)
   let target = _required_promotion_field("target-section", target-section)
   let gate = _required_promotion_field("gate", gate)
   let disposition = _required_promotion_field("disposition", disposition)
   if type(disposition) != str or disposition not in promotion_dispositions { panic("Unknown promotion disposition: " + repr(disposition)) }
-  block(breakable: false)[
-    #text(size: 8.4pt)[*Promotion queue — #disposition:* #summary \
-      #text(size: 7.6pt)[Source: #source; target: #target; gate: #gate]]
-  ]
+  development_subitem(
+    block(breakable: false)[
+      #text(size: 8.4pt)[*#disposition:* #summary \
+        #text(size: 7.6pt)[Source: #source; target: #target; gate: #gate]]
+    ],
+    [Promotion queue],
+  )
 })
 
 #let todo_marker(kind, body, stroke: orange, source: none, gate: none) = if thesis_mode == "submission" {
   panic("Unresolved thesis marker in submission mode: " + repr(kind))
-} else { block(breakable: false)[
-  #text(size: 9pt)[
-    #dashy_todo(position: "inline", stroke: stroke)[
-      *#kind:* #body
-      #if source != none [
-        \
-        #text(size: 7.6pt)[Source: #source]
+} else {
+  development_boundary(
+    block(breakable: false)[
+      #text(size: 9pt)[
+        #dashy_todo(position: "inline", stroke: stroke)[
+          *#kind:* #body
+          #if source != none [
+            \
+            #text(size: 7.6pt)[Source: #source]
+          ]
+          #if gate != none [
+            \
+            #text(size: 7.6pt)[Gate: #gate]
+          ]
+        ]
       ]
-      #if gate != none [
-        \
-        #text(size: 7.6pt)[Gate: #gate]
-      ]
-    ]
-  ]
-] }
+    ],
+    label: kind,
+    breakable: false,
+  )
+}
 
 #let impl_todo(body, source: none, gate: none) = todo_marker([Implementation TODO], body, stroke: blue, source: source, gate: gate)
 #let research_todo(body, source: none, gate: none) = todo_marker([Research TODO], body, stroke: purple, source: source, gate: gate)
@@ -106,14 +155,8 @@
   let impl_colour = implementation_colour(implementation)
   let ev_colour = evidence_colour(evidence)
 
-  block(above: 0.7em, below: 0.8em, breakable: false)[
-    #rect(
-      width: 100%,
-      radius: 3pt,
-      inset: (x: 9pt, y: 7pt),
-      fill: impl_colour.lighten(95%),
-      stroke: 0.55pt + ev_colour.lighten(42%),
-    )[
+  development_boundary(
+    block(breakable: false)[
       #text(size: 8.2pt, weight: 700, fill: impl_colour)[Implementation: #implementation]
       #h(0.8em)
       #text(size: 8.2pt, weight: 700, fill: ev_colour)[Evidence: #evidence]
@@ -131,8 +174,10 @@
         \
         #text(size: 7.6pt, fill: gray)[Development source: #source]
       ]
-    ]
-  ]
+    ],
+    label: [Status],
+    breakable: false,
+  )
 }
 
 #let thesis_box(title, body) = block(above: 0.9em, below: 1em, breakable: true)[
