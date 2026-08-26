@@ -372,28 +372,32 @@ PY
 [[ ! -e "${SECOND_WORKTREE_ROOT}/.data/graphify-semantic-cache" ]]
 [[ ! -L "${SECOND_WORKTREE_ROOT}/.data/graphify-semantic-cache" ]]
 
-# Equally ranked admitted ancestor siblings are ambiguous; the resolver must
-# not select whichever worktree happened to appear first, and must not mutate
-# the child.
+# A real Codex fork parent remains authoritative even though the canonical
+# primary checkout and an admitted sibling are also available. Set this child
+# up before the tie-break fixture so each admitted candidate is a valid shared
+# runtime as well as a query-admissible Graphify source.
+ARIA_TEST_ADMIT_SECOND=1 run_codex_setup "${EXPLICIT_CHILD_ROOT}" "${SECOND_WORKTREE_ROOT}" \
+  >"${SANDBOX}/explicit-codex.out" 2>"${SANDBOX}/explicit-codex.err"
+[[ ! -s "${SANDBOX}/explicit-codex.out" && ! -s "${SANDBOX}/explicit-codex.err" ]]
+
+# Equally ranked admitted ancestor siblings use a deterministic path tie-break.
 git --git-dir="$(git -C "${AMBIGUOUS_CHILD_ROOT}" rev-parse --absolute-git-dir)" \
   --work-tree="${AMBIGUOUS_CHILD_ROOT}" merge --ff-only \
   "$(git --git-dir="$(git -C "${SECOND_WORKTREE_ROOT}" rev-parse --absolute-git-dir)" \
     --work-tree="${SECOND_WORKTREE_ROOT}" rev-parse HEAD)"
-ambiguous_before="$(snapshot_tree "${AMBIGUOUS_CHILD_ROOT}")"
-if ARIA_TEST_PRIMARY_UNUSABLE=1 ARIA_TEST_ADMIT_EXPLICIT=1 \
+ARIA_TEST_PRIMARY_UNUSABLE=1 ARIA_TEST_ADMIT_EXPLICIT=1 \
   run_codex_setup "${AMBIGUOUS_CHILD_ROOT}" "" \
-  >"${SANDBOX}/ambiguous.out" 2>"${SANDBOX}/ambiguous.err"; then
-  echo "Codex setup unexpectedly selected an ambiguous parent" >&2
-  exit 1
-fi
-grep -Fq "ambiguous query-admissible Graphify parent candidates" "${SANDBOX}/ambiguous.err"
-[[ "$(snapshot_tree "${AMBIGUOUS_CHILD_ROOT}")" == "${ambiguous_before}" ]]
+  >"${SANDBOX}/ambiguous.out" 2>"${SANDBOX}/ambiguous.err"
+[[ ! -s "${SANDBOX}/ambiguous.out" && ! -s "${SANDBOX}/ambiguous.err" ]]
+python3 - "${AMBIGUOUS_CHILD_ROOT}/graphify-out/.aria-worktree-seed.json" \
+  "${EXPLICIT_CHILD_ROOT}" <<'PY'
+import json
+import sys
+from pathlib import Path
 
-# A real Codex fork parent remains authoritative even though the canonical
-# primary checkout and an admitted sibling are also available.
-ARIA_TEST_ADMIT_SECOND=1 run_codex_setup "${EXPLICIT_CHILD_ROOT}" "${SECOND_WORKTREE_ROOT}" \
-  >"${SANDBOX}/explicit-codex.out" 2>"${SANDBOX}/explicit-codex.err"
-[[ ! -s "${SANDBOX}/explicit-codex.out" && ! -s "${SANDBOX}/explicit-codex.err" ]]
+sentinel = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+assert sentinel["source_worktree"] == str(Path(sys.argv[2]).resolve())
+PY
 
 # Git hooks export destination bindings. The top-level bridge must discard
 # those bindings before it validates independent sibling and primary paths.

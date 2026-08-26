@@ -213,7 +213,7 @@ registered_sibling_ranks() {
 }
 
 parentless_worktree() {
-  local primary candidates best_distance selected_count selected line distance candidate
+  local primary candidates distance candidate
   primary="$(canonical_primary_worktree)"
   if candidate_usable "$primary"; then
     printf '%s\n' "$primary"
@@ -223,34 +223,20 @@ parentless_worktree() {
   candidates="$(registered_sibling_ranks "$primary" | LC_ALL=C sort -t $'\t' -k1,1n -k2,2)"
   [[ -n "$candidates" ]] || fail \
     "no query-admissible registered Graphify parent; refresh the canonical primary or an eligible ancestor worktree"
-  best_distance=""
-  selected=""
-  selected_count=0
   while IFS=$'\t' read -r distance candidate; do
     [[ -n "$distance" && -n "$candidate" ]] || continue
-    if [[ -n "$best_distance" && "$distance" != "$best_distance" ]]; then
-      [[ "$selected_count" -eq 0 ]] || break
-    fi
-    if [[ -z "$best_distance" || "$distance" != "$best_distance" ]]; then
-      best_distance="$distance"
-      selected=""
-      selected_count=0
-    fi
     if candidate_usable "$candidate"; then
-      selected="$candidate"
-      selected_count=$((selected_count + 1))
+      printf '%s\n' "$candidate"
+      return 0
     fi
   done <<<"$candidates"
-  [[ "$selected_count" -gt 0 ]] || fail \
-    "no query-admissible registered Graphify parent; refresh the canonical primary or an eligible ancestor worktree"
-  [[ "$selected_count" -eq 1 ]] || fail \
-    "ambiguous query-admissible Graphify parent candidates at Git distance $best_distance; set CODEX_SOURCE_WORKSPACE_PATH explicitly"
-  printf '%s\n' "$selected"
+  fail "no query-admissible registered Graphify parent; refresh the canonical primary or an eligible ancestor worktree"
 }
 
 # A non-empty Codex source is the actual fork parent and therefore always wins.
 # Codex 0.149.1 may omit it for project-created worktrees; only then fall back
-# to an unambiguous, query-admissible registered ancestor worktree.
+# to the nearest query-admissible registered ancestor worktree. Equally near
+# candidates use the stable worktree-path ordering established above.
 # The strict setup owner validates both topology and Graphify admission.
 validated_modes="$(validated_graphify_modes)"
 
