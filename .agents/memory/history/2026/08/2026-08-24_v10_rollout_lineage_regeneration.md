@@ -76,6 +76,7 @@ retained configs require source/store validation before reuse; no generated
 store was available in this isolated checkout, so runtime store validation
 remains a downstream gate. Current candidate generation is governed by the
 replacement program and issues #117--#120.
+The clean replacement/disposition is [PR #153](https://github.com/JanDuchscherer104/ARIA-NBV/pull/153).
 
 At the historical commit, tracked rollout-generation configuration named VIN
 V10 as the canonical source and the V11 pilot as the corrected campaign.

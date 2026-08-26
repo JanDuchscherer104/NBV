@@ -10,7 +10,7 @@ touched_owner_paths:
   - .omx/specs/autoresearch-rollout-candidate-diversity-pilot-20260824/report.md
 codex_thread: codex://threads/01a033a6-100a-73d2-83bb-4a4153903cc4
 repo_object_format: sha1
-repo_head: c75085cf73a394abccce2ea946336cb5099bc6a0
+repo_head: ba5631d54379b5fd9f33ec072767524f52f5d97f
 repo_branch: codex/pr116-candidate-provenance-salvage
 worktree_kind: linked
 ---
@@ -24,6 +24,7 @@ the ignored execution plan `.omx/plans/candidate-generation-issue-resolution-pro
 Those raw files are deliberately not promoted into this salvage PR. The
 historical measurements and lineage details remain in
 `.omx/specs/autoresearch-rollout-candidate-diversity-pilot-20260824/report.md`.
+The clean replacement/disposition is [PR #153](https://github.com/JanDuchscherer104/ARIA-NBV/pull/153).
 
 ## Accepted source and candidate contracts
 

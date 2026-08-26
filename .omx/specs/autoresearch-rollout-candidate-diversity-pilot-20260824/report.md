@@ -8,6 +8,7 @@ evidence, not current implementation state.
 **Current-truth anchor:** `origin/main` at salvage branch point
 `db8c8812aca8fdae4be9565183e5e7ca66de53b6`. For the accepted architecture
 digest, see [the tracked candidate-generation architecture debrief](../../../.agents/memory/history/2026/08/2026-08-26_candidate_generation_architecture_digest.md).
+The clean replacement/disposition is [PR #153](https://github.com/JanDuchscherer104/ARIA-NBV/pull/153).
 
 **Validation:** independent `prompt-architect-artifact` review required
 
