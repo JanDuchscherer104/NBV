@@ -177,11 +177,11 @@ def _details(result: ProbeResult) -> list[str]:
 
 
 def _graphify_process_details(result: ProbeResult) -> list[str]:
-    details = [f"Graphify checker exit status: {result.returncode}"]
+    details = [f"Graphify admission probe exit status: {result.returncode}"]
     if stdout := result.stdout.strip():
-        details.append(f"Graphify checker stdout: {stdout}")
+        details.append(f"Graphify admission probe stdout: {stdout}")
     if stderr := result.stderr.strip():
-        details.append(f"Graphify checker stderr: {stderr}")
+        details.append(f"Graphify admission probe stderr: {stderr}")
     return details
 
 
@@ -383,35 +383,14 @@ def _readiness(boundary: GitBoundary, kind: Kind) -> ReadinessStatus:
 
 
 def _aria_graphify_action(boundary: GitBoundary, kind: Kind) -> str | None:
-    """Return only a refresh command owned by an existing ARIA checkout."""
-    if not (boundary.path / "scripts" / "check_graphify_freshness.py").is_file():
+    """Return the setup-owned maintenance action for an existing checkout."""
+    if not (boundary.path / "scripts" / "setup_codex_worktree_env.sh").is_file():
         return None
-    bootstrap_seed_exists = (
-        boundary.path / "graphify-out" / ".aria-worktree-seed.json"
-    ).exists() or (boundary.path / ".aria-worktree-seed.json").exists()
-    if (
-        kind == "linked"
-        and not (boundary.path / "graphify-out").exists()
-        and not bootstrap_seed_exists
-        and (boundary.path / "scripts" / "setup_worktree_env.sh").is_file()
-    ):
-        return _graphify_command(boundary.path, "bash", "scripts/setup_worktree_env.sh")
-    if (
-        kind in {"primary", "standalone"}
-        and (boundary.path / "scripts" / "build_graphify_projection.py").is_file()
-    ):
-        return (
-            f"cd {shlex.quote(str(boundary.path))} && python3 "
-            "scripts/build_graphify_projection.py --output graphify-input "
-            '--aria-code-ref "$(git rev-parse HEAD)" && graphify . --update'
-        )
-    if (boundary.path / "scripts" / "build_graphify_projection.py").is_file():
-        return _graphify_command(boundary.path, "graphify", ".", "--update")
-    return None
+    return _graphify_command(boundary.path, "make", "graphify-maintain")
 
 
 def _graphify(boundary: GitBoundary, *, bare: bool, kind: Kind) -> GraphifyStatus:
-    """Delegate freshness semantics without executing repair or mutation."""
+    """Report Graphify admission without executing maintenance or mutation."""
     if bare:
         return {
             "state": "unavailable",
@@ -460,7 +439,7 @@ def _graphify(boundary: GitBoundary, *, bare: bool, kind: Kind) -> GraphifyStatu
         return {
             "state": "unusable",
             "details": [
-                "Graphify checker JSON payload is not an object",
+                "Graphify admission payload is not an object",
                 *_graphify_process_details(probe),
             ],
             "next_action": _aria_graphify_action(boundary, kind),
@@ -468,14 +447,14 @@ def _graphify(boundary: GitBoundary, *, bare: bool, kind: Kind) -> GraphifyStatu
     state = payload.get("state")
     raw_details = payload.get("reasons", [])
     owner_action = payload.get("next_action")
-    owner_details = [f"Graphify checker state: {state}"]
+    owner_details = [f"Graphify admission state: {state}"]
     owner_details.extend(
         [item for item in raw_details if isinstance(item, str)]
         if isinstance(raw_details, list)
         else [str(raw_details)]
     )
     if isinstance(owner_action, str) and owner_action:
-        owner_details.append(f"Graphify checker next_action: {owner_action}")
+        owner_details.append(f"Graphify admission owner note: {owner_action}")
     contract: dict[str, tuple[int, State]] = {
         "fresh": (0, "healthy"),
         "usable-stale": (1, "stale"),
@@ -487,7 +466,7 @@ def _graphify(boundary: GitBoundary, *, bare: bool, kind: Kind) -> GraphifyStatu
             "state": "unusable",
             "details": [
                 *owner_details,
-                "Graphify checker returned an unknown state",
+                "Graphify admission returned an unknown state",
                 *_graphify_process_details(probe),
             ],
             "next_action": _aria_graphify_action(boundary, kind),
@@ -499,7 +478,7 @@ def _graphify(boundary: GitBoundary, *, bare: bool, kind: Kind) -> GraphifyStatu
             "details": [
                 *owner_details,
                 (
-                    f"Graphify checker state {state!r} requires exit status "
+                    f"Graphify admission state {state!r} requires exit status "
                     f"{expected_returncode}, got {probe.returncode}"
                 ),
                 *_graphify_process_details(probe),

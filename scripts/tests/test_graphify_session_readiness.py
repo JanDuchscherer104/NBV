@@ -32,6 +32,8 @@ class GraphifySessionReadinessTests(unittest.TestCase):
                 "aria_nbv/.venv/bin",
                 ".data/semantic",
                 ".data/semantic-deep",
+                ".data/graphify-semantic-cache/semantic",
+                ".data/graphify-semantic-cache/semantic-deep",
                 "docs/thesis",
                 "scripts",
                 ".codex/environments",

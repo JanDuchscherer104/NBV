@@ -19,7 +19,7 @@ source/tests, and exact ARIA owner. Docker MCP Context7 is deprecated.
 - `/graphify-labs/graphify`
   - `query, path, and explain command selection and output contracts`
   - `post-commit and post-checkout hook installation behavior`
-  - `incremental code and Markdown quick-scan behavior versus explicit semantic refresh`
+  - `upstream AST maintenance and changed semantic-input dispatch versus explicit semantic refresh`
 - `/websites/typst_app` — `labels, references, imports, context, show rules, and
   compile behavior for the exact Typst construct in use`.
 - `/typst-community/glossarium` — `term registration, short forms, references,

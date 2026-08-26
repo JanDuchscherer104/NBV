@@ -1,5 +1,5 @@
 .DEFAULT_GOAL := help
-.PHONY: help ci ci-impact-self-test ownership-consolidation-contract typst-authoring-contract thesis-literature-provenance skill-source-self-test graphify-skill-upstream-self-test graphify-projection-self-test graphify-projection-live-check graphify-usable-check graphify-state-check scaffold-check agents-db-validate package-smoke qh-ci replay-oracle-golden docs-render-core quarto-docs-ci typst-paper-ci thesis-pdf-ci thesis-marker-contract ruff-full ruff-targeted mypy-contract mypy-full mypy-targeted coverage-targeted agent-status
+.PHONY: help ci ci-impact-self-test ownership-consolidation-contract typst-authoring-contract thesis-literature-provenance skill-source-self-test graphify-skill-upstream-self-test graphify-projection-self-test graphify-projection-live-check graphify-usable-check graphify-state-check graphify-maintain graphify-session-readiness-integration scaffold-check agents-db-validate package-smoke qh-ci replay-oracle-golden docs-render-core quarto-docs-ci typst-paper-ci thesis-pdf-ci thesis-marker-contract ruff-full ruff-targeted mypy-contract mypy-full mypy-targeted coverage-targeted agent-status
 .PHONY: api-docs-self-test
 .PHONY: context-qmd-tree qmd-frontmatter-check
 .PHONY: context-index context-get context-contracts context-modules context-classes context-functions
@@ -294,6 +294,9 @@ skill-source-self-test: _check_python ## 🔗 Validate explicit upstream skill-s
 graphify-skill-upstream-self-test: _check_python ## 🕸️ Verify the project Graphify skill is byte-identical to upstream
 	@$(PYTHON_INTERPRETER) scripts/tests/test_graphify_upstream_skill.py
 
+graphify-session-readiness-integration: _check_python ## 🕸️ Exercise real explicit and parentless Codex worktree setup
+	@ARIA_NBV_RUN_GRAPHIFY_SESSION_INTEGRATION=1 $(PYTHON_INTERPRETER) scripts/tests/test_graphify_session_readiness_integration.py
+
 graphify-projection-self-test: _check_python ## 🕸️ Verify the deterministic literature projection builder
 	@$(PYTHON_INTERPRETER) scripts/tests/test_build_graphify_projection.py
 
@@ -305,6 +308,9 @@ graphify-usable-check: _check_python ## 🕸️ Require a valid Graphify snapsho
 
 graphify-state-check: _check_python ## 🕸️ Require indexed Graphify bytes to match the current worktree
 	@$(PYTHON_INTERPRETER) scripts/check_graphify_freshness.py
+
+graphify-maintain: ## 🕸️ Maintain and admit the current worktree's Graphify state
+	@CODEX_WORKTREE_PATH="$$PWD" bash scripts/setup_codex_worktree_env.sh --maintain --quiet
 
 ci-impact-self-test: ## 🧭 Verify path-to-CI-family routing and fail-closed behavior
 	@$(PYTHON_INTERPRETER) scripts/tests/test_ci_impact.py

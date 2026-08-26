@@ -27,9 +27,9 @@ repos:
         pass_filenames: false
         files: ^(\.agents/memory/|scripts/validate_agent_memory\.py|AGENTS\.md|Makefile)$
 
-      - id: graphify-usable-check
-        name: graphify usable snapshot
-        entry: make graphify-usable-check
+      - id: graphify-maintain
+        name: graphify automatic maintenance
+        entry: make graphify-maintain
         language: system
         pass_filenames: false
         files: ^(AGENTS\.md|\.agents/(references/|skills/)|aria_nbv/|docs/|graphify-input/|\.graphifyignore|scripts/(build_graphify_projection|check_graphify_freshness)\.py|Makefile)$
@@ -45,7 +45,7 @@ repos:
 
       - id: docs-render-core
         name: core docs render
-        entry: make docs-render-core
+        entry: bash -c 'unset GIT_DIR GIT_WORK_TREE; export TMPDIR="$(git rev-parse --absolute-git-dir)"; exec make docs-render-core'
         language: system
         pass_filenames: false
         stages:
