@@ -1,44 +1,145 @@
-# Lightning
+# Lightning Training
 
-`aria_nbv.lightning` owns training lifecycle and source composition. It does
-not own metric formulas, Oracle label generation, or immutable data codecs.
+`aria_nbv.lightning` owns training-stage admission, objectives, optimization,
+checkpoint selection, metrics, and experiment publication. VIN owns scorer
+architecture; data handling owns actor/supervision DTOs; rollouts own factual
+replay and stored masks.
 
-## Source Composition
+## One-Step VIN
 
-`lit_datamodule.py` composes the discriminated online/offline source union.
-Online generation is implemented by `oracle.pipelines.online_vin`; immutable
-offline source configuration is implemented by
-`data_handling.vin_store.source`.
+The public command-line training path remains the one-step CORAL control:
 
-| Symbol | Kind | Visibility | Before module | Current module | Final owner | Status |
-|---|---|---|---|---|---|---|
-| `VinDatasetSourceConfig` | alias | public | `data_handling._vin_sources` | `lightning.lit_datamodule` | `lightning.lit_datamodule` | moved: RWP03A |
-| `VinDataModuleConfig` | config | public | `lightning.lit_datamodule` | `lightning.lit_datamodule` | `lightning.lit_datamodule` | already aligned |
-| `VinDataModule` | class | public | `lightning.lit_datamodule` | `lightning.lit_datamodule` | `lightning.lit_datamodule` | already aligned |
+```sh
+cd aria_nbv
+uv run nbv-train --help
+uv run nbv-summary --help
+```
 
-The `kind = "online"` and `kind = "offline"` discriminators and all nested
-TOML fields are frozen configuration contracts.
+`AriaNBVExperimentConfig`, `VinDataModuleConfig`, and
+`VinLightningModuleConfig` provide the corresponding config-as-factory Python
+surface.
 
-## Finite-Horizon Q_H Training
+## Finite-Horizon QH
 
-The retained `Q_H` surface is an infrastructure seam, separate from the
-scene-wise one-step CORAL stack:
+Finite-horizon fitting is a programmatic, immutable experiment API rather than
+a second CLI. The normal lifecycle is:
 
-- `data_handling.qh_data` and `rollouts.qh_reader` provide the leaf dataset and
-  validated reader contracts.
-- `qh_datamodule.py` admits compatible, scene-disjoint stage datasets and owns
-  only their DataLoaders.
-- `qh_module.py` owns scorer-independent fitted-Q optimization. Construct
-  `QhLightningModule(config, scorer=...)` with a required scorer that maps
-  `QhActorTensors` to `Tensor[B,S,N]` candidate values.
-- A non-terminal selected row is excluded when the actor has a valid successor
-  but no successor has label support. Terminal rows and states with no
-  actor-valid successor keep their immediate-reward boundary target.
-- Scorer outputs must be finite only where they participate in the selected
-  loss or supported Double-Q backup; padded and unsupported values are ignored.
+```mermaid
+flowchart LR
+  V[("VIN actor store")] --> D["QhDatasetConfig"]
+  R[("Train · validation · test rollout stores")] --> D
+  D --> M["QhDataModule admission"]
+  M --> L["QhLightningModule"]
+  A["Authoritative action_mask"] --> L
+  L --> E["QhExperiment.fit"]
+  E --> B[("Immutable bundle and receipts")]
+  B --> C["Held-out and exact-Q2 certification"]
+  B --> I["load_for_inference"]
+  I --> O["Online QH adapter"]
+  A --> O
+  O --> S["Hard-valid CandidateScores"]
 
-The package does not provide a production scorer, dedicated CLI, experiment
-configuration, run-artifact lifecycle, checkpoint policy, or cluster launcher
-for this seam. The reader, dataset, collation, and loader layers support varying
-horizons, including mixed-horizon batches; this is not a scientific
-claim that an `H >= 3` model has been implemented or evaluated.
+  classDef input fill:#D5E8D4,stroke:#82B366,stroke-width:1.5px,rx:0,ry:0;
+  classDef output fill:#F8CECC,stroke:#B85450,stroke-width:1.5px,rx:0,ry:0;
+  classDef compute fill:#E1D5E7,stroke:#9673A6,stroke-width:1.5px,rx:8,ry:8;
+  classDef data fill:#F5F5F5,stroke:#9E9E9E,stroke-width:1.2px,rx:0,ry:0;
+  class A input;
+  class D,M,L,E,C,I,O compute;
+  class V,R,B data;
+  class S output;
+```
+
+```python
+from aria_nbv.lightning.qh_experiment import (
+    QhCheckpointSelectionSpec,
+    QhExperimentConfig,
+    QhFitRequest,
+)
+from aria_nbv.lightning.qh_module import QhLightningModuleConfig
+from aria_nbv.vin.models.target_finite_horizon import (
+    TargetFiniteHorizonScorerConfig,
+)
+
+experiment = QhExperimentConfig(
+    scorer=TargetFiniteHorizonScorerConfig(max_horizon=4),
+    module=QhLightningModuleConfig(
+        actor_state_contract_hash="bound-during-fit",
+        learning_contract_hash="bound-during-fit",
+    ),
+).setup_target()
+
+result = experiment.fit(
+    QhFitRequest(
+        train=train_dataset_config,
+        validation=validation_dataset_config,
+        test=test_dataset_config,
+        warm_start_from=None,
+        checkpoint_selection=QhCheckpointSelectionSpec(),
+        seed=23,
+        output_bundle_dir=bundle_dir,
+    )
+)
+runtime = experiment.load_for_inference(result.bundle, device="cuda")
+```
+
+The train, validation, and test configs must identify non-empty,
+scene-disjoint populations with compatible learning semantics. The output
+directory must not already exist. Fit publishes scorer weights, a manifest,
+and hashed training/checkpoint-selection receipts; it does not publish
+optimizer state as an inference dependency.
+
+For a bounded one-epoch smoke, set the nested `TrainerFactoryConfig` to one
+epoch and one train/validation batch. The executable example is maintained in
+`tests/lightning/test_qh_experiment.py::test_qh_fit_publishes_new_bundle_and_hashed_receipts`.
+
+## Mask and Gradient Ownership
+
+`QhLightningModule.forward()` exposes the scorer's raw, action-mask-independent
+`QhScoreOutput`. Training then applies separate support contracts:
+
+- `candidate_mask` identifies materialized rows;
+- `action_mask` defines legal backup and policy support;
+- `q_label_mask` identifies factual one-step label support;
+- fitted-Q admission selects realized horizon targets;
+- step and padding masks exclude unrealized storage rows.
+
+Feasibility learns from labelled valid and invalid materialized rows. Q loss and
+bootstrap participation remain zero outside Q-label and hard-action support.
+Zero-filled padding or invalid rows can therefore never win a masked selection,
+including when all valid Q values are negative.
+
+## Objective and Decoders
+
+The fitted-Q objective uses Huber loss, online argmax/target evaluation, exact
+`h -> h - 1` recursion, and hard-valid next-action support. The scorer may use:
+
+- direct continuous regression, the canonical decoder; or
+- CORAL with a manifest-bound support and calibration identity.
+
+Decoder selection belongs to `TargetFiniteHorizonScorerConfig`; Lightning
+dispatches the corresponding loss without changing mask semantics.
+
+## Bundle and Online Use
+
+`QhExperiment.load_for_inference()` verifies the manifest, configuration,
+weights, trained horizons, representation semantics, calibration, geometry,
+and actor/learning identities. The online adapter in
+`aria_nbv.oracle.pipelines.online_qh` rejects mismatched contexts and converts
+only hard-valid conditional values into `CandidateScores`.
+
+Learned feasibility is auxiliary in the deployed core. It does not replace the
+authoritative analytic/observed action mask.
+
+## Verification
+
+```sh
+cd aria_nbv
+uv run ruff check aria_nbv/lightning
+uv run pytest tests/lightning/test_qh_datamodule.py
+uv run pytest tests/lightning/test_qh_module.py
+uv run pytest tests/lightning/test_qh_experiment.py
+uv run pytest tests/lightning/test_qh_q2_certification.py
+```
+
+Use `tests/lightning/test_qh_fast_dev_run.py` for the smallest complete
+Lightning transaction.

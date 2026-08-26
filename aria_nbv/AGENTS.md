@@ -13,14 +13,19 @@ being changed.
 
 - Code, tests, and active configuration own package behavior. Keep public roots
   narrow and add compatibility only for an active, explicit public contract.
-- `data_handling` owns raw snippets and immutable VIN stores; `rollouts` owns
-  replay/Zarr records; `rri_metrics` owns metric semantics; `vin` owns scorer and
-  candidate-context contracts. Cross a boundary through its owning leaf contract.
+- `data_handling` owns raw snippets, immutable VIN stores, and QH actor/label
+  joins; `rollouts` owns replay/Zarr records and QH reading; `rri_metrics` owns
+  metric semantics; `vin` owns scorer, decoder, and inference-bundle contracts;
+  `lightning` owns data admission, optimization, certification, and experiment
+  lifecycle. Cross a boundary through its owning leaf contract.
 - Preserve EFM3D/ATEK coordinate conventions and typed frame containers; make
   failures actionable rather than silently falling back.
 - `python-standards` owns generic Python, typing, config, docstring, and upstream
   reuse rules. `pyproject.toml` owns executable formatter/linter configuration;
   nearest source and tests own behavior and local API detail.
+- Public docstrings are the package's detailed human-facing implementation
+  contract and feed Quartodoc. READMEs orient users through supported workflows;
+  they link to docstrings and tests instead of caching private symbol layouts.
 - Type dynamic boundaries with the narrowest valid union, `TypedDict`, protocol,
   or verified third-party `Any`; `object` is not an accepted type annotation.
 

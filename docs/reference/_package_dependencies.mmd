@@ -11,21 +11,21 @@ flowchart LR
   targets["targets"]
   utils["utils"]
   vin["vin"]
-  vin -->|"20"| utils
-  data_handling -->|"12"| utils
-  oracle -->|"10"| data_handling
-  oracle -->|"10"| utils
+  vin -->|"25"| utils
+  data_handling -->|"13"| utils
+  oracle -->|"13"| utils
+  oracle -->|"12"| data_handling
+  lightning -->|"10"| utils
+  vin -->|"10"| data_handling
+  oracle -->|"9"| pose_generation
   data_handling -->|"8"| configs
-  lightning -->|"8"| utils
-  vin -->|"8"| data_handling
-  oracle -->|"7"| pose_generation
+  lightning -->|"8"| data_handling
+  oracle -->|"7"| rollouts
   rollouts -->|"7"| utils
+  data_handling -->|"6"| vin
   lightning -->|"6"| configs
-  lightning -->|"6"| data_handling
+  oracle -->|"6"| targets
   pose_generation -->|"6"| utils
-  oracle -->|"5"| rendering
-  rendering -->|"5"| utils
-  rollouts -->|"5"| pose_generation
 
   classDef input fill:#D5E8D4,stroke:#82B366,stroke-width:1.5px,rx:0,ry:0;
   classDef output fill:#F8CECC,stroke:#B85450,stroke-width:1.5px,rx:0,ry:0;

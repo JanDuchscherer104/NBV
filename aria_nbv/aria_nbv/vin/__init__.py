@@ -1,10 +1,14 @@
-"""VIN one-step scoring models and typed prediction contracts.
+"""VIN one-step and finite-horizon scoring models.
 
 The active public surface is `VinModelV3`: a target-agnostic one-step scorer for
 candidate RRI rows that uses EVL voxel evidence, candidate pose encodings,
 semidense projection features, and a CORAL ordinal head. It is the implemented
 seminar substrate and the myopic control for the thesis target-conditioned
-rollout work; it is not a full multi-step NBV policy.
+rollout work. The production finite-horizon scorer remains leaf-owned by
+:mod:`aria_nbv.vin.models.target_finite_horizon`; its modular history, scene,
+state-fusion, and value decoders live under :mod:`aria_nbv.vin.modules`, and
+:mod:`aria_nbv.vin.qh_bundle` owns immutable inference identity. These QH
+contracts are not widened into the package-root one-step API.
 
 This package owns the stable imports for scorer protocols, actor-visible EVL
 adapters and feature banks, candidate encoders, predictions, and diagnostics.

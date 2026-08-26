@@ -1,8 +1,10 @@
 """Scorer-independent fitted-Q optimization for finite-candidate chains.
 
 The injected scorer maps :class:`~aria_nbv.data_handling.qh_data.QhActorTensors`
-directly to candidate values. This module owns Double-Q targets, exact
-distributed admission, one optimizer transaction, metrics, and target sync.
+to :class:`~aria_nbv.vin.models.target_finite_horizon.QhScoreOutput` with raw
+conditional values and feasibility logits. This module owns authoritative
+action-mask use, Double-Q targets, exact distributed admission, one optimizer
+transaction, metrics, and target sync.
 """
 
 from __future__ import annotations
@@ -492,7 +494,7 @@ class QhLightningModule(pl.LightningModule):
         return loss.detach()
 
     def on_train_epoch_start(self) -> None:
-        """Reset local training aggregates."""
+        """Reset local loss and per-horizon support aggregates for a new epoch."""
 
         self.training_loss_sum.zero_()
         self.training_row_count.zero_()
@@ -520,7 +522,7 @@ class QhLightningModule(pl.LightningModule):
         return self._evaluation_step(batch, Stage.TEST)
 
     def on_validation_epoch_start(self) -> None:
-        """Reset validation aggregates."""
+        """Reset validation numerators, denominators, and horizon counts."""
 
         self.validation_loss_sum.zero_()
         self.validation_row_count.zero_()
@@ -539,7 +541,7 @@ class QhLightningModule(pl.LightningModule):
         self._log_aggregate(Stage.VAL, self.validation_loss_sum, self.validation_row_count)
 
     def on_test_epoch_start(self) -> None:
-        """Reset held-out aggregates."""
+        """Reset held-out numerators, denominators, and horizon counts."""
 
         self.test_loss_sum.zero_()
         self.test_row_count.zero_()

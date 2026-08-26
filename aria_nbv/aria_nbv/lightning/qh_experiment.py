@@ -1,4 +1,12 @@
-"""Immutable training and inference composition for finite-horizon Q_H."""
+"""Immutable finite-horizon QH training, certification, and inference.
+
+This module owns experiment-level composition of validated stage datasets,
+scorer construction, masked
+Double-Q optimization, deterministic checkpoint selection, content-addressed
+receipts, atomic bundle publication, explicit held-out evaluation, and bounded
+exact-``Q_2`` certification. Scorer architecture stays in :mod:`aria_nbv.vin`;
+factual replay and actor joins remain with their data owners.
+"""
 
 from __future__ import annotations
 
@@ -247,13 +255,42 @@ class QhExperimentConfig(TargetConfig["QhExperiment"]):
 
 
 class QhExperiment:
-    """Fit, publish, verify, and reconstruct immutable Q_H bundles."""
+    """Fit, publish, verify, and reconstruct immutable QH bundles.
+
+    A fit admits nonempty scene-disjoint train, validation, and test datasets,
+    constructs a scorer and masked Double-Q module, selects the minimum
+    validation-loss checkpoint with deterministic tie breaking, and atomically
+    publishes scorer weights plus content-bound receipts. Held-out evaluation
+    and exact-``Q_2`` certification are explicit later requests; fit never uses
+    test metrics for checkpoint selection.
+
+    Published bundles contain inference dependencies rather than resumable
+    training state. :meth:`load_for_inference` verifies hashes, configuration,
+    implementation identity, calibration support, representation semantics,
+    and trained horizons before returning an evaluation-mode scorer.
+    """
 
     def __init__(self, config: QhExperimentConfig) -> None:
         self.config = config
 
     def fit(self, request: QhFitRequest) -> QhFitResult:
-        """Train from immutable stages and atomically publish one new bundle."""
+        """Train from immutable stages and atomically publish one new bundle.
+
+        Args:
+            request: Stage configurations, optional verified warm-start weights,
+                deterministic checkpoint rule, seed, and a new output directory.
+
+        Returns:
+            Bundle reference plus hashed training and checkpoint-selection
+            receipts. The output directory becomes visible only after complete
+            publication.
+
+        Raises:
+            FileExistsError: If the requested immutable destination exists.
+            ValueError: If stage, profile, horizon, geometry, warm-start, or
+                checkpoint identities are incompatible.
+            RuntimeError: If fitting produces no realized horizon support.
+        """
 
         output = request.output_bundle_dir.expanduser().resolve()
         if output.exists():
@@ -654,7 +691,21 @@ class QhExperiment:
         *,
         device: torch.device | str,
     ) -> QhInferenceRuntime:
-        """Verify a bundle and return its scorer with manifest-derived identities."""
+        """Verify a bundle and return its scorer with manifest-derived identities.
+
+        Args:
+            ref: Content-bound bundle reference whose schema and manifest hash
+                must match the bytes on disk.
+            device: Destination device for the reconstructed scorer.
+
+        Returns:
+            Evaluation-mode scorer and manifest-derived runtime identities used
+            by online context and trained-horizon admission.
+
+        Raises:
+            ValueError: If the manifest, scorer state, configuration, support
+                artifact, implementation identity, or hashes are inconsistent.
+        """
 
         manifest = cls._read_verified_manifest(ref)
         config = TargetFiniteHorizonScorerConfig.model_validate(manifest["scorer_config"])

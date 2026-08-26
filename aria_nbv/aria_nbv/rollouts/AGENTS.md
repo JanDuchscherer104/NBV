@@ -7,7 +7,9 @@ summary: Replay, rollout-Zarr/Q store, and finite-candidate rollout boundaries.
 # Rollout Boundary
 
 `aria_nbv.rollouts` owns multi-step replay records and rollout Zarr/Q stores;
-`replay/`, `trace.py`, `zarr_store.py`, and their tests own implementation detail.
+`replay/`, `trace.py`, `zarr_store.py`, and their tests own persisted behavior.
+`qh_reader.py` owns validated chain reads and data-contract identity;
+`qh_geometry.py` owns stored-to-actor pose composition.
 Generation belongs to `aria_nbv.oracle.pipelines`; finite candidate sampling and
 provenance stay in `aria_nbv.pose_generation`.
 
@@ -23,6 +25,9 @@ DTO.
   VIN offline store for multi-step rollout data.
 - Invalid candidates and targets are hard mask/reason-code cases, never low-RRI
   labels; `q_train_mask` requires explicit target-RRI supervision.
+- QH readers expose factual chains and supervision support. Lightning owns
+  backup/loss masking, while online adapters return hard-masked
+  `CandidateScores`; neither boundary fabricates invalid-row Q targets.
 - `read_model.py` remains presentation-free. Rerun/Streamlit behavior belongs to
   its clients; use `rerun-nbv-inspector` for the Rerun procedure and current
   reference route.
