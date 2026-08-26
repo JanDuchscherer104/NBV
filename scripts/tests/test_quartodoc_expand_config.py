@@ -8,6 +8,7 @@ def test_qh_modules_are_discovered_for_api_generation() -> None:
     qh_modules = {name for name in discovered if name.startswith(("data_handling.qh", "lightning.qh", "rollouts.qh"))}
 
     assert qh_modules == {
+        "data_handling.qh_contracts",
         "data_handling.qh_data",
         "data_handling.qh_data.batching",
         "data_handling.qh_data.dataset",
@@ -16,6 +17,7 @@ def test_qh_modules_are_discovered_for_api_generation() -> None:
         "lightning.qh_datamodule",
         "lightning.qh_experiment",
         "lightning.qh_module",
+        "lightning.qh_q2_certification",
         "rollouts.qh_geometry",
         "rollouts.qh_reader",
     }

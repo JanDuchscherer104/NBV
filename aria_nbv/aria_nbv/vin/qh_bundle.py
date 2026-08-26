@@ -63,5 +63,8 @@ class QhInferenceRuntime:
     representation_semantics: str
     """Meaning of the actor representation consumed by the scorer."""
 
+    trained_horizons: tuple[int, ...]
+    """Sorted scalar horizons with positive manifest-bound training support."""
+
 
 __all__ = ["QH_INFERENCE_BUNDLE_SCHEMA_VERSION", "QhInferenceBundleRef", "QhInferenceRuntime"]

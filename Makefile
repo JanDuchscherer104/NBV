@@ -98,16 +98,22 @@ PACKAGE_SMOKE_TESTS := \
 	tests/vin/test_vin_diagnostics_runtime.py
 QH_CI_RUFF_PATHS := \
 	aria_nbv/data_handling/__init__.py \
+	aria_nbv/data_handling/qh_contracts.py \
 	aria_nbv/data_handling/qh_data \
 	aria_nbv/lightning/qh_datamodule.py \
 	aria_nbv/lightning/qh_experiment.py \
 	aria_nbv/lightning/qh_module.py \
+	aria_nbv/lightning/qh_q2_certification.py \
 	aria_nbv/oracle/environment.py \
 	aria_nbv/oracle/pipelines/online_qh.py \
 	aria_nbv/rollouts/qh_reader.py \
 	aria_nbv/rollouts/zarr_store.py \
 	aria_nbv/vin/models/__init__.py \
 	aria_nbv/vin/models/target_finite_horizon.py \
+	aria_nbv/vin/encoders/fourier.py \
+	aria_nbv/vin/encoders/pose.py \
+	aria_nbv/vin/modules/qh_history_encoders.py \
+	aria_nbv/vin/modules/qh_scene_encoders.py \
 	aria_nbv/vin/modules/qh_state_fusion.py \
 	aria_nbv/vin/modules/qh_value_decoders.py \
 	aria_nbv/vin/qh_bundle.py \
@@ -118,18 +124,22 @@ QH_CI_RUFF_PATHS := \
 	tests/rollouts/test_public_rollouts_api.py \
 	tests/rollouts/test_zarr_store.py \
 	tests/vin/test_models_namespace.py \
+	tests/vin/test_learnable_fourier_features.py \
 	tests/lightning/test_candidate_scorer_contract.py \
 	tests/lightning/test_optimizer_finite_values.py \
 	tests/lightning/test_qh_datamodule.py \
 	tests/lightning/test_qh_dense_valid.py \
 	tests/lightning/test_qh_experiment.py \
 	tests/lightning/test_qh_module.py \
+	tests/lightning/test_qh_q2_certification.py \
 	tests/lightning/test_qh_fast_dev_run.py \
 	tests/lightning/test_qh_torchrun_smoke.py \
 	tests/lightning/qh_torchrun_worker.py \
 	tests/oracle/test_online_qh.py \
 	tests/rollouts/test_replay_oracle_golden_parity.py \
 	tests/targets/test_protocol.py \
+	tests/vin/test_qh_history_encoders.py \
+	tests/vin/test_qh_scene_encoders.py \
 	tests/vin/test_qh_state_fusion.py \
 	tests/vin/test_qh_value_decoders.py \
 	tests/vin/test_target_finite_horizon.py \
@@ -144,6 +154,7 @@ QH_CI_TESTS := \
 	tests/lightning/test_qh_dense_valid.py \
 	tests/lightning/test_qh_experiment.py \
 	tests/lightning/test_qh_module.py \
+	tests/lightning/test_qh_q2_certification.py \
 	tests/lightning/test_qh_fast_dev_run.py \
 	tests/lightning/test_qh_torchrun_smoke.py \
 	tests/oracle/test_online_qh.py \
@@ -154,9 +165,12 @@ QH_CI_TESTS := \
 	tests/data_handling/test_vin_offline_store.py \
 	tests/data_handling/test_public_api_contract.py \
 	tests/vin/test_models_namespace.py \
+	tests/vin/test_learnable_fourier_features.py \
 	../scripts/tests/test_check_replay_oracle_golden.py \
 	tests/lightning/test_candidate_scorer_contract.py \
 	tests/lightning/test_optimizer_finite_values.py \
+	tests/vin/test_qh_history_encoders.py \
+	tests/vin/test_qh_scene_encoders.py \
 	tests/vin/test_qh_state_fusion.py \
 	tests/vin/test_qh_value_decoders.py \
 	tests/vin/test_target_finite_horizon.py \

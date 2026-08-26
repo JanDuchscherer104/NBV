@@ -322,6 +322,31 @@
     gamma
     B_t^((h,e))
   $,
+  qh_exact_q2_target: $
+    #symb.rl.exact_q2_target
+    =
+    r_t^e
+    +
+    gamma_t
+    max_(j : m_(t+1,j)^"train" = 1)
+    r_(t+1,j)^e
+  $,
+  qh_exact_q2_error: $
+    #symb.rl.q2_recursion_error
+    =
+    abs(
+      y_t^((2,"recursive"))
+      -
+      #symb.rl.exact_q2_target
+    ),
+    quad
+    #symb.rl.q2_recursion_error
+    <=
+    tau_"abs"
+    +
+    tau_"rel"
+    abs(#symb.rl.exact_q2_target)
+  $,
   qh_loss: $
     #symb.rl.q_loss
     =

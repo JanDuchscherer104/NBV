@@ -126,6 +126,18 @@ class R6dLffPoseEncoderConfig(TargetConfig[R6dLffPoseEncoder]):
         """Factory target for `aria_nbv.utils.base_config.BaseConfig.setup_target`."""
         return R6dLffPoseEncoder
 
+    @property
+    def out_dim(self) -> int:
+        """Return the complete pose-embedding width seen by consumers.
+
+        The pose encoder delegates feature construction to its LFF carrier.
+        This property intentionally exposes the carrier's *emitted* width,
+        including an optional raw ``[translation, rotation-6D]`` residual,
+        rather than only the learned branch width.
+        """
+
+        return int(self.pose_encoder_lff.out_dim)
+
     kind: Literal["r6d_lff"] = "r6d_lff"
     """Discriminator for pose-encoder selection."""
 

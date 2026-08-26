@@ -43,4 +43,21 @@ def test_lff_include_input_concatenates_raw_inputs() -> None:
     x = torch.randn((2, cfg.input_dim))
     out = lff(x)
     assert out.shape == (2, cfg.input_dim + cfg.output_dim)
+    assert cfg.out_dim == cfg.input_dim + cfg.output_dim
+    assert lff.out_dim == cfg.out_dim
     assert torch.allclose(out[:, : cfg.input_dim], x)
+
+
+def test_lff_config_and_module_report_learned_only_output_width() -> None:
+    """Configuration and runtime agree when raw coordinates are omitted."""
+
+    cfg = LearnableFourierFeaturesConfig(
+        input_dim=3,
+        fourier_dim=8,
+        hidden_dim=4,
+        output_dim=6,
+        include_input=False,
+    )
+
+    assert cfg.out_dim == cfg.output_dim
+    assert cfg.setup_target().out_dim == cfg.out_dim

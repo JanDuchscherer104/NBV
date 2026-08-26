@@ -105,4 +105,66 @@
     ),
     quad "Ak" in {"A0", "A1"}
   $,
+  qh_history_controls: $
+    #symb.model.history_pose_feature
+    &=
+    op("PoseEnc") (T_(c_t arrow.l c_j)),
+    quad j<t \
+    #symb.model.history_relative_age
+    &=
+    (t-1-j) / #symb.rl.H_max \
+    #symb.model.history_token^"H0"
+    &=
+    op("HistProj") (
+      1 / max(1,t) sum_(j<t) #symb.model.history_pose_feature
+    ) \
+    #symb.model.history_token^"H1"
+    &=
+    op("HistProj") (
+      op("LastValid") (
+        op("CausalTransformer") (
+          [bold(e)_"empty",
+           {#symb.model.history_pose_feature + g(#symb.model.history_relative_age)}_(j<t)]
+        )
+      )
+    )
+  $,
+  qh_cfplus_h0_control: $
+    op("Struct")(bold(o)_t) = op("Struct")(bold(o)'_t)
+    quad arrow.r.double quad
+    f_theta^"CF+-H0"(
+      #symb.rl.s_pose,
+      bold(o)_t,
+      #symb.entity.target_desc,
+      {q_(t,i)}_(i=1)^(#symb.shape.Nq),
+      #symb.rl.requested_horizon
+    )
+    =
+    f_theta^"CF+-H0"(
+      #symb.rl.s_pose,
+      bold(o)'_t,
+      #symb.entity.target_desc,
+      {q_(t,i)}_(i=1)^(#symb.shape.Nq),
+      #symb.rl.requested_horizon
+    )
+  $,
+  qh_s1_selected_surface: $
+    bold(p)_(t,j,u)^(c_t)
+    &=
+    T_(c_t arrow.l r) T_(r arrow.l c_j)
+    pi^(-1)(u, D_(j,u)^"sel"),
+    quad j<t \
+    bold(z)_(t,j,u)
+    &=
+    phi_"pt"(bold(p)_(t,j,u)^(c_t) / sigma_"xyz") \
+    bold(g)_t^"S1"
+    &=
+    [op("Mean") bold(z), op("Max") bold(z),
+      rho_t^"present", rho_t^"pixel", rho_t^"view"] \
+    #symb.scene.scene_memory_t^"S1"
+    &=
+    #symb.scene.scene_memory_t^"root"
+    + W_"pt" bold(g)_t^"S1",
+    quad W_"pt"^(0) = 0
+  $,
 )

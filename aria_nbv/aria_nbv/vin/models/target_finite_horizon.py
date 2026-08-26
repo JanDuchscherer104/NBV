@@ -31,9 +31,11 @@ separates four information paths:
   conditional value. Regression predicts it directly; CORAL discretizes the
   same fitted-Q target and decodes fixed continuous representatives.
 
-The root scene carrier is intentionally small and lossy: detached EVL channel
-moments plus root-frame semidense point mean, standard deviation, presence, and
-support. It is an executable control, not a claim that global moments are a
+The default root scene carrier is intentionally small and lossy: detached EVL
+channel moments plus root-frame semidense point mean, standard deviation,
+presence, and support. Privileged S1 may add a same-width residual formed from
+strictly causal selected-depth surfaces expressed from the factual current
+camera. Both are executable controls, not claims that global pooling is a
 sufficient reconstruction state. Candidate rows never exchange information,
 so a joint row permutation produces the same output permutation and duplicate
 rows remain identical.
@@ -49,8 +51,19 @@ from efm3d.aria.pose import PoseTW
 from pydantic import Field, model_validator
 from torch import Tensor, nn
 
+from ...data_handling.qh_contracts import QhExperimentProfile, validate_selected_observation_prefix
 from ...utils import TargetConfig
 from ..encoders import R6dLffPoseEncoder, R6dLffPoseEncoderConfig
+from ..modules.qh_history_encoders import (
+    QhCausalTransformerHistoryEncoderConfig,
+    QhHistoryEncoderConfig,
+    QhMeanPoolHistoryEncoderConfig,
+)
+from ..modules.qh_scene_encoders import (
+    QhRootMomentsSceneEncoder,
+    QhSceneChannel,
+    QhSceneEncoderConfig,
+)
 from ..modules.qh_state_fusion import (
     QhCrossAttentionStateFusionConfig,
     QhStateFusionConfig,
@@ -64,8 +77,6 @@ from ..modules.qh_value_decoders import (
 
 if TYPE_CHECKING:
     from ...data_handling.qh_data import QhActorTensors
-
-QhSceneChannel = Literal["occ_pr", "occ_input", "free_input", "counts", "cent_pr"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -95,7 +106,7 @@ class QhScoreOutput:
 
 
 class TargetFiniteHorizonScorerConfig(TargetConfig["TargetFiniteHorizonScorer"]):
-    """Configure the deployable actor-only finite-horizon value scorer."""
+    """Configure the actor-only finite-horizon value scorer."""
 
     hidden_dim: int = Field(default=128, gt=0)
     """Shared candidate and state token width."""
@@ -112,8 +123,37 @@ class TargetFiniteHorizonScorerConfig(TargetConfig["TargetFiniteHorizonScorer"])
     )
     """Ordered compact root-EVL fields pooled into the state token."""
 
-    representation_semantics: Literal["root_moments_v1"] = "root_moments_v1"
-    """Versioned meaning of the scene token: root-frame moments plus support."""
+    representation_semantics: Literal[
+        "root_moments_v1",
+        "root_moments_plus_selected_surface_points_identity_start_v1",
+        "root_moments_plus_selected_surface_points_v1",
+    ] = "root_moments_v1"
+    """Versioned scene-token meaning bound into scorer and artifact identity."""
+
+    scene_encoder: QhSceneEncoderConfig | None = Field(default=None, exclude_if=lambda value: value is None)
+    """Optional explicit scene carrier; ``None`` preserves legacy S0 identity.
+
+    The omitted alias instantiates the parameter-free ``root_moments_v1``
+    control without changing its serialized config hash or state dictionary.
+    ``root_moments_plus_selected_surface_points_identity_start_v1`` is the
+    active privileged S1 carrier: it
+    validates and consumes the causal CF-GT selected-depth prefix while
+    returning the same scene width as H0. The shorter historical discriminator
+    is accepted only to inspect ambiguous legacy configurations and cannot
+    enter a new fit, warm start, inference runtime, or bundle.
+    """
+
+    history_encoder: QhHistoryEncoderConfig | None = Field(default=None, exclude_if=lambda value: value is None)
+    """H0/H1 representation of the strictly causal selected-pose prefix.
+
+    ``None`` is the checkpoint-compatible H0 ``mean_pool_v1`` default and is
+    omitted from serialized legacy-equivalent configuration. Explicit H0 has
+    the same runtime semantics but records the named control; H1
+    ``causal_transformer_v1`` adds relative-age encoding and causal temporal
+    attention behind the same one-token boundary. The versioned nested
+    discriminator is history representation identity; the separate
+    ``representation_semantics`` field names only the scene carrier.
+    """
 
     state_fusion: QhStateFusionConfig = Field(default_factory=QhCrossAttentionStateFusionConfig)
     """A0/A1 interaction over the identical candidate query and state tokens.
@@ -140,8 +180,18 @@ class TargetFiniteHorizonScorerConfig(TargetConfig["TargetFiniteHorizonScorer"])
     horizon_query_semantics: Literal["bounded_scalar_v1"] = "bounded_scalar_v1"
     """Scalar query family admitting every realized ``1 <= h <= b_t <= H_max``."""
 
-    experiment_profile: Literal["qh_cf0_v1"] = "qh_cf0_v1"
-    """Closed deployable actor profile; privileged CF+ observations are not accepted."""
+    experiment_profile: QhExperimentProfile = "qh_cf0_v1"
+    """Named source role admitted by the scorer.
+
+    ``qh_cf0_v1`` requires no selected-observation carrier and remains the
+    deployable default. ``qh_cfplus_gt_depth_v1`` admits the privileged causal
+    CF-GT carrier for source-matched research. Under
+    ``root_moments_v1`` this is the H0 control: the carrier is structurally
+    validated but every depth, validity, calibration, and selected-camera-pose
+    value is intentionally ignored. Lightning owns privileged execution and
+    the inference-bundle validator rejects CF+ independently; this field does
+    not grant deployment authority.
+    """
 
     @property
     def target_type(self) -> type["TargetFiniteHorizonScorer"]:
@@ -158,10 +208,21 @@ class TargetFiniteHorizonScorerConfig(TargetConfig["TargetFiniteHorizonScorer"])
             and self.hidden_dim % self.state_fusion.attention_heads != 0
         ):
             raise ValueError("hidden_dim must be divisible by state_fusion.attention_heads.")
+        pose_dim = int(self.pose_encoder.out_dim)
+        if (
+            isinstance(self.history_encoder, QhCausalTransformerHistoryEncoderConfig)
+            and pose_dim % self.history_encoder.attention_heads != 0
+        ):
+            raise ValueError("pose-encoder output width must be divisible by history_encoder.attention_heads.")
         if not self.scene_channels:
             raise ValueError("scene_channels must contain at least one root-EVL field.")
         if len(set(self.scene_channels)) != len(self.scene_channels):
             raise ValueError("scene_channels must be unique and ordered.")
+        scene_kind = "root_moments_v1" if self.scene_encoder is None else self.scene_encoder.kind
+        if self.representation_semantics != scene_kind:
+            raise ValueError("representation_semantics must equal the configured scene-encoder kind.")
+        if scene_kind != "root_moments_v1" and self.experiment_profile != "qh_cfplus_gt_depth_v1":
+            raise ValueError("Q_H selected-surface scene encoding requires qh_cfplus_gt_depth_v1.")
         return self
 
 
@@ -210,9 +271,29 @@ class TargetFiniteHorizonScorer(nn.Module):
         The target token encodes the root-relative target pose plus metric
         extents. Target source is an experiment-profile fact rather than
         something inferred from tensor shape. Scene context is the deliberately
-        lossy ``root_moments_v1`` carrier. Causal history is the mean of past
-        selected poses expressed from the current camera; it discards order so
-        ordered history remains an honest representation ablation.
+        lossy ``root_moments_v1`` carrier. Causal history first expresses the
+        exact selected-pose prefix from the current camera. H0 takes its masked
+        mean; the optional H1 carrier adds relative age and causal temporal
+        attention before returning the same one-token interface. H1 remains an
+        ``S0-pose`` trajectory ablation: it does not invent selected
+        observations or make compact root moments a sufficient dynamic
+        reconstruction state.
+
+        The CF+ H0 role is the source-protocol-matched counterfactual for S1.
+        It requires the same strictly causal CF-GT carrier and data population,
+        but the prediction graph consumes none of its numeric payload.
+        Consequently any change confined to selected depth, depth-valid
+        support, calibration, or selected-camera poses must leave both raw
+        heads exactly unchanged. S1 instead uses canonical float32
+        backprojection and a fixed-width, density-weighted point-set residual.
+        Its scene feature remains shared across candidate rows and target
+        independent; candidate-relative point queries are deliberately
+        deferred. Its final bias-free residual projection starts at zero, and
+        dynamic scene rows traverse the same per-state linear path as static
+        H0. Thus matched zero-residual S1 and H0 predictions are bitwise equal
+        at initialization rather than merely close despite shape-dependent GEMM
+        rounding. Neither CF+ role is deployable, and comparing CF0 with CF+ H0
+        does not identify an S1 representation gain.
 
     Notes:
         Syntactic admission does not assert empirical support. Lightning owns
@@ -251,6 +332,12 @@ class TargetFiniteHorizonScorer(nn.Module):
             nn.GELU(),
             nn.LayerNorm(hidden_dim),
         )
+        history_encoder = config.history_encoder or QhMeanPoolHistoryEncoderConfig()
+        self.history_encoder = history_encoder.setup_target(
+            feature_dim=pose_dim,
+            max_horizon=int(config.max_horizon),
+            dropout=float(config.dropout),
+        )
         self.budget_projection = nn.Sequential(
             nn.Linear(1, hidden_dim),
             nn.GELU(),
@@ -276,9 +363,20 @@ class TargetFiniteHorizonScorer(nn.Module):
             hidden_dim=hidden_dim,
             dropout=float(config.dropout),
         )
+        scene_encoder_config = config.scene_encoder
+        self.scene_encoder = (
+            QhRootMomentsSceneEncoder(scene_channels=config.scene_channels)
+            if scene_encoder_config is None
+            else scene_encoder_config.setup_target(
+                scene_channels=config.scene_channels,
+                dropout=float(config.dropout),
+            )
+        )
+        if self.scene_encoder.output_dim != scene_dim:
+            raise ValueError("Q_H scene encoder must preserve the configured root-moment width.")
 
-    def validate_value_decoder_state(self, *, require_publishable: bool = False) -> None:
-        """Validate non-learned decoder state against scorer configuration.
+    def validate_artifact_state(self, *, require_publishable: bool = False) -> None:
+        """Validate non-learned architecture state against scorer configuration.
 
         Learned weights may vary while the scorer configuration stays fixed,
         but CORAL edges and representatives are experiment identity: they
@@ -288,6 +386,13 @@ class TargetFiniteHorizonScorer(nn.Module):
         direct regression as the no-extra-state baseline.
         """
 
+        if require_publishable and self.config.representation_semantics == (
+            "root_moments_plus_selected_surface_points_v1"
+        ):
+            raise ValueError(
+                "Legacy S1 scene-carrier identity is inspection-only and cannot enter training, warm start, "
+                "inference, or a scientific bundle."
+            )
         if isinstance(self.value_decoder, QhCoralValueDecoder):
             self.value_decoder.validate_configured_support()
             if require_publishable:
@@ -303,7 +408,9 @@ class TargetFiniteHorizonScorer(nn.Module):
 
         Args:
             actor: Batched actor-visible chain with candidate support
-                ``Tensor["B S N", bool]`` and compact root EVL evidence.
+                ``Tensor["B S N", bool]``, compact root EVL evidence, and—only
+                for the named privileged S1 profile—the complete causal
+                selected-depth prefix.
             requested_horizon: Optional ``Tensor["B S", int64]`` value query.
                 ``None`` means :attr:`QhActorTensors.horizon_remaining`.
                 Realized rows admit ``1 <= h <= b_t <= H_max``; padding must be
@@ -339,8 +446,16 @@ class TargetFiniteHorizonScorer(nn.Module):
         root_candidate_features = self.pose_encoder.encode(candidate_pose).pose_enc
         current_from_candidate = self._expand_pose(current_pose.inverse(), width) @ candidate_pose
         current_candidate_features = self.pose_encoder.encode(current_from_candidate).pose_enc
-        scene_summary = self._scene_summary(actor)
-        candidate_scene = scene_summary[:, None, None, :].expand(-1, steps, width, -1)
+        scene_summary = (
+            self.scene_encoder(actor)
+            if isinstance(self.scene_encoder, QhRootMomentsSceneEncoder)
+            else self.scene_encoder(actor, current_pose_relative_root=current_pose)
+        )
+        candidate_scene = (
+            scene_summary[:, None, None, :].expand(-1, steps, width, -1)
+            if scene_summary.ndim == 2
+            else scene_summary.unsqueeze(-2).expand(-1, -1, width, -1)
+        )
         physical_tokens = self.physical_projection(
             torch.cat((root_candidate_features, current_candidate_features, candidate_scene), dim=-1)
         )
@@ -356,16 +471,13 @@ class TargetFiniteHorizonScorer(nn.Module):
 
         current_from_history = self._expand_pose(current_pose.inverse(), steps) @ history_pose
         history_features = self.pose_encoder.encode(current_from_history).pose_enc
-        history_sum = torch.where(history_mask.unsqueeze(-1), history_features, torch.zeros_like(history_features)).sum(
-            dim=-2
-        )
-        history_count = history_mask.sum(dim=-1, keepdim=True).clamp_min(1)
-        history_token = self.history_projection(history_sum / history_count)
+        history_summary = self.history_encoder(history_features, history_mask, actor.step_mask)
+        history_token = self.history_projection(history_summary)
 
         budget = actor.horizon_remaining.float().unsqueeze(-1) / float(self.config.max_horizon)
         budget_token = self.budget_projection(budget)
         horizon_token = self.horizon_projection(horizon.float().unsqueeze(-1) / float(self.config.max_horizon))
-        scene_token = self.scene_projection(scene_summary).unsqueeze(1).expand(-1, steps, -1)
+        scene_token = self._project_scene_summary(scene_summary, steps=steps)
         target_token = target_token.unsqueeze(1).expand(-1, steps, -1)
 
         target_by_candidate = self._expand_pose(target_pose, steps, width)
@@ -404,6 +516,41 @@ class TargetFiniteHorizonScorer(nn.Module):
             conditional_q=conditional_q.float(),
             feasibility_logits=feasibility_logits.float(),
             value_auxiliary=value_auxiliary,
+        )
+
+    def _project_scene_summary(self, scene_summary: Tensor, *, steps: int) -> Tensor:
+        """Project static or dynamic scene rows through one numeric path.
+
+        The H0 carrier returns ``[B,F]`` because root evidence is static, while
+        S1 returns ``[B,S,F]`` after adding a causal state residual.  Applying
+        the same linear layer once to those differently ranked tensors can
+        select different BLAS kernels and introduce small rounding differences
+        even when every S1 residual is exactly zero.  Projecting each dynamic
+        state as ``[B,F]`` preserves the H0 operation exactly and makes S1 a
+        genuinely nested control at initialization.  This changes neither
+        learned parameters nor gradients: nonzero residual rows still pass
+        through the same shared projection and stack back to ``[B,S,H]``.
+
+        Args:
+            scene_summary: Static ``Tensor["B F"]`` root features or dynamic
+                ``Tensor["B S F"]`` scene features.
+            steps: Padded scorer state width ``S``.
+
+        Returns:
+            ``Tensor["B S H"]`` scene tokens aligned with scorer states.
+
+        Raises:
+            ValueError: If the scene carrier returns an unsupported rank or a
+                dynamic step width inconsistent with the actor.
+        """
+
+        if scene_summary.ndim == 2:
+            return self.scene_projection(scene_summary).unsqueeze(1).expand(-1, steps, -1)
+        if scene_summary.ndim != 3 or scene_summary.shape[1] != steps:
+            raise ValueError("Q_H scene summary must have shape (B,F) or actor-aligned (B,S,F).")
+        return torch.stack(
+            tuple(self.scene_projection(state_summary) for state_summary in scene_summary.unbind(dim=1)),
+            dim=1,
         )
 
     def _validated_requested_horizon(
@@ -465,49 +612,6 @@ class TargetFiniteHorizonScorer(nn.Module):
             values = values.unsqueeze(-2)
         return PoseTW(values.expand(*values.shape[: -len(sizes) - 1], *sizes, 12))
 
-    def _scene_summary(self, actor: QhActorTensors) -> Tensor:
-        r"""Pool the versioned ``root_moments_v1`` scene carrier.
-
-        Every configured EVL field contributes global mean, standard
-        deviation, minimum, and maximum. Semidense world points are transformed
-        by :math:`T_{r\leftarrow w}` into the rollout-root frame and contribute
-        coordinate-wise mean and standard deviation plus explicit presence and
-        valid-support fraction. Source tensors are detached because these are
-        persisted actor observations, not an end-to-end EFM3D training path.
-
-        The summary is shared across all states and candidates in one chain.
-        It records broad occupancy/free-space statistics but no query-local
-        topology, visibility ray, or selected-observation update; richer point
-        and ray memories must be evaluated as separately named carriers.
-        """
-
-        context = actor.static_context
-        if context is None:  # guarded by _validate_actor
-            raise ValueError("TargetFiniteHorizonScorer requires compact root EVL context.")
-        pooled = [self._pool_channel(getattr(context, name)) for name in self.config.scene_channels]
-
-        points = actor.vin_snippet.points_world.detach().float()[..., :3]
-        if points.ndim != 3:
-            raise ValueError(f"Q_H batched semidense points must have shape (B,P,C), got {tuple(points.shape)}.")
-        lengths = actor.vin_snippet.lengths.reshape(points.shape[0], -1)[:, 0].long()
-        if bool((lengths < 0).any() or (lengths > points.shape[1]).any()):
-            raise ValueError(f"Q_H semidense lengths must be in [0,{points.shape[1]}].")
-        point_mask = torch.arange(points.shape[1], device=points.device).unsqueeze(0) < lengths.unsqueeze(1)
-        finite = torch.isfinite(points).all(dim=-1)
-        point_mask &= finite
-        root_active = actor.step_mask.any(dim=-1)
-        root_from_world = self._sanitize_pose(actor.root_pose_world, root_active, name="root").inverse()
-        points_root = root_from_world.transform(points)
-        safe_points = torch.where(point_mask.unsqueeze(-1), points_root, torch.zeros_like(points_root))
-        valid_count = point_mask.sum(dim=1, keepdim=True)
-        count = valid_count.clamp_min(1)
-        mean = safe_points.sum(dim=1) / count
-        centered = torch.where(point_mask.unsqueeze(-1), points_root - mean.unsqueeze(1), torch.zeros_like(points_root))
-        std = (centered.square().sum(dim=1) / count).sqrt()
-        support = (valid_count.float() / max(points.shape[1], 1)).clamp(0.0, 1.0)
-        present = valid_count.gt(0).float()
-        return torch.cat((*pooled, mean, std, present, support), dim=-1)
-
     @staticmethod
     def _sanitize_pose(pose: PoseTW, active: Tensor, *, name: str) -> PoseTW:
         """Reject active non-finite poses and replace inactive rows by identity."""
@@ -518,28 +622,6 @@ class TargetFiniteHorizonScorer(nn.Module):
             raise ValueError(f"Q_H active {name} poses must be finite.")
         identity = PoseTW().tensor().to(device=values.device, dtype=values.dtype).expand_as(values)
         return PoseTW(torch.where(active.unsqueeze(-1), values, identity))
-
-    @staticmethod
-    def _pool_channel(value: Tensor | None) -> Tensor:
-        """Return mean, standard deviation, minimum, and maximum per batch row."""
-
-        if value is None:
-            raise ValueError("TargetFiniteHorizonScorer requires every configured root EVL field.")
-        detached = value.detach().float()
-        if detached.ndim < 2:
-            raise ValueError(f"Q_H root EVL fields require a batch axis, got {tuple(detached.shape)}.")
-        flat = detached.reshape(detached.shape[0], -1)
-        if not bool(torch.isfinite(flat).all()):
-            raise ValueError("TargetFiniteHorizonScorer root EVL fields must be finite.")
-        return torch.stack(
-            (
-                flat.mean(dim=-1),
-                flat.std(dim=-1, unbiased=False),
-                flat.amin(dim=-1),
-                flat.amax(dim=-1),
-            ),
-            dim=-1,
-        )
 
     def _validate_actor(self, actor: QhActorTensors) -> None:
         """Fail before scoring when the actor profile or padded axes drift."""
@@ -577,12 +659,26 @@ class TargetFiniteHorizonScorer(nn.Module):
             raise ValueError("Q_H history_mask must be strictly causal.")
         context = actor.static_context
         if context is None:
-            raise ValueError("TargetFiniteHorizonScorer qh_cf0_v1 requires compact root EVL context.")
-        if actor.selected_observation_prefix is not None:
-            raise ValueError("TargetFiniteHorizonScorer qh_cf0_v1 rejects privileged selected observations.")
+            raise ValueError(
+                f"TargetFiniteHorizonScorer {self.config.experiment_profile} requires compact root EVL context."
+            )
+        prefix = actor.selected_observation_prefix
+        if self.config.experiment_profile == "qh_cf0_v1":
+            if prefix is not None:
+                raise ValueError("TargetFiniteHorizonScorer qh_cf0_v1 rejects privileged selected observations.")
+        else:
+            if prefix is None:
+                raise ValueError("TargetFiniteHorizonScorer qh_cfplus_gt_depth_v1 requires a causal CF-GT prefix.")
+            validate_selected_observation_prefix(
+                prefix,
+                history_mask=actor.history_mask,
+                step_mask=actor.step_mask,
+            )
         presence = context.evl_presence
         if presence.shape[-1] != 8 or not bool(presence.all()):
-            raise ValueError("TargetFiniteHorizonScorer qh_cf0_v1 requires all eight root EVL fields.")
+            raise ValueError(
+                f"TargetFiniteHorizonScorer {self.config.experiment_profile} requires all eight root EVL fields."
+            )
 
 
 __all__ = ["QhScoreOutput", "TargetFiniteHorizonScorer", "TargetFiniteHorizonScorerConfig"]

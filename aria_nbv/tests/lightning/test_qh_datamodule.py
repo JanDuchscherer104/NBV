@@ -82,7 +82,7 @@ def test_datamodule_rejects_pairwise_scene_overlap() -> None:
 
 
 def test_datamodule_rejects_different_semantic_contracts() -> None:
-    with pytest.raises(ValueError, match="incompatible learning contracts"):
+    with pytest.raises(ValueError, match="incompatible learning semantics"):
         qh_datamodule.QhDataModule(
             train=_StructuralDataset("train"),
             val=_StructuralDataset("val", contract=replace(_CONTRACT, reward_metric="scene-rri")),
@@ -98,7 +98,7 @@ def test_datamodule_rejects_different_semantic_contracts() -> None:
         ("selection_policies", ("softmax-v2",)),
     ),
 )
-def test_datamodule_rejects_different_replay_support_identity(
+def test_datamodule_allows_different_stage_population_identity(
     field_name: Literal["candidate_config_hashes", "rollout_config_hashes", "selection_policies"],
     value: tuple[str, ...],
 ) -> None:
@@ -108,12 +108,13 @@ def test_datamodule_rejects_different_replay_support_identity(
         contract = replace(_CONTRACT, rollout_config_hashes=value)
     else:
         contract = replace(_CONTRACT, selection_policies=value)
-    with pytest.raises(ValueError, match="incompatible learning contracts"):
-        qh_datamodule.QhDataModule(
-            train=_StructuralDataset("train"),
-            val=_StructuralDataset("val", contract=contract),
-            seed=7,
-        )
+    data = qh_datamodule.QhDataModule(
+        train=_StructuralDataset("train"),
+        val=_StructuralDataset("val", contract=contract),
+        seed=7,
+    )
+
+    assert data.learning_contract.data_contract == _CONTRACT
 
 
 @pytest.mark.parametrize(

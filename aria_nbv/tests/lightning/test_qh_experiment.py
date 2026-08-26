@@ -10,26 +10,33 @@ import subprocess
 import sys
 from dataclasses import FrozenInstanceError, replace
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 import torch
 
+import aria_nbv.lightning.qh_experiment as qh_experiment_module
+from aria_nbv.data_handling.qh_data.views import QhActorStateContract
 from aria_nbv.lightning.lit_trainer_factory import TrainerFactoryConfig
 from aria_nbv.lightning.qh_datamodule import QhLearningContract
 from aria_nbv.lightning.qh_experiment import (
     QH_INFERENCE_BUNDLE_SCHEMA_VERSION,
     QhCheckpointSelectionSpec,
+    QhExactQ2CertificationRequest,
+    QhExactQ2CertificationSpec,
     QhExperiment,
     QhExperimentConfig,
     QhFitRequest,
     QhHeldOutEvaluationRequest,
     QhInferenceBundleRef,
+    _headroom_diagnostic,
     _manifest_hash,
 )
 from aria_nbv.lightning.qh_module import QhLightningModuleConfig
 from aria_nbv.rollouts.qh_reader import QhDataContract
 from aria_nbv.utils.fingerprints import stable_config_hash, stable_msgspec_hash
 from aria_nbv.vin.models.target_finite_horizon import TargetFiniteHorizonScorerConfig
+from aria_nbv.vin.modules.qh_history_encoders import QhCausalTransformerHistoryEncoderConfig
 from aria_nbv.vin.modules.qh_state_fusion import QhIndependentMlpStateFusionConfig
 from aria_nbv.vin.modules.qh_value_decoders import (
     QhCoralValueDecoderConfig,
@@ -96,6 +103,69 @@ def _a0_experiment() -> QhExperiment:
     return base.model_copy(deep=True, update={"scorer": scorer}).setup_target()
 
 
+def test_headroom_diagnostic_accepts_any_positive_included_cohort(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class _Reader:
+        def __init__(self, store_dir: Path) -> None:
+            self.store_dir = store_dir
+
+        def validate(self, *, validate_selected_depth_payload: bool) -> SimpleNamespace:
+            assert validate_selected_depth_payload is False
+            return SimpleNamespace(
+                ok=True,
+                errors=(),
+                store_dir=self.store_dir,
+                num_rollouts=2,
+                num_steps=4,
+                num_candidates=12,
+            )
+
+        def manifest(self) -> dict[str, object]:
+            return {"root_attrs": {"manifest_sha256": "manifest"}}
+
+    evidence = {
+        "evidence_status": "diagnostic_only",
+        "metric_source": "oracle",
+        "endpoint_kind": "terminal_proxy",
+        "independent_endpoint_evaluation": False,
+        "contrast_rows": [
+            {"contrast": "delta_look", "status": "included", "value": 0.25},
+            {"contrast": "delta_look", "status": "included", "value": -0.10},
+        ],
+        "summary_rows": [],
+    }
+    monkeypatch.setattr(qh_experiment_module, "RolloutZarrStoreReader", _Reader)
+    monkeypatch.setattr(
+        qh_experiment_module,
+        "oracle_headroom_evidence",
+        lambda _reader, *, threshold: evidence,
+    )
+
+    diagnostic = _headroom_diagnostic(tmp_path / "headroom.zarr", threshold=0.0)
+
+    assert diagnostic["positive_lookahead_headroom"] is True
+    assert diagnostic["delta_look_values"] == [0.25, -0.10]
+
+
+def _h1_experiment() -> QhExperiment:
+    """Return the regression experiment with ordered causal pose history."""
+
+    base = _experiment().config
+    scorer = base.scorer.model_copy(
+        deep=True,
+        update={
+            "history_encoder": QhCausalTransformerHistoryEncoderConfig(
+                attention_heads=4,
+                layers=1,
+                feedforward_multiplier=2,
+            ),
+        },
+    )
+    return base.model_copy(deep=True, update={"scorer": scorer}).setup_target()
+
+
 def _bundle(tmp_path) -> tuple[QhExperiment, QhInferenceBundleRef]:
     experiment = _experiment()
     module_config, identity = _publish_contracts(experiment)
@@ -145,6 +215,7 @@ def test_qh_bundle_round_trip_preserves_values_and_ranking(tmp_path) -> None:
     assert runtime.scorer.training is False
     assert runtime.scorer_state_sha256 == manifest["artifacts"]["scorer-state.pt"]["sha256"]
     assert runtime.representation_semantics == "root_moments_v1"
+    assert runtime.trained_horizons == (1, 2)
     assert torch.equal(actual.conditional_q, expected.conditional_q)
     assert torch.equal(actual.feasibility_logits, expected.feasibility_logits)
     assert torch.equal(
@@ -250,6 +321,45 @@ def test_qh_a0_bundle_round_trip_preserves_fusion_identity_and_values(tmp_path) 
     assert torch.equal(actual.feasibility_logits, expected.feasibility_logits)
 
 
+def test_qh_h1_bundle_round_trip_preserves_history_identity_and_values(tmp_path) -> None:
+    """The deployable manifest and strict state load preserve the H1 carrier."""
+
+    torch.manual_seed(29)
+    experiment = _h1_experiment()
+    scorer = experiment.config.scorer.setup_target().eval()
+    actor = _actor(steps=4)
+    expected = scorer(actor)
+    bundle_dir = tmp_path / "h1-bundle"
+    bundle_dir.mkdir()
+    module_config, identity = _publish_contracts(experiment)
+    manifest = experiment._publish_bundle(  # noqa: SLF001
+        bundle_dir,
+        scorer,
+        module_config=module_config,
+        identity=identity,
+        artifact_hashes=_stub_artifacts(bundle_dir),
+    )
+    ref = QhInferenceBundleRef(
+        bundle_path=bundle_dir,
+        schema_version=QH_INFERENCE_BUNDLE_SCHEMA_VERSION,
+        manifest_sha256=manifest["manifest_sha256"],
+    )
+
+    runtime = QhExperiment.load_for_inference(ref, device="cpu")
+    actual = runtime.scorer(actor)
+
+    assert manifest["scorer_config"]["history_encoder"] == {
+        "kind": "causal_transformer_v1",
+        "attention_heads": 4,
+        "layers": 1,
+        "feedforward_multiplier": 2,
+    }
+    assert isinstance(runtime.scorer.config.history_encoder, QhCausalTransformerHistoryEncoderConfig)
+    assert stable_config_hash(runtime.scorer.config, length=64) == manifest["scorer_config_hash"]
+    assert torch.equal(actual.conditional_q, expected.conditional_q)
+    assert torch.equal(actual.feasibility_logits, expected.feasibility_logits)
+
+
 @pytest.mark.parametrize(
     ("field", "replacement", "message"),
     [
@@ -349,6 +459,71 @@ def test_qh_bundle_detects_manifest_and_state_mutation(tmp_path) -> None:
         QhExperiment.load_for_inference(ref, device="cpu")
 
 
+def test_qh_bundle_rejects_consistent_cfplus_tamper_without_privileged_marker(tmp_path) -> None:
+    """Deployability follows the profile itself, not a bypassable bool."""
+
+    _experiment_instance, ref = _bundle(tmp_path)
+    manifest_path = ref.bundle_path / "manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    geometry_hash = "tampered-cfplus-geometry"
+    manifest["scorer_config"]["experiment_profile"] = "qh_cfplus_gt_depth_v1"
+    scorer_config = TargetFiniteHorizonScorerConfig.model_validate(manifest["scorer_config"])
+    manifest["scorer_config_hash"] = stable_config_hash(scorer_config, length=64)
+    manifest["module_config"].update(
+        {
+            "experiment_profile": "qh_cfplus_gt_depth_v1",
+            "selected_observation_protocol": "cf_gt",
+            "privileged": False,
+            "geometry_contract_hash": geometry_hash,
+        }
+    )
+    actor_payload = manifest["identity"]["actor_state_contract"]
+    actor_payload.update(
+        {
+            "experiment_profile": "qh_cfplus_gt_depth_v1",
+            "selected_observation_protocol": "cf_gt",
+            "geometry_contract_hash": geometry_hash,
+        }
+    )
+    actor_contract = QhActorStateContract(**actor_payload)
+    actor_hash = stable_msgspec_hash(actor_contract)
+    manifest["identity"]["actor_state_contract_hash"] = actor_hash
+    manifest["identity"]["geometry_contract_hash"] = geometry_hash
+    manifest["module_config"]["actor_state_contract_hash"] = actor_hash
+    manifest["manifest_sha256"] = _manifest_hash(manifest)
+    manifest_path.write_text(json.dumps(manifest, sort_keys=True, indent=2) + "\n", encoding="utf-8")
+    tampered_ref = replace(ref, manifest_sha256=manifest["manifest_sha256"])
+
+    with pytest.raises(ValueError, match="Deployable Q_H configuration rejects privileged"):
+        QhExperiment.load_for_inference(tampered_ref, device="cpu")
+
+
+def test_qh_bundle_rejects_rehashed_cf0_target_protocol_drift(tmp_path) -> None:
+    """Deployable CF0 binds the observed target source through learning identity."""
+
+    _experiment_instance, ref = _bundle(tmp_path)
+    manifest_path = ref.bundle_path / "manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    learning_payload = manifest["identity"]["learning_contract"]
+    learning_payload["data_contract"]["target_protocol"] = "v0_oracle_compatible"
+    data_contract = QhDataContract(**learning_payload["data_contract"])
+    learning_contract = QhLearningContract(
+        data_contract=data_contract,
+        max_horizon=int(learning_payload["max_horizon"]),
+        horizon_weighting=str(learning_payload["horizon_weighting"]),
+        objective_profile=learning_payload["objective_profile"],
+    )
+    learning_hash = stable_msgspec_hash(learning_contract)
+    manifest["identity"]["learning_contract_hash"] = learning_hash
+    manifest["module_config"]["learning_contract_hash"] = learning_hash
+    manifest["manifest_sha256"] = _manifest_hash(manifest)
+    manifest_path.write_text(json.dumps(manifest, sort_keys=True, indent=2) + "\n", encoding="utf-8")
+    tampered_ref = replace(ref, manifest_sha256=manifest["manifest_sha256"])
+
+    with pytest.raises(ValueError, match="requires target_protocol='v1_observed'"):
+        QhExperiment.load_for_inference(tampered_ref, device="cpu")
+
+
 def test_qh_bundle_rejects_missing_required_artifact(tmp_path) -> None:
     _experiment_instance, ref = _bundle(tmp_path)
     (ref.bundle_path / "training-receipt.json").unlink()
@@ -409,6 +584,34 @@ def test_qh_bundle_rejects_recorded_identity_mutation(tmp_path, mutation: str, m
         QhExperiment.load_for_inference(tampered_ref, device="cpu")
 
 
+def test_qh_bundle_dependencies_bind_exact_pytorch3d_vcs_identity() -> None:
+    dependencies = qh_experiment_module._bundle_dependencies()  # noqa: SLF001
+
+    assert dependencies["pytorch3d"] == "0.7.9"
+    assert dependencies["pytorch3d_vcs_url"] == "https://github.com/facebookresearch/pytorch3d.git"
+    assert dependencies["pytorch3d_vcs_commit"] == "b6a77ad7aaf41ed90fca80ce6a2bac3c462a7881"
+
+
+def test_qh_bundle_dependencies_reject_moving_pytorch3d_runtime(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    direct_url = json.dumps(
+        {
+            "url": "https://github.com/facebookresearch/pytorch3d.git",
+            "vcs_info": {
+                "vcs": "git",
+                "commit_id": "0" * 40,
+                "requested_revision": "main",
+            },
+        }
+    )
+    distribution = SimpleNamespace(read_text=lambda name: direct_url if name == "direct_url.json" else None)
+    monkeypatch.setattr(qh_experiment_module.importlib.metadata, "distribution", lambda _name: distribution)
+
+    with pytest.raises(ValueError, match="does not match the exact project pin"):
+        qh_experiment_module._installed_pytorch3d_vcs_commit()  # noqa: SLF001
+
+
 def test_qh_bundle_rejects_learning_horizon_beyond_scorer_capacity(tmp_path) -> None:
     _experiment_instance, ref = _bundle(tmp_path)
     manifest_path = ref.bundle_path / "manifest.json"
@@ -421,6 +624,28 @@ def test_qh_bundle_rejects_learning_horizon_beyond_scorer_capacity(tmp_path) -> 
     tampered_ref = replace(ref, manifest_sha256=manifest["manifest_sha256"])
 
     with pytest.raises(ValueError, match="learning-contract max_horizon exceeds scorer max_horizon"):
+        QhExperiment.load_for_inference(tampered_ref, device="cpu")
+
+
+@pytest.mark.parametrize(
+    "support",
+    [
+        {},
+        {"2": {"state_count": 1, "candidate_count": 1}},
+        {"1": {"state_count": 2, "candidate_count": 1}},
+        {"1": {"state_count": 1, "candidate_count": 1}, "5": {"state_count": 1, "candidate_count": 1}},
+    ],
+)
+def test_qh_bundle_rejects_invalid_trained_horizon_support(tmp_path, support: dict[str, object]) -> None:
+    _experiment_instance, ref = _bundle(tmp_path)
+    manifest_path = ref.bundle_path / "manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["identity"]["trained_horizon_support"] = support
+    manifest["manifest_sha256"] = _manifest_hash(manifest)
+    manifest_path.write_text(json.dumps(manifest, sort_keys=True, indent=2) + "\n", encoding="utf-8")
+    tampered_ref = replace(ref, manifest_sha256=manifest["manifest_sha256"])
+
+    with pytest.raises(ValueError, match="trained horizon|h=1 training support"):
         QhExperiment.load_for_inference(tampered_ref, device="cpu")
 
 
@@ -560,7 +785,21 @@ class _DatasetConfig:
 
 
 def _dense_dataset(scene: str, offset: int) -> _ChainDataset:
-    dataset = _ChainDataset([_chain(steps=2, width=3, offset=offset)], scene=scene)
+    chain = _chain(steps=2, width=3, offset=offset)
+    chain = replace(
+        chain,
+        key=replace(
+            chain.key,
+            scene_id=scene,
+            configured_horizon=2,
+            candidate_width_min=3,
+            candidate_width_max=3,
+            candidate_config_hash="candidate-test-v1",
+            rollout_config_hash="rollout-test-v1",
+            selection_policy="q_h",
+        ),
+    )
+    dataset = _ChainDataset([chain], scene=scene)
     dataset.contract = QhDataContract(
         schema_version="qh-v1",
         target_protocol="v1_observed",
@@ -570,6 +809,9 @@ def _dense_dataset(scene: str, offset: int) -> _ChainDataset:
         discount_gamma=0.95,
         reason_code_version="reasons-v1",
         actor_store_version="vin-v1",
+        candidate_config_hashes=("candidate-test-v1",),
+        rollout_config_hashes=("rollout-test-v1",),
+        selection_policies=("q_h",),
         oracle_query_mode="dense_valid",
         label_support_semantics="equals_action_on_realized_steps_v1",
     )
@@ -592,6 +834,7 @@ def _publish_contracts(experiment: QhExperiment) -> tuple[QhLightningModuleConfi
             "actor_state_contract_hash": actor_hash,
             "learning_contract_hash": learning_hash,
             "geometry_contract_hash": actor_contract.geometry_contract_hash,
+            "max_horizon": experiment.config.scorer.max_horizon,
         },
     )
     stages = {"train": {"kind": "test"}, "validation": {"kind": "test"}, "test": {"kind": "test"}}
@@ -608,6 +851,10 @@ def _publish_contracts(experiment: QhExperiment) -> tuple[QhLightningModuleConfi
         "warm_start_parent_manifest_sha256": None,
         "action_mask_semantics": dataset.contract.action_mask_semantics,
         "representation_semantics": experiment.config.scorer.representation_semantics,
+        "trained_horizon_support": {
+            "1": {"state_count": 2, "candidate_count": 6},
+            "2": {"state_count": 1, "candidate_count": 1},
+        },
         "seed": 0,
     }
 
@@ -639,10 +886,21 @@ def test_qh_fit_publishes_new_bundle_and_hashed_receipts(tmp_path) -> None:
         callbacks=base.trainer.callbacks,
     )
     experiment = base.model_copy(deep=True, update={"trainer": trainer}).setup_target()
+    train_dataset = _dense_dataset("train", 0)
+    validation_dataset = _dense_dataset("val", 20)
+    validation_dataset.contract = replace(
+        validation_dataset.contract,
+        rollout_config_hashes=("rollout-validation-v1",),
+    )
+    test_dataset = _dense_dataset("test", 40)
+    test_dataset.contract = replace(
+        test_dataset.contract,
+        rollout_config_hashes=("rollout-test-v1",),
+    )
     request = QhFitRequest(
-        train=_DatasetConfig(tmp_path / "train.zarr", _dense_dataset("train", 0)),  # type: ignore[arg-type]
-        validation=_DatasetConfig(tmp_path / "val.zarr", _dense_dataset("val", 20)),  # type: ignore[arg-type]
-        test=_DatasetConfig(tmp_path / "test.zarr", _dense_dataset("test", 40)),  # type: ignore[arg-type]
+        train=_DatasetConfig(tmp_path / "train.zarr", train_dataset),  # type: ignore[arg-type]
+        validation=_DatasetConfig(tmp_path / "val.zarr", validation_dataset),  # type: ignore[arg-type]
+        test=_DatasetConfig(tmp_path / "test.zarr", test_dataset),  # type: ignore[arg-type]
         warm_start_from=None,
         checkpoint_selection=QhCheckpointSelectionSpec(),
         seed=23,
@@ -660,6 +918,14 @@ def test_qh_fit_publishes_new_bundle_and_hashed_receipts(tmp_path) -> None:
     training_receipt = json.loads(result.training_receipt_path.read_text(encoding="utf-8"))
     assert training_receipt["warm_start_parent_manifest_sha256"] is None
     assert "test_loss" not in training_receipt
+    assert training_receipt["target_descriptor_identity"] == {
+        stage: dataset.target_descriptor_identity
+        for stage, dataset in {
+            "train": train_dataset,
+            "validation": validation_dataset,
+            "test": test_dataset,
+        }.items()
+    }
 
     held_out = experiment.evaluate_held_out(
         QhHeldOutEvaluationRequest(
@@ -671,6 +937,60 @@ def test_qh_fit_publishes_new_bundle_and_hashed_receipts(tmp_path) -> None:
     held_out_receipt = json.loads(held_out.receipt_path.read_text(encoding="utf-8"))
     assert held_out_receipt["diagnostic_only"] is True
     assert held_out_receipt["endpoint_policy_evidence"] is False
+    assert held_out_receipt["target_descriptor_identity"] == test_dataset.target_descriptor_identity
+    assert (
+        held_out_receipt["test_provenance_sha256"]
+        == hashlib.sha256(
+            json.dumps(test_dataset.provenance, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        ).hexdigest()
+    )
+    assert held_out_receipt["ordered_store_manifest_sha256s"] == []
+    assert held_out_receipt["bound_contract"] == {
+        "learning_contract_hash": training_receipt["learning_contract_hash"],
+        "actor_state_contract_hash": training_receipt["actor_state_contract_hash"],
+        "geometry_contract_hash": test_dataset.actor_state_contract.geometry_contract_hash,
+    }
+
+    certification = experiment.certify_exact_q2(
+        QhExactQ2CertificationRequest(
+            bundle=result.bundle,
+            test=request.test,
+            spec=QhExactQ2CertificationSpec(
+                absolute_tolerance=1e-5,
+                relative_tolerance=1e-5,
+                minimum_independent_units=5,
+                minimum_exact_rows_per_independent_unit=1,
+                independent_unit_aggregation="all_units_v1",
+                minimum_population_coverage=1.0,
+            ),
+            output_receipt_path=tmp_path / "exact-q2.json",
+        )
+    )
+    certification_receipt = json.loads(certification.receipt_path.read_text(encoding="utf-8"))
+    assert certification_receipt["bundle_manifest_sha256"] == result.bundle.manifest_sha256
+    assert certification_receipt["exact_q2"]["population_census"]["near_exhaustive"] is True
+    assert certification_receipt["exact_q2"]["aggregate"]["factual_selected_action_exact_q2_row_count"] == 1
+    assert certification_receipt["schema_version"] == "qh-exact-q2-certification-receipt-v2"
+    assert certification_receipt["exact_q2"]["independent_unit_gate"]["selected_independent_unit_count"] == 1
+    assert certification_receipt["exact_q2"]["independent_unit_gate"]["minimum_independent_units_met"] is False
+    assert certification_receipt["oracle_headroom"]["available"] is False
+    assert certification_receipt["longer_horizon_gate"]["independent_positive_headroom"] is False
+    assert certification_receipt["longer_horizon_gate"]["passed"] is False
+    with pytest.raises(FileExistsError, match="already exists"):
+        experiment.certify_exact_q2(
+            QhExactQ2CertificationRequest(
+                bundle=result.bundle,
+                test=request.test,
+                spec=QhExactQ2CertificationSpec(
+                    absolute_tolerance=1e-5,
+                    relative_tolerance=1e-5,
+                    minimum_independent_units=5,
+                    minimum_exact_rows_per_independent_unit=1,
+                    independent_unit_aggregation="all_units_v1",
+                ),
+                output_receipt_path=certification.receipt_path,
+            )
+        )
     with pytest.raises(FileExistsError, match="already exists"):
         experiment.fit(request)
 
@@ -684,3 +1004,15 @@ def test_qh_fit_publishes_new_bundle_and_hashed_receipts(tmp_path) -> None:
     repeated_receipt = json.loads(repeated.training_receipt_path.read_text(encoding="utf-8"))
     assert repeated_receipt["warm_start_parent_manifest_sha256"] == result.bundle.manifest_sha256
     assert repeated_receipt["optimizer_updates"] == training_receipt["optimizer_updates"]
+
+    test_dataset.provenance = {"scene": "same-path-replacement"}
+    drift_receipt = tmp_path / "held-out-after-replacement.json"
+    with pytest.raises(ValueError, match="held-out diagnostic test provenance drifted"):
+        experiment.evaluate_held_out(
+            QhHeldOutEvaluationRequest(
+                bundle=result.bundle,
+                test=request.test,
+                output_receipt_path=drift_receipt,
+            )
+        )
+    assert not drift_receipt.exists()
