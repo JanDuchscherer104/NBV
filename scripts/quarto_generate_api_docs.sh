@@ -182,6 +182,11 @@ if [[ "${BUILD_STATUS}" -ne 0 ]]; then
 fi
 
 clean_reference_render_artifacts
+README_GUIDE_ARGS=()
+if [[ -n "${QUARTODOC_FILTER:-}" ]]; then
+  README_GUIDE_ARGS+=(--filter "${QUARTODOC_FILTER}")
+fi
+"${PYTHON_BIN}" "${SCRIPT_DIR}/quartodoc_inject_package_readmes.py" "${README_GUIDE_ARGS[@]}"
 "${PYTHON_BIN}" "${SCRIPT_DIR}/quartodoc_generate_dependency_diagram.py"
 refresh_interlinks
 "${PYTHON_BIN}" "${SCRIPT_DIR}/quartodoc_nest_sidebar.py" "${REFERENCE_DIR}/_sidebar.yml"
