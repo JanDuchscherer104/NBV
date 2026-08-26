@@ -630,6 +630,79 @@ save_manifest(result['files'], manifest_path=manifest, root=root, scan_corpus=co
         finally:
             snapshot.cleanup()
 
+    def test_head_snapshot_retains_tracked_gitignored_html(self) -> None:
+        """The snapshot indexes exactly the raw HEAD tree for ignore policy."""
+        ignored = self.root / "docs" / "evidence.html"
+        ignored.parent.mkdir(parents=True, exist_ok=True)
+        ignored.write_text("tracked evidence\n", encoding="utf-8")
+        (self.root / ".gitignore").write_text(
+            "docs/**/*.html\n", encoding="utf-8"
+        )
+        (self.root / ".graphifyignore").write_text(
+            "!docs/**/*.html\n", encoding="utf-8"
+        )
+        subprocess.run(
+            ["git", "add", ".gitignore", ".graphifyignore"],
+            cwd=self.root,
+            check=True,
+        )
+        subprocess.run(
+            ["git", "add", "-f", "docs/evidence.html"],
+            cwd=self.root,
+            check=True,
+        )
+        subprocess.run(
+            ["git", "commit", "-qm", "tracked ignored evidence"],
+            cwd=self.root,
+            check=True,
+        )
+        self.head = self.git("rev-parse", "HEAD")
+        self._write_projection()
+        self._write_graph()
+        self._save_upstream_manifest()
+
+        snapshot = freshness._raw_commit_snapshot(
+            self.root, self.head, self.root / "graphify-input"
+        )
+        root = Path(snapshot.name)
+        try:
+            ast, semantic = freshness._detect_incremental(
+                root, interpreter_root=self.root
+            )
+        finally:
+            snapshot.cleanup()
+
+        expected = str(root / "docs" / "evidence.html")
+        for result in (ast, semantic):
+            self.assertIn(expected, result["files"]["document"])
+            self.assertEqual(result["excluded_files"], [])
+
+    def test_head_snapshot_does_not_mutate_hook_bound_index(self) -> None:
+        """Private snapshot Git commands ignore pre-commit's repository bindings."""
+        source = self.root / "src" / "example.py"
+        source.write_text("def example(): return 2\n", encoding="utf-8")
+        subprocess.run(["git", "add", str(source)], cwd=self.root, check=True)
+        before = self.git("ls-files", "-s")
+        git_dir = self.git("rev-parse", "--absolute-git-dir")
+
+        with mock.patch.dict(
+            os.environ,
+            {
+                "GIT_DIR": git_dir,
+                "GIT_WORK_TREE": str(self.root),
+                "GIT_INDEX_FILE": str(Path(git_dir) / "index"),
+            },
+        ):
+            snapshot = freshness._raw_commit_snapshot(
+                self.root, self.head, self.root / "graphify-input"
+            )
+        snapshot.cleanup()
+
+        self.assertEqual(self.git("ls-files", "-s"), before)
+        self.assertEqual(
+            self.git("diff", "--cached", "--name-only"), "src/example.py"
+        )
+
     def test_same_tree_admission_rejects_excluded_tracked_byte_drift(self) -> None:
         tree = self.git("rev-parse", f"{self.head}^{{tree}}")
         rebased = subprocess.run(

@@ -512,6 +512,60 @@ def _raw_commit_snapshot(
     _regular(graph, "graph")
     (snapshot / GRAPH).parent.mkdir(parents=True, exist_ok=True)
     (snapshot / GRAPH).write_bytes(graph.read_bytes())
+    # Graphify preserves tracked files from .gitignore exclusions.  The raw
+    # blob snapshot intentionally has no checkout index, so give it a private
+    # index for exactly ``commit`` without consulting the mutable source index
+    # or applying checkout filters.
+    common = subprocess.run(
+        ["git", "rev-parse", "--path-format=absolute", "--git-common-dir"],
+        cwd=root,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    common_dir = Path(common.stdout.strip())
+    objects = common_dir / "objects"
+    if common.returncode or not common.stdout.strip() or not objects.is_dir():
+        temporary.cleanup()
+        raise ValueError("Git common object directory is unavailable")
+    snapshot_env = {
+        key: value
+        for key, value in os.environ.items()
+        if not key.startswith("GIT_")
+    }
+    initialized = subprocess.run(
+        ["git", "init", "-q", str(snapshot)],
+        check=False,
+        capture_output=True,
+        text=True,
+        env=snapshot_env,
+    )
+    if initialized.returncode:
+        temporary.cleanup()
+        raise ValueError(
+            "Git HEAD snapshot index initialization failed: "
+            f"{initialized.stderr.strip() or initialized.stdout.strip()}"
+        )
+    alternates = snapshot / ".git" / "objects" / "info" / "alternates"
+    try:
+        alternates.parent.mkdir(parents=True, exist_ok=True)
+        alternates.write_text(f"{objects}\n", encoding="utf-8")
+    except OSError as error:
+        temporary.cleanup()
+        raise ValueError(f"Git HEAD snapshot index initialization failed: {error}") from error
+    indexed = subprocess.run(
+        ["git", "-C", str(snapshot), "read-tree", commit],
+        check=False,
+        capture_output=True,
+        text=True,
+        env=snapshot_env,
+    )
+    if indexed.returncode:
+        temporary.cleanup()
+        raise ValueError(
+            "Git HEAD snapshot index initialization failed: "
+            f"{indexed.stderr.strip() or indexed.stdout.strip()}"
+        )
     return temporary
 
 
