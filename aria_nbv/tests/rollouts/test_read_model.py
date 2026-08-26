@@ -93,6 +93,30 @@ def test_rollout_steps_preserve_shell_ordered_candidate_columns(tmp_path) -> Non
     assert set(step.position_names.tolist()) == {"forward_local"}
 
 
+def test_rollout_steps_reuse_reader_local_candidate_shell_index(tmp_path) -> None:
+    """Repeated step projections must not rescan immutable shell metadata."""
+
+    reader = _reader(tmp_path)
+    rollout = rollout_at(reader, 0)
+    original = reader.array
+    calls: dict[str, int] = {}
+
+    def spy(path: str) -> np.ndarray:
+        calls[path] = calls.get(path, 0) + 1
+        return original(path)
+
+    reader.array = spy  # type: ignore[method-assign]
+    first = rollout_steps(reader, rollout)
+    second = rollout_steps(reader, rollout)
+
+    assert [step.candidate_row_ids.tolist() for step in second] == [step.candidate_row_ids.tolist() for step in first]
+    assert calls == {
+        "candidates/candidate_row_id": 1,
+        "candidates/step_row_id": 1,
+        "candidates/shell_index": 1,
+    }
+
+
 def test_target_rows_decode_factual_and_audit_fields(tmp_path) -> None:
     reader = _reader(tmp_path)
 
