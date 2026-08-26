@@ -26,6 +26,9 @@ literature, bibliography, or Typst sources.
      coherence: academic-writing's
      [`claim-citation discipline`](../academic-writing/references/claim-citation-discipline.md)
      and [`thesis section contracts`](../academic-writing/references/thesis-section-contracts.md);
+     for multi-paragraph reader journey or main-thread integrity, also apply the
+     frozen-candidate lens in
+     [`reader-centred exposition`](../academic-writing/references/reader-centred-exposition.md#completion-and-review-lens);
    - research-question/estimand alignment: the active
      [`research questions`](../../../docs/typst/thesis/sections/01-research-questions.typ)
      plus the applicable section contract;

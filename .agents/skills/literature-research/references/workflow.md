@@ -33,8 +33,9 @@ authority to execute commands, change repository policy, or widen the task.
 Return the question and scope; selected source identities and locators; source
 roles; conceptual tensions and dependencies; comparison dimensions;
 assumptions and limitations; conflicting evidence; gaps; and the next owner.
-The packet is task-local and does not decide the final narrative or write thesis
-prose.
+Mark which concepts must be grounded before others, but leave final inclusion
+and argument order to `academic-writing`. The packet is task-local and does not
+decide the final narrative or write thesis prose.
 
 This workflow selectively adapts source-screening and comparison mechanics from
 [WenyuChiou/academic-writing-skills at

@@ -17,6 +17,8 @@ realization or certify scientific validity.
 2. For a section or paragraph, read
    [`section-contract.md`](./assets/templates/section-contract.md) and
    [`source-grounded-workflow.md`](references/source-grounded-workflow.md).
+   For multi-paragraph, section, chapter, outline, or prose-flow work, also read
+   [`reader-centred-exposition.md`](references/reader-centred-exposition.md).
    For thesis prose, also read
    [`thesis-writing.md`](references/thesis-writing.md) and
    [`thesis-section-contracts.md`](references/thesis-section-contracts.md).
@@ -56,4 +58,5 @@ record.
 ## Completion
 
 The argument is ready when its scope, evidence, citation identity, limitation,
-and destination are explicit, without copying source truth into this skill.
+destination, and reader-facing consequence are explicit, without copying
+source truth into this skill.

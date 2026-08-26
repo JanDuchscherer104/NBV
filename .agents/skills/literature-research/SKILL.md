@@ -27,6 +27,7 @@ or academic phase state.
 ## Completion
 
 The task-local packet states the question, screened scope, selected source
-identities, comparison dimensions, tensions, gaps, and next owner. Any
-authorized canonical-record edit follows `docs/AGENTS.md`; the packet itself
-does not duplicate those records.
+identities, conceptual dependencies, comparison dimensions, assumptions,
+limitations, disconfirming evidence, gaps, and next owner. Any authorized
+canonical-record edit follows `docs/AGENTS.md`; the packet itself does not
+duplicate those records or decide the final narrative.
