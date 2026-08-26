@@ -1,0 +1,55 @@
+---
+id: 2026-08-26_graphify_automatic_worktree_maintenance
+date: 2026-08-26
+title: "Graphify automatic worktree maintenance"
+status: done
+topics: [graphify, worktrees, codex, setup]
+confidence: high
+canonical_updates_needed: []
+touched_owner_paths:
+  - scripts/setup_codex_worktree_env.sh
+  - scripts/setup_worktree_env.sh
+  - scripts/graphify_worktree_seed.py
+  - scripts/reconcile_graphify_worktree.py
+  - scripts/check_graphify_freshness.py
+codex_thread: codex://threads/01a03a4a-114d-7f71-b9ec-140f32b8b20b
+repo_object_format: sha1
+repo_head: cc1a76f301d37aeb7fcb0d4283f66cd86e69b1b8
+repo_branch: "codex/fix-parentless-graphify-setup"
+worktree_kind: linked
+---
+
+## Task
+Make every Codex worktree inherit only a query-admissible graph while keeping
+Graphify 0.9.48's semantic lifecycle and cache namespaces authoritative.
+
+## Method
+Validated explicit and parentless source selection before parent runtime use;
+anchored semantic caches at the registered primary checkout; delegated
+incremental extraction to upstream `graphify extract`; and routed automatic
+maintenance through the existing setup boundary and pre-commit hook.
+
+## Findings
+`scripts/setup_codex_worktree_env.sh` now rejects malformed modes and unsafe
+canonical cache topology before parent admission, handles hook-provided Git
+bindings, and normalizes successful setup to silence. `scripts/setup_worktree_env.sh`
+uses independently authenticated primary cache targets, while
+`scripts/graphify_worktree_seed.py` records them without trusting a selected
+parent's cache links. Reconciliation rebuilds the projection only for changed
+projection owners and invokes the upstream incremental extractor for the
+declared standard/deep consumers.
+
+## Commits
+- [cc1a76f301d37aeb7fcb0d4283f66cd86e69b1b8](https://github.com/JanDuchscherer104/ARIA-NBV/commit/cc1a76f301d37aeb7fcb0d4283f66cd86e69b1b8)
+
+## Verification
+Focused seed, reconciliation, freshness, session, setup, guidance, governance,
+and CI-impact suites passed; Ruff, shell syntax, diff checks, automatic
+maintenance, and strict Graphify state checks passed. Fresh disposable explicit
+and empty-source setup both emitted no output, produced query-admissible graphs,
+answered a real Graphify query, and linked both semantic caches under the
+canonical primary checkout.
+
+## Canonical Owner Impact
+The setup scripts, seeder, reconciliation owner, freshness helper, maintenance
+hook, and their focused tests are the canonical owners updated by this work.
