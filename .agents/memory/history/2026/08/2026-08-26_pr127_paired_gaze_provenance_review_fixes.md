@@ -20,7 +20,7 @@ touched_owner_paths:
   - aria_nbv/tests/rollouts/test_zarr_store.py
 codex_thread: codex://threads/01a03a5c-ff92-7e03-8cd3-fde05269a56f
 repo_object_format: sha1
-repo_head: 5d5111ebcacabc2eee995416793482e8bd44cf29
+repo_head: c8ab0e41489961e9b871e7ca7a820051da1effff
 repo_branch: "codex/g002-pr127-impl"
 worktree_kind: linked
 ---
@@ -53,6 +53,7 @@ and Zarr round-trip persistence.
 ## Commits
 - [4c6bca860c027c6f55743db107cb6b6b60444eb5](https://github.com/JanDuchscherer104/ARIA-NBV/commit/4c6bca860c027c6f55743db107cb6b6b60444eb5) — paired provenance contract after rebase
 - [5d5111ebcacabc2eee995416793482e8bd44cf29](https://github.com/JanDuchscherer104/ARIA-NBV/commit/5d5111ebcacabc2eee995416793482e8bd44cf29) — legacy Zarr compatibility and validation
+- [c8ab0e41489961e9b871e7ca7a820051da1effff](https://github.com/JanDuchscherer104/ARIA-NBV/commit/c8ab0e41489961e9b871e7ca7a820051da1effff) — exact-source replay golden identity refresh
 
 ## Candidate Owner Intent
 <!-- Omit this section unless the agent-behavior candidate-intent branch applies. -->
