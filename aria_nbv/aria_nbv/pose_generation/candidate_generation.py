@@ -493,6 +493,73 @@ class CandidateViewGenerator:
             centers_world, offsets_ref = PositionSampler(self.config).sample(
                 sampling_pose,
             )
+            return self._generate_for_centers(
+                reference_pose=reference_pose,
+                sampling_pose=sampling_pose,
+                centers_world=centers_world,
+                offsets_ref=offsets_ref,
+                gt_mesh=gt_mesh,
+                mesh_verts=mesh_verts,
+                mesh_faces=mesh_faces,
+                camera_calib_template=camera_calib_template,
+                occupancy_extent=occupancy_extent,
+                seed=None,
+            )
+
+    def generate_from_centers(
+        self,
+        *,
+        reference_pose: PoseTW,
+        centers_world: torch.Tensor,
+        offsets_ref: torch.Tensor,
+        gt_mesh: trimesh.Trimesh,
+        mesh_verts: torch.Tensor,
+        mesh_faces: torch.Tensor,
+        camera_calib_template: CameraTW,
+        occupancy_extent: torch.Tensor,
+        seed: int | None = None,
+    ) -> CandidateSamplingResult:
+        """Orient and validate an explicit candidate-centre table.
+
+        This is the paired-proposal seam: several gaze hypotheses may reuse
+        exactly the same world-space centers while orientation jitter and hard
+        validity remain independently auditable per candidate row.
+        """
+
+        device = self.config.device
+        prepared_reference = rotate_yaw_cw90(ensure_unbatched_pose(reference_pose.to(device)))
+        sampling_pose = _gravity_align_pose(prepared_reference) if self.config.align_to_gravity else prepared_reference
+        return self._generate_for_centers(
+            reference_pose=prepared_reference,
+            sampling_pose=sampling_pose,
+            centers_world=centers_world.to(device=device),
+            offsets_ref=offsets_ref.to(device=device),
+            gt_mesh=gt_mesh,
+            mesh_verts=mesh_verts,
+            mesh_faces=mesh_faces,
+            camera_calib_template=camera_calib_template,
+            occupancy_extent=occupancy_extent,
+            seed=self.config.seed if seed is None else seed,
+        )
+
+    def _generate_for_centers(
+        self,
+        *,
+        reference_pose: PoseTW,
+        sampling_pose: PoseTW,
+        centers_world: torch.Tensor,
+        offsets_ref: torch.Tensor,
+        gt_mesh: trimesh.Trimesh,
+        mesh_verts: torch.Tensor,
+        mesh_faces: torch.Tensor,
+        camera_calib_template: CameraTW,
+        occupancy_extent: torch.Tensor,
+        seed: int | None,
+    ) -> CandidateSamplingResult:
+        """Build orientations and apply hard rules for prepared centers."""
+
+        device = self.config.device
+        with _maybe_seed(seed, device=torch.device(device)):
             shell_poses, view_dirs_delta = OrientationBuilder(self.config).build(
                 sampling_pose,
                 centers_world,

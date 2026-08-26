@@ -18,6 +18,7 @@ from aria_nbv.pose_generation import (
     CandidateMixtureViewGenerator,
     CandidateMixtureViewGeneratorConfig,
     CandidatePositionMode,
+    CandidateViewGenerator,
     CandidateViewGeneratorConfig,
     SamplingStrategy,
     ViewDirectionMode,
@@ -73,7 +74,7 @@ def _base_cfg() -> CandidateViewGeneratorConfig:
     )
 
 
-def _run_generate(cfg: CandidateMixtureViewGeneratorConfig):
+def _run_generate(cfg: CandidateMixtureViewGeneratorConfig, *, seed: int | None = None):
     mesh, verts, faces = _mesh_triplet(cfg.device)
     return CandidateMixtureViewGenerator(cfg).generate(
         reference_pose=_identity_pose(device=cfg.device),
@@ -83,6 +84,7 @@ def _run_generate(cfg: CandidateMixtureViewGeneratorConfig):
         camera_calib_template=_dummy_camera(cfg.device),
         occupancy_extent=torch.tensor([-10.0, 10.0, -10.0, 10.0, -10.0, 10.0], dtype=torch.float32),
         runtime_context=CandidateGenerationRuntimeContext(descriptor=_descriptor()),
+        seed=seed,
     )
 
 
@@ -114,6 +116,75 @@ def test_mixed_sampler_fixed_counts_and_full_shell_provenance() -> None:
         torch.full((6,), 1.0 / 6.0, device=result.sampler_probability.device),
     )
     assert result.views.tensor().shape[0] == int(result.mask_valid.sum().item())
+
+
+def test_paired_variants_keep_original_component_id() -> None:
+    cfg = CandidateMixtureViewGeneratorConfig(
+        base=_base_cfg(),
+        components=[
+            CandidateMixtureComponentConfig(
+                name="pair",
+                count=2,
+                view_mode=ViewDirectionMode.TARGET_POINT,
+                paired_view_mode=ViewDirectionMode.FORWARD_RIG,
+                position_mode=CandidatePositionMode.TARGET_BEARING_LOCAL,
+            ),
+            CandidateMixtureComponentConfig(name="after", count=2, view_mode=ViewDirectionMode.FORWARD_RIG),
+        ],
+    )
+
+    result = _run_generate(cfg)
+
+    assert result.mixture_id is not None
+    assert result.mixture_id.tolist() == [0, 0, 0, 0, 1, 1]
+    assert result.position_pair_id is not None
+    assert result.gaze_variant_id is not None
+    assert result.position_pair_id.tolist() == [0, 1, 0, 1, -1, -1]
+    assert result.gaze_variant_id.tolist() == [0, 0, 1, 1, -1, -1]
+
+
+def test_paired_seed_is_derived_from_resolved_component_seed_for_direct_and_replay(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from aria_nbv.rollouts.replay.policy import derive_component_seed
+
+    cfg = CandidateMixtureViewGeneratorConfig(
+        base=_base_cfg(),
+        components=[
+            CandidateMixtureComponentConfig(
+                name="pair",
+                count=2,
+                view_mode=ViewDirectionMode.TARGET_POINT,
+                paired_view_mode=ViewDirectionMode.FORWARD_RIG,
+                position_mode=CandidatePositionMode.TARGET_BEARING_LOCAL,
+            )
+        ],
+    )
+    observed: list[int | None] = []
+    original_generate = CandidateViewGenerator.generate
+    original_generate_from_centers = CandidateViewGenerator.generate_from_centers
+
+    def record_generate(self, *args, **kwargs):
+        observed.append(self.config.seed)
+        return original_generate(self, *args, **kwargs)
+
+    def record_generate_from_centers(self, *args, **kwargs):
+        observed.append(self.config.seed)
+        return original_generate_from_centers(self, *args, **kwargs)
+
+    monkeypatch.setattr(CandidateViewGenerator, "generate", record_generate)
+    monkeypatch.setattr(CandidateViewGenerator, "generate_from_centers", record_generate_from_centers)
+
+    _run_generate(cfg)
+    direct_primary, direct_paired = observed
+    assert direct_primary == cfg.base.seed
+    assert direct_paired == derive_component_seed(direct_primary, "pair__paired_forward_rig")
+
+    observed.clear()
+    _run_generate(cfg, seed=41)
+    replay_primary, replay_paired = observed
+    assert replay_primary == derive_component_seed(41, "pair")
+    assert replay_paired == derive_component_seed(replay_primary, "pair__paired_forward_rig")
 
 
 def test_target_point_component_requires_runtime_target_context() -> None:
@@ -214,6 +285,41 @@ def test_rich_local_five_family_is_named_ablation() -> None:
         "revisit_backtrack",
     ]
     assert [component.count for component in cfg.components] == [18, 18, 12, 6, 6]
+
+
+def test_paired_component_reuses_centers_and_retains_gaze_variants() -> None:
+    cfg = CandidateMixtureViewGeneratorConfig(
+        base=_base_cfg(),
+        components=[
+            CandidateMixtureComponentConfig(
+                name="target_forward_pair",
+                count=4,
+                view_mode=ViewDirectionMode.TARGET_POINT,
+                paired_view_mode=ViewDirectionMode.FORWARD_RIG,
+                position_mode=CandidatePositionMode.TARGET_BEARING_LOCAL,
+            )
+        ],
+    )
+
+    result = _run_generate(cfg)
+
+    assert cfg.total_count == 8
+    assert result.mask_valid.numel() == 8
+    assert result.extras["position_pair_id"].cpu().tolist() == [0, 1, 2, 3, 0, 1, 2, 3]
+    assert result.extras["gaze_variant_id"].cpu().tolist() == [0, 0, 0, 0, 1, 1, 1, 1]
+    centers = result.shell_poses.t.reshape(-1, 3)
+    assert torch.allclose(centers[:4], centers[4:])
+    forward = result.shell_poses.R[:, :, 2]
+    assert not torch.allclose(forward[:4], forward[4:])
+    assert result.component_name == ("target_forward_pair",) * 4 + ("target_forward_pair__paired_forward_rig",) * 4
+    assert torch.allclose(result.sampler_probability, torch.full_like(result.sampler_probability, 1.0 / 8.0))
+
+
+def test_paired_center_gaze_preset_keeps_sixty_candidate_rows() -> None:
+    cfg = CandidateMixtureViewGeneratorConfig.paired_center_gaze_family()
+
+    assert cfg.total_count == 60
+    assert cfg.components[0].paired_view_mode is ViewDirectionMode.FORWARD_RIG
 
 
 def test_reviewed_component_templates_preserve_rich_family_fields() -> None:

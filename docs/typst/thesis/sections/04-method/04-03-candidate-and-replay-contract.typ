@@ -28,6 +28,13 @@ shell for visual and statistical audit. Legacy zero-cap spherical samplers are
 explicitly unbounded rather than being misrepresented by a zero-area box; view
 jitter changes proposal support but does not bypass hard validity rules.
 
+A paired proposal component may reuse one sampled world-space camera center for
+two distinct base-gaze families before applying their independent view jitter.
+Both rows remain first-class actions and retain a shared `position_pair_id`
+plus a `gaze_variant_id`; they are not averaged or collapsed before scoring.
+This controlled intervention separates the value of camera translation from
+the value of viewing direction at identical acquisition positions.
+
 Invalid rows remain available for diagnostics and dense replay, but cannot be selected. A row enters the training mask only when it is actor-selectable and has a finite oracle target. Invalid rows have false masks and undefined labels; scene RRI is never substituted for a missing target-specific label. `valid_action_mask`, `q_train_mask`, padding, and any deployable feasibility estimate are distinct fields with distinct owners.
 
 The persisted supervision profile makes label density an auditable contract

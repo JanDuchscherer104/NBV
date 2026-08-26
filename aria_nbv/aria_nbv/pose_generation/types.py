@@ -214,7 +214,9 @@ class CandidateSamplingResult:
     * `mask_valid`: full-shell actor-action mask, shape `(N,)`;
     * `strategy_id`, `position_id`, `mixture_id`, `sampler_probability`, and
       `component_name`: optional full-shell provenance arrays/tuples aligned
-      with `mask_valid`.
+      with `mask_valid`;
+    * `position_pair_id` and `gaze_variant_id`: typed optional paired-gaze
+      provenance arrays aligned with `mask_valid`, using ``-1`` sentinels.
 
     Invalid candidates remain in the full shell and must receive false training
     masks and NaN oracle labels rather than low RRI.
@@ -255,6 +257,12 @@ class CandidateSamplingResult:
 
     component_name: tuple[str, ...] | None = None
     """Optional per-shell component names aligned with ``mask_valid``."""
+
+    position_pair_id: torch.Tensor | None = None
+    """Optional shared-center ids for paired gaze hypotheses; ``-1`` means no pair."""
+
+    gaze_variant_id: torch.Tensor | None = None
+    """Optional gaze variant ids aligned with ``position_pair_id``; ordinary rows use ``-1``."""
 
     extras: dict[str, Any] = field(default_factory=dict)
     """Extensible provenance payload; tensor rows must remain aligned with ``N``."""

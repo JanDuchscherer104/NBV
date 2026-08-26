@@ -94,6 +94,9 @@ class CandidateMixtureComponentConfig(BaseConfig):
     view_mode: ViewDirectionMode | None = None
     """View-direction family used as stable candidate-strategy provenance."""
 
+    paired_view_mode: ViewDirectionMode | None = None
+    """Optional second gaze family evaluated at the exact same sampled centers."""
+
     position_mode: CandidatePositionMode | None = None
     """Position-family prior used to sample candidate centers."""
 
@@ -122,6 +125,8 @@ class CandidateMixtureComponentConfig(BaseConfig):
             raise ValueError("Candidate mixture components require view_mode or strategy.")
         object.__setattr__(self, "view_mode", view_mode)
         object.__setattr__(self, "strategy", view_mode)
+        if self.paired_view_mode is view_mode:
+            raise ValueError("paired_view_mode must differ from the component view_mode.")
         if self.position_mode is None:
             object.__setattr__(self, "position_mode", CandidatePositionMode.UPPER_BOUND_FREE_SHELL)
         return self
@@ -204,7 +209,9 @@ class CandidateMixtureViewGeneratorConfig(TargetConfig["CandidateMixtureViewGene
     def total_count(self) -> int:
         """Total full-shell candidate budget across mixture components."""
 
-        return sum(component.count for component in self.components)
+        return sum(
+            component.count * (2 if component.paired_view_mode is not None else 1) for component in self.components
+        )
 
     @classmethod
     def reviewed_component_templates(
@@ -286,6 +293,51 @@ class CandidateMixtureViewGeneratorConfig(TargetConfig["CandidateMixtureViewGene
                 CandidateMixtureComponentConfig(
                     name="forward_local",
                     count=18,
+                    view_mode=ViewDirectionMode.FORWARD_RIG,
+                    position_mode=CandidatePositionMode.FORWARD_LOCAL,
+                ),
+                CandidateMixtureComponentConfig(
+                    name="lateral_target_bypass",
+                    count=12,
+                    view_mode=ViewDirectionMode.TARGET_POINT,
+                    position_mode=CandidatePositionMode.LATERAL_TARGET_BYPASS,
+                ),
+                CandidateMixtureComponentConfig(
+                    name="local_refinement",
+                    count=6,
+                    view_mode=ViewDirectionMode.TARGET_POINT,
+                    position_mode=CandidatePositionMode.LOCAL_REFINEMENT,
+                    min_radius=0.25,
+                    max_radius=0.7,
+                ),
+                CandidateMixtureComponentConfig(
+                    name="revisit_backtrack",
+                    count=6,
+                    view_mode=ViewDirectionMode.FORWARD_RIG,
+                    position_mode=CandidatePositionMode.REVISIT_BACKTRACK,
+                    min_radius=0.25,
+                    max_radius=0.25,
+                ),
+            ],
+        )
+
+    @classmethod
+    def paired_center_gaze_family(cls) -> "CandidateMixtureViewGeneratorConfig":
+        """Build a 60-row sampler with paired target and forward gaze hypotheses."""
+
+        return cls(
+            base=cls.rich_local_five_family().base,
+            components=[
+                CandidateMixtureComponentConfig(
+                    name="target_forward_pair",
+                    count=12,
+                    view_mode=ViewDirectionMode.TARGET_POINT,
+                    paired_view_mode=ViewDirectionMode.FORWARD_RIG,
+                    position_mode=CandidatePositionMode.TARGET_BEARING_LOCAL,
+                ),
+                CandidateMixtureComponentConfig(
+                    name="forward_local",
+                    count=12,
                     view_mode=ViewDirectionMode.FORWARD_RIG,
                     position_mode=CandidatePositionMode.FORWARD_LOCAL,
                 ),
@@ -478,8 +530,58 @@ class CandidateMixtureViewGenerator:
         component_names: list[str] = []
         from ..rollouts.replay.policy import derive_component_seed
 
+        pair_base = 0
+
+        def append_component(
+            result: CandidateSamplingResult,
+            *,
+            name: str,
+            view_mode: ViewDirectionMode,
+            position_mode: CandidatePositionMode,
+            pair_ids: torch.Tensor | None = None,
+            gaze_variant: int = -1,
+        ) -> None:
+            shell_count = int(result.mask_valid.reshape(-1).shape[0])
+            device = result.mask_valid.device
+            result.strategy_id = torch.full(
+                (shell_count,),
+                candidate_strategy_id(view_mode),
+                dtype=torch.int64,
+                device=device,
+            )
+            result.position_id = torch.full(
+                (shell_count,),
+                candidate_position_id(position_mode),
+                dtype=torch.int64,
+                device=device,
+            )
+            # Paired variants retain the original serialized component index.
+            result.mixture_id = torch.full((shell_count,), component_index, dtype=torch.int64, device=device)
+            result.sampler_probability = torch.full(
+                (shell_count,),
+                1.0 / float(self.config.total_count),
+                dtype=torch.float32,
+                device=device,
+            )
+            result.component_name = tuple(name for _ in range(shell_count))
+            position_pair_id = (
+                torch.full((shell_count,), -1, dtype=torch.int64, device=device)
+                if pair_ids is None
+                else pair_ids.to(device=device, dtype=torch.int64)
+            )
+            gaze_variant_id = torch.full((shell_count,), gaze_variant, dtype=torch.int64, device=device)
+            result.position_pair_id = position_pair_id
+            result.gaze_variant_id = gaze_variant_id
+            result.extras["position_pair_id"] = position_pair_id
+            result.extras["gaze_variant_id"] = gaze_variant_id
+            component_results.append(result)
+            component_names.extend([name] * shell_count)
+
         for component_index, component in enumerate(self.config.components):
             component_seed = None if seed is None else derive_component_seed(seed, component.name)
+            resolved_component_seed = component_seed
+            if resolved_component_seed is None and self.config.base.seed is not None:
+                resolved_component_seed = int(self.config.base.seed) + component_index
             component_cfg = self._component_config(
                 component, component_index, runtime_context=runtime_context, component_seed=component_seed
             )
@@ -493,29 +595,60 @@ class CandidateMixtureViewGenerator:
                 seed=component_seed,
             )
             shell_count = int(result.mask_valid.reshape(-1).shape[0])
-            device = result.mask_valid.device
-            result.strategy_id = torch.full(
-                (shell_count,),
-                candidate_strategy_id(component.view_mode),
-                dtype=torch.int64,
-                device=device,
+            pair_ids = None
+            if component.paired_view_mode is not None:
+                pair_ids = torch.arange(
+                    pair_base,
+                    pair_base + shell_count,
+                    dtype=torch.int64,
+                    device=result.mask_valid.device,
+                )
+                pair_base += shell_count
+            append_component(
+                result,
+                name=component.name,
+                view_mode=component.view_mode,
+                position_mode=component.position_mode,
+                pair_ids=pair_ids,
+                gaze_variant=0 if pair_ids is not None else -1,
             )
-            result.position_id = torch.full(
-                (shell_count,),
-                candidate_position_id(component.position_mode),
-                dtype=torch.int64,
-                device=device,
-            )
-            result.mixture_id = torch.full((shell_count,), component_index, dtype=torch.int64, device=device)
-            result.sampler_probability = torch.full(
-                (shell_count,),
-                1.0 / float(self.config.total_count),
-                dtype=torch.float32,
-                device=device,
-            )
-            result.component_name = tuple(component.name for _ in range(shell_count))
-            component_results.append(result)
-            component_names.extend([component.name] * shell_count)
+
+            if component.paired_view_mode is not None:
+                assert result.shell_offsets_ref is not None
+                paired_name = f"{component.name}__paired_{component.paired_view_mode.value}"
+                paired_seed = (
+                    None
+                    if resolved_component_seed is None
+                    else derive_component_seed(resolved_component_seed, paired_name)
+                )
+                paired_component = component.model_copy(
+                    update={"view_mode": component.paired_view_mode, "strategy": component.paired_view_mode}
+                )
+                paired_cfg = self._component_config(
+                    paired_component,
+                    component_index,
+                    runtime_context=runtime_context,
+                    component_seed=paired_seed,
+                )
+                paired_result = CandidateViewGenerator(paired_cfg).generate_from_centers(
+                    reference_pose=reference_pose,
+                    centers_world=result.shell_poses.t.reshape(-1, 3),
+                    offsets_ref=result.shell_offsets_ref,
+                    gt_mesh=gt_mesh,
+                    mesh_verts=mesh_verts,
+                    mesh_faces=mesh_faces,
+                    camera_calib_template=camera_calib_template,
+                    occupancy_extent=occupancy_extent,
+                    seed=paired_seed,
+                )
+                append_component(
+                    paired_result,
+                    name=paired_name,
+                    view_mode=component.paired_view_mode,
+                    position_mode=component.position_mode,
+                    pair_ids=pair_ids,
+                    gaze_variant=1,
+                )
 
         return _concat_results(component_results, component_name=tuple(component_names))
 
@@ -610,6 +743,8 @@ def _concat_results(
         mixture_id=mixture_id,
         sampler_probability=sampler_probability,
         component_name=component_name,
+        position_pair_id=_cat_optional([result.position_pair_id for result in results]),
+        gaze_variant_id=_cat_optional([result.gaze_variant_id for result in results]),
         extras=extras,
     )
 

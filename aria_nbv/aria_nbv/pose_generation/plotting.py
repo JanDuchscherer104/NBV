@@ -1354,6 +1354,133 @@ def plot_proposal_sequence_support(candidates: "CandidateSamplingResult") -> go.
     return fig
 
 
+def plot_paired_gaze_support(candidates: "CandidateSamplingResult", *, ray_length_m: float = 0.35) -> go.Figure:
+    """Plot shared candidate centers with their alternative ground-plane gaze rays."""
+
+    pair_ids = candidates.position_pair_id
+    variants = candidates.gaze_variant_id
+    if not isinstance(pair_ids, torch.Tensor):
+        pair_ids = candidates.extras.get("position_pair_id")
+    if not isinstance(variants, torch.Tensor):
+        variants = candidates.extras.get("gaze_variant_id")
+    if not isinstance(pair_ids, torch.Tensor) or not isinstance(variants, torch.Tensor):
+        fig = go.Figure()
+        fig.add_annotation(
+            text="This candidate table has no paired-center gaze provenance.",
+            x=0.5,
+            y=0.5,
+            xref="paper",
+            yref="paper",
+            showarrow=False,
+        )
+        return fig
+
+    shell = candidates.shell_poses
+    ref_inv = candidates.reference_pose.inverse().to(shell.t.device)
+    poses_ref_cam = ref_inv.compose(shell)
+    offsets = poses_ref_cam.t.reshape(-1, 3)
+    directions = poses_ref_cam.R[..., :, 2].reshape(-1, 3)
+    directions = directions / directions.norm(dim=-1, keepdim=True).clamp_min(1e-8)
+    offsets_np = offsets.detach().cpu().numpy().reshape(-1, 3)
+    directions_np = directions.detach().cpu().numpy().reshape(-1, 3)
+    pair_np = pair_ids.detach().cpu().numpy().reshape(-1)
+    variant_np = variants.detach().cpu().numpy().reshape(-1)
+    valid_np = candidates.mask_valid.detach().cpu().numpy().reshape(-1).astype(bool, copy=False)
+    components = np.asarray(candidates.component_name or tuple("candidate" for _ in range(offsets_np.shape[0])))
+    paired_mask = pair_np >= 0
+
+    fig = go.Figure()
+    if not paired_mask.any():
+        fig.add_annotation(
+            text="This candidate table contains no paired-center gaze hypotheses.",
+            x=0.5,
+            y=0.5,
+            xref="paper",
+            yref="paper",
+            showarrow=False,
+        )
+        fig.update_layout(
+            title="Paired gaze hypotheses at shared candidate centers",
+            xaxis={"title": "forward / m", "scaleanchor": "y", "scaleratio": 1},
+            yaxis={"title": "left / m"},
+            height=620,
+        )
+        return fig
+    for variant in sorted(int(value) for value in np.unique(variant_np[paired_mask])):
+        mask = paired_mask & (variant_np == variant)
+        line_x: list[float | None] = []
+        line_y: list[float | None] = []
+        for center, direction in zip(offsets_np[mask], directions_np[mask], strict=True):
+            endpoint = center + float(ray_length_m) * direction
+            line_x.extend((float(center[2]), float(endpoint[2]), None))
+            line_y.extend((float(center[0]), float(endpoint[0]), None))
+        label = f"gaze variant {variant}"
+        fig.add_trace(
+            go.Scatter(
+                x=line_x,
+                y=line_y,
+                mode="lines",
+                name=label,
+                line={"width": 2.5},
+                hoverinfo="skip",
+            )
+        )
+        endpoints = offsets_np[mask] + float(ray_length_m) * directions_np[mask]
+        customdata = np.empty((int(mask.sum()), 4), dtype=object)
+        customdata[:, 0] = pair_np[mask]
+        customdata[:, 1] = components[mask]
+        customdata[:, 2] = valid_np[mask]
+        customdata[:, 3] = variant
+        fig.add_trace(
+            go.Scatter(
+                x=endpoints[:, 2],
+                y=endpoints[:, 0],
+                mode="markers",
+                name=f"{label} endpoint",
+                marker={"size": 8, "symbol": "triangle-up"},
+                customdata=customdata,
+                hovertemplate=(
+                    "pair=%{customdata[0]}<br>component=%{customdata[1]}"
+                    "<br>valid=%{customdata[2]}<br>variant=%{customdata[3]}<extra></extra>"
+                ),
+            )
+        )
+
+    unique_pair_rows = np.asarray(
+        [np.flatnonzero(pair_np == pair_id)[0] for pair_id in np.unique(pair_np[paired_mask])]
+    )
+    fig.add_trace(
+        go.Scatter(
+            x=offsets_np[unique_pair_rows, 2],
+            y=offsets_np[unique_pair_rows, 0],
+            mode="markers",
+            marker={"color": "white", "size": 8, "symbol": "circle-open"},
+            name="shared center",
+            customdata=pair_np[unique_pair_rows],
+            hovertemplate="pair=%{customdata}<extra></extra>",
+        )
+    )
+    fig.add_trace(
+        go.Scatter(
+            x=[0.0],
+            y=[0.0],
+            mode="markers",
+            marker={"color": "white", "size": 11, "symbol": "cross"},
+            name="reference pose",
+            hoverinfo="skip",
+        )
+    )
+    fig.update_layout(
+        title="Paired gaze hypotheses at shared candidate centers",
+        xaxis={"title": "forward / m", "scaleanchor": "y", "scaleratio": 1},
+        yaxis={"title": "left / m"},
+        legend_title="paired proposal geometry",
+        height=620,
+        margin={"l": 70, "r": 30, "t": 70, "b": 60},
+    )
+    return fig
+
+
 def plot_radius_hist(
     offsets: np.ndarray,
     *,
