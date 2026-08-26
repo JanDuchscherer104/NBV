@@ -14,7 +14,7 @@ touched_owner_paths:
   - scripts/check_graphify_freshness.py
 codex_thread: codex://threads/01a03a4a-114d-7f71-b9ec-140f32b8b20b
 repo_object_format: sha1
-repo_head: 470cdf5152bd614b6d087bbbd37afb6aa46a48cd
+repo_head: 69c5eeb053a2c9bcf17df5ab8fa0a84ab37e1d54
 repo_branch: "codex/fix-parentless-graphify-setup"
 worktree_kind: linked
 ---
@@ -58,11 +58,16 @@ checks both child cache links resolve beneath the canonical primary `.data`
 root. Standard and deep command-path cache assertions now prove their actual
 mode-specific namespace containment.
 
+After rebasing, maintenance also treats a deleted projection owner as a rebuild
+signal while strict admission still rejects the stale projection. This lets an
+upstream owner removal repair itself without weakening query admission.
+
 ## Commits
-- [cc1a76f301d37aeb7fcb0d4283f66cd86e69b1b8](https://github.com/JanDuchscherer104/ARIA-NBV/commit/cc1a76f301d37aeb7fcb0d4283f66cd86e69b1b8)
-- [ec52c743cebcb8be0151797e151109987b381f25](https://github.com/JanDuchscherer104/ARIA-NBV/commit/ec52c743cebcb8be0151797e151109987b381f25)
-- [805b4149d6145a5b335b82d5cd65a1848910183f](https://github.com/JanDuchscherer104/ARIA-NBV/commit/805b4149d6145a5b335b82d5cd65a1848910183f)
-- [470cdf5152bd614b6d087bbbd37afb6aa46a48cd](https://github.com/JanDuchscherer104/ARIA-NBV/commit/470cdf5152bd614b6d087bbbd37afb6aa46a48cd)
+- [0d205f80c52af495b62851e4829962176b384b14](https://github.com/JanDuchscherer104/ARIA-NBV/commit/0d205f80c52af495b62851e4829962176b384b14)
+- [0a00f2dff727d808a22d346db139a1e6b6939a28](https://github.com/JanDuchscherer104/ARIA-NBV/commit/0a00f2dff727d808a22d346db139a1e6b6939a28)
+- [724004282b11e788dd1c8c184bfec6128ed7f242](https://github.com/JanDuchscherer104/ARIA-NBV/commit/724004282b11e788dd1c8c184bfec6128ed7f242)
+- [68067d53898242829517e0aa205a71e2d7e64209](https://github.com/JanDuchscherer104/ARIA-NBV/commit/68067d53898242829517e0aa205a71e2d7e64209)
+- [69c5eeb053a2c9bcf17df5ab8fa0a84ab37e1d54](https://github.com/JanDuchscherer104/ARIA-NBV/commit/69c5eeb053a2c9bcf17df5ab8fa0a84ab37e1d54)
 
 ## Verification
 Focused seed, reconciliation, freshness, session, setup, guidance, governance,
@@ -76,6 +81,9 @@ The pinned Graphify 0.9.48 command-path test also verified warm-standard zero
 dispatch, one-file semantic refresh, deep namespace isolation, cold-deep
 warmup, legacy-flat-cache rejection, and matching lookup/save prompt
 fingerprints.
+
+The removed-owner regression and the complete CI-equivalent scaffold, docs,
+ownership, and focused lint suites passed again after the final rebase.
 
 `make graphify-session-readiness-integration` completed both real explicit and
 parentless disposable worktree paths in 304 seconds on the local host.

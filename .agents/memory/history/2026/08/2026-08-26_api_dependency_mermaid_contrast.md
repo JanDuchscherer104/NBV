@@ -13,7 +13,7 @@ touched_owner_paths:
   - scripts/tests/test_quartodoc_generate_dependency_diagram.py
 codex_thread: codex://threads/01a03a4a-114d-7f71-b9ec-140f32b8b20b
 repo_object_format: sha1
-repo_head: 19d1e1712221e0e8781d25810cfc97c64deef0cf
+repo_head: c26f8861c4428e70b999d0358bed86ae13143cbd
 repo_branch: "codex/fix-parentless-graphify-setup"
 worktree_kind: linked
 ---
@@ -27,15 +27,15 @@ The global Quarto Mermaid dark theme supplied a light default node-label color
 to the generated pale package nodes. The generator now emits local base-theme
 frontmatter with explicit dark primary text, line, and edge-label background
 colors, and its sole package class supplies the matching label color and
-semibold weight. The stale unused input/output/compute/data class definitions
-were removed.
+semibold weight. After rebasing, the package-specific contrast remains layered
+with the shared input/output/compute/data definitions now owned by `main`.
 
 `make api-docs` regenerated the diagram and dependency JSON. Its unrelated
 sidebar churn was excluded. A focused generator test locks the local styling
 and preserves the LR edge-label output contract.
 
 ## Commit
-- [19d1e1712221e0e8781d25810cfc97c64deef0cf](https://github.com/JanDuchscherer104/ARIA-NBV/commit/19d1e1712221e0e8781d25810cfc97c64deef0cf)
+- [c26f8861c4428e70b999d0358bed86ae13143cbd](https://github.com/JanDuchscherer104/ARIA-NBV/commit/c26f8861c4428e70b999d0358bed86ae13143cbd)
 
 ## Verification
 `make api-docs`, the focused generator test, Ruff, CI-impact test,
