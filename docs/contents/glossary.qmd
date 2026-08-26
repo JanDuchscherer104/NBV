@@ -21,11 +21,11 @@ execute:
 ::: {.glossary-page}
 
 ::: {.glossary-intro}
-**56 terms** across **10 categories**. The canonical source is
+**57 terms** across **10 categories**. The canonical source is
 `docs/typst/shared/glossary.typ`; generated Quarto, Typst, YAML, KG, and shortcode artifacts
 share the same definitions.
 
-Tier counts: **27 core**, **13 support**,
+Tier counts: **27 core**, **14 support**,
 and **16 background** terms. Core terms are the thesis math lookup;
 background terms remain linkable but are visually demoted.
 
@@ -39,7 +39,7 @@ Use `{{{< gls term-id >}}}` for the linked short label and
 <a class="glossary-chip glossary-category-chip" href="#glossary-category-dataset">Dataset <span>11</span></a>
 <a class="glossary-chip glossary-category-chip" href="#glossary-category-geometry">Geometry <span>5</span></a>
 <a class="glossary-chip glossary-category-chip" href="#glossary-category-metrics">Metrics <span>3</span></a>
-<a class="glossary-chip glossary-category-chip" href="#glossary-category-model">Model <span>3</span></a>
+<a class="glossary-chip glossary-category-chip" href="#glossary-category-model">Model <span>4</span></a>
 <a class="glossary-chip glossary-category-chip" href="#glossary-category-planning">Planning <span>1</span></a>
 <a class="glossary-chip glossary-category-chip" href="#glossary-category-reconstruction">Reconstruction <span>4</span></a>
 <a class="glossary-chip glossary-category-chip" href="#glossary-category-representation">Representation <span>2</span></a>
@@ -1146,7 +1146,7 @@ $$
 
 <p class="glossary-definition">Finite-horizon candidate-value function for target-conditioned ARIA-NBV.</p>
 
-<p class="glossary-detail-text">The thesis-core Q_H interface is one shared scalar-requested-horizon scorer over finite candidate sets. The current A1 interaction reads actor-visible S0-pose/root-moments context, target descriptor, candidate geometry, and causal budget/history, then emits conditional Q values and feasibility logits without reading the action mask. Lightning and online adapters apply the authoritative hard mask, exclude invalid rows from Q supervision and bootstrap, and select only hard-valid candidates. DQN contributes replayed transition learning and Bellman-style finite-action value targets; Double DQN contributes the selector/evaluator backup as an optional estimator control. Exact-Q2 parity and positive held-out headroom gate claims for longer horizons. Learned-only feasibility and P(valid) times Q ranking are not thesis-core behavior.</p>
+<p class="glossary-detail-text">The thesis-core Q_H interface is one shared scalar-requested-horizon scorer over finite candidate sets. The current A1 interaction reads actor-visible S0-pose/root-moments context, target descriptor, candidate geometry, and causal budget/history, then emits conditional Q values and feasibility logits without reading the action mask. The terminal decoder is modular: direct continuous Huber regression is canonical, while fixed-support CORAL is an implemented ordinal ablation over the same fitted-Q target and decodes back to continuous return units. Lightning and online adapters apply the authoritative hard mask, exclude invalid rows from Q supervision and bootstrap, and select only hard-valid candidates. Exact-Q2 parity and positive held-out headroom gate claims for longer horizons. Learned-only feasibility and P(valid) times Q ranking are not thesis-core behavior.</p>
 
 ::: {.glossary-formula}
 **Finite-horizon candidate value**
@@ -1926,6 +1926,41 @@ $$
 
 </article>
 
+<article class="glossary-card glossary-tier-support" id="term-coral-q-decoder">
+<div class="glossary-card-header">
+<div class="glossary-term-title">CORAL Q-Value Decoder</div>
+<div class="glossary-term-badges">
+<span class="glossary-badge glossary-badge-short">Q-CORAL</span>
+<span class="glossary-badge glossary-tier-badge glossary-tier-badge-support">support</span>
+<span class="glossary-badge">model.value.decoder</span>
+</div>
+</div>
+
+<div class="glossary-aliases">
+<span>Aliases</span>
+<code>CORAL value head</code> <code>ordinal Q decoder</code> <code>finite-horizon CORAL</code>
+</div>
+
+<div class="glossary-card-notation">
+<div><strong>Symbols</strong><div class="glossary-notation-list glossary-notation-symbols"><span class="glossary-notation-item"><span class="glossary-notation-math">$Q_{h,\theta,e,i}^{\mathrm{cond}}$</span><code>rl.conditional_q</code></span> <span class="glossary-notation-item"><span class="glossary-notation-math">$e_k^Q$</span><code>rl.coral_q_edge</code></span> <span class="glossary-notation-item"><span class="glossary-notation-math">$u_k^Q$</span><code>rl.coral_q_value</code></span> <span class="glossary-notation-item"><span class="glossary-notation-math">$c_n^Q$</span><code>rl.coral_q_label</code></span></div></div>
+<div><strong>Equations</strong><div class="glossary-notation-list glossary-notation-equations"><span class="glossary-notation-item"><span class="glossary-notation-math">$\begin{gathered}c_n^Q=\sum_{k=0}^{K-2}\mathbb{1}[y_n>e_k^Q],\quad l_{n,k}=\mathbb{1}[c_n^Q>k];\\ \mathcal{L}_Q^{\mathrm{CORAL}}=-\sum_n\sum_{k=0}^{K-2}\left(l_{n,k}\log p_{n,k}+(1-l_{n,k})\log(1-p_{n,k})\right),\quad p_{n,k}=\sigma(o_{n,k});\\ \pi_{n,k}^{\mathrm{raw}}=p_{n,k-1}-p_{n,k},\quad \widetilde{\pi}_{n,k}=\frac{\max(\pi_{n,k}^{\mathrm{raw}},0)}{\sum_j\max(\pi_{n,j}^{\mathrm{raw}},0)+\varepsilon},\quad Q_n^{\mathrm{cond}}=\sum_{k=0}^{K-1}\widetilde{\pi}_{n,k}u_k^Q\end{gathered}$</span><code>rl.qh_coral_interface</code></span></div></div>
+</div>
+
+<p class="glossary-definition">Ordinal ablation over the same continuous fitted-Q target as direct regression.</p>
+
+<p class="glossary-detail-text">Q-CORAL assigns each continuous fitted-Q target to one ordinal class using fixed increasing edges, trains K-1 cumulative thresholds with CORAL loss, repairs any negative class-mass differences for decoding, and averages fixed increasing Q representatives to recover the scalar conditional value used by backup and ranking. CORAL itself supplies order but no metric spacing; edges, representatives, initialization, and decoder kind are manifest identity. Hard-invalid and unsupported rows are excluded rather than assigned the lowest class, and support saturation plus threshold-order violations are reported.</p>
+
+<details class="glossary-details">
+<summary>Links and references</summary>
+<div class="glossary-metadata">
+<div class="glossary-metadata-row"><span>Related</span><div><a class="glossary-chip" href="#term-finite-horizon-q-function">Q_H</a> <a class="glossary-chip" href="#term-finite-horizon-return">return</a> <a class="glossary-chip" href="#term-validity-mask">mask</a></div></div>
+<div class="glossary-metadata-row"><span>Docs</span><div><a class="glossary-chip" href="../typst/thesis/sections/04-method/04-05-finite-candidate-value-model.typ" title="docs/typst/thesis/sections/04-method/04-05-finite-candidate-value-model.typ">04 05 Finite Candidate Value Model</a></div></div>
+<div class="glossary-metadata-row"><span>References</span><div><a class="glossary-chip glossary-citation" href="#ref-CORAL-cao2019">&#64;CORAL-cao2019</a></div></div>
+</div>
+</details>
+
+</article>
+
 </div>
 
 ## Planning {#glossary-category-planning}
@@ -2160,7 +2195,7 @@ $$
 </div>
 
 ::: {.glossary-citation-seed}
-[@DBLP:journals/corr/MnihKSGAWR13]; [@DoubleDQN-vanHasselt2015]; [@EFM3D-straub2024]; [@EVL-Doc-2025]; [@Frustum-Wikipedia-2025]; [@GaussianSplatting-kerbl2023]; [@GenNBV-chen2024]; [@IQL-kostrikov2021]; [@ProjectAria-ASE-2025]; [@SceneScript-avetisyan2024]; [@VIN-NBV-frahm2025]; [@projectaria-engel2023]
+[@CORAL-cao2019]; [@DBLP:journals/corr/MnihKSGAWR13]; [@DoubleDQN-vanHasselt2015]; [@EFM3D-straub2024]; [@EVL-Doc-2025]; [@Frustum-Wikipedia-2025]; [@GaussianSplatting-kerbl2023]; [@GenNBV-chen2024]; [@IQL-kostrikov2021]; [@ProjectAria-ASE-2025]; [@SceneScript-avetisyan2024]; [@VIN-NBV-frahm2025]; [@projectaria-engel2023]
 :::
 
 :::

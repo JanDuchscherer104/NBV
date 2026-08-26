@@ -14,6 +14,25 @@ object represented by its root-relative pose and metric extents, and
 horizon ``h`` selects an estimand; it is not a substitute for ``b_t`` and does
 not reveal future observations. Supervision, oracle lineage, and policy masks
 remain outside this module.
+The model implements the ``A1--S0-pose--root-moments`` control. For each
+materialized candidate row it separates three information paths:
+
+* a physical trunk encodes the candidate in the rollout-root and current-camera
+  frames together with compact root-scene evidence; it is independent of the
+  target, requested horizon, labels, and authoritative ``action_mask``;
+* a conditional-value query adds the target expressed in the candidate frame
+  and cross-attends to five state tokens: scene, target, causal pose history,
+  remaining budget :math:`b_t`, and requested residual horizon :math:`h`;
+* a modular terminal decoder maps the shared feature to one continuous
+  conditional value. Regression predicts it directly; CORAL discretizes the
+  same fitted-Q target and decodes fixed continuous representatives.
+
+The root scene carrier is intentionally small and lossy: detached EVL channel
+moments plus root-frame semidense point mean, standard deviation, presence, and
+support. It is an executable control, not a claim that global moments are a
+sufficient reconstruction state. Candidate rows never exchange information,
+so a joint row permutation produces the same output permutation and duplicate
+rows remain identical.
 """
 
 from __future__ import annotations
@@ -28,6 +47,12 @@ from torch import Tensor, nn
 
 from ...utils import TargetConfig
 from ..encoders import R6dLffPoseEncoder, R6dLffPoseEncoderConfig
+from ..modules.qh_value_decoders import (
+    QhCoralAuxiliary,
+    QhCoralValueDecoder,
+    QhRegressionValueDecoderConfig,
+    QhValueDecoderConfig,
+)
 
 if TYPE_CHECKING:
     from ...data_handling.qh_data import QhActorTensors
@@ -45,6 +70,10 @@ class QhScoreOutput:
             finite but are neither Q-supervised nor deployable.
         feasibility_logits: ``Tensor["B S N", float32]`` binary-validity
             logits. Positive values denote greater predicted feasibility.
+        value_auxiliary: Optional decoder-specific training payload. CORAL
+            supplies cumulative threshold logits and fixed Q-bin edges;
+            regression supplies ``None``. Bellman backup and online ranking
+            always consume ``conditional_q``, never this auxiliary payload.
     """
 
     conditional_q: Tensor
@@ -52,6 +81,9 @@ class QhScoreOutput:
 
     feasibility_logits: Tensor
     """``Tensor["B S N", float32]`` binary-validity logits from the physical trunk."""
+
+    value_auxiliary: QhCoralAuxiliary | None = None
+    """Optional decoder training payload; policy backup and ranking never consume it."""
 
 
 class TargetFiniteHorizonScorerConfig(TargetConfig["TargetFiniteHorizonScorer"]):
@@ -80,6 +112,14 @@ class TargetFiniteHorizonScorerConfig(TargetConfig["TargetFiniteHorizonScorer"])
 
     dropout: float = Field(default=0.05, ge=0.0, lt=1.0)
     """Training-only dropout in attention and the value head."""
+
+    value_decoder: QhValueDecoderConfig = Field(default_factory=QhRegressionValueDecoderConfig)
+    """Terminal scalar-Q decoder over the shared candidate-state feature.
+
+    Direct regression is canonical. CORAL is an explicitly configured ordinal
+    ablation whose fixed label edges and continuous representatives are bound
+    into scorer and bundle identity.
+    """
 
     max_horizon: int = Field(default=5, gt=0)
     """Largest admitted acquisition horizon; remaining budget is normalized by this value."""
@@ -141,6 +181,21 @@ class TargetFiniteHorizonScorer(nn.Module):
         history, budget, and requested horizon. Candidate rows are independent
         queries over those shared tokens; no attention axis crosses candidates.
 
+        Geometry uses explicit transform direction.
+        ``candidate_pose_relative_root`` is root-from-candidate
+        :math:`T_{r\leftarrow c_i}`. The physical trunk also forms
+        current-from-candidate :math:`T_{c_t\leftarrow c_i}`. Conditional Q
+        receives candidate-from-target :math:`T_{c_i\leftarrow e}`, so the same
+        target induces a different relation for every candidate without making
+        feasibility target-dependent.
+
+        The target token encodes the root-relative target pose plus metric
+        extents. Target source is an experiment-profile fact rather than
+        something inferred from tensor shape. Scene context is the deliberately
+        lossy ``root_moments_v1`` carrier. Causal history is the mean of past
+        selected poses expressed from the current camera; it discards order so
+        ordered history remains an honest representation ablation.
+
     Notes:
         Syntactic admission does not assert empirical support. Lightning owns
         which horizons receive targets, while a verified inference bundle owns
@@ -148,6 +203,8 @@ class TargetFiniteHorizonScorer(nn.Module):
     """
 
     def __init__(self, config: TargetFiniteHorizonScorerConfig) -> None:
+        """Construct the physical trunk, five state-token paths, and decoder."""
+
         super().__init__()
         self.config = config
         self.pose_encoder: R6dLffPoseEncoder = config.pose_encoder.setup_target()
@@ -197,12 +254,27 @@ class TargetFiniteHorizonScorer(nn.Module):
             dropout=float(config.dropout),
             batch_first=True,
         )
-        self.value_head = nn.Sequential(
-            nn.Linear(3 * hidden_dim, hidden_dim),
-            nn.GELU(),
-            nn.Dropout(float(config.dropout)),
-            nn.Linear(hidden_dim, 1),
+        self.value_decoder = config.value_decoder.setup_target(
+            in_dim=3 * hidden_dim,
+            hidden_dim=hidden_dim,
+            dropout=float(config.dropout),
         )
+
+    def validate_value_decoder_state(self, *, require_publishable: bool = False) -> None:
+        """Validate non-learned decoder state against scorer configuration.
+
+        Learned weights may vary while the scorer configuration stays fixed,
+        but CORAL edges and representatives are experiment identity: they
+        determine supervision labels and convert ordinal mass back into the
+        continuous units used by Bellman backup and policy ranking. This hook
+        gives bundle owners one decoder-agnostic validation seam and leaves
+        direct regression as the no-extra-state baseline.
+        """
+
+        if isinstance(self.value_decoder, QhCoralValueDecoder):
+            self.value_decoder.validate_configured_support()
+            if require_publishable:
+                self.value_decoder.require_publishable_support()
 
     def forward(
         self,
@@ -224,6 +296,9 @@ class TargetFiniteHorizonScorer(nn.Module):
         Returns:
             Candidate-aligned conditional Q and feasibility logits. Both are
             finite on materialized realized rows and zero only on padding.
+            CORAL additionally returns threshold logits and its fixed support
+            in ``value_auxiliary`` for Lightning supervision and diagnostics;
+            policy backup and ranking still use only ``conditional_q``.
         """
 
         self._validate_actor(actor)
@@ -292,11 +367,24 @@ class TargetFiniteHorizonScorer(nn.Module):
             need_weights=False,
         )
         attended = attended.reshape(batch_size, steps, width, -1)
-        conditional_q = self.value_head(torch.cat((value_queries, attended, value_queries * attended), dim=-1)).squeeze(
-            -1
-        )
+        decoded_value = self.value_decoder(torch.cat((value_queries, attended, value_queries * attended), dim=-1))
+        conditional_q = decoded_value.conditional_q
         conditional_q = torch.where(candidate_mask, conditional_q, torch.zeros_like(conditional_q))
         feasibility_logits = torch.where(candidate_mask, feasibility_logits, torch.zeros_like(feasibility_logits))
+        value_auxiliary = decoded_value.coral
+        if value_auxiliary is not None:
+            logits = torch.where(
+                candidate_mask.unsqueeze(-1),
+                value_auxiliary.logits,
+                torch.zeros_like(value_auxiliary.logits),
+            )
+            if not bool(torch.isfinite(logits[candidate_mask]).all()):
+                raise ValueError("TargetFiniteHorizonScorer produced nonfinite CORAL logits on materialized rows.")
+            value_auxiliary = QhCoralAuxiliary(
+                logits=logits.float(),
+                bin_edges=value_auxiliary.bin_edges.float(),
+                bin_values=value_auxiliary.bin_values.float(),
+            )
         if not bool(torch.isfinite(conditional_q[candidate_mask]).all()):
             raise ValueError("TargetFiniteHorizonScorer produced nonfinite conditional Q on materialized rows.")
         if not bool(torch.isfinite(feasibility_logits[candidate_mask]).all()):
@@ -304,6 +392,7 @@ class TargetFiniteHorizonScorer(nn.Module):
         return QhScoreOutput(
             conditional_q=conditional_q.float(),
             feasibility_logits=feasibility_logits.float(),
+            value_auxiliary=value_auxiliary,
         )
 
     def _validated_requested_horizon(
@@ -333,7 +422,13 @@ class TargetFiniteHorizonScorer(nn.Module):
         return horizon
 
     def _current_pose_relative_root(self, actor: QhActorTensors, history_pose: PoseTW) -> PoseTW:
-        """Return root-from-current-camera for every realized state."""
+        r"""Return root-from-current-camera :math:`T_{r\leftarrow c_t}`.
+
+        At chain state :math:`s_t`, the current camera is the root identity for
+        :math:`t=0` and the immediately preceding selected candidate for
+        :math:`t>0`. A realized non-root state without that predecessor is not
+        a causal transition and fails closed rather than inventing a pose.
+        """
 
         batch_size, steps = actor.step_mask.shape
         history_index = torch.arange(steps, device=actor.step_mask.device).sub(1).clamp_min(0)
@@ -360,7 +455,20 @@ class TargetFiniteHorizonScorer(nn.Module):
         return PoseTW(values.expand(*values.shape[: -len(sizes) - 1], *sizes, 12))
 
     def _scene_summary(self, actor: QhActorTensors) -> Tensor:
-        """Pool detached root EVL and semidense evidence into one chain token."""
+        r"""Pool the versioned ``root_moments_v1`` scene carrier.
+
+        Every configured EVL field contributes global mean, standard
+        deviation, minimum, and maximum. Semidense world points are transformed
+        by :math:`T_{r\leftarrow w}` into the rollout-root frame and contribute
+        coordinate-wise mean and standard deviation plus explicit presence and
+        valid-support fraction. Source tensors are detached because these are
+        persisted actor observations, not an end-to-end EFM3D training path.
+
+        The summary is shared across all states and candidates in one chain.
+        It records broad occupancy/free-space statistics but no query-local
+        topology, visibility ray, or selected-observation update; richer point
+        and ray memories must be evaluated as separately named carriers.
+        """
 
         context = actor.static_context
         if context is None:  # guarded by _validate_actor

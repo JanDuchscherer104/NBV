@@ -834,16 +834,16 @@
   tier: core
   lookup_rank: 190
   definition_short: Finite-horizon candidate-value function for target-conditioned ARIA-NBV.
-  definition_long: The thesis-core Q_H interface is one shared scalar-requested-horizon scorer
+  definition_long: 'The thesis-core Q_H interface is one shared scalar-requested-horizon scorer
     over finite candidate sets. The current A1 interaction reads actor-visible S0-pose/root-moments
     context, target descriptor, candidate geometry, and causal budget/history, then emits
-    conditional Q values and feasibility logits without reading the action mask. Lightning
-    and online adapters apply the authoritative hard mask, exclude invalid rows from Q supervision
-    and bootstrap, and select only hard-valid candidates. DQN contributes replayed transition
-    learning and Bellman-style finite-action value targets; Double DQN contributes the selector/evaluator
-    backup as an optional estimator control. Exact-Q2 parity and positive held-out headroom
-    gate claims for longer horizons. Learned-only feasibility and P(valid) times Q ranking
-    are not thesis-core behavior.
+    conditional Q values and feasibility logits without reading the action mask. The terminal
+    decoder is modular: direct continuous Huber regression is canonical, while fixed-support
+    CORAL is an implemented ordinal ablation over the same fitted-Q target and decodes back
+    to continuous return units. Lightning and online adapters apply the authoritative hard
+    mask, exclude invalid rows from Q supervision and bootstrap, and select only hard-valid
+    candidates. Exact-Q2 parity and positive held-out headroom gate claims for longer horizons.
+    Learned-only feasibility and P(valid) times Q ranking are not thesis-core behavior.'
   formula:
     label: Finite-horizon candidate value
     tex: Q_H(s_t^{\mathrm{cf0}},a_t,\boldsymbol{\phi}_e)=\mathbb{E}\left[G_t^{(H)}\mid s_t=s_t^{\mathrm{cf0}},a_t,\boldsymbol{\phi}_e\right]
@@ -880,6 +880,45 @@
   - model
   - q-learning
   - thesis-core
+- id: coral-q-decoder
+  anchor: term-coral-q-decoder
+  label: CORAL Q-Value Decoder
+  short: Q-CORAL
+  aliases:
+  - CORAL value head
+  - ordinal Q decoder
+  - finite-horizon CORAL
+  category: model.value.decoder
+  parent: finite-horizon-q-function
+  tier: support
+  lookup_rank: 191
+  definition_short: Ordinal ablation over the same continuous fitted-Q target as direct regression.
+  definition_long: Q-CORAL assigns each continuous fitted-Q target to one ordinal class using
+    fixed increasing edges, trains K-1 cumulative thresholds with CORAL loss, repairs any
+    negative class-mass differences for decoding, and averages fixed increasing Q representatives
+    to recover the scalar conditional value used by backup and ranking. CORAL itself supplies
+    order but no metric spacing; edges, representatives, initialization, and decoder kind
+    are manifest identity. Hard-invalid and unsupported rows are excluded rather than assigned
+    the lowest class, and support saturation plus threshold-order violations are reported.
+  symbol_refs:
+  - rl.conditional_q
+  - rl.coral_q_edge
+  - rl.coral_q_value
+  - rl.coral_q_label
+  equation_refs:
+  - rl.qh_coral_interface
+  internal_links:
+  - docs/typst/thesis/sections/04-method/04-05-finite-candidate-value-model.typ
+  citations:
+  - CORAL-cao2019
+  related:
+  - finite-horizon-q-function
+  - finite-horizon-return
+  - validity-mask
+  kg_tags:
+  - model
+  - ordinal-regression
+  - ablation
 - id: validity-mask
   anchor: term-validity-mask
   label: Validity Mask

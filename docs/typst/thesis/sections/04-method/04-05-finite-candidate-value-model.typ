@@ -19,15 +19,15 @@
   citation: [@VIN-NBV-frahm2025 @CORAL-cao2019 @DoubleDQN-vanHasselt2015],
   source: "aria_nbv/aria_nbv/vin/models/target_finite_horizon.py; aria_nbv/aria_nbv/lightning/qh_module.py; aria_nbv/aria_nbv/oracle/pipelines/online_qh.py; aria_nbv/tests/vin/test_target_finite_horizon.py",
   gate: [retain the one-step scorer as a matched control, certify exact Q2, and require held-out oracle-rescored policy evidence],
-)[The A1--S0-pose--root-moments finite-horizon scorer, typed output, scalar horizon query, feasibility auxiliary, fitted-Q learner, and hard-masked online adapter are implemented. The one-step VIN/CORAL scorer remains historical evidence and a myopic control; scientific policy evidence is pending.]
+)[The A1--S0-pose--root-moments finite-horizon scorer, typed output, scalar horizon query, feasibility auxiliary, modular regression/CORAL value decoders, fitted-Q learner, and hard-masked online adapter are implemented. The one-step VIN/CORAL scorer remains historical evidence and a myopic control; scientific policy evidence is pending.]
 
 The actor DTO carries root semidense evidence, GT-derived target pose and extent, root-relative candidate geometry, selected-pose history, remaining budget, and candidate materialization support. It deliberately excludes supervision and audit lineage from scorer inputs. The current model makes this an executable `S0-pose` baseline, but neither a trained checkpoint nor task-sufficient reconstruction state follows from interface tests alone.
 
-The scorer emits a typed pair before policy masking:
+The scorer emits two policy-facing tensors before masking:
 
 #eqs.rl.qh_scorer_interface
 
-`conditional_q` is finite for every materialized row and is trained only where hard validity and Q-label support admit a target. `feasibility_logits` is produced by a target-, horizon-, and action-mask-independent physical trunk and may receive binary supervision on labelled materialized rows. Lightning owns hard-mask admission, Huber loss, optional feasibility BCE, exact $h arrow.l h-1$ recursion checks, Double-Q targets, and target synchronization. Online inference compacts conditional values only through the authoritative hard mask.
+`conditional_q` is finite for every materialized row and is trained only where hard validity and Q-label support admit a target. `feasibility_logits` is produced by a target-, horizon-, and action-mask-independent physical trunk and may receive binary supervision on labelled materialized rows. A configured value decoder may attach training-only tensors, but neither policy masking nor feasibility reads them. Lightning owns hard-mask admission, decoder-specific value loss, optional feasibility BCE, exact $h arrow.l h-1$ recursion checks, Double-Q targets, and target synchronization. Online inference compacts conditional values only through the authoritative hard mask.
 
 === Scalar requested-horizon scorer
 
@@ -103,12 +103,33 @@ The objective-design comparison is therefore:
 
 1. dense continuous $Q_1$ supervision on every candidate admitted by `q_train_mask`;
 2. exact selected-action $Q_2$ supervision as a base-case certification;
-3. the shared scalar-horizon model versus fixed-H or separate-head ablations for $h=1,dots,H_"max"$;
-4. Double-Q selector/evaluator backups as a max-bias ablation;
-5. behavior-policy Monte-Carlo return regression as a separate estimand;
-6. an uncentred one-step-plus-residual decomposition.
+3. direct continuous regression versus fixed-support CORAL decoding over the same fitted-Q targets;
+4. the shared scalar-horizon model versus fixed-H or separate-head ablations for $h=1,dots,H_"max"$;
+5. Double-Q selector/evaluator backups as a max-bias ablation;
+6. behavior-policy Monte-Carlo return regression as a separate estimand;
+7. an uncentred one-step-plus-residual decomposition.
 
 Because dense one-step rows vastly outnumber selected transitions at longer horizons, training and evaluation must report support, loss, calibration, ranking, and selected-action regret separately by horizon under either interface. If requested horizons share one learner, their sampling or weighting must be explicit; an aggregate loss must not allow $Q_1$ to hide longer-horizon failure.
+
+=== Modular continuous-value decoding
+
+#thesis_status(
+  implementation: "implemented",
+  evidence: "pending",
+  citation: [@CORAL-cao2019 @QRDQN-dabney2017],
+  source: "aria_nbv/aria_nbv/vin/modules/qh_value_decoders.py; aria_nbv/aria_nbv/lightning/qh_module.py; aria_nbv/tests/vin/test_qh_value_decoders.py",
+  gate: [fit-data-only support selection, held-out per-horizon ranking and calibration, support-saturation reports, and matched policy evaluation],
+)[Direct regression and fixed-support CORAL are executable alternatives over the same candidate-state features and the same continuous fitted-Q targets. Regression remains canonical; CORAL is an ordinal ablation, not a new action-value estimand.]
+
+The representation trunk produces one feature vector per materialized candidate row. A terminal decoder maps that vector to the scalar `conditional_q` consumed by the unchanged Double-Q backup and hard-masked selector. The regression decoder applies a per-row MLP and linear output, trained with Huber loss in continuous root-gain return units. The CORAL decoder applies a per-row MLP and $K-1$ cumulative thresholds. For fitted-Q target $y_n$, fixed edges #symb.rl.coral_q_edge create the ordinal class #symb.rl.coral_q_label; standard cumulative binary cross-entropy supervises the thresholds @CORAL-cao2019:
+
+#eqs.rl.qh_coral_interface
+
+CORAL provides order, not metric distance. The continuous interpretation used by backup and ranking is an additional experiment contract: repaired class mass is averaged through fixed, strictly increasing representatives #symb.rl.coral_q_value. Edges, representatives, threshold initialization, and decoder kind are therefore scorer configuration and inference-bundle identity. Changing them defines another model even if $K$ is unchanged. Invalid candidates are not mapped to the lowest class; hard-invalid and unsupported selected rows are excluded before either Huber or CORAL loss.
+
+The outer CORAL classes are open-ended while decoded values saturate at the outer representatives. Every CORAL run consequently reports the fraction of fitted-Q targets below and above the representative support, the outer-class fraction, and pre-repair cumulative-probability order violations. Support edges and representatives must be selected using fit data only and then frozen before validation or test evaluation. A one-epoch GPU smoke proves the executable transaction and bundle reconstruction, not scientific superiority or comparability of Huber and cumulative-BCE loss magnitudes.
+
+If a third decoder is promoted, quantile regression is the most coherent next study: it estimates a return distribution whose expectation can preserve the scalar ranking seam, whereas CORAL only discretizes one scalar target @QRDQN-dabney2017. Such a head is justified only after stochastic returns or actor-state aliasing are measured, and it requires a separately frozen distributional Bellman projection, quantile support, risk-neutral or risk-sensitive decoding rule, and calibration evaluation. It must not be introduced as a stylistic replacement for direct Q.
 
 === One-step base and finite-horizon residual
 
@@ -138,13 +159,7 @@ $
   #eqs.rl.qh_uncentered_residual
 $
 
-CORAL remains a motivated one-step ranking and calibration interface,
-
-$
-  #eqs.rl.qh_coral_interface
-$
-
-but additive finite-horizon returns are learned in continuous root-gain units. Fixed-H and requested-horizon models, the exact H=2 control, Double-Q ablation, Monte-Carlo control, and residual learner form separate comparisons rather than one implicit architecture.
+The historical one-step CORAL score remains a motivated myopic ranking and calibration interface, but it must not be confused with the implemented finite-horizon CORAL decoder above. The historical head discretizes one-step RRI; the new decoder discretizes the continuous fitted-Q target and decodes back to return units. Fixed-H and requested-horizon models, the exact H=2 control, Double-Q ablation, Monte-Carlo control, and residual learner form separate comparisons rather than one implicit architecture.
 
 #research_todo(
   [Compare staged and joint shared-parameter variable-horizon fitted Q against separate per-horizon heads; include dense Q1, exact Q2, Double Q, behavior-return regression, and the uncentred residual after positive oracle-lookahead headroom is established.],
