@@ -3684,10 +3684,13 @@ def test_root_relative_candidate_rows_preserve_shell_order_without_materializing
         tmp_path / "rollouts.zarr",
         build_rollout_records(horizon=2, num_samples=6, seed=160)[:2],
     )
+    root = zarr.open_group(result.store_dir, mode="a")
+    _zarr_array(root, "candidates/actor_action_mask")[0] = np.asarray(False, dtype=np.bool_)
     reader = RolloutZarrStoreReader(result.store_dir)
 
     def scalar_reference(
         *,
+        rollout_row_id: int | None = None,
         step_row_id: int | None = None,
         actor_valid_only: bool = False,
     ) -> list[dict[str, object]]:
@@ -3699,6 +3702,8 @@ def test_root_relative_candidate_rows_preserve_shell_order_without_materializing
         rollout_count = int(np.asarray(reader.array("rollouts/rollout_row_id")).size)
         for rollout_position in range(rollout_count):
             rollout = rollout_at(reader, rollout_position)
+            if rollout_row_id is not None and rollout.rollout_row_id != rollout_row_id:
+                continue
             root_center = np.asarray(rollout.root_pose_world[9:12], dtype=np.float64)
             for step in rollout_steps(reader, rollout):
                 if step_row_id is not None and step.step_row_id != step_row_id:
@@ -3733,6 +3738,7 @@ def test_root_relative_candidate_rows_preserve_shell_order_without_materializing
 
     expected_all = scalar_reference()
     expected_valid = scalar_reference(actor_valid_only=True)
+    expected_rollout = scalar_reference(rollout_row_id=int(expected_all[-1]["rollout_row_id"]))
     expected_step = scalar_reference(step_row_id=int(expected_all[-1]["step_row_id"]))
 
     import aria_nbv.rollouts.inspection as inspection
@@ -3744,6 +3750,9 @@ def test_root_relative_candidate_rows_preserve_shell_order_without_materializing
 
     assert root_relative_candidate_rows(reader) == expected_all
     assert root_relative_candidate_rows(reader, actor_valid_only=True) == expected_valid
+    assert (
+        root_relative_candidate_rows(reader, rollout_row_id=int(expected_all[-1]["rollout_row_id"])) == expected_rollout
+    )
     assert root_relative_candidate_rows(reader, step_row_id=int(expected_all[-1]["step_row_id"])) == expected_step
 
 
