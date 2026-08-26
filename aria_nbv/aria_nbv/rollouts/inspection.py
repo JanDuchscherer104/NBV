@@ -7494,12 +7494,7 @@ def _target_surface_frustum_mask(
         v = cy - fy * y / z
     front_facing = np.sum(sphere_directions * (camera_center - surface_points), axis=-1) > _GEOMETRY_EPSILON
     return np.asarray(
-        front_facing
-        & (z > _GEOMETRY_EPSILON)
-        & (u >= 0.0)
-        & (u <= float(width))
-        & (v >= 0.0)
-        & (v <= float(height)),
+        front_facing & (z > _GEOMETRY_EPSILON) & (u >= 0.0) & (u <= float(width)) & (v >= 0.0) & (v <= float(height)),
         dtype=np.bool_,
     )
 
