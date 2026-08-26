@@ -8,9 +8,9 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from aria_nbv.utils.fingerprints import stable_msgspec_hash
 
 from aria_nbv.oracle.pipelines.admission_evidence import read_campaign_admission_evidence
-from aria_nbv.utils.fingerprints import stable_msgspec_hash
 
 
 def _payload(rows: list[dict[str, Any]]) -> dict[str, Any]:
