@@ -8,14 +8,16 @@ confidence: high
 canonical_updates_needed:
   - scripts/quarto_generate_api_docs.sh
   - scripts/quartodoc_inject_package_readmes.py
+  - aria_nbv/aria_nbv/vin/README.md
 touched_owner_paths:
   - scripts/quarto_generate_api_docs.sh
   - scripts/quartodoc_inject_package_readmes.py
   - scripts/tests/test_quarto_generate_api_docs.sh
   - scripts/tests/test_quartodoc_inject_package_readmes.py
+  - aria_nbv/aria_nbv/vin/README.md
 codex_thread: codex://threads/01a033b8-ed20-76a0-9627-2679b556cbff
 repo_object_format: sha1
-repo_head: 071d37b8b6b50c483cf0cdfb4543adb7194a8b88
+repo_head: a822cde9209a6c16e61092a688f877a31a682481
 repo_branch: "codex/quartodoc-package-readmes"
 worktree_kind: linked
 ---
@@ -41,6 +43,8 @@ packages remain outside the existing public Quartodoc surface.
 
 ## Commits
 - [071d37b8b6b50c483cf0cdfb4543adb7194a8b88](https://github.com/JanDuchscherer104/ARIA-NBV/commit/071d37b8b6b50c483cf0cdfb4543adb7194a8b88)
+- [8e3807b8f78516b1d3a3eb1d3692a93b6cdc6cbb](https://github.com/JanDuchscherer104/ARIA-NBV/commit/8e3807b8f78516b1d3a3eb1d3692a93b6cdc6cbb)
+- [a822cde9209a6c16e61092a688f877a31a682481](https://github.com/JanDuchscherer104/ARIA-NBV/commit/a822cde9209a6c16e61092a688f877a31a682481)
 
 ## Verification
 - Five focused generator/injection tests passed.
@@ -50,7 +54,10 @@ packages remain outside the existing public Quartodoc surface.
   expected existing Quartodoc docstring warnings and missing-target warnings
   remain when rendering a single page without the rest of the generated graph.
 - The generated VIN page returned HTTP 200 from a localhost tmux-hosted preview.
+- Its Mermaid graph now has an explicit dark text color in every semantic node
+  class, preserving legibility against its light semantic fills under Quarto's
+  configured dark Mermaid theme.
 
 ## Canonical Owner Impact
-Updated the API-generation seam and its focused tests. No Typst or package
-runtime contract changed.
+Updated the API-generation seam, focused tests, and the VIN user-facing
+architecture guide. No Typst or package runtime contract changed.
