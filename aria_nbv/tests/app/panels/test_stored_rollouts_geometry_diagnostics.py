@@ -17,7 +17,7 @@ import streamlit as st
 
 pytest.importorskip("efm3d")
 
-from aria_nbv.app.panels._stored_rollouts import candidate_generation, validity_support
+from aria_nbv.app.panels._stored_rollouts import candidate_generation, qh_admission, validity_support
 from aria_nbv.rollouts.inspection import GeometryFrame
 
 
@@ -102,6 +102,85 @@ def test_normalized_radius_figure_exposes_unit_target_range_threshold() -> None:
 
     assert sorted(float(value) for trace in figure.data for value in trace.y) == [0.2, 0.4, 0.8, 1.2]
     assert any(shape.y0 == 1.0 and shape.y1 == 1.0 for shape in figure.layout.shapes)
+
+
+def test_target_s2_figures_render_complete_heatmaps_and_projection_overlays() -> None:
+    """Both S² channels retain a 3D heatmap with target-frame unit-vector points."""
+
+    payload = {
+        "movement_counts": np.asarray([[0, 2], [1, 0]], dtype=np.int64),
+        "view_direction_counts": np.asarray([[3, 0], [0, 1]], dtype=np.int64),
+        "movement_projection": np.asarray([[1.0, 0.0, 0.0]], dtype=np.float32),
+        "movement_projection_normalized_lengths": np.asarray([0.75], dtype=np.float32),
+        "view_direction_projection": np.asarray([[0.0, 1.0, 0.0]], dtype=np.float32),
+    }
+
+    movement = qh_admission._s2_direction_figure(payload, channel="movement")
+    view = qh_admission._s2_direction_figure(payload, channel="view_direction")
+
+    for figure, expected_count, expected_name in (
+        (movement, 3, "movement projection"),
+        (view, 4, "camera +Z projection"),
+    ):
+        assert isinstance(figure.data[0], go.Surface)
+        assert int(np.asarray(figure.data[0].surfacecolor).sum()) == expected_count
+        assert isinstance(figure.data[1], go.Scatter3d)
+        assert figure.data[1].name == expected_name
+        assert figure.layout.scene.xaxis.title.text == "target x"
+        assert figure.layout.scene.yaxis.title.text == "target y"
+        assert figure.layout.scene.zaxis.title.text == "target z"
+
+
+def test_target_s2_panel_dispatches_the_complete_store_reducer_only_after_toggle(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The panel owns controls and rendering, while the session owns the full-store read."""
+
+    class Column:
+        def __enter__(self) -> "Column":
+            return self
+
+        def __exit__(self, *_args: Any) -> None:
+            return None
+
+        def number_input(self, _label: str, *, value: int, **_kwargs: Any) -> int:
+            return value
+
+    payload = {
+        "movement_counts": np.asarray([[1]], dtype=np.int64),
+        "view_direction_counts": np.asarray([[1]], dtype=np.int64),
+        "movement_projection": np.asarray([[1.0, 0.0, 0.0]], dtype=np.float32),
+        "movement_projection_normalized_lengths": np.asarray([0.5], dtype=np.float32),
+        "view_direction_projection": np.asarray([[0.0, 0.0, 1.0]], dtype=np.float32),
+        "movement_count": 1,
+        "view_direction_count": 1,
+        "movement_skipped_zero_count": 0,
+        "rollout_count": 1,
+        "issues": (),
+    }
+    calls: list[tuple[int, int]] = []
+    rendered: list[go.Figure] = []
+
+    class Handle:
+        def s2_direction_histogram(self, *, azimuth_bins: int, elevation_bins: int) -> dict[str, Any]:
+            calls.append((azimuth_bins, elevation_bins))
+            return payload
+
+    monkeypatch.setattr(st, "markdown", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(st, "caption", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(st, "columns", lambda _count: [Column(), Column()])
+    monkeypatch.setattr(st, "toggle", lambda *_args, **_kwargs: True)
+    monkeypatch.setattr(st, "warning", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(st, "dataframe", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(qh_admission, "_render_plot", lambda figure, *_args, **_kwargs: rendered.append(figure))
+
+    qh_admission._render_s2_direction_histograms(Handle())
+
+    assert calls == [(36, 18)]
+    assert [figure.layout.title.text for figure in rendered] == [
+        "Root-target-normalized movement on target-frame S²",
+        "Selected camera view directions on target-frame S²",
+    ]
 
 
 def test_bounded_geometry_is_default_visible_in_admission_surface() -> None:
