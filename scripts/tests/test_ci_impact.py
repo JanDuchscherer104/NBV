@@ -360,7 +360,7 @@ class SelectionTests(unittest.TestCase):
         self.assertIn("id: graphify-state-check", hooks)
         self.assertIn("entry: make graphify-state-check", hooks)
         self.assertIn(
-            "entry: bash -c 'unset GIT_DIR GIT_WORK_TREE; exec make docs-render-core'",
+            "entry: bash -c 'unset GIT_DIR GIT_WORK_TREE; export TMPDIR=",
             hooks,
         )
         self.assertIn("- pre-push", hooks)

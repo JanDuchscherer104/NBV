@@ -26,6 +26,29 @@ def fail(message: str) -> None:
     raise ValueError(message)
 
 
+def git_temporary_root(root: Path) -> Path:
+    """Return repository-local administrative storage for transient work."""
+    marker = root / ".git"
+    if marker.is_dir():
+        temporary_root = marker.resolve()
+    elif marker.is_file():
+        try:
+            binding = marker.read_text(encoding="utf-8").strip()
+        except (OSError, UnicodeDecodeError) as error:
+            fail(f"Git administrative directory is unavailable: {error}")
+        if not binding.startswith("gitdir: "):
+            fail("Git administrative directory is unavailable")
+        configured = Path(binding.removeprefix("gitdir: "))
+        temporary_root = (
+            configured if configured.is_absolute() else root / configured
+        ).resolve()
+    else:
+        fail("Git administrative directory is unavailable")
+    if not temporary_root.is_dir():
+        fail("Git administrative directory is unavailable")
+    return temporary_root
+
+
 def trusted_graphify_cli(root: Path) -> Path:
     """Return the installed CLI only when it is outside the repository."""
     discovered = shutil.which("graphify")
@@ -68,7 +91,9 @@ def trusted_graphify_runtime(root: Path) -> tuple[Path, Path]:
     if configured != canonical_interpreter:
         fail("Graphify interpreter marker does not match trusted CLI")
 
-    with tempfile.TemporaryDirectory(prefix="aria-graphify-reconcile-trust-") as neutral:
+    with tempfile.TemporaryDirectory(
+        prefix="aria-graphify-reconcile-trust-", dir=git_temporary_root(root)
+    ) as neutral:
         environment = {
             key: value
             for key, value in os.environ.items()
@@ -267,7 +292,9 @@ def run(root: Path, *, modes: tuple[str, ...] | None = None) -> None:
     rebuild_projection = bool(freshness.projection_owner_changes(root))
 
     scripts = Path(__file__).resolve().parent
-    with tempfile.TemporaryDirectory(prefix="aria-graphify-reconcile-backup-") as temporary:
+    with tempfile.TemporaryDirectory(
+        prefix="aria-graphify-reconcile-backup-", dir=git_temporary_root(root)
+    ) as temporary:
         backup = Path(temporary)
         _backup_generation(root, backup)
         try:
