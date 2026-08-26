@@ -1,110 +1,63 @@
 # Oracle Pipelines
 
-`aria_nbv.oracle.pipelines` owns operational Oracle-label generation and the
-composition of immutable VIN and rollout datasets. The package marker provides
-no convenience exports.
+`aria_nbv.oracle.pipelines` composes data access, candidate generation,
+privileged scoring, replay, and immutable persistence. It does not redefine the
+lower-level storage, target, RRI, or scorer contracts.
 
-## Layout
+## Command-Line Workflows
 
-```text
-oracle/pipelines/
-  evaluated_rollout.py
-  offline_vin.py
-  online_vin.py
-  rollout_dataset.py
-  scene_labels.py
-  shards.py
-  cli.py
+Run from `aria_nbv/`:
+
+| Command | Purpose |
+| --- | --- |
+| `nbv-build-offline` | Build an immutable one-step VIN store. |
+| `nbv-build-rollouts` | Generate one rollout store or one planned shard. |
+| `nbv-plan-rollout-shards` | Bind ordered source rows into a shard manifest. |
+| `nbv-plan-rollout-source` | Build a source-population manifest. |
+| `nbv-status-rollout-shards` | Validate and summarize shard completion. |
+| `nbv-rollout-campaign` | Run a bounded resumable rollout campaign. |
+
+Always validate configuration before generation:
+
+```sh
+uv run nbv-build-offline \
+  --config-path ../.configs/build_vin_offline_81286.toml \
+  --dry-run
+uv run nbv-build-rollouts \
+  --config-path ../.configs/build_rollouts_v1_smoke.toml \
+  --dry-run
 ```
 
-Baseline: `6b72b62639e24fc13bba845ec63bc8fc72c77aae`
+## Composition Boundaries
 
-Inventory generated: `2026-07-10T16:10:28.231382+00:00`
+| Module | Responsibility |
+| --- | --- |
+| `offline_vin` | Stream raw snippets, prepare expensive evidence, and write VIN rows. |
+| `rollout_dataset` | Compose target tasks, candidates, oracle scoring, replay, and store writes. |
+| `scene_labels` | Generate scene-level labels over finite candidate tables. |
+| `evaluated_rollout` | Bind replay transitions to retained oracle evaluation. |
+| `shards` | Plan and atomically promote independent generation shards. |
+| `campaign` | Resume bounded local/CUDA campaign work with explicit receipts. |
+| `online_vin` | Live one-step oracle dataset for the historical control. |
+| `online_qh` | Verify an immutable QH bundle and adapt hard-valid values to replay `CandidateScores`. |
 
-## Symbol Ownership Matrix
+`online_qh` fails closed on actor, learning, target, candidate-generator,
+action-mask, representation, geometry, or trained-horizon mismatches. It does
+not rank by `P(valid) * Q`; the authoritative hard mask defines deployable
+support.
 
-### `__init__.py`
+## Verification
 
-No top-level AST definitions; imported names and `__all__` are excluded.
+```sh
+cd aria_nbv
+uv run ruff check aria_nbv/oracle/pipelines
+uv run pytest tests/rollouts/test_cli_typer.py
+uv run pytest tests/oracle/test_online_qh.py
+uv run nbv-build-rollouts \
+  --config-path ../.configs/build_rollouts_v1_smoke.toml \
+  --dry-run
+```
 
-### `evaluated_rollout.py`
-
-| Symbol | Kind | Visibility | Before module | Mechanical module | Final owner | Status |
-|---|---|---|---|---|---|---|
-| `OracleInvalidity` | protocol | public | implicit exception contract | `oracle.pipelines.evaluated_rollout` | `oracle.pipelines.evaluated_rollout` | moved |
-| `OracleCandidateScorer` | protocol | public | replay evaluator callable | `oracle.pipelines.evaluated_rollout` | `oracle.pipelines.evaluated_rollout` | moved |
-| `EvaluatedRolloutStep` | DTO | public | wide replay step | `oracle.pipelines.evaluated_rollout` | `oracle.pipelines.evaluated_rollout` | moved |
-| `EvaluatedRollout` | DTO | public | wide replay result | `oracle.pipelines.evaluated_rollout` | `oracle.pipelines.evaluated_rollout` | moved |
-| `EvaluatedRolloutRecord` | DTO | public | `rollouts.trace.RolloutZarrRecord` | `oracle.pipelines.evaluated_rollout` | `oracle.pipelines.evaluated_rollout` | moved |
-| `OracleReplayAdapter` | class | public | writer-local target adapter | `oracle.pipelines.evaluated_rollout` | `oracle.pipelines.evaluated_rollout` | moved |
-| `OracleReplayInvalidityError` | exception | public | writer-local exception | `oracle.pipelines.evaluated_rollout` | `oracle.pipelines.evaluated_rollout` | moved |
-| `_PipelineOracleState` | DTO | private | replay trajectory Oracle state | `oracle.pipelines.evaluated_rollout` | `oracle.pipelines.evaluated_rollout` | moved |
-
-### `rollout_dataset.py`
-
-| Symbol | Kind | Visibility | Before module | Mechanical module | Final owner | Status |
-|---|---|---|---|---|---|---|
-| `RolloutDatasetWriterStats` | `DTO` | `public` | `rollouts.dataset_writer` | `oracle.pipelines.rollout_dataset` | `oracle.pipelines.rollout_dataset` | `moved` |
-| `RolloutRecipeConfig` | `config` | `public` | `rollouts.dataset_writer` | `oracle.pipelines.rollout_dataset` | `oracle.pipelines.rollout_dataset` | `moved` |
-| `SelectedDepthRetentionConfig` | `config` | `public` | `rollouts.dataset_writer` | `oracle.pipelines.rollout_dataset` | `oracle.pipelines.rollout_dataset` | `moved` |
-| `RolloutDatasetWriterConfig` | `config` | `public` | `rollouts.dataset_writer` | `oracle.pipelines.rollout_dataset` | `oracle.pipelines.rollout_dataset` | `moved` |
-| `_RolloutSourceLineageBuilder` | `DTO` | `private` | `rollouts.dataset_writer` | `oracle.pipelines.rollout_dataset` | `oracle.pipelines.rollout_dataset` | `moved` |
-| `_RolloutTargetSelectionResult` | `DTO` | `private` | `rollouts.dataset_writer` | `oracle.pipelines.rollout_dataset` | `oracle.pipelines.rollout_dataset` | `moved` |
-| `_SplitRecord` | `protocol` | `private` | untyped lineage helper input | `oracle.pipelines.rollout_dataset` | `oracle.pipelines.rollout_dataset` | `moved` |
-| `RolloutDatasetWriter` | `class` | `public` | `rollouts.dataset_writer` | `oracle.pipelines.rollout_dataset` | `oracle.pipelines.rollout_dataset` | `moved` |
-| `_lineage_split` | `function` | `private` | `rollouts.dataset_writer` | `oracle.pipelines.rollout_dataset` | `oracle.pipelines.rollout_dataset` | `moved` |
-
-### `offline_vin.py`
-
-| Symbol | Kind | Visibility | Before module | Mechanical module | Final owner | Status |
-|---|---|---|---|---|---|---|
-| `VinOfflineWriterConfig` | `config` | `public leaf` | `data_handling.vin_store.writer` | `oracle.pipelines.offline_vin` | `oracle.pipelines.offline_vin` | `moved` |
-| `VinOfflineWriter` | `class` | `public leaf` | `data_handling.vin_store.writer` | `oracle.pipelines.offline_vin` | `oracle.pipelines.offline_vin` | `moved` |
-
-### `scene_labels.py`
-
-| Symbol | Kind | Visibility | Before module | Mechanical module | Final owner | Status |
-|---|---|---|---|---|---|---|
-| `OracleRriSample` | `DTO` | `public leaf` | `pipelines.oracle_rri_labeler` | `oracle.pipelines.scene_labels` | `oracle.pipelines.scene_labels` | `moved` |
-| `_target_cls` | `function` | `private` | `pipelines.oracle_rri_labeler` | `oracle.pipelines.scene_labels` | `oracle.pipelines.scene_labels` | `moved` |
-| `OracleRriLabelerConfig` | `config` | `public leaf` | `pipelines.oracle_rri_labeler` | `oracle.pipelines.scene_labels` | `oracle.pipelines.scene_labels` | `moved` |
-| `OracleRriLabeler` | `class` | `public leaf` | `pipelines.oracle_rri_labeler` | `oracle.pipelines.scene_labels` | `oracle.pipelines.scene_labels` | `moved` |
-
-### `shards.py`
-
-| Symbol | Kind | Visibility | Before module | Mechanical module | Final owner | Status |
-|---|---|---|---|---|---|---|
-| `RolloutShardRunResult` | `DTO` | `public` | `rollouts.shards` | `oracle.pipelines.shards` | `oracle.pipelines.shards` | `moved` |
-| `RolloutShardStatus` | `DTO` | `public` | `rollouts.shards` | `oracle.pipelines.shards` | `oracle.pipelines.shards` | `moved` |
-| `RolloutShardCampaignStatus` | `DTO` | `public` | `rollouts.shards` | `oracle.pipelines.shards` | `oracle.pipelines.shards` | `moved` |
-| `plan_rollout_shards` | `function` | `public` | `rollouts.shards` | `oracle.pipelines.shards` | `oracle.pipelines.shards` | `moved` |
-| `write_rollout_shard_manifest_from_config` | `function` | `public` | `rollouts.shards` | `oracle.pipelines.shards` | `oracle.pipelines.shards` | `moved` |
-| `summarize_rollout_shard_campaign` | `function` | `public` | `rollouts.shards` | `oracle.pipelines.shards` | `oracle.pipelines.shards` | `moved` |
-| `run_rollout_shard` | `function` | `public` | `rollouts.shards` | `oracle.pipelines.shards` | `oracle.pipelines.shards` | `moved` |
-| `_summarize_rollout_shard_entry` | `function` | `private` | `rollouts.shards` | `oracle.pipelines.shards` | `oracle.pipelines.shards` | `moved` |
-| `_records_by_split` | `function` | `private` | `rollouts.shards` | `oracle.pipelines.shards` | `oracle.pipelines.shards` | `moved` |
-| `_chunks` | `function` | `private` | `rollouts.shards` | `oracle.pipelines.shards` | `oracle.pipelines.shards` | `moved` |
-| `_completed_shard_is_current` | `function` | `private` | `rollouts.shards` | `oracle.pipelines.shards` | `oracle.pipelines.shards` | `moved` |
-| `_owner_payload` | `function` | `private` | `rollouts.shards` | `oracle.pipelines.shards` | `oracle.pipelines.shards` | `moved` |
-| `_success_payload` | `function` | `private` | `rollouts.shards` | `oracle.pipelines.shards` | `oracle.pipelines.shards` | `moved` |
-| `_write_failed_marker` | `function` | `private` | `rollouts.shards` | `oracle.pipelines.shards` | `oracle.pipelines.shards` | `moved` |
-| `_write_json_atomic` | `function` | `private` | `rollouts.shards` | `oracle.pipelines.shards` | `oracle.pipelines.shards` | `moved` |
-
-### `cli.py`
-
-| Symbol | Kind | Visibility | Before module | Mechanical module | Final owner | Status |
-|---|---|---|---|---|---|---|
-| `_HELP_SETTINGS` | `constant` | `private` | `rollouts.cli` | `oracle.pipelines.cli` | `oracle.pipelines.cli` | `moved` |
-| `build_app` | `constant` | `public` | `rollouts.cli` | `oracle.pipelines.cli` | `oracle.pipelines.cli` | `moved` |
-| `offline_app` | `constant` | `public leaf` | `data_handling.vin_store.cli` | `oracle.pipelines.cli` | `oracle.pipelines.cli` | `moved` |
-| `plan_app` | `constant` | `public` | `rollouts.cli` | `oracle.pipelines.cli` | `oracle.pipelines.cli` | `moved` |
-| `status_app` | `constant` | `public` | `rollouts.cli` | `oracle.pipelines.cli` | `oracle.pipelines.cli` | `moved` |
-| `main` | `function` | `public` | `rollouts.cli` | `oracle.pipelines.cli` | `oracle.pipelines.cli` | `moved` |
-| `offline_main` | `function` | `public leaf` | `data_handling.vin_store.cli` | `oracle.pipelines.cli` | `oracle.pipelines.cli` | `moved` |
-| `plan_main` | `function` | `public` | `rollouts.cli` | `oracle.pipelines.cli` | `oracle.pipelines.cli` | `moved` |
-| `status_main` | `function` | `public` | `rollouts.cli` | `oracle.pipelines.cli` | `oracle.pipelines.cli` | `moved` |
-| `build_rollouts_command` | `function` | `public` | `rollouts.cli` | `oracle.pipelines.cli` | `oracle.pipelines.cli` | `moved` |
-| `build_offline_command` | `function` | `public leaf` | `data_handling.vin_store.cli` | `oracle.pipelines.cli` | `oracle.pipelines.cli` | `moved` |
-| `plan_rollout_shards_command` | `function` | `public` | `rollouts.cli` | `oracle.pipelines.cli` | `oracle.pipelines.cli` | `moved` |
-| `status_rollout_shards_command` | `function` | `public` | `rollouts.cli` | `oracle.pipelines.cli` | `oracle.pipelines.cli` | `moved` |
-| `_raw_argv` | `function` | `private` | `rollouts.cli` | `oracle.pipelines.cli` | `oracle.pipelines.cli` | `moved` |
+Use the [data-handling guide](../../data_handling/README.md) for source/store
+preparation and the [rollout guide](../../rollouts/README.md) for persisted
+validation and inspection.

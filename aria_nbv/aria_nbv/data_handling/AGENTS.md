@@ -6,9 +6,11 @@ summary: Raw EFM snippets and immutable VIN-store ownership and validation.
 
 # Data Handling Boundary
 
-`aria_nbv.data_handling` owns raw snippets, VIN batches, and immutable VIN
-offline stores. The public surface is `__init__.py`; store format and lifecycle
-are owned by `vin_store/format.py`, `store.py`, `writer.py`, and `dataset.py`.
+`aria_nbv.data_handling` owns raw snippets, VIN batches, immutable VIN offline
+stores, and the QH join from rollout source references to actor-visible tensors
+and separately held supervision. The root public surface stays narrow; store
+format/lifecycle live under `vin_store/`, while `qh_data/` owns QH views,
+materialization, batching, and dataset admission.
 
 ## Local Hazards
 
@@ -24,6 +26,9 @@ are owned by `vin_store/format.py`, `store.py`, `writer.py`, and `dataset.py`.
   updates the public surface, documentation, and focused tests together.
 - Oracle/pipeline behavior belongs outside this module; follow the owning leaf
   contract for online labeling or Lightning selection.
+- Preserve the `QhActorTensors`/`QhSupervision` boundary. Oracle labels and
+  audit payloads do not enter scorer inputs; padding, candidate, action, and Q
+  label masks retain distinct meanings.
 
 ## Procedure And Proof
 
@@ -31,3 +36,6 @@ are owned by `vin_store/format.py`, `store.py`, `writer.py`, and `dataset.py`.
   then `cd aria_nbv && uv run pytest tests/data_handling/test_vin_offline_store.py
   tests/data_handling/test_public_api_contract.py`.
 - For training-facing batch selection, add the nearest Lightning/datamodule test.
+- For QH joins or views, run `tests/data_handling/test_qh.py` and the focused
+  rollout-reader test; include Lightning admission tests when stage semantics
+  change.
