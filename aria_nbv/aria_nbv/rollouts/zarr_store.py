@@ -288,6 +288,8 @@ CANDIDATE_TABLE = _TableSchema(
         _TableField("strategy_id", np.int32),
         _TableField("position_id", np.int32),
         _TableField("mixture_id", np.int32),
+        _TableField("position_pair_id", np.int64),
+        _TableField("gaze_variant_id", np.int8),
         _TableField("sampler_probability", np.float32),
         _TableField("score_source_id", np.int32),
         _TableField("invalid_reason_bitset", np.uint32),
@@ -2958,6 +2960,14 @@ def _append_candidate_row(
     rows["strategy_id"].append(_full_shell_value(step.candidates.strategy_id, shell_index, candidate_valid, default=-1))
     rows["position_id"].append(_full_shell_value(step.candidates.position_id, shell_index, candidate_valid, default=-1))
     rows["mixture_id"].append(_full_shell_value(step.candidates.mixture_id, shell_index, candidate_valid, default=-1))
+    position_pair_id = step.candidates.position_pair_id
+    if position_pair_id is None:
+        position_pair_id = step.candidates.extras.get("position_pair_id")
+    rows["position_pair_id"].append(_full_shell_value(position_pair_id, shell_index, candidate_valid, default=-1))
+    gaze_variant_id = step.candidates.gaze_variant_id
+    if gaze_variant_id is None:
+        gaze_variant_id = step.candidates.extras.get("gaze_variant_id")
+    rows["gaze_variant_id"].append(_full_shell_value(gaze_variant_id, shell_index, candidate_valid, default=-1))
     rows["sampler_probability"].append(
         _full_shell_value(step.candidates.sampler_probability, shell_index, candidate_valid, default=np.nan)
     )

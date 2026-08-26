@@ -530,7 +530,6 @@ class CandidateMixtureViewGenerator:
         component_names: list[str] = []
         from ..rollouts.replay.policy import derive_component_seed
 
-        mixture_index = 0
         pair_base = 0
 
         def append_component(
@@ -542,7 +541,6 @@ class CandidateMixtureViewGenerator:
             pair_ids: torch.Tensor | None = None,
             gaze_variant: int = -1,
         ) -> None:
-            nonlocal mixture_index
             shell_count = int(result.mask_valid.reshape(-1).shape[0])
             device = result.mask_valid.device
             result.strategy_id = torch.full(
@@ -557,7 +555,8 @@ class CandidateMixtureViewGenerator:
                 dtype=torch.int64,
                 device=device,
             )
-            result.mixture_id = torch.full((shell_count,), mixture_index, dtype=torch.int64, device=device)
+            # Paired variants retain the original serialized component index.
+            result.mixture_id = torch.full((shell_count,), component_index, dtype=torch.int64, device=device)
             result.sampler_probability = torch.full(
                 (shell_count,),
                 1.0 / float(self.config.total_count),
@@ -565,20 +564,24 @@ class CandidateMixtureViewGenerator:
                 device=device,
             )
             result.component_name = tuple(name for _ in range(shell_count))
-            result.extras["position_pair_id"] = (
+            position_pair_id = (
                 torch.full((shell_count,), -1, dtype=torch.int64, device=device)
                 if pair_ids is None
                 else pair_ids.to(device=device, dtype=torch.int64)
             )
-            result.extras["gaze_variant_id"] = torch.full(
-                (shell_count,), gaze_variant, dtype=torch.int64, device=device
-            )
+            gaze_variant_id = torch.full((shell_count,), gaze_variant, dtype=torch.int64, device=device)
+            result.position_pair_id = position_pair_id
+            result.gaze_variant_id = gaze_variant_id
+            result.extras["position_pair_id"] = position_pair_id
+            result.extras["gaze_variant_id"] = gaze_variant_id
             component_results.append(result)
             component_names.extend([name] * shell_count)
-            mixture_index += 1
 
         for component_index, component in enumerate(self.config.components):
             component_seed = None if seed is None else derive_component_seed(seed, component.name)
+            resolved_component_seed = component_seed
+            if resolved_component_seed is None and self.config.base.seed is not None:
+                resolved_component_seed = int(self.config.base.seed) + component_index
             component_cfg = self._component_config(
                 component, component_index, runtime_context=runtime_context, component_seed=component_seed
             )
@@ -613,7 +616,11 @@ class CandidateMixtureViewGenerator:
             if component.paired_view_mode is not None:
                 assert result.shell_offsets_ref is not None
                 paired_name = f"{component.name}__paired_{component.paired_view_mode.value}"
-                paired_seed = None if seed is None else derive_component_seed(seed, paired_name)
+                paired_seed = (
+                    None
+                    if resolved_component_seed is None
+                    else derive_component_seed(resolved_component_seed, paired_name)
+                )
                 paired_component = component.model_copy(
                     update={"view_mode": component.paired_view_mode, "strategy": component.paired_view_mode}
                 )
@@ -736,6 +743,8 @@ def _concat_results(
         mixture_id=mixture_id,
         sampler_probability=sampler_probability,
         component_name=component_name,
+        position_pair_id=_cat_optional([result.position_pair_id for result in results]),
+        gaze_variant_id=_cat_optional([result.gaze_variant_id for result in results]),
         extras=extras,
     )
 

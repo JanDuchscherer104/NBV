@@ -1357,8 +1357,12 @@ def plot_proposal_sequence_support(candidates: "CandidateSamplingResult") -> go.
 def plot_paired_gaze_support(candidates: "CandidateSamplingResult", *, ray_length_m: float = 0.35) -> go.Figure:
     """Plot shared candidate centers with their alternative ground-plane gaze rays."""
 
-    pair_ids = candidates.extras.get("position_pair_id")
-    variants = candidates.extras.get("gaze_variant_id")
+    pair_ids = candidates.position_pair_id
+    variants = candidates.gaze_variant_id
+    if not isinstance(pair_ids, torch.Tensor):
+        pair_ids = candidates.extras.get("position_pair_id")
+    if not isinstance(variants, torch.Tensor):
+        variants = candidates.extras.get("gaze_variant_id")
     if not isinstance(pair_ids, torch.Tensor) or not isinstance(variants, torch.Tensor):
         fig = go.Figure()
         fig.add_annotation(
@@ -1386,6 +1390,22 @@ def plot_paired_gaze_support(candidates: "CandidateSamplingResult", *, ray_lengt
     paired_mask = pair_np >= 0
 
     fig = go.Figure()
+    if not paired_mask.any():
+        fig.add_annotation(
+            text="This candidate table contains no paired-center gaze hypotheses.",
+            x=0.5,
+            y=0.5,
+            xref="paper",
+            yref="paper",
+            showarrow=False,
+        )
+        fig.update_layout(
+            title="Paired gaze hypotheses at shared candidate centers",
+            xaxis={"title": "forward / m", "scaleanchor": "y", "scaleratio": 1},
+            yaxis={"title": "left / m"},
+            height=620,
+        )
+        return fig
     for variant in sorted(int(value) for value in np.unique(variant_np[paired_mask])):
         mask = paired_mask & (variant_np == variant)
         line_x: list[float | None] = []

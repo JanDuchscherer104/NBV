@@ -126,6 +126,10 @@ def test_rollout_zarr_store_writes_reads_and_validates_records(tmp_path) -> None
         reader.array("candidates/candidate_row_id"),
     )
     assert reader.array("candidates/position_id").shape == (result.num_candidates,)
+    assert reader.array("candidates/position_pair_id").shape == (result.num_candidates,)
+    assert reader.array("candidates/gaze_variant_id").shape == (result.num_candidates,)
+    assert np.all(reader.array("candidates/position_pair_id") == -1)
+    assert np.all(reader.array("candidates/gaze_variant_id") == -1)
     assert np.array_equal(
         reader.array("candidate_diagnostics/position_id"),
         reader.array("candidates/position_id"),
@@ -214,6 +218,27 @@ def test_rollout_zarr_store_writes_reads_and_validates_records(tmp_path) -> None
             assert np.allclose(actual, expected, equal_nan=True)
         else:
             assert np.array_equal(actual, expected)
+
+
+def test_rollout_zarr_persists_pair_provenance_columns(tmp_path) -> None:
+    records = build_rollout_records(horizon=1, num_samples=4, seed=17)[:1]
+    candidates = _steps(records[0])[0].transition.candidates
+    count = int(candidates.mask_valid.numel())
+    candidates.position_pair_id = torch.arange(count, dtype=torch.int64)
+    candidates.gaze_variant_id = torch.zeros(count, dtype=torch.int64)
+
+    result = write_rollout_zarr_store(
+        tmp_path / "paired.zarr",
+        records,
+        discount_gamma=0.95,
+        target_protocol_version="v0_gt_input",
+        source_offline_store_version="7",
+        split_manifest_hash="fixture-split-manifest",
+    )
+    reader = RolloutZarrStoreReader(result.store_dir)
+
+    assert reader.array("candidates/position_pair_id")[:count].tolist() == list(range(count))
+    assert reader.array("candidates/gaze_variant_id")[:count].tolist() == [0] * count
 
 
 def test_rollout_zarr_dense_valid_contract_is_proven_by_persisted_support(tmp_path) -> None:

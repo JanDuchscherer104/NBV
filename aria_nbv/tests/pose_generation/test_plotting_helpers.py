@@ -148,6 +148,19 @@ def test_plot_paired_gaze_support_shows_shared_centers_and_two_variants() -> Non
     assert list(fig.data[-2].customdata) == [0, 1]
 
 
+def test_plot_paired_gaze_support_annotates_all_sentinel_provenance() -> None:
+    candidates = _make_candidates(num=2)
+    candidates.position_pair_id = torch.full((2,), -1, dtype=torch.int64)
+    candidates.gaze_variant_id = torch.full((2,), -1, dtype=torch.int64)
+
+    fig = plot_paired_gaze_support(candidates)
+
+    assert isinstance(fig, go.Figure)
+    assert len(fig.data) == 0
+    assert len(fig.layout.annotations) == 1
+    assert "no paired-center" in fig.layout.annotations[0].text
+
+
 def test_plot_position_sphere_with_dirs() -> None:
     candidates = _make_candidates(num=3)
     offsets, dirs = candidates.get_offsets_and_dirs_ref()

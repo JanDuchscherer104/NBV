@@ -116,6 +116,31 @@ def test_mixed_sampler_fixed_counts_and_full_shell_provenance() -> None:
     assert result.views.tensor().shape[0] == int(result.mask_valid.sum().item())
 
 
+def test_paired_variants_keep_original_component_id() -> None:
+    cfg = CandidateMixtureViewGeneratorConfig(
+        base=_base_cfg(),
+        components=[
+            CandidateMixtureComponentConfig(
+                name="pair",
+                count=2,
+                view_mode=ViewDirectionMode.TARGET_POINT,
+                paired_view_mode=ViewDirectionMode.FORWARD_RIG,
+                position_mode=CandidatePositionMode.TARGET_BEARING_LOCAL,
+            ),
+            CandidateMixtureComponentConfig(name="after", count=2, view_mode=ViewDirectionMode.FORWARD_RIG),
+        ],
+    )
+
+    result = _run_generate(cfg)
+
+    assert result.mixture_id is not None
+    assert result.mixture_id.tolist() == [0, 0, 0, 0, 1, 1]
+    assert result.position_pair_id is not None
+    assert result.gaze_variant_id is not None
+    assert result.position_pair_id.tolist() == [0, 1, 0, 1, -1, -1]
+    assert result.gaze_variant_id.tolist() == [0, 0, 1, 1, -1, -1]
+
+
 def test_target_point_component_requires_runtime_target_context() -> None:
     cfg = CandidateMixtureViewGeneratorConfig(
         base=_base_cfg(),
