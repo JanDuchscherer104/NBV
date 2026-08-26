@@ -1,0 +1,14 @@
+{
+  "attributes": {
+    "enabled": false,
+    "role": "oracle_eval_only",
+    "coordinate_frame": "world",
+    "points_dtype": "float32",
+    "mask_dtype": "bool",
+    "max_points": 50000,
+    "source_roles": "current_eval,candidate_eval",
+    "retention": "disabled_training_core"
+  },
+  "zarr_format": 3,
+  "node_type": "group"
+}

@@ -1,0 +1,20 @@
+{
+  "attributes": {
+    "enabled": true,
+    "width_px": 240,
+    "height_px": 240,
+    "depth_dtype": "float16",
+    "valid_mask_dtype": "bool",
+    "units": "m",
+    "invalid_fill_value": 0.0,
+    "codec": "blosc:zstd:clevel=5:bitshuffle",
+    "chunk_steps": 16,
+    "role": "selected_successor_state_history",
+    "renderer": "Pytorch3DDepthRenderer",
+    "znear_m": 0.001,
+    "zfar_m": 20.0,
+    "source_resolution": "exact_output_size"
+  },
+  "zarr_format": 3,
+  "node_type": "group"
+}
