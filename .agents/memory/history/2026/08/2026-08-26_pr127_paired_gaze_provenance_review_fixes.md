@@ -20,7 +20,7 @@ touched_owner_paths:
   - aria_nbv/tests/rollouts/test_zarr_store.py
 codex_thread: codex://threads/01a03a5c-ff92-7e03-8cd3-fde05269a56f
 repo_object_format: sha1
-repo_head: b59028a8ab3e4f9cfd58e5295a4ee1c0c949bc81
+repo_head: 5d5111ebcacabc2eee995416793482e8bd44cf29
 repo_branch: "codex/g002-pr127-impl"
 worktree_kind: linked
 ---
@@ -43,13 +43,16 @@ gaze plot returns an annotated empty figure for all-sentinel inputs.
 ## Findings
 ``candidate_mixture.py`` preserves decoder-compatible component IDs and
 resolves paired seed lineage. ``types.py`` adds typed aligned provenance.
-``zarr_store.py`` persists pair and variant IDs. ``plotting.py`` handles
-legacy and typed provenance and no-pair tables. Regression coverage includes
-component decode alignment, typed pair provenance, all-sentinel plotting, and
-Zarr round-trip persistence.
+``zarr_store.py`` persists pair and variant IDs, reads old stores with virtual
+sentinel arrays, and rejects unsupported or uncoupled provenance. ``plotting.py``
+handles legacy and typed provenance and no-pair tables. Regression coverage
+includes component decode alignment, direct/replay seed derivation, typed pair
+provenance, all-sentinel plotting, legacy Zarr reads, malformed provenance,
+and Zarr round-trip persistence.
 
 ## Commits
-- [b59028a8ab3e4f9cfd58e5295a4ee1c0c949bc81](https://github.com/JanDuchscherer104/ARIA-NBV/commit/b59028a8ab3e4f9cfd58e5295a4ee1c0c949bc81)
+- [4c6bca860c027c6f55743db107cb6b6b60444eb5](https://github.com/JanDuchscherer104/ARIA-NBV/commit/4c6bca860c027c6f55743db107cb6b6b60444eb5) — paired provenance contract after rebase
+- [5d5111ebcacabc2eee995416793482e8bd44cf29](https://github.com/JanDuchscherer104/ARIA-NBV/commit/5d5111ebcacabc2eee995416793482e8bd44cf29) — legacy Zarr compatibility and validation
 
 ## Candidate Owner Intent
 <!-- Omit this section unless the agent-behavior candidate-intent branch applies. -->
@@ -61,7 +64,8 @@ Zarr round-trip persistence.
 ## Verification
 ``uv run ruff format`` and ``uv run ruff check`` passed for all seven changed
 owners/tests. Focused pose-generation, plotting, and Zarr tests passed:
-64 passed. ``git diff --check`` passed. External publication, PR comments,
+68 passed. Replay tests passed: 38 passed. ``make check-agent-memory`` and
+``git diff --check`` passed. External publication, PR comments,
 thread resolution, and merge remain coordinator-owned; this lane did not push.
 
 ## Canonical Owner Impact
