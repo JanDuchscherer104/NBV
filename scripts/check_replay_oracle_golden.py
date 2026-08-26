@@ -15,8 +15,7 @@ from tempfile import TemporaryDirectory
 from typing import Any
 
 import numpy as np
-
-import aria_nbv as _aria_nbv_package
+import tests.rollout_fixtures as _rollout_fixtures_module
 from aria_nbv.rollouts import RolloutZarrStoreReader
 from aria_nbv.rollouts.manifest import ROLLOUT_MANIFEST_VERSION
 from aria_nbv.rollouts.zarr_store import (
@@ -24,8 +23,9 @@ from aria_nbv.rollouts.zarr_store import (
     validate_rollout_zarr_store,
     write_rollout_zarr_store,
 )
-import tests.rollout_fixtures as _rollout_fixtures_module
 from tests.rollout_fixtures import build_rollout_records
+
+import aria_nbv as _aria_nbv_package
 
 _ROOT = Path(__file__).resolve().parents[1]
 _GOLDEN = _ROOT / "aria_nbv" / "tests" / "fixtures" / "replay_oracle_golden.json"
