@@ -16,9 +16,10 @@ repository owners remain authoritative for behavior and scientific claims.
    mutating the child, the setup owner proves that both paths are registered,
    distinct worktrees in the same Git common directory and that the selected
    parent's graph is query-admissible. It then copies that generation locally,
-   links the selected parent's content-addressed `semantic` and `semantic-deep` namespaces,
-   regenerates the deterministic child projection, then runs setup-owned
-   upstream incremental maintenance before reporting readiness.
+   links the canonical primary's content-addressed `semantic` and
+   `semantic-deep` namespaces, rebuilds the deterministic child projection only
+   when its owners changed, then runs setup-owned upstream incremental maintenance
+   before reporting readiness.
 2. Mutable projection, graph, manifest, stat, interpreter, root, run, and
    provenance state are worktree-local regular-file copies. Only the two
    content-addressed cache namespaces are shared; neither cache identity nor a
@@ -55,14 +56,14 @@ delta is `unusable`; an ancestor committed delta or bounded overlay delta is
 
 ## Freshness And Refresh
 
-Setup owns the ordinary session reconciliation: it regenerates the deterministic
-child projection and invokes upstream's no-LLM incremental code update. A
+Setup owns the ordinary session reconciliation: it rebuilds the deterministic
+child projection only for owner changes and invokes upstream's incremental
+extractor for every declared active mode. A
 receipt, matching semantic counts, or matching Git commit never substitutes for
 the pinned upstream detector and ancestry checks. A parent whose detector result
 is unbounded or otherwise unusable requires a factual semantic refresh before a
 new session can start. `make graphify-state-check` remains
-strict for scaffold and pre-push validation, while `make graphify-usable-check`
-proves navigation safety. A Git HEAD mismatch alone is not staleness when the
+strict for scaffold and pre-push validation. A Git HEAD mismatch alone is not staleness when the
 recorded graph and projection revisions are ancestors and indexed bytes still
 match. Semantic refreshes use `fork_turns="none"` and account for every
 dispatched file. Incomplete or unreconciled semantic refreshes remain strict-gate

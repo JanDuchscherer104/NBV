@@ -263,12 +263,7 @@ def run(root: Path, *, modes: tuple[str, ...] | None = None) -> None:
         fail(f"Graphify reconciliation root is not a Git worktree: {root}")
     cli, interpreter = trusted_graphify_runtime(root)
     revision = head(root)
-    inherited_revision = graph_revision(root)
     active_modes = configured_modes() if modes is None else modes
-    # A seed records the parent's current HEAD, which may legitimately be newer
-    # than the copied graph.  Only the graph's own provenance can establish
-    # equivalence and authorize stamping it with the destination revision.
-    equivalent_tree = graph_tree_matches_head(root, inherited_revision, revision)
     rebuild_projection = bool(freshness.projection_owner_changes(root))
 
     scripts = Path(__file__).resolve().parent
@@ -289,15 +284,16 @@ def run(root: Path, *, modes: tuple[str, ...] | None = None) -> None:
                     cwd=root,
                     check=True,
                 )
-            if not equivalent_tree:
-                for mode in active_modes:
-                    command = [str(cli), "extract", str(root)]
-                    if mode == "deep":
-                        command.extend(("--mode", "deep"))
-                    subprocess.run(command, cwd=root, check=True)
-            # A tree-equivalent inherited graph has the same source corpus even
-            # across unrelated commit histories. Stamp the destination commit
-            # after that proof so freshness does not reject portable seeds.
+            # Graphify's detector and mode-specific cache are the only source
+            # of truth for no-op, dirty-input, and cold-deep decisions. A Git
+            # tree match cannot prove any of those runtime states.
+            for mode in active_modes:
+                command = [str(cli), "extract", str(root)]
+                if mode == "deep":
+                    command.extend(("--mode", "deep"))
+                subprocess.run(command, cwd=root, check=True)
+            # The extractor has reconciled the actual worktree inputs. Stamp
+            # its local graph with this worktree's commit after success.
             stamp_graph_provenance(root, revision)
             subprocess.run(
                 [

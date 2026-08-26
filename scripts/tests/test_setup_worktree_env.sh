@@ -315,7 +315,14 @@ fi
 grep -Fq ".venv is not linked" "${SANDBOX}/fresh.err"
 [[ ! -e "${WORKTREE_ROOT}/graphify-out/graph.json" ]]
 
+# A mutating setup creates only missing regular leaves under the authenticated
+# primary cache root; read-only setup keeps the stricter absence failure above.
+rmdir "${SHARED_ROOT}/.data/graphify-semantic-cache/semantic" \
+  "${SHARED_ROOT}/.data/graphify-semantic-cache/semantic-deep" \
+  "${SHARED_ROOT}/.data/graphify-semantic-cache"
 run_setup "${WORKTREE_ROOT}"
+[[ -d "${SHARED_ROOT}/.data/graphify-semantic-cache/semantic" ]]
+[[ -d "${SHARED_ROOT}/.data/graphify-semantic-cache/semantic-deep" ]]
 grep -Fqx -- "--root ${WORKTREE_ROOT}" "${SANDBOX}/reconcile.log"
 [[ -d "${WORKTREE_ROOT}/.data" ]]
 [[ -L "${WORKTREE_ROOT}/.data/ase_efm" ]]
@@ -335,6 +342,13 @@ done
 [[ ! -e "${WORKTREE_ROOT}/graphify-out/query.json" ]]
 [[ -L "${WORKTREE_ROOT}/graphify-out/cache/semantic" ]]
 [[ -L "${WORKTREE_ROOT}/graphify-out/cache/semantic-deep" ]]
+
+# The canonical primary has no parent seed requirement: its maintenance route
+# validates its own cache root and reconciles the existing local graph quietly.
+CODEX_WORKTREE_PATH="${SHARED_ROOT}" \
+  bash "${SHARED_ROOT}/scripts/setup_codex_worktree_env.sh" --maintain --quiet \
+  >"${SANDBOX}/maintain-primary.out" 2>"${SANDBOX}/maintain-primary.err"
+[[ ! -s "${SANDBOX}/maintain-primary.out" && ! -s "${SANDBOX}/maintain-primary.err" ]]
 
 # Execute the exact Codex environment bridge with the source variable empty.
 # When the canonical primary is unusable, it must choose the nearest admitted
@@ -396,6 +410,28 @@ from pathlib import Path
 sentinel = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
 assert sentinel["source_worktree"] == str(Path(sys.argv[2]).resolve())
 PY
+
+# Linked-worktree maintenance first validates the owned local seed and cache
+# links; unlike primary maintenance, it cannot reconcile an arbitrary graph.
+CODEX_WORKTREE_PATH="${EXPLICIT_CHILD_ROOT}" \
+  bash "${EXPLICIT_CHILD_ROOT}/scripts/setup_codex_worktree_env.sh" --maintain --quiet \
+  >"${SANDBOX}/maintain-linked.out" 2>"${SANDBOX}/maintain-linked.err"
+[[ ! -s "${SANDBOX}/maintain-linked.out" && ! -s "${SANDBOX}/maintain-linked.err" ]]
+unlink "${EXPLICIT_CHILD_ROOT}/graphify-out/cache/semantic"
+ln -s "${SHARED_ROOT}/.data/offline_cache" "${EXPLICIT_CHILD_ROOT}/graphify-out/cache/semantic"
+if CODEX_WORKTREE_PATH="${EXPLICIT_CHILD_ROOT}" \
+  bash "${EXPLICIT_CHILD_ROOT}/scripts/setup_codex_worktree_env.sh" --maintain --quiet \
+  >"${SANDBOX}/maintain-invalid.out" 2>"${SANDBOX}/maintain-invalid.err"; then
+  echo "linked maintenance unexpectedly accepted a tampered cache link" >&2
+  exit 1
+fi
+[[ ! -s "${SANDBOX}/maintain-invalid.out" ]]
+[[ "$(wc -l <"${SANDBOX}/maintain-invalid.err")" -eq 1 ]]
+grep -Fqx "error: linked worktree Graphify seed is invalid; rerun Codex worktree setup" \
+  "${SANDBOX}/maintain-invalid.err"
+unlink "${EXPLICIT_CHILD_ROOT}/graphify-out/cache/semantic"
+ln -s "${SHARED_ROOT}/.data/graphify-semantic-cache/semantic" \
+  "${EXPLICIT_CHILD_ROOT}/graphify-out/cache/semantic"
 printf 'cache-hit\n' >"${WORKTREE_ROOT}/graphify-out/cache/semantic/cache-hit.json"
 grep -Fqx cache-hit "${SECOND_WORKTREE_ROOT}/graphify-out/cache/semantic/cache-hit.json"
 printf '{"built_at_commit":"%s","nodes":[{"source_file":"graphify-input/index.md"}],"fixture":"child"}\n' \

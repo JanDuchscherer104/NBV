@@ -163,6 +163,30 @@ class GraphifyWorktreeSeedTest(unittest.TestCase):
             text=True,
         )
 
+    def check_owned(self, *, check: bool = True) -> subprocess.CompletedProcess[str]:
+        destination_git_dir = subprocess.run(
+            ["git", "-C", str(self.destination), "rev-parse", "--absolute-git-dir"],
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+        return subprocess.run(
+            [
+                sys.executable,
+                str(SEEDER),
+                "--check-owned",
+                "--destination",
+                str(self.destination),
+                "--destination-git-dir",
+                destination_git_dir,
+                "--canonical-cache-root",
+                str(self.canonical_cache),
+            ],
+            check=check,
+            capture_output=True,
+            text=True,
+        )
+
     def test_copies_only_manifest_backed_durable_artifacts_and_rebinds_child(
         self,
     ) -> None:
@@ -279,6 +303,43 @@ class GraphifyWorktreeSeedTest(unittest.TestCase):
 
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("semantic cache points somewhere else", result.stderr)
+
+    def test_owned_check_rejects_a_tampered_local_cache_link(self) -> None:
+        self.seed()
+        self.assertEqual(self.check_owned().returncode, 0)
+        replacement = self.sandbox / "replacement-semantic"
+        replacement.mkdir()
+        cache = self.destination / "graphify-out/cache/semantic"
+        cache.unlink()
+        cache.symlink_to(replacement, target_is_directory=True)
+
+        result = self.check_owned(check=False)
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("semantic cache points somewhere else", result.stderr)
+
+    def test_mutating_seed_rebinds_an_owned_legacy_cache_target(self) -> None:
+        self.seed()
+        legacy = self.sandbox / "legacy-semantic"
+        legacy.mkdir()
+        cache = self.destination / "graphify-out/cache/semantic"
+        cache.unlink()
+        cache.symlink_to(legacy, target_is_directory=True)
+        sentinel_path = self.destination / "graphify-out/.aria-worktree-seed.json"
+        sentinel = json.loads(sentinel_path.read_text(encoding="utf-8"))
+        sentinel["source_cache_targets"]["semantic"] = str(legacy)
+        sentinel_path.write_text(json.dumps(sentinel), encoding="utf-8")
+
+        self.seed()
+
+        refreshed = json.loads(sentinel_path.read_text(encoding="utf-8"))
+        self.assertEqual(
+            str(cache.resolve()), str((self.canonical_cache / "semantic").resolve())
+        )
+        self.assertEqual(
+            refreshed["source_cache_targets"]["semantic"],
+            str((self.canonical_cache / "semantic").resolve()),
+        )
 
     def test_source_cache_links_are_not_used_for_publishing(self) -> None:
         source_cache = self.source / "graphify-out/cache/semantic-deep"

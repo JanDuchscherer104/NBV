@@ -94,9 +94,14 @@ done < <(git --git-dir="$canonical_git_dir" --work-tree="$canonical_primary" wor
 canonical_cache_root="$canonical_primary/.data/graphify-semantic-cache"
 for cache_path in "$canonical_primary/.data" "$canonical_cache_root" \
   "$canonical_cache_root/semantic" "$canonical_cache_root/semantic-deep"; do
-  [[ ! -L "$cache_path" && -d "$cache_path" ]] || \
-    fail "canonical Graphify cache is missing or unsafe: $cache_path"
+  if [[ "$check_only" == true || -e "$cache_path" || -L "$cache_path" ]]; then
+    [[ ! -L "$cache_path" && -d "$cache_path" ]] || \
+      fail "canonical Graphify cache is missing or unsafe: $cache_path"
+  fi
 done
+if [[ "$check_only" == false ]]; then
+  mkdir -p "$canonical_cache_root/semantic" "$canonical_cache_root/semantic-deep"
+fi
 
 # Everything above is Git metadata only. Do not invoke a parent-provided
 # executable or create child links until the source topology is proven.

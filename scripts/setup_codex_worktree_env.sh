@@ -10,10 +10,12 @@ unset GIT_DIR GIT_WORK_TREE
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 explicit_parent="${CODEX_SOURCE_WORKSPACE_PATH:-}"
 maintain=false
+check_only=false
 
 for argument in "$@"; do
   case "$argument" in
     --maintain) maintain=true ;;
+    --check) check_only=true ;;
     --quiet) ;;
     *) ;;
   esac
@@ -66,7 +68,7 @@ canonical_primary_worktree() {
 }
 
 validate_canonical_cache_topology() {
-  local primary="$1" primary_git_dir primary_common_dir expected_common_dir cache_path line
+  local primary="$1" allow_missing="$2" primary_git_dir primary_common_dir expected_common_dir cache_path line
 
   [[ -n "$primary" && -d "$primary" ]] || fail "canonical primary worktree is unavailable"
   primary="$(cd "$primary" && pwd -P)"
@@ -89,15 +91,35 @@ validate_canonical_cache_topology() {
   for cache_path in "$primary/.data/graphify-semantic-cache" \
     "$primary/.data/graphify-semantic-cache/semantic" \
     "$primary/.data/graphify-semantic-cache/semantic-deep"; do
+    [[ "$allow_missing" == true && ! -e "$cache_path" && ! -L "$cache_path" ]] && continue
     [[ ! -L "$cache_path" && -d "$cache_path" ]] || \
       fail "canonical Graphify cache is missing or unsafe: $cache_path"
   done
 }
 
+prepare_canonical_cache() {
+  local primary="$1"
+  validate_canonical_cache_topology "$primary" true
+  [[ ! -e "$primary/.data" || ( ! -L "$primary/.data" && -d "$primary/.data" ) ]] || \
+    fail "canonical Graphify cache is missing or unsafe: $primary/.data"
+  mkdir -p "$primary/.data/graphify-semantic-cache/semantic" \
+    "$primary/.data/graphify-semantic-cache/semantic-deep"
+  validate_canonical_cache_topology "$primary" false
+}
+
 maintain_graphify() {
-  local primary
+  local primary repo_git_dir
   primary="$(canonical_primary_worktree)"
-  validate_canonical_cache_topology "$primary"
+  prepare_canonical_cache "$primary"
+  repo_git_dir="$(git -C "$repo_root" rev-parse --absolute-git-dir)" || \
+    fail "destination Git metadata is unavailable for Graphify maintenance"
+  if [[ "$repo_root" != "$primary" ]]; then
+    python3 "$repo_root/scripts/graphify_worktree_seed.py" --check-owned \
+      --destination "$repo_root" --destination-git-dir "$repo_git_dir" \
+      --canonical-cache-root "$primary/.data/graphify-semantic-cache" \
+      >/dev/null 2>&1 || \
+      fail "linked worktree Graphify seed is invalid; rerun Codex worktree setup"
+  fi
   if ! python3 "$repo_root/scripts/reconcile_graphify_worktree.py" \
     --root "$repo_root" >/dev/null 2>&1; then
     fail "Graphify admission maintenance failed; rerun Codex worktree setup"
@@ -214,7 +236,9 @@ fi
 
 shared_root="$explicit_parent"
 canonical_primary="$(canonical_primary_worktree)"
-validate_canonical_cache_topology "$canonical_primary"
+cache_may_be_missing=false
+[[ "$check_only" == false ]] && cache_may_be_missing=true
+validate_canonical_cache_topology "$canonical_primary" "$cache_may_be_missing"
 if [[ -z "$shared_root" ]]; then
   common_dir="$(git -C "$repo_root" rev-parse --git-common-dir)" || \
     fail "Git metadata is unavailable for Codex worktree setup"

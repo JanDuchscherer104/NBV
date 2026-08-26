@@ -227,7 +227,7 @@ class ReconcileGraphifyWorktreeTests(unittest.TestCase):
         self.assertIn(extract, recorded)
         self.assertEqual(recorded[-1][-2:], ("--usable", "--quiet"))
 
-    def test_stamps_destination_for_an_equivalent_tree_at_a_different_commit(self) -> None:
+    def test_runs_standard_extraction_for_dirty_inputs_at_an_equivalent_head(self) -> None:
         with tempfile.TemporaryDirectory(prefix="aria-reconcile-") as temporary:
             root = Path(temporary)
             (root / ".git").mkdir()
@@ -274,10 +274,48 @@ class ReconcileGraphifyWorktreeTests(unittest.TestCase):
             ):
                 reconcile.run(root)
 
-            self.assertNotIn((str(cli), "update", str(root.resolve())), recorded)
+            self.assertIn((str(cli), "extract", str(root.resolve())), recorded)
             self.assertEqual(
                 json.loads(graph.read_text(encoding="utf-8"))["built_at_commit"],
                 "a" * 40,
+            )
+
+    def test_runs_cold_deep_extraction_even_when_standard_graph_tree_matches(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="aria-reconcile-") as temporary:
+            root = Path(temporary)
+            (root / ".git").mkdir()
+            (root / "graphify-input").mkdir()
+            (root / "graphify-input/index.md").write_text("# fixture\n", encoding="utf-8")
+            output = root / "graphify-out"
+            output.mkdir()
+            (output / "graph.json").write_text(
+                json.dumps({"built_at_commit": "b" * 40, "nodes": [], "links": []}),
+                encoding="utf-8",
+            )
+            interpreter = root.parent / "trusted-python"
+            interpreter.write_text("#!/bin/sh\n", encoding="utf-8")
+            interpreter.chmod(0o755)
+            cli = root.parent / "trusted-graphify"
+            cli.write_text(f"#!{interpreter}\n", encoding="utf-8")
+            cli.chmod(0o755)
+            commands: list[tuple[str, ...]] = []
+
+            def completed(command: list[str], **_: object) -> subprocess.CompletedProcess[str]:
+                commands.append(tuple(command))
+                return subprocess.CompletedProcess(command, 0, "", "")
+
+            with (
+                mock.patch.object(
+                    reconcile, "trusted_graphify_runtime", return_value=(cli, interpreter)
+                ),
+                mock.patch.object(reconcile, "head", return_value="a" * 40),
+                mock.patch.object(reconcile.freshness, "projection_owner_changes", return_value=[]),
+                mock.patch.object(reconcile.subprocess, "run", side_effect=completed),
+            ):
+                reconcile.run(root, modes=("deep",))
+
+            self.assertIn(
+                (str(cli), "extract", str(root.resolve()), "--mode", "deep"), commands
             )
 
     def test_runs_standard_before_deep_for_both_declared_consumers(self) -> None:
@@ -309,8 +347,6 @@ class ReconcileGraphifyWorktreeTests(unittest.TestCase):
                     reconcile, "trusted_graphify_runtime", return_value=(cli, interpreter)
                 ),
                 mock.patch.object(reconcile, "head", return_value="a" * 40),
-                mock.patch.object(reconcile, "graph_revision", return_value="b" * 40),
-                mock.patch.object(reconcile, "graph_tree_matches_head", return_value=False),
                 mock.patch.object(
                     reconcile.freshness, "projection_owner_changes", return_value=[]
                 ),
