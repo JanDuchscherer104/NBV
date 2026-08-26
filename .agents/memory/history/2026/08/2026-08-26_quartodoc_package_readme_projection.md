@@ -9,15 +9,19 @@ canonical_updates_needed:
   - scripts/quarto_generate_api_docs.sh
   - scripts/quartodoc_inject_package_readmes.py
   - aria_nbv/aria_nbv/vin/README.md
+  - tools/mermaid/references/aria_mermaid_style.md
 touched_owner_paths:
   - scripts/quarto_generate_api_docs.sh
   - scripts/quartodoc_inject_package_readmes.py
   - scripts/tests/test_quarto_generate_api_docs.sh
   - scripts/tests/test_quartodoc_inject_package_readmes.py
   - aria_nbv/aria_nbv/vin/README.md
+  - aria_nbv/aria_nbv/lightning/README.md
+  - docs/figures/diagrams
+  - tools/mermaid
 codex_thread: codex://threads/01a033b8-ed20-76a0-9627-2679b556cbff
 repo_object_format: sha1
-repo_head: a822cde9209a6c16e61092a688f877a31a682481
+repo_head: fbf30215289f1c62330b04d166694d8fcfe7c74c
 repo_branch: "codex/quartodoc-package-readmes"
 worktree_kind: linked
 ---
@@ -45,6 +49,7 @@ packages remain outside the existing public Quartodoc surface.
 - [071d37b8b6b50c483cf0cdfb4543adb7194a8b88](https://github.com/JanDuchscherer104/ARIA-NBV/commit/071d37b8b6b50c483cf0cdfb4543adb7194a8b88)
 - [8e3807b8f78516b1d3a3eb1d3692a93b6cdc6cbb](https://github.com/JanDuchscherer104/ARIA-NBV/commit/8e3807b8f78516b1d3a3eb1d3692a93b6cdc6cbb)
 - [a822cde9209a6c16e61092a688f877a31a682481](https://github.com/JanDuchscherer104/ARIA-NBV/commit/a822cde9209a6c16e61092a688f877a31a682481)
+- [fbf30215289f1c62330b04d166694d8fcfe7c74c](https://github.com/JanDuchscherer104/ARIA-NBV/commit/fbf30215289f1c62330b04d166694d8fcfe7c74c)
 
 ## Verification
 - Five focused generator/injection tests passed.
@@ -57,7 +62,11 @@ packages remain outside the existing public Quartodoc surface.
 - Its Mermaid graph now has an explicit dark text color in every semantic node
   class, preserving legibility against its light semantic fills under Quarto's
   configured dark Mermaid theme.
+- The same contrast contract now covers all tracked semantic Mermaid sources,
+  package README diagrams, templates, examples, and the generated API
+  dependency graph; a focused regression test guards the contract.
 
 ## Canonical Owner Impact
-Updated the API-generation seam, focused tests, and the VIN user-facing
-architecture guide. No Typst or package runtime contract changed.
+Updated the API-generation seam, focused tests, shared Mermaid style/lint
+owners, and user-facing package/Quarto diagrams. No Typst or package runtime
+contract changed.
