@@ -39,8 +39,8 @@ filter, and a step filter, while failing if the optimized path materializes a
 `StoredStep` payload.
 
 ## Commits
-- [05e888d40deaa49839bd89d49d2c4fdd771c5076](https://github.com/JanDuchscherer104/ARIA-NBV/commit/05e888d40deaa49839bd89d49d2c4fdd771c5076)
-- [45893a0d0a279a3e0c27957406743344ea58e2ad](https://github.com/JanDuchscherer104/ARIA-NBV/commit/45893a0d0a279a3e0c27957406743344ea58e2ad)
+- [e823e424464f228bbf8a7c83b4561e13b4810ff7](https://github.com/JanDuchscherer104/ARIA-NBV/commit/e823e424464f228bbf8a7c83b4561e13b4810ff7)
+- [d7b5fc40bf1b24f40c977993f47bfd6d32463a5d](https://github.com/JanDuchscherer104/ARIA-NBV/commit/d7b5fc40bf1b24f40c977993f47bfd6d32463a5d)
 
 ## Verification
 Passed `ruff format` and `ruff check` on the three touched files. Passed
