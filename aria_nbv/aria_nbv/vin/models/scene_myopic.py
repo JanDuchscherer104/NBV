@@ -65,6 +65,7 @@ directional memory over view directions, not folded into the pose encoding.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal
 
 import torch
@@ -146,6 +147,16 @@ FIELD_CHANNELS_V3: tuple[str, ...] = (
     "unknown",
     "new_surface_prior",
 )
+
+
+@dataclass(slots=True)
+class _PreparedSceneContext:
+    """Request-scoped, candidate-independent VIN inference tensors."""
+
+    snippet: VinSnippetView
+    field_bundle: FieldBundle
+    voxel_points: Tensor
+    semidense_points: Tensor
 
 
 class VinModelV3Config(TargetConfig["VinModelV3"]):
@@ -304,6 +315,8 @@ class VinModelV3(nn.Module):
     def __init__(self, config: VinModelV3Config) -> None:
         super().__init__()
         self.config = config
+        self._prepared_scene_cache_key: tuple[object, ...] | None = None
+        self._prepared_scene_context: _PreparedSceneContext | None = None
 
         # Optional modules (may be None)
         self.voxel_proj_film: nn.Module | None = None
@@ -384,6 +397,104 @@ class VinModelV3(nn.Module):
                 num_groups=traj_norm_groups,
                 num_channels=pose_dim,
             )
+
+    def train(self, mode: bool = True) -> "VinModelV3":
+        """Set training mode and discard inference-only prepared scene state."""
+        self._prepared_scene_cache_key = None
+        self._prepared_scene_context = None
+        return super().train(mode)
+
+    @staticmethod
+    def _tensor_cache_stamp(value: object) -> tuple[object, ...] | None:
+        if not isinstance(value, Tensor):
+            return None
+        return (id(value), getattr(value, "_version", None), value.device, value.dtype, tuple(value.shape))
+
+    def _scene_cache_key(
+        self,
+        efm: EfmSnippetView | VinSnippetView,
+        backbone_out: EvlBackboneOutput,
+        *,
+        device: torch.device,
+    ) -> tuple[object, ...]:
+        """Build an identity/version key for safe frozen-weight reuse."""
+        backbone_values = (
+            backbone_out.occ_pr,
+            backbone_out.cent_pr,
+            backbone_out.occ_input,
+            backbone_out.free_input,
+            backbone_out.counts,
+            backbone_out.pts_world,
+            backbone_out.voxel_extent,
+            getattr(backbone_out.t_world_voxel, "_data", None),
+        )
+        snippet_values = (
+            getattr(efm, "points_world", None),
+            getattr(efm, "lengths", None),
+            getattr(efm, "t_world_rig", None),
+        )
+        return (
+            id(efm),
+            id(backbone_out),
+            device,
+            tuple(self._tensor_cache_stamp(value) for value in snippet_values),
+            tuple(self._tensor_cache_stamp(value) for value in backbone_values),
+            tuple((id(param), getattr(param, "_version", None)) for param in self.parameters()),
+        )
+
+    def _prepare_scene_context(
+        self,
+        efm: EfmSnippetView | VinSnippetView,
+        backbone_out: EvlBackboneOutput,
+        *,
+        device: torch.device,
+    ) -> _PreparedSceneContext:
+        """Prepare candidate-independent scene tensors for one inference request."""
+        snippet = self._ensure_vin_snippet(efm, device=device)
+        field_bundle = self._build_field_bundle(backbone_out)
+        pool_grid = min(
+            int(self.config.global_pool_grid_size),
+            int(field_bundle.field.shape[-3]),
+            int(field_bundle.field.shape[-2]),
+            int(field_bundle.field.shape[-1]),
+        )
+        pts_world = backbone_out.pts_world
+        if not isinstance(pts_world, Tensor):
+            raise KeyError("Missing backbone output 'voxel/pts_world' required for positional encoding.")
+        voxel_points = pool_voxel_points(
+            pts_world,
+            grid_shape=tuple(int(size) for size in field_bundle.field.shape[-3:]),
+            pool_grid=pool_grid,
+        )
+        semidense_points = sample_semidense_points(
+            snippet,
+            device=device,
+            max_points=int(self.config.semidense_proj_max_points),
+        )
+        return _PreparedSceneContext(
+            snippet=snippet,
+            field_bundle=field_bundle,
+            voxel_points=voxel_points,
+            semidense_points=semidense_points,
+        )
+
+    def _get_prepared_scene_context(
+        self,
+        efm: EfmSnippetView | VinSnippetView,
+        backbone_out: EvlBackboneOutput,
+        *,
+        device: torch.device,
+    ) -> _PreparedSceneContext:
+        """Return reusable scene state only for frozen, gradient-free inference."""
+        cache_allowed = not self.training and not torch.is_grad_enabled()
+        key = self._scene_cache_key(efm, backbone_out, device=device) if cache_allowed else None
+        if cache_allowed and key == self._prepared_scene_cache_key and self._prepared_scene_context is not None:
+            return self._prepared_scene_context
+        context = self._prepare_scene_context(efm, backbone_out, device=device)
+        if cache_allowed:
+            self._prepared_scene_cache_key = key
+            self._prepared_scene_context = context
+        return context
 
     @property
     def pose_encoder_lff(self) -> LearnableFourierFeatures | None:
@@ -716,8 +827,8 @@ class VinModelV3(nn.Module):
 
         device = backbone_out.voxel_extent.device
 
-        # vin_snippet.points_world is in WORLD frame (x_w, y_w, z_w) with optional extras per point.
-        vin_snippet = self._ensure_vin_snippet(efm, device=device)  # points_world: (B, P, C_sem)
+        scene_context = self._get_prepared_scene_context(efm, backbone_out, device=device)
+        vin_snippet = scene_context.snippet  # points_world: (B, P, C_sem)
         prepared = self._prepare_inputs(
             vin_snippet,
             candidate_poses_world_cam=candidate_poses_world_cam,
@@ -731,7 +842,7 @@ class VinModelV3(nn.Module):
             pose_world_rig_ref=prepared.pose_world_rig_ref,
         )
         # pose_vec: (B, N_q, 9); pose_enc: (B, N_q, F_pose); candidate_center_rig_m: (B, N_q, 3) in rig_ref metres.
-        field_bundle = self._build_field_bundle(backbone_out)
+        field_bundle = scene_context.field_bundle
         # field_in: (B, F_in, D, H, W); field: (B, F_g, D, H, W)
 
         candidate_centers_world = prepared.pose_world_cam.t.to(
@@ -767,21 +878,7 @@ class VinModelV3(nn.Module):
         )
         # global_feat: (B, N_q, F_g); pos_grid: (B, 3, D, H, W) = normalized voxel centers in rig_ref frame.
         global_feat = global_ctx.global_feat
-        pool_grid = min(
-            int(self.config.global_pool_grid_size),
-            int(field_bundle.field.shape[-3]),
-            int(field_bundle.field.shape[-2]),
-            int(field_bundle.field.shape[-1]),
-        )
-        voxel_points = pool_voxel_points(
-            pts_world,
-            grid_shape=(
-                int(field_bundle.field.shape[-3]),
-                int(field_bundle.field.shape[-2]),
-                int(field_bundle.field.shape[-1]),
-            ),
-            pool_grid=pool_grid,
-        )
+        voxel_points = scene_context.voxel_points
         # voxel_points: (B, P_proj, 3) WORLD coords with P_proj = G_pool^3 (pooled voxel centers).
         voxel_proj_data = project_points_to_candidate_cameras(
             voxel_points,
@@ -813,11 +910,7 @@ class VinModelV3(nn.Module):
         global_ctx = GlobalContext(pos_grid=global_ctx.pos_grid, global_feat=global_feat)
 
         # ------------------------------------------------------------------ semidense projection
-        semidense_points = sample_semidense_points(
-            vin_snippet,
-            device=prepared.device,
-            max_points=int(self.config.semidense_proj_max_points),
-        )
+        semidense_points = scene_context.semidense_points
         # semidense_points: (B, P_fr, C_sem) in WORLD frame (XYZ + extras), with P_fr <= semidense_proj_max_points.
         proj_data = project_points_to_candidate_cameras(
             semidense_points,
