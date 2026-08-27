@@ -48,6 +48,7 @@ EXPECTED_QMD_PAGES = {
     "archive/main_seminar_findings.qmd",
     "ase_dataset.qmd",
     "diagrams.qmd",
+    "evidence/candidate_generation_scaleup_pilot.qmd",
     "glossary.qmd",
     "ideas.qmd",
     "literature/3dgs_instance_nbv.qmd",
