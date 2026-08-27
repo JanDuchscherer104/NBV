@@ -107,8 +107,11 @@ def test_rollout_steps_reuse_reader_local_candidate_shell_index(tmp_path) -> Non
 
     reader.array = spy  # type: ignore[method-assign]
     first = rollout_steps(reader, rollout)
+    expected_positions = first[0].candidate_row_positions.copy()
+    first[0].candidate_row_positions[:] = -1
     second = rollout_steps(reader, rollout)
 
+    assert np.array_equal(second[0].candidate_row_positions, expected_positions)
     assert [step.candidate_row_ids.tolist() for step in second] == [step.candidate_row_ids.tolist() for step in first]
     assert calls == {
         "candidates/candidate_row_id": 1,

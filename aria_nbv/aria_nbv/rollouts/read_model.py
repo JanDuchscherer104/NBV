@@ -308,7 +308,7 @@ def rollout_steps(reader: RolloutZarrStoreReader, rollout: StoredRollout) -> tup
     steps: list[StoredStep] = []
     for step_position in rollout.step_row_positions.tolist():
         step_row_id = int(step_table["step_row_id"][step_position])
-        row_positions = shell_index.positions_by_step.get(step_row_id, np.empty(0, dtype=np.int64))
+        row_positions = shell_index.positions_by_step.get(step_row_id, np.empty(0, dtype=np.int64)).copy()
 
         def take(group: Any, name: str, dtype: Any, positions: np.ndarray = row_positions) -> np.ndarray:
             return np.asarray(group[name][positions], dtype=dtype)
