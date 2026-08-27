@@ -112,7 +112,7 @@
   (key: "spatial.candidate_pose_feat", tex: "\\boldsymbol{h}_{t,i}^{\\mathrm{pose}}", description: "Relative/local candidate pose descriptor derived from a reference pose rather than raw world coordinates.", thesis_list: true, order: 570),
   (key: "spatial.candidate_target_rel_feat", tex: "\\boldsymbol{h}_{t,e\\mid i}^{\\mathrm{rel}}", description: "Candidate-target relation descriptor in the candidate/query local frame.", thesis_list: true, order: 580),
   (key: "spatial.relation_rpe", tex: "\\boldsymbol{e}_{a\\mid i}^{\\mathrm{rel}}", description: "Query-local relative positional embedding for target, history, support, or candidate relations.", thesis_list: true, order: 590),
-  (key: "spatial.target_obb_scale", tex: "r_e", description: "Volume-equivalent target radius given by the geometric mean of the target OBB semi-axis lengths.", thesis_list: true, order: 592),
+  (key: "spatial.target_obb_scale", tex: "r_e", description: "Geometric-mean target-proxy scale derived from the target OBB semi-axis lengths.", thesis_list: true, order: 592),
   (key: "spatial.target_frame_motion_direction", tex: "\\widehat{\\boldsymbol{\\delta}}_{j,t}^{e}", description: "Unit factual selected-camera displacement expressed in target-object coordinates for rollout j and step t.", thesis_list: true, order: 594),
   (key: "spatial.target_frame_view_direction", tex: "\\widehat{\\boldsymbol{v}}_{j,t}^{e}", description: "Unit selected-camera forward optical axis expressed in target-object coordinates.", thesis_list: true, order: 596),
   (key: "spatial.target_frame_frustum", tex: "\\mathcal{F}_{j,t}^{e}", description: "Front-facing target-proxy surface directions that project inside the calibrated selected-camera image.", thesis_list: true, order: 598),

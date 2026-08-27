@@ -629,7 +629,7 @@ return {
     ["spatial.target_obb_scale"] = {
       tex = "r_e",
       typst = "#symb.spatial.target_obb_scale",
-      description = "Volume-equivalent target radius given by the geometric mean of the target OBB semi-axis lengths.",
+      description = "Geometric-mean target-proxy scale derived from the target OBB semi-axis lengths.",
       thesis_list = true,
     },
     ["vin.cand_valid"] = {
@@ -1295,9 +1295,9 @@ return {
       thesis_list = true,
     },
     ["spatial.target_frame_frustum_membership"] = {
-      tex = "\\mathcal{F}_{j,t}^e=\\{\\boldsymbol{d}\\in\\mathcal{S}^2:\\boldsymbol{d}^\\top(\\boldsymbol{c}_{j,t}^e-\\boldsymbol{x}^e)>0,\\ x_z^c>0,\\ 0\\le u(\\boldsymbol{d})\\le W,\\ 0\\le v(\\boldsymbol{d})\\le H\\}",
+      tex = "\\mathcal{F}_{j,t}^e=\\{\\boldsymbol{d}\\in\\mathcal{S}^2:\\boldsymbol{d}^\\top(\\boldsymbol{c}_{j,t}^e-\\boldsymbol{x}^e)>0,\\ x_z^c>0,\\ -\\tfrac12\\le u(\\boldsymbol{d})\\le W-\\tfrac12,\\ -\\tfrac12\\le v(\\boldsymbol{d})\\le H-\\tfrac12\\}",
       typst = "#eqs.spatial.target_frame_frustum_membership",
-      description = "Front-facing target-proxy directions inside the calibrated continuous image rectangle.",
+      description = "Front-facing target-proxy directions inside the calibrated half-pixel image rectangle.",
       thesis_list = true,
     },
     ["spatial.target_frame_frustum_projection"] = {
@@ -1312,10 +1312,10 @@ return {
       description = "Target-object-frame direction of a factual selected-camera displacement.",
       thesis_list = true,
     },
-    ["spatial.target_frame_obb_radius"] = {
+    ["spatial.target_frame_obb_scale"] = {
       tex = "r_e=(a_xa_ya_z)^{1/3}",
-      typst = "#eqs.spatial.target_frame_obb_radius",
-      description = "Volume-equivalent target-proxy radius from OBB semi-axis lengths.",
+      typst = "#eqs.spatial.target_frame_obb_scale",
+      description = "Geometric-mean target-proxy scale from OBB semi-axis lengths.",
       thesis_list = true,
     },
     ["spatial.target_frame_view_direction"] = {

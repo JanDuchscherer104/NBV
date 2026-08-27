@@ -6695,8 +6695,8 @@ class S2DirectionHistogram:
     $$
 
     ``(a_x, a_y, a_z)`` are the target OBB semi-axis lengths, obtained by
-    halving the persisted full extents.  Their geometric mean is the radius of
-    a volume-equivalent sphere, so it does not privilege one OBB axis.  The
+    halving the persisted full extents.  Their geometric mean defines a
+    geometric-mean semi-axis scale, so it does not privilege one OBB axis.  The
     final movement direction is scale invariant, but retaining ``r_e`` also
     exposes the dimensionless transition length used by target-relative
     translation descriptors.  View directions use the selected camera's local
@@ -6709,8 +6709,9 @@ class S2DirectionHistogram:
     the persisted pinhole image rectangle.  A bin contributes only when the
     proxy surface normal faces the camera and the projected point is in front
     of and inside the calibrated image.  Thus ``frustum_counts`` measures
-    geometric field-of-view support on a target-centred volume-equivalent
-    sphere.  It is not occlusion-aware and must not be reported as measured
+    geometric field-of-view support on a target-centred proxy sphere whose
+    radius is the geometric-mean semi-axis scale.  It is not occlusion-aware
+    and must not be reported as measured
     target-mesh visibility.
 
     Here ``j`` identifies the factual rollout chain and ``t`` its zero-based
@@ -7144,7 +7145,7 @@ def s2_target_direction_histogram(
     mean of the target OBB semi-axes before their unit-sphere projection, while
     the selected camera local ``+Z`` optical axis supplies the view direction.
     The calibrated-frustum channel evaluates which points of the corresponding
-    target-centred volume-equivalent sphere are front-facing and project inside
+    target-centred geometric-mean-scale proxy sphere are front-facing and project inside
     each selected pinhole camera.
 
     Args:
@@ -7206,7 +7207,7 @@ def s2_target_direction_histogram(
     selected_step_count = 0
     issues: list[GeometryIssue] = []
     try:
-        frustum_calibrations = _selected_frustum_calibrations(reader)
+        frustum_calibrations = _selected_frustum_calibrations(reader, issues=issues)
     except ValueError as error:
         frustum_calibrations = {}
         issues.append(GeometryIssue("invalid_selected_frustum_calibration", str(error)))
@@ -7226,7 +7227,7 @@ def s2_target_direction_histogram(
             continue
         try:
             target_pose = _geometry_pose(target.pose_world_object, role="observed target")
-            object_radius_m = _target_obb_geometric_mean_radius(target.extents)
+            target_scale_m = _target_obb_geometric_mean_scale(target.extents)
             root_pose = _geometry_pose(rollout.root_pose_world, role="rollout root")
             steps = _bounded_geometry_steps(reader, rollout)
             _validate_factual_steps(rollout.rollout_row_id, steps)
@@ -7251,7 +7252,7 @@ def s2_target_direction_histogram(
         for step in steps:
             selected_pose = _selected_pose(step)
             selected_center = selected_pose[9:12]
-            movement_target = target_rotation.T @ (selected_center - prior_center) / object_radius_m
+            movement_target = target_rotation.T @ (selected_center - prior_center) / target_scale_m
             normalized_movement = _unit_direction(movement_target)
             if normalized_movement is None:
                 movement_skipped_zero_count += 1
@@ -7309,7 +7310,7 @@ def s2_target_direction_histogram(
                 camera_center_target = target_rotation.T @ (selected_center - target_pose[9:12])
                 footprint = _target_surface_frustum_mask(
                     sphere_directions,
-                    target_radius_m=object_radius_m,
+                    target_scale_m=target_scale_m,
                     camera_center_target=camera_center_target,
                     camera_to_target=camera_to_target,
                     calibration=calibration,
@@ -7377,13 +7378,13 @@ def s2_target_direction_histogram(
     )
 
 
-def _target_obb_geometric_mean_radius(extents: np.ndarray) -> float:
-    """Return the target OBB's volume-equivalent sphere radius in metres.
+def _target_obb_geometric_mean_scale(extents: np.ndarray) -> float:
+    """Return the target OBB's geometric-mean semi-axis scale in metres.
 
     Persisted OBB extents are full axis lengths.  Halving them gives semi-axes
-    ``(a_x, a_y, a_z)``; ``r_e=(a_x a_y a_z)^(1/3)`` is the radius of a sphere
-    with the same volume as the OBB.  The geometric rather than arithmetic mean
-    therefore preserves volume and remains equivariant to uniform scaling.
+    ``(a_x, a_y, a_z)``; ``r_e=(a_x a_y a_z)^(1/3)`` is their geometric-mean
+    scale.  This scale is permutation-invariant over the OBB axes and remains
+    equivariant to uniform scaling; it is a proxy normalization length.
     """
 
     axes = np.asarray(extents, dtype=np.float64).reshape(3)
@@ -7400,6 +7401,21 @@ def _unit_direction(vector: np.ndarray) -> NDArray[np.float64] | None:
     if not np.isfinite(norm) or norm <= _GEOMETRY_EPSILON:
         return None
     return value / norm
+
+
+def _image_edge_coordinates(size: int) -> tuple[float, float]:
+    """Return continuous pixel-edge coordinates for an image dimension.
+
+    Pixel centres use integer coordinates ``0`` through ``size - 1``.  The
+    corresponding image boundary is therefore the half-pixel interval
+    ``[-0.5, size - 0.5]``.  Keeping this convention in one helper ensures the
+    spherical frustum footprint and its analytic corner-ray solid angle use
+    the same image rectangle.
+    """
+
+    if int(size) != size or size <= 0:
+        raise ValueError("Image dimensions must be positive integers.")
+    return -0.5, float(size) - 0.5
 
 
 def _increment_s2_count(counts: NDArray[np.int64], direction: NDArray[np.float64]) -> None:
@@ -7427,8 +7443,17 @@ def _s2_bin_center_directions(elevation_bins: int, azimuth_bins: int) -> NDArray
 
 def _selected_frustum_calibrations(
     reader: RolloutZarrStoreReader,
+    *,
+    issues: list[GeometryIssue] | None = None,
 ) -> dict[int, _SelectedFrustumCalibration]:
-    """Read selected-view pinhole metadata without materializing depth rasters."""
+    """Read selected-view pinhole metadata without materializing depth rasters.
+
+    Array-shape, duplicate-key, and missing-field defects are structural and
+    fail the whole calibration payload.  A malformed value in one otherwise
+    addressable row is a local evidence issue: that row is omitted while all
+    other valid rows remain available to the frustum projection.  Pass
+    ``issues`` to retain those row-level diagnostics in the returned histogram.
+    """
 
     if not bool(reader.root.attrs.get("selected_depth_enabled", False)):
         return {}
@@ -7456,7 +7481,15 @@ def _selected_frustum_calibrations(
             or height <= 0
             or width <= 0
         ):
-            raise ValueError(f"Selected-depth frustum calibration row {row} is non-finite or non-positive.")
+            if issues is not None:
+                issues.append(
+                    GeometryIssue(
+                        "invalid_selected_frustum_calibration_row",
+                        f"Selected-depth frustum calibration row {row} is non-finite or non-positive.",
+                        step_row_id=int(step_ids[row]),
+                    )
+                )
+            continue
         result[int(step_ids[row])] = _SelectedFrustumCalibration(
             candidate_row_id=int(candidate_ids[row]),
             focal_px=focal[row].copy(),
@@ -7469,7 +7502,7 @@ def _selected_frustum_calibrations(
 def _target_surface_frustum_mask(
     sphere_directions: NDArray[np.float64],
     *,
-    target_radius_m: float,
+    target_scale_m: float,
     camera_center_target: NDArray[np.float64],
     camera_to_target: NDArray[np.float64],
     calibration: _SelectedFrustumCalibration,
@@ -7489,9 +7522,9 @@ def _target_surface_frustum_mask(
     the true target geometry beyond the proxy sphere's front-facing test.
     """
 
-    radius = float(target_radius_m)
+    radius = float(target_scale_m)
     if not np.isfinite(radius) or radius <= _GEOMETRY_EPSILON:
-        raise ValueError("target_radius_m must be finite and positive.")
+        raise ValueError("target_scale_m must be finite and positive.")
     camera_center = np.asarray(camera_center_target, dtype=np.float64).reshape(3)
     if not np.isfinite(camera_center).all():
         raise ValueError("camera_center_target must be finite.")
@@ -7504,17 +7537,14 @@ def _target_surface_frustum_mask(
     fx, fy = calibration.focal_px
     cx, cy = calibration.principal_point_px
     height, width = calibration.image_size_hw
+    u_min, u_max = _image_edge_coordinates(width)
+    v_min, v_max = _image_edge_coordinates(height)
     with np.errstate(divide="ignore", invalid="ignore"):
         u = cx - fx * x / z
         v = cy - fy * y / z
     front_facing = np.sum(sphere_directions * (camera_center - surface_points), axis=-1) > _GEOMETRY_EPSILON
     return np.asarray(
-        front_facing
-        & (z > _GEOMETRY_EPSILON)
-        & (u >= 0.0)
-        & (u <= float(width))
-        & (v >= 0.0)
-        & (v <= float(height)),
+        front_facing & (z > _GEOMETRY_EPSILON) & (u >= u_min) & (u <= u_max) & (v >= v_min) & (v <= v_max),
         dtype=np.bool_,
     )
 
@@ -7535,15 +7565,17 @@ def _pinhole_frustum_solid_angle_sr(calibration: _SelectedFrustumCalibration) ->
     fx, fy = calibration.focal_px
     cx, cy = calibration.principal_point_px
     height, width = calibration.image_size_hw
+    u_min, u_max = _image_edge_coordinates(width)
+    v_min, v_max = _image_edge_coordinates(height)
 
     def ray(u: float, v: float) -> NDArray[np.float64]:
         value = np.asarray([(cx - u) / fx, (cy - v) / fy, 1.0], dtype=np.float64)
         return value / np.linalg.norm(value)
 
-    top_left = ray(0.0, 0.0)
-    top_right = ray(float(width), 0.0)
-    bottom_right = ray(float(width), float(height))
-    bottom_left = ray(0.0, float(height))
+    top_left = ray(u_min, v_min)
+    top_right = ray(u_max, v_min)
+    bottom_right = ray(u_max, v_max)
+    bottom_left = ray(u_min, v_max)
 
     def triangle(a: np.ndarray, b: np.ndarray, c: np.ndarray) -> float:
         numerator = abs(float(np.dot(a, np.cross(b, c))))

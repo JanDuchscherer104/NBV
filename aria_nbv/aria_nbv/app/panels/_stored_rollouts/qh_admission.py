@@ -5,6 +5,7 @@ Corpus construction remains on the Training Dataset page.
 
 from __future__ import annotations
 
+import hashlib
 from typing import Any
 
 import pandas as pd
@@ -12,6 +13,24 @@ import streamlit as st
 
 from .s2_directions import render_s2_direction_histograms as _render_s2_direction_histograms
 from .shared import download_frame as _download_frame
+
+
+def _s2_widget_prefix(session_handle: Any) -> str:
+    """Return a stable, content-scoped namespace for the QH S² controls.
+
+    Streamlit widget state survives page reruns.  The selected store identity
+    must therefore participate in every S² widget key, otherwise bin settings
+    and the load toggle from one immutable store can leak into another store
+    selected at the same path.  ``store_identity`` is the replacement-
+    sensitive content identity owned by ``StoredRolloutSession``; the path is
+    only a compatibility fallback for lightweight test handles.
+    """
+
+    identity = str(
+        getattr(session_handle, "store_identity", None) or getattr(session_handle, "canonical_path", "unknown-store")
+    )
+    digest = hashlib.sha256(identity.encode("utf-8")).hexdigest()[:16]
+    return f"stored_rollouts_qh_{digest}"
 
 
 def _render_q_h_evidence(session_handle: Any) -> None:
@@ -82,4 +101,4 @@ def _render_q_h_evidence(session_handle: Any) -> None:
     if not rows.empty and not bool(rows.iloc[0].get("available", False)):
         st.info(f"Q_H evidence unavailable: {rows.iloc[0].get('blocking_reason', 'unknown reason')}")
     _download_frame("Download Q_H evidence CSV", "q-h-evidence.csv", rows)
-    _render_s2_direction_histograms(session_handle, key_prefix="stored_rollouts_qh")
+    _render_s2_direction_histograms(session_handle, key_prefix=_s2_widget_prefix(session_handle))
