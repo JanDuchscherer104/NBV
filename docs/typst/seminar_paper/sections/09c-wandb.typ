@@ -1,6 +1,5 @@
-#import "@preview/booktabs:0.0.4": *
-#show: booktabs-default-table-style
 #import "../../shared/macros.typ": *
+#import "../../shared/tables.typ": publication-table
 
 = Training Dynamics <sec:wandb-analysis>
 
@@ -32,17 +31,16 @@ $rho = 0.254$ to $0.501$ over training.
   supplement: [Table],
   placement: none,
   caption: [Start #sym.arrow finish improvements for `rtjvfyyp` (first and last logged points).],
-  text(size: 8.5pt)[
-    #table(
+  [
+    #publication-table(
       columns: (auto, auto),
+      header: ([Metric], [Start #sym.arrow finish (delta)]),
       align: (left, left),
-      toprule(),
-      table.header([Metric], [Start #sym.arrow finish (delta)]),
-      midrule(), [$#(symb.vin.loss) _("rel")^"train"$],
+      rows: ([$#(symb.vin.loss) _("rel")^"train"$],
       [0.777 #sym.arrow 0.659 (-15.2%)], [$#(symb.vin.loss) _("rel")^"val"$],
       [0.743 #sym.arrow 0.666 (-10.4%)], [$rho(r, hat(r))$],
       [0.254 #sym.arrow 0.501 (+96.9%)], [$"Acc"@3$ (val)],
-      [0.248 #sym.arrow 0.329 (+32.8%)], bottomrule(),
+      [0.248 #sym.arrow 0.329 (+32.8%)]),
     )
   ],
 ) <tab:wandb-rtjvfyyp-improvement>

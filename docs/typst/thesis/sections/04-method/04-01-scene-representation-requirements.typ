@@ -2,7 +2,7 @@
 #import "../../../shared/symbols.typ": symb
 #import "../../../shared/equations.typ": eqs
 #import "../../draft_markers.typ": thesis_status
-#import "@preview/booktabs:0.0.4": *
+#import "../../../shared/tables.typ": publication-table
 
 == Actor State and Representation Boundary <sec:thesis-scene-representation>
 
@@ -52,17 +52,17 @@ duplicated inside target-independent scene memory.
 The selected-pose history $bold(H)_t$ remains explicit unless a promoted memory is demonstrated to be a sufficient statistic for it. Raw selected depth is an observation consumed by the memory update; it need not remain a direct scorer input once its surface, free-space, support, source, and recency information have been fused.
 
 #figure(
-  text(size: 8.2pt, table(
+  publication-table(
+    text-size: 8.2pt,
     columns: (0.72fr, 0.94fr, 1.55fr),
-    toprule(),
-    table.header([*State protocol*], [*Dynamic evidence*], [*Interpretation*]),
-    midrule(),
-    [`S0-pose`], [selected poses only], [Implemented feature-matched A0/A1 root-moments controls over replay tensors; not a complete reconstruction state.],
-    [`S1-points`], [causally fused selected surface points], [Implemented privileged identity-start, fixed-width residual over current-camera point sets; confirmatory evidence remains pending and observed free is not distinguished from unknown space.],
-    [`S2-ray`], [surface, free, unknown, support, recency], [Canonical planned dynamic state for candidate-frustum and target-support queries.],
-    [Privileged / sensor-like / actor-visible], [source tag on selected observations], [Orthogonal information protocol: privileged mesh depth, declared sensor-like simulation, or actor-visible observation.],
-    bottomrule(),
-  )),
+    header: ([*State protocol*], [*Dynamic evidence*], [*Interpretation*]),
+    rows: (
+      [`S0-pose`], [selected poses only], [Implemented feature-matched A0/A1 root-moments controls over replay tensors; not a complete reconstruction state.],
+      [`S1-points`], [causally fused selected surface points], [Implemented privileged identity-start, fixed-width residual over current-camera point sets; confirmatory evidence remains pending and observed free is not distinguished from unknown space.],
+      [`S2-ray`], [surface, free, unknown, support, recency], [Canonical planned dynamic state for candidate-frustum and target-support queries.],
+      [Privileged / sensor-like / actor-visible], [source tag on selected observations], [Orthogonal information protocol: privileged mesh depth, declared sensor-like simulation, or actor-visible observation.],
+    ),
+  ),
   caption: [Counterfactual state and source protocols. Scene carrier, information source, interaction architecture, and learning objective are orthogonal experimental choices.],
 ) <tab:thesis-counterfactual-state-protocols>
 
@@ -93,22 +93,22 @@ The coverage limitation motivates a layered interface rather than repeated infer
 )[This table ranks scene carriers only. The interaction architecture is specified separately in @sec:thesis-method-geometry-contract so a carrier change does not silently redefine candidate or target semantics.]
 
 #figure(
-  text(size: 8.2pt, table(
-    columns: (0.78fr, 0.72fr, 1.18fr, 1.22fr),
-    toprule(),
-    table.header([*Carrier*], [*Status*], [*Inductive benefit*], [*Cost and promotion gate*]),
-    midrule(),
-    [Root semidense moments], [implemented S0 control], [Cheap root-level context for contract and optimization tests.], [No spatial support or causal update; never interpret as task-sufficient state.],
-    [Persisted EVL and snippet evidence], [available; lossy moments consumed], [Aria-native local fields, OBB hypotheses, calibrated cameras, and explicit extent.], [The scorer consumes global moments rather than spatial EVL fields; limited support still requires coverage metadata.],
-    [Selected-surface point memory], [implemented privileged identity-start control; unpromoted], [Strictly causal surfaces follow selected views; fixed width and a zero-output residual preserve matched H0 initialization.], [Confirmatory comparison requires an immutable receipt and untouched scene-disjoint test manifest.],
-    [Sparse ray-aware memory], [planned primary extension], [Separates surface, free, unknown, support, uncertainty, and causal updates.], [Requires deterministic fusion and counterfactual-source masks.],
-    [Target-centred EVL re-lifting], [adaptation ablation], [Reuses logged frame features when the target lies outside the root field.], [Domain shift in the 3D neck; compare against simple logged-feature pooling.],
-    [DINO-on-point], [appearance ablation], [Extends logged appearance to observed points beyond the EVL grid.], [Needs visibility gating, compression, and missing-descriptor masks.],
-    [TSDF/SDF or sparse encoder], [geometry/encoder ablation], [Compact metric geometry or learned coordinate-bearing tokens.], [Must preserve observation weights and unknown-space semantics.],
-    [Object-aware 3DGS], [renderable-memory ablation], [Candidate rendering, soft target membership, and primitive uncertainty.], [Per-scene optimization and mask supervision change the state contract.],
-    [SceneScript], [global-context control], [Broad ASE-aligned layout and object hypotheses from semidense input.], [Not an ATEK drop-in and does not provide causal free/unknown updates.],
-    bottomrule(),
-  )),
+  publication-table(
+    text-size: 7.8pt,
+    columns: (0.68fr, 0.62fr, 1.18fr, 1.52fr),
+    header: ([*Carrier*], [*Status*], [*Inductive benefit*], [*Cost and promotion gate*]),
+    rows: (
+      [Root semidense moments], [implemented S0 control], [Cheap root-level context for contract and optimization tests.], [No spatial support or causal update; never interpret as task-sufficient state.],
+      [Persisted EVL and snippet evidence], [available; lossy moments consumed], [Aria-native local fields, OBB hypotheses, calibrated cameras, and explicit extent.], [The scorer consumes global moments rather than spatial EVL fields; limited support still requires coverage metadata.],
+      [Selected-surface point memory], [implemented privileged identity-start control; unpromoted], [Strictly causal surfaces follow selected views; fixed width and a zero-output residual preserve matched H0 initialization.], [Confirmatory comparison requires an immutable receipt and untouched scene-disjoint test manifest.],
+      [Sparse ray-aware memory], [planned primary extension], [Separates surface, free, unknown, support, uncertainty, and causal updates.], [Requires deterministic fusion and counterfactual-source masks.],
+      [Target-centred EVL re-lifting], [adaptation ablation], [Reuses logged frame features when the target lies outside the root field.], [Domain shift in the 3D neck; compare against simple logged-feature pooling.],
+      [DINO-on-point], [appearance ablation], [Extends logged appearance to observed points beyond the EVL grid.], [Needs visibility gating, compression, and missing-descriptor masks.],
+      [TSDF/SDF or sparse encoder], [geometry/encoder ablation], [Compact metric geometry or learned coordinate-bearing tokens.], [Must preserve observation weights and unknown-space semantics.],
+      [Object-aware 3DGS], [renderable-memory ablation], [Candidate rendering, soft target membership, and primitive uncertainty.], [Per-scene optimization and mask supervision change the state contract.],
+      [SceneScript], [global-context control], [Broad ASE-aligned layout and object hypotheses from semidense input.], [Not an ATEK drop-in and does not provide causal free/unknown updates.],
+    ),
+  ),
   caption: [Ranked scene-carrier design space. Status describes the role in the thesis method, not empirical superiority.],
 ) <tab:thesis-scene-representation-design-space>
 

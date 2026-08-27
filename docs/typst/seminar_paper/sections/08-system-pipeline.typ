@@ -1,7 +1,5 @@
-#import "@preview/booktabs:0.0.4": *
-#show: booktabs-default-table-style
-
 #import "../../shared/macros.typ": *
+#import "../../shared/tables.typ": publication-table
 #let labeler_cfg = toml("/typst/shared/data/paper_figures_oracle_labeler.toml")
 #let gen_cfg = labeler_cfg.labeler.generator
 #let depth_cfg = labeler_cfg.labeler.depth
@@ -30,12 +28,11 @@ summarized in @tab:pipeline and visualized in @fig:candidate-poses.
   kind: "table",
   supplement: [Table],
   caption: [Pipeline modules and data flow.],
-  table(
+  publication-table(
     columns: (14em, auto, auto),
+    header: ([Module], [Inputs], [Outputs]),
     align: (left, left, left),
-    toprule(),
-    table.header([Module], [Inputs], [Outputs]),
-    midrule(),
+    rows: (
     [Dataset loader],
     [ASE shards, mesh],
     [Snippet window (streams, poses, semi-dense points, mesh)],
@@ -51,7 +48,7 @@ summarized in @tab:pipeline and visualized in @fig:candidate-poses.
     [Future: learned scorer],
     [oracle labels, scene features],
     [Predicted ordinal scores],
-    bottomrule(),
+    ),
   ),
 ) <tab:pipeline>
 
@@ -59,12 +56,11 @@ summarized in @tab:pipeline and visualized in @fig:candidate-poses.
   kind: "table",
   supplement: [Table],
   caption: [Oracle label configuration used when building the VIN offline store.],
-  table(
+  publication-table(
     columns: (18em, auto),
+    header: ([Parameter], [Value]),
     align: (left, left),
-    toprule(),
-    table.header([Parameter], [Value]),
-    midrule(), [Candidate count (requested)],
+    rows: ([Candidate count (requested)],
     [#gen_cfg.num_samples], [Candidate shell radius],
     [[#gen_cfg.min_radius, #gen_cfg.max_radius] m], [Elevation range],
     [#gen_cfg.min_elev_deg#sym.degree to #gen_cfg.max_elev_deg#sym.degree], [Azimuth spread],
@@ -80,7 +76,7 @@ summarized in @tab:pipeline and visualized in @fig:candidate-poses.
     [#depth_cfg.max_candidates_final], [Depth z-range],
     [znear=#renderer_cfg.znear, zfar=#renderer_cfg.zfar], [Backprojection stride],
     [#labeler_cfg.labeler.backprojection_stride], [Oracle reduction],
-    [mean over triangles (cropped AABB)], bottomrule(),
+    [mean over triangles (cropped AABB)]),
   ),
 ) <tab:oracle-label-config>
 

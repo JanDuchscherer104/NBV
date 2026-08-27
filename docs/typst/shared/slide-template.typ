@@ -1,7 +1,6 @@
 #import "@preview/definitely-not-isec-slides:1.0.1": *
 #import "@preview/tableau-icons:0.331.0": *
 #import "@preview/muchpdf:0.1.1": muchpdf
-#import "@preview/booktabs:0.0.4": *
 #import "@preview/codly:1.3.0": *
 #import "@preview/tdtr:0.5.0": *
 // Shared math symbols (also imported by slides; safe to import here for helpers).

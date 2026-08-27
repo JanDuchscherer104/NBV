@@ -1,6 +1,5 @@
-#import "@preview/booktabs:0.0.4": *
-#show: booktabs-default-table-style
 #import "../../shared/macros.typ": *
+#import "../../shared/tables.typ": publication-table
 
 = Ablation Plan and Open Experiments <sec:ablation-plan>
 
@@ -13,13 +12,12 @@ expected outcomes are summarized in @tab:ablations.
   supplement: [Table],
   placement: none,
   caption: [Planned ablations and hypotheses.],
-  text(size: 8.5pt)[
-    #table(
+  [
+    #publication-table(
       columns: (9em, 8em, auto),
+      header: ([Ablation], [Change], [Hypothesis]),
       align: (left, left, left),
-      toprule(),
-      table.header([Ablation], [Change], [Hypothesis]),
-      midrule(), [Semi-dense point encoder], [on/off (PointNeXt)],
+      rows: ([Semi-dense point encoder], [on/off (PointNeXt)],
       [Does a global semi-dense embedding help beyond view-conditioned cues?], [Semi-dense frustum MHCA], [on/off],
       [Does token-level candidate conditioning improve ranking vs. projection stats alone?],
       [Visibility token embedding],
@@ -58,7 +56,7 @@ expected outcomes are summarized in @tab:ablations.
       [on/off (annealed weighting)],
 
       [Early emphasis on high-evidence candidates should prevent collapse while still learning all candidates.],
-      bottomrule(),
+      ),
     )
   ],
 ) <tab:ablations>
@@ -87,15 +85,14 @@ ablation to attribute gains to trajectory features.
   supplement: [Table],
   placement: none,
   caption: [Final validation metrics for the current top-2 runs (last logged points).],
-  text(size: 8.5pt)[
-    #table(
+  [
+    #publication-table(
       columns: (auto, auto, auto, auto),
+      header: ([Run], [$#(symb.vin.loss) _("rel")$], [$rho$], [$"TopKAcc"(3)$]),
       align: (left, left, left, left),
-      toprule(),
-      table.header([Run], [$#(symb.vin.loss) _("rel")$], [$rho$], [$"TopKAcc"(3)$]),
-      midrule(), [`hq1how1j`], [0.677], [0.469],
+      rows: ([`hq1how1j`], [0.677], [0.469],
       [0.314], [`rtjvfyyp`], [0.666], [0.501],
-      [0.329], bottomrule(),
+      [0.329]),
     )
   ],
 ) <tab:wandb-top2-final>

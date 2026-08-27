@@ -763,13 +763,17 @@ quarto-preview: ## Preview the Quarto website locally
 #  🧾 Typst builds
 #  ═══════════════════════════════════════════════════════════════════════
 
-.PHONY: typst-paper typst-slide thesis-pdf thesis-pdf-ci thesis-watch scientific-report-v2-smoke
+.PHONY: typst-paper typst-paper-table-contract typst-slide thesis-pdf thesis-pdf-ci thesis-watch typst-table-gallery thesis-report-data-contract scientific-report-v2-smoke
 typst-paper: ## Compile the Typst paper (docs/typst/seminar_paper/main.typ)
 	@$(TYPST) compile --root $(TYPST_ROOT) $(TYPST_PAPER) $(TYPST_PAPER_PDF)
 
 typst-paper-ci: ## Compile the Typst paper into an ignored CI artifact path
 	@mkdir -p "$(CI_RENDER_DIR)"
 	@$(TYPST) compile --root $(TYPST_ROOT) $(TYPST_PAPER) "$(CI_RENDER_DIR)/seminar_paper.pdf"
+
+typst-paper-table-contract: ## Compile table-bearing seminar sections outside the current paper entrypoint
+	@mkdir -p "$(CI_RENDER_DIR)"
+	@$(TYPST) compile --root $(TYPST_ROOT) docs/typst/seminar_paper/tests/system_pipeline_table_smoke.typ "$(CI_RENDER_DIR)/seminar-system-pipeline-table-smoke.pdf"
 
 typst-slide: ## Compile a Typst slide deck (make typst-slide SLIDES=slides_4.typ or SLIDES=docs/typst/thesis_slides/slides_thesis_outlook.typ)
 	@$(TYPST) compile --root $(TYPST_ROOT) $(SLIDES_SRC) $(SLIDES_PDF)
@@ -789,16 +793,25 @@ scientific-report-v2-smoke: ## Compile bundle-v2 and prove pilot evidence fails 
 thesis-watch: ## Watch and recompile the DEVELOPMENT/DRAFT thesis PDF
 	@$(TYPST) watch --root $(TYPST_ROOT) $(TYPST_THESIS) $(TYPST_THESIS_PDF)
 
+typst-table-gallery: ## Compile the isolated Typst table-style gallery into an ignored CI artifact
+	@mkdir -p "$(CI_RENDER_DIR)"
+	@$(TYPST) compile --root $(TYPST_ROOT) docs/typst/thesis/tests/table_gallery.typ "$(CI_RENDER_DIR)/table-gallery.pdf"
+
+thesis-report-data-contract: _check_python ## Verify positive and negative Typst report-data fixtures
+	@$(PYTHON_INTERPRETER) scripts/tests/test_typst_report_data_contract.py
+
 thesis-marker-contract: _check_python ## Verify Typst development/submission marker fixtures
 	@$(PYTHON_INTERPRETER) scripts/tests/test_thesis_marker_contract.py
 
 typst-authoring-contract: _check_python ## Enforce shared-equation, notation, label, and prose hygiene
+	@$(PYTHON_INTERPRETER) scripts/tests/test_typst_authoring_hygiene.py
 	@$(PYTHON_INTERPRETER) scripts/tests/test_typst_authoring_hygiene.py --scan docs/typst/thesis
+	@$(PYTHON_INTERPRETER) scripts/tests/test_typst_authoring_hygiene.py --table-scan
 
 thesis-literature-provenance: _check_python ## Check Related Work citation identity and source locators
 	@$(PYTHON_INTERPRETER) -m pytest --import-mode=importlib scripts/tests/test_thesis_literature_provenance.py
 
-docs-render-core: graphify-projection-self-test graphify-projection-live-check quarto-docs-ci typst-paper-ci thesis-pdf-ci scientific-report-v2-smoke typst-authoring-contract thesis-marker-contract thesis-literature-provenance ## Render the core docs surfaces used by root CI
+docs-render-core: graphify-projection-self-test graphify-projection-live-check quarto-docs-ci typst-paper-ci typst-paper-table-contract thesis-pdf-ci scientific-report-v2-smoke typst-table-gallery thesis-report-data-contract typst-authoring-contract thesis-marker-contract thesis-literature-provenance ## Render the core docs surfaces used by root CI
 
 qh-ci: ## Run the focused CPU-only Q_H training and distributed contracts
 	@cd $(PKG_DIR) && $(QH_CI_PYTHON) -m ruff format --check $(QH_CI_RUFF_PATHS)

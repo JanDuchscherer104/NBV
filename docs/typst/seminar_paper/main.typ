@@ -1,8 +1,5 @@
 #import "charged_ieee_local.typ": ieee
-#import "@preview/booktabs:0.0.4": *
 #import "../shared/macros.typ": *
-
-#show: booktabs-default-table-style
 
 #let figures_path = "/figures/"
 

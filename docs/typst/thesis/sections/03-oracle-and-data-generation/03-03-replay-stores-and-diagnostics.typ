@@ -2,7 +2,7 @@
 #import "../../../shared/symbols.typ": symb
 #import "../../draft_markers.typ": prune_todo, development_only
 #import "../../experiment_data.typ": load-scientific-report, report-value, report-figure-path, format-report-value
-#import "@preview/booktabs:0.0.4": *
+#import "../../../shared/tables.typ": publication-table
 
 == Replay Stores and Diagnostic Evidence
 
@@ -27,22 +27,21 @@ The rollout store is normalized around replay identity. One source can produce m
 ) <fig:offline-rollout-store-relation>
 
 #figure(
-  table(
+  publication-table(
     columns: (0.8fr, 1.35fr),
-    toprule(),
-    table.header([*Evidence family*], [*Interpretation contract*]),
-    midrule(),
-    [Sources and targets],
-    [Manifest-backed task coverage; not proof of actor-visible target discovery.],
-    [Candidates and invalidity],
-    [Full-shell support with separate hard-action, training, padding, and future deployable-feasibility roles.],
-    [Retained chains and steps],
-    [Recipe-selected evidence; not a persisted exhaustive search tree.],
-    [Selected depth],
-    [Chosen-action successor observation with calibration and source role; actor input only under an explicitly admitted later-state protocol.],
-    [#symb.rl.qh view],
-    [Derived training cache whose rewards and masks must agree with factual rows; not a scene-memory representation.],
-    bottomrule(),
+    header: ([*Evidence family*], [*Interpretation contract*]),
+    rows: (
+      [Sources and targets],
+      [Manifest-backed task coverage; not proof of actor-visible target discovery.],
+      [Candidates and invalidity],
+      [Full-shell support with separate hard-action, training, padding, and future deployable-feasibility roles.],
+      [Retained chains and steps],
+      [Recipe-selected evidence; not a persisted exhaustive search tree.],
+      [Selected depth],
+      [Chosen-action successor observation with calibration and source role; actor input only under an explicitly admitted later-state protocol.],
+      [#symb.rl.qh view],
+      [Derived training cache whose rewards and masks must agree with factual rows; not a scene-memory representation.],
+    ),
   ),
   caption: [Interpretation contract for rollout-store audits. Numeric values are rendered from the resolved report bundle in the experiment and reproducibility sections.],
 ) <tab:current-rollout-store-audit>

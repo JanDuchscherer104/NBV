@@ -98,6 +98,17 @@
   matches.first()
 }
 
+#let report-store-fact(report, store-id, key) = {
+  let matches = report.tables.facts.rows.filter(
+    row => row.store_id == store-id and row.key == key,
+  )
+  assert(
+    matches.len() == 1,
+    message: "expected one thesis report fact for store and key: " + store-id + " / " + key,
+  )
+  matches.first()
+}
+
 #let short-store-label(report, store-id) = {
   let stores = report.tables.stores.rows
   let matches = stores.filter(store => store.store_id == store-id)

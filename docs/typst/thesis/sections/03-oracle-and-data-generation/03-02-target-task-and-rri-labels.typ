@@ -1,7 +1,7 @@
 #import "../../../shared/macros.typ": *
 #import "../../../shared/symbols.typ": symb
 #import "../../../shared/equations.typ": eqs
-#import "@preview/booktabs:0.0.4": *
+#import "../../../shared/tables.typ": publication-table
 #import "../../draft_markers.typ": validation_todo
 
 == Data Generation and Target-Specific @relative-reconstruction-improvement:short Labels
@@ -225,25 +225,24 @@ The completeness reduction gives every mesh face equal weight. It is deliberatel
 // - @VIN-NBV-frahm2025 -> docs/literature/tex-src/arXiv-VIN-NBV/sec/4_experiments.tex:63-67 (Chamfer primary metric; coverage and F1 diagnostics).
 
 #figure(
-  table(
+  publication-table(
     columns: (1.05fr, 1.45fr, 1.32fr),
     align: left,
-    toprule(),
-    table.header([*Metric family*], [*Question answered*], [*Dependency and thesis role*]),
-    midrule(),
-    [Equal-face bidirectional point--mesh error],
-    [Are reconstructed points close to @ground-truth:short faces, and does every @ground-truth:short face have nearby point evidence?],
-    [Depends on point fusion and mesh tessellation; selected operational RRI error.],
-    [Point-sampled Chamfer / accuracy--completeness],
-    [Are two sampled surface point sets mutually close?],
-    [Depends on sampling density, randomness, norm, and squaring convention; important alternative, not the current metric.],
-    [Thresholded precision, recall, and F-score],
-    [What fraction of predicted and reference samples fall within tolerance $tau$, and how do the two fractions balance?],
-    [Interpretable at a physical tolerance but threshold-dependent; useful diagnostic rather than the scalar RRI owner.],
-    [TSDF, occupancy, coverage, or information gain],
-    [How much volumetric surface, free space, or previously unknown space is reconstructed or observed?],
-    [Depends on grid, truncation, and visibility definitions; answers a different question from target surface quality.],
-    bottomrule(),
+    header: ([*Metric family*], [*Question answered*], [*Dependency and thesis role*]),
+    rows: (
+      [Equal-face bidirectional point--mesh error],
+      [Are reconstructed points close to @ground-truth:short faces, and does every @ground-truth:short face have nearby point evidence?],
+      [Depends on point fusion and mesh tessellation; selected operational RRI error.],
+      [Point-sampled Chamfer / accuracy--completeness],
+      [Are two sampled surface point sets mutually close?],
+      [Depends on sampling density, randomness, norm, and squaring convention; important alternative, not the current metric.],
+      [Thresholded precision, recall, and F-score],
+      [What fraction of predicted and reference samples fall within tolerance $tau$, and how do the two fractions balance?],
+      [Interpretable at a physical tolerance but threshold-dependent; useful diagnostic rather than the scalar RRI owner.],
+      [TSDF, occupancy, coverage, or information gain],
+      [How much volumetric surface, free space, or previously unknown space is reconstructed or observed?],
+      [Depends on grid, truncation, and visibility definitions; answers a different question from target surface quality.],
+    ),
   ),
   caption: [Reconstruction-metric alternatives and their role in this thesis. No alternative is promoted to a co-primary metric.],
 ) <tab:thesis-reconstruction-metric-comparison>

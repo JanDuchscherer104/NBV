@@ -26,8 +26,8 @@ LABEL_SCOPE = {
     Path("docs/typst/thesis/development/m1-contract-report.typ"): "development",
 }
 EXPECTED_LABEL_COUNTS = {
-    Path("docs/typst/thesis/sections/01-introduction.typ"): 2,
-    Path("docs/typst/thesis/sections/01-research-questions.typ"): 9,
+    Path("docs/typst/thesis/sections/01-introduction.typ"): 3,
+    Path("docs/typst/thesis/sections/01-research-questions.typ"): 10,
     Path("docs/typst/thesis/development/roadmap.typ"): 10,
     Path("docs/typst/thesis/development/m1-contract-report.typ"): 4,
 }
@@ -40,7 +40,9 @@ LABEL_RE = re.compile(r"<([A-Za-z][A-Za-z0-9_:-]*)>")
 # words such as "implemented".  Code spans and guarded development prose are
 # valid places to show an exact owner key.
 RAW_PROSE_PATTERNS = (
-    re.compile(r"\b(?:valid_action_mask|actor_action_mask|oracle_label_mask|q_train_mask)\b"),
+    re.compile(
+        r"\b(?:valid_action_mask|actor_action_mask|oracle_label_mask|q_train_mask)\b"
+    ),
     re.compile(r"\b(?:candidate_validity|candidate_support|candidate_row_id)\b"),
     re.compile(r"\b(?:V0|V1)\b"),
     re.compile(r"\bnot implemented\b", re.IGNORECASE),
@@ -55,6 +57,267 @@ RECURRING_RAW_PATTERNS = (
     re.compile(r'\bbold\(F\)_t\^"EVL"\b'),
     re.compile(r'\bbold\(O\)_t\^"pred"\b'),
 )
+
+# Table policy is derived from every active authored Typst family rather than a
+# second hand-maintained file inventory. The template owns title-page layout;
+# archived sources and package manuals are historical/reference material.
+TABLE_PACKAGE_IMPORT_RE = re.compile(
+    r'(?m)^[ \t]*#import\s+"@preview/([^":]+)(?::[^" ]+)?"', re.IGNORECASE
+)
+TABLE_CALL_RE = re.compile(
+    r"(?<![\w-])(?:#)?(table|publication-table|development-table|presentation-table)\s*\("
+)
+TABLE_ALIAS_RE = re.compile(
+    r"(?m)^[ \t]*#?let\s+[A-Za-z_][\w-]*\s*=\s*"
+    r"(?:table|publication-table|development-table|presentation-table)\b"
+)
+TABLE_PACKAGE_NAMES = {"booktabs", "tablex", "tblr", "tabularx", "tabut"}
+SHARED_TABLE_IMPORT_RE = re.compile(
+    r'(?m)^[ \t]*#import\s+"(?:tables\.typ|(?:\.\./)+shared/tables\.typ)"\s*:\s*([^\n]+)'
+)
+SHARED_TABLE_ALIAS_IMPORT_RE = re.compile(
+    r'(?m)^[ \t]*#import\s+"(?:tables\.typ|(?:\.\./)+shared/tables\.typ)"'
+    r"(?:\s+as\s+[A-Za-z_][\w-]*|\s*:[^\n]*\bas\b)"
+)
+
+
+@dataclass(frozen=True)
+class TableCall:
+    """One active table constructor call and its source span."""
+
+    path: Path
+    line: int
+    constructor: str
+    body: str
+
+
+def _table_source_paths() -> list[Path]:
+    """Return every active authored table surface with narrow exclusions."""
+    roots = (
+        THESIS_ROOT / "sections",
+        THESIS_ROOT / "appendix",
+        THESIS_ROOT / "development",
+        ROOT / "docs/typst/seminar_paper",
+        ROOT / "docs/typst/seminar_slides",
+        ROOT / "docs/typst/thesis_slides",
+    )
+    discovered = [
+        path
+        for root in roots
+        for path in sorted(root.rglob("*.typ"))
+        if "generated" not in path.parts
+        and "assets" not in path.parts
+        and "tests" not in path.parts
+    ]
+    return sorted(
+        set(discovered)
+        | {
+            THESIS_ROOT / "main.typ",
+            ROOT / "docs/typst/shared/notation.typ",
+            ROOT / "docs/typst/shared/slide-template.typ",
+        }
+    )
+
+
+def _table_surface(path: Path) -> str | None:
+    """Classify one authored source by the shared constructor it must use."""
+    relative = _relative(path)
+    if relative == Path("docs/typst/shared/notation.typ"):
+        return "publication"
+    if relative.parts[:3] == ("docs", "typst", "seminar_paper"):
+        return "publication"
+    if relative.parts[:3] in {
+        ("docs", "typst", "seminar_slides"),
+        ("docs", "typst", "thesis_slides"),
+    }:
+        return "presentation"
+    if relative.parts[:4] == ("docs", "typst", "thesis", "development"):
+        return "development"
+    if relative.parts[:4] in {
+        ("docs", "typst", "thesis", "sections"),
+        ("docs", "typst", "thesis", "appendix"),
+    }:
+        return "publication"
+    return None
+
+
+def _table_call_at(text: str, match: re.Match[str]) -> str:
+    """Return the balanced constructor body, tolerating quoted strings."""
+    opening = text.find("(", match.start(), match.end())
+    depth = 0
+    quoted = False
+    escaped = False
+    for index in range(opening, len(text)):
+        char = text[index]
+        if char == '"' and not escaped:
+            quoted = not quoted
+        escaped = char == "\\" and not escaped
+        if quoted:
+            continue
+        if char == "(":
+            depth += 1
+        elif char == ")":
+            depth -= 1
+            if depth == 0:
+                return text[opening + 1 : index]
+        if char != "\\":
+            escaped = False
+    return text[opening + 1 :]
+
+
+def _mask_typst_non_code(text: str, *, mask_strings: bool = True) -> str:
+    """Mask comments and optionally strings while preserving source offsets."""
+    output = list(text)
+    index = 0
+    block_depth = 0
+    while index < len(text):
+        if block_depth:
+            if text.startswith("/*", index):
+                output[index : index + 2] = "  "
+                block_depth += 1
+                index += 2
+            elif text.startswith("*/", index):
+                output[index : index + 2] = "  "
+                block_depth -= 1
+                index += 2
+            else:
+                if text[index] != "\n":
+                    output[index] = " "
+                index += 1
+            continue
+        if text.startswith("//", index):
+            while index < len(text) and text[index] != "\n":
+                output[index] = " "
+                index += 1
+            continue
+        if text.startswith("/*", index):
+            output[index : index + 2] = "  "
+            block_depth = 1
+            index += 2
+            continue
+        if text[index] == '"':
+            if mask_strings:
+                output[index] = " "
+            index += 1
+            escaped = False
+            while index < len(text):
+                char = text[index]
+                if mask_strings and char != "\n":
+                    output[index] = " "
+                index += 1
+                if char == '"' and not escaped:
+                    break
+                escaped = char == "\\" and not escaped
+                if char != "\\":
+                    escaped = False
+            continue
+        index += 1
+    return "".join(output)
+
+
+def _table_calls(path: Path, text: str) -> list[TableCall]:
+    calls: list[TableCall] = []
+    for match in TABLE_CALL_RE.finditer(_mask_typst_non_code(text)):
+        line = text.count("\n", 0, match.start()) + 1
+        calls.append(TableCall(path, line, match.group(1), _table_call_at(text, match)))
+    return calls
+
+
+def scan_table_style_text(path: Path, text: str) -> list[Violation]:
+    """Check table ownership, semantic headers, and package boundaries."""
+    relative = _relative(path)
+    surface = _table_surface(path)
+    active_support_file = relative in {
+        Path("docs/typst/thesis/main.typ"),
+        Path("docs/typst/shared/slide-template.typ"),
+    }
+    if surface is None and not active_support_file:
+        return []
+
+    violations: list[Violation] = []
+    code = _mask_typst_non_code(text)
+    comment_free = _mask_typst_non_code(text, mask_strings=False)
+    calls = _table_calls(path, text)
+    required = {
+        "publication": "publication-table",
+        "development": "development-table",
+        "presentation": "presentation-table",
+    }.get(surface)
+    imported = {
+        name.strip()
+        for match in SHARED_TABLE_IMPORT_RE.finditer(comment_free)
+        for name in match.group(1).split(",")
+    }
+    for match in TABLE_ALIAS_RE.finditer(code):
+        violations.append(
+            Violation(
+                path,
+                text.count("\n", 0, match.start()) + 1,
+                "table-constructor-alias",
+                "call the shared table constructor directly",
+            )
+        )
+    for number, line in enumerate(comment_free.splitlines(), 1):
+        if SHARED_TABLE_ALIAS_IMPORT_RE.search(line):
+            violations.append(
+                Violation(
+                    path,
+                    number,
+                    "table-constructor-alias",
+                    "import the shared table constructor without an alias",
+                )
+            )
+    if (
+        calls
+        and required is not None
+        and required not in imported
+        and "*" not in imported
+    ):
+        violations.append(
+            Violation(
+                path,
+                calls[0].line,
+                "table-owner-import",
+                f"import {required} from the shared tables owner",
+            )
+        )
+    for call in calls:
+        if call.constructor != required:
+            rule = f"{surface}-table-owner"
+            violations.append(
+                Violation(path, call.line, rule, f"use shared {required} constructor")
+            )
+        if "header:" not in call.body:
+            violations.append(
+                Violation(
+                    path,
+                    call.line,
+                    "semantic-table-header",
+                    "every active table needs a shared semantic header",
+                )
+            )
+
+    for number, line in enumerate(comment_free.splitlines(), 1):
+        package = TABLE_PACKAGE_IMPORT_RE.search(line)
+        if package and package.group(1).lower() in TABLE_PACKAGE_NAMES:
+            violations.append(
+                Violation(
+                    path,
+                    number,
+                    "table-package-import",
+                    "import the shared tables API, not a table package",
+                )
+            )
+    return violations
+
+
+def scan_table_style_paths(paths: list[Path] | None = None) -> list[Violation]:
+    """Scan the derived active table inventory, or explicitly supplied paths."""
+    targets = _table_source_paths() if paths is None else paths
+    violations: list[Violation] = []
+    for path in targets:
+        violations.extend(scan_table_style_text(path, path.read_text(encoding="utf-8")))
+    return violations
 
 
 @dataclass(frozen=True)
@@ -102,7 +365,9 @@ def _token_is_explicit_code(line: str, match: re.Match[str]) -> bool:
         return True
     # Schema/report accessors are executable Typst code; only their quoted
     # field arguments receive the exemption, never neighboring prose.
-    if re.search(r"#(?:fact-value|metadata|let|assert|json)\b", line):
+    if re.search(r"#(?:fact-value|metadata|let|assert|json)\b", line) or re.search(
+        r"\b(?:key|low-key|high-key|denominator-key):\s*\"", line
+    ):
         for quoted in re.finditer(r'"[^"\n]*"', line):
             if quoted.start() <= start and end <= quoted.end():
                 return True
@@ -127,13 +392,23 @@ def _raw_display_violations(path: Path, lines: list[str]) -> list[Violation]:
             elif line.count("$$") >= 2:
                 if "#eqs." not in line:
                     violations.append(
-                        Violation(path, number, "raw-display", "use a shared #eqs.* equation consumer")
+                        Violation(
+                            path,
+                            number,
+                            "raw-display",
+                            "use a shared #eqs.* equation consumer",
+                        )
                     )
             continue
         if stripped == delimiter:
             if not any("#eqs." in item for item in body):
                 violations.append(
-                    Violation(path, start, "raw-display", "use a shared #eqs.* equation consumer")
+                    Violation(
+                        path,
+                        start,
+                        "raw-display",
+                        "use a shared #eqs.* equation consumer",
+                    )
                 )
             in_display = False
             delimiter = ""
@@ -150,7 +425,7 @@ def _raw_display_violations(path: Path, lines: list[str]) -> list[Violation]:
 def scan_text(path: Path, text: str) -> list[Violation]:
     """Return blocking violations for one authored Typst source file."""
     relative = _relative(path)
-    violations: list[Violation] = []
+    violations: list[Violation] = scan_table_style_text(path, text)
     lines = text.splitlines()
 
     # Standalone `$` and `$$` displays are the audited authored-display forms.
@@ -168,7 +443,12 @@ def scan_text(path: Path, text: str) -> list[Violation]:
                 if label in METADATA_LABELS or label.startswith(LABEL_PREFIXES):
                     continue
                 violations.append(
-                    Violation(path, number, "label-prefix", f"{scope} label <{label}> lacks an approved prefix")
+                    Violation(
+                        path,
+                        number,
+                        "label-prefix",
+                        f"{scope} label <{label}> lacks an approved prefix",
+                    )
                 )
 
     if _file_is_code_context(relative):
@@ -179,13 +459,23 @@ def scan_text(path: Path, text: str) -> list[Violation]:
                 match = pattern.search(line)
                 if match and not _token_is_explicit_code(line, match):
                     violations.append(
-                        Violation(path, number, "shared-notation", f"use a shared facade for {match.group(0)}")
+                        Violation(
+                            path,
+                            number,
+                            "shared-notation",
+                            f"use a shared facade for {match.group(0)}",
+                        )
                     )
         for pattern in RAW_PROSE_PATTERNS:
             match = pattern.search(line)
             if match and not _token_is_explicit_code(line, match):
                 violations.append(
-                    Violation(path, number, "scientific-prose", f"implementation/status token {match.group(0)!r} needs an explicit code or development context")
+                    Violation(
+                        path,
+                        number,
+                        "scientific-prose",
+                        f"implementation/status token {match.group(0)!r} needs an explicit code or development context",
+                    )
                 )
     return violations
 
@@ -225,8 +515,12 @@ class HygieneTests(unittest.TestCase):
         self.assertTrue(scan_text(path, "The `field` V1 descriptor is planned."))
         self.assertTrue(scan_text(path, "#strong[V1] remains planned."))
         self.assertEqual(scan_text(path, "#raw[V1]"), [])
-        self.assertEqual(scan_text(path, '#fact-value(store, "candidate_validity.valid")'), [])
-        self.assertEqual(scan_text(path, "#import \"draft_markers.typ\": thesis_status"), [])
+        self.assertEqual(
+            scan_text(path, '#fact-value(store, "candidate_validity.valid")'), []
+        )
+        self.assertEqual(
+            scan_text(path, '#import "draft_markers.typ": thesis_status'), []
+        )
         development = ROOT / "docs/typst/thesis/development/fixture.typ"
         self.assertEqual(scan_text(development, "V0 is a development baseline."), [])
 
@@ -235,7 +529,9 @@ class HygieneTests(unittest.TestCase):
         self.assertTrue(scan_text(path, "= Heading <rq1>"))
         self.assertEqual(scan_text(path, "= Heading <sec:rq1>"), [])
         roadmap = ROOT / "docs/typst/thesis/development/roadmap.typ"
-        self.assertEqual(scan_text(roadmap, "#metadata(\"roadmap-outcome\") <outcome>"), [])
+        self.assertEqual(
+            scan_text(roadmap, '#metadata("roadmap-outcome") <outcome>'), []
+        )
 
     def test_live_label_inventory_is_stable(self) -> None:
         totals = {"submission": 0, "development": 0}
@@ -248,23 +544,161 @@ class HygieneTests(unittest.TestCase):
             ]
             self.assertEqual(len(labels), expected, relative)
             totals[LABEL_SCOPE[relative]] += len(labels)
-        self.assertEqual(totals, {"submission": 11, "development": 14})
+        self.assertEqual(totals, {"submission": 13, "development": 14})
+
+    def test_active_table_inventory_is_derived_and_scoped(self) -> None:
+        """All authored scientific tables are covered; layout tables are not."""
+        calls = [
+            call
+            for path in _table_source_paths()
+            for call in _table_calls(path, path.read_text(encoding="utf-8"))
+        ]
+        publication = [
+            call for call in calls if _table_surface(call.path) == "publication"
+        ]
+        development = [
+            call for call in calls if _table_surface(call.path) == "development"
+        ]
+        presentation = [
+            call for call in calls if _table_surface(call.path) == "presentation"
+        ]
+        self.assertEqual(len(publication), 29)
+        self.assertEqual(len(development), 1)
+        self.assertEqual(len(presentation), 12)
+        titlepage = ROOT / "docs/typst/thesis/template/layout/titlepage.typ"
+        self.assertEqual(
+            _table_calls(titlepage, titlepage.read_text(encoding="utf-8")), []
+        )
+
+    def test_live_authored_table_surfaces_use_shared_styles(self) -> None:
+        self.assertEqual(scan_table_style_paths(), [])
+
+    def test_publication_table_requires_shared_constructor(self) -> None:
+        path = ROOT / "docs/typst/thesis/sections/fixture.typ"
+        violations = scan_table_style_text(
+            path, "table(table.header([*Header*]), [value])"
+        )
+        self.assertTrue(
+            any(item.rule == "publication-table-owner" for item in violations)
+        )
+
+    def test_shared_constructor_requires_authoritative_import(self) -> None:
+        path = ROOT / "docs/typst/thesis/sections/fixture.typ"
+        text = "#let publication-table(..args) = table(..args)\n#publication-table(header: ([*Header*],))"
+        violations = scan_table_style_text(path, text)
+        self.assertTrue(any(item.rule == "table-owner-import" for item in violations))
+
+    def test_active_table_requires_semantic_header(self) -> None:
+        path = ROOT / "docs/typst/thesis/sections/fixture.typ"
+        violations = scan_table_style_text(path, "publication-table([value])")
+        self.assertTrue(
+            any(item.rule == "semantic-table-header" for item in violations)
+        )
+
+    def test_shared_table_owner_emits_semantic_header(self) -> None:
+        owner = ROOT / "docs/typst/shared/tables.typ"
+        text = owner.read_text(encoding="utf-8")
+        self.assertIn("table.header(..header)", text)
+        self.assertIn("assert(header.len() > 0", text)
+
+    def test_nested_raw_table_is_rejected(self) -> None:
+        path = ROOT / "docs/typst/thesis/sections/fixture.typ"
+        violations = scan_table_style_text(
+            path, "#align(center, table(table.header([*Header*]), [value]))"
+        )
+        self.assertTrue(
+            any(item.rule == "publication-table-owner" for item in violations)
+        )
+
+    def test_table_constructor_alias_is_rejected(self) -> None:
+        path = ROOT / "docs/typst/thesis/sections/fixture.typ"
+        violations = scan_table_style_text(path, "#let t = table\n#t([value])")
+        self.assertTrue(
+            any(item.rule == "table-constructor-alias" for item in violations)
+        )
+
+    def test_shared_constructor_import_alias_is_rejected(self) -> None:
+        path = ROOT / "docs/typst/thesis/sections/fixture.typ"
+        text = '#import "../../shared/tables.typ": publication-table as styled\n#styled([value])'
+        violations = scan_table_style_text(path, text)
+        self.assertTrue(
+            any(item.rule == "table-constructor-alias" for item in violations)
+        )
+
+    def test_commented_table_example_is_ignored(self) -> None:
+        path = ROOT / "docs/typst/thesis/sections/fixture.typ"
+        self.assertEqual(scan_table_style_text(path, "// table([example])"), [])
+
+    def test_block_commented_table_imports_are_ignored(self) -> None:
+        path = ROOT / "docs/typst/thesis/sections/fixture.typ"
+        text = (
+            '/* #import "@preview/tablex:0.1.0": tablex\n'
+            '#import "../../shared/tables.typ": publication-table as styled */\n'
+            '#import "../../shared/tables.typ": publication-table\n'
+            "#publication-table(header: ([*Header*],), rows: ([value],))"
+        )
+        self.assertEqual(scan_table_style_text(path, text), [])
+
+    def test_active_table_rejects_unapproved_package_import(self) -> None:
+        path = ROOT / "docs/typst/thesis/sections/fixture.typ"
+        violations = scan_table_style_text(
+            path, '#import "@preview/tablex:0.1.0": tablex'
+        )
+        self.assertTrue(any(item.rule == "table-package-import" for item in violations))
+
+    def test_development_table_uses_development_constructor(self) -> None:
+        path = ROOT / "docs/typst/thesis/development/fixture.typ"
+        self.assertEqual(
+            scan_table_style_text(
+                path,
+                '#import "../../shared/tables.typ": development-table\n'
+                "development-table(header: ([*Header*],), rows: ([value],))",
+            ),
+            [],
+        )
+
+    def test_slide_table_uses_presentation_constructor(self) -> None:
+        path = ROOT / "docs/typst/seminar_slides/fixture.typ"
+        self.assertEqual(
+            scan_table_style_text(
+                path,
+                '#import "../shared/tables.typ": presentation-table\n'
+                "presentation-table(header: ([*Header*],), rows: ([value],))",
+            ),
+            [],
+        )
+
+    def test_structural_titlepage_tables_are_excluded(self) -> None:
+        path = ROOT / "docs/typst/thesis/template/layout/titlepage.typ"
+        self.assertEqual(scan_table_style_text(path, "table([layout])"), [])
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--scan", nargs="*", type=Path, help="scan Typst files/directories")
-    parser.add_argument("--examples", action="store_true", help="run positive/negative fixtures")
+    parser.add_argument(
+        "--scan", nargs="*", type=Path, help="scan Typst files/directories"
+    )
+    parser.add_argument(
+        "--examples", action="store_true", help="run positive/negative fixtures"
+    )
+    parser.add_argument(
+        "--table-scan",
+        action="store_true",
+        help="scan every active authored table surface",
+    )
     args = parser.parse_args(argv)
+    if args.table_scan:
+        violations = scan_table_style_paths()
+        for violation in violations:
+            print(violation, file=sys.stderr)
+        return 1 if violations else 0
     if args.scan is not None:
         paths = [path if path.is_absolute() else ROOT / path for path in args.scan]
         violations = scan_paths(paths or [THESIS_ROOT])
         for violation in violations:
             print(violation, file=sys.stderr)
         return 1 if violations else 0
-    result = unittest.main(
-        module=__name__, argv=[sys.argv[0]], exit=False, verbosity=2
-    )
+    result = unittest.main(module=__name__, argv=[sys.argv[0]], exit=False, verbosity=2)
     return 0 if result.result.wasSuccessful() else 1
 
 

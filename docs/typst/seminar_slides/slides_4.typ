@@ -19,9 +19,8 @@
 // - limitations + next steps
 
 #import "../shared/slide-template.typ": *
+#import "../shared/tables.typ": presentation-table
 #import "@preview/muchpdf:0.1.1": muchpdf
-#import "@preview/booktabs:0.0.4": *
-#show: booktabs-default-table-style
 
 // Shared macros and symbols (paper + slides)
 #import "../shared/macros.typ": *
@@ -239,14 +238,12 @@
             (code-inline("min_dist_to_mesh"), [#gen_cfg.min_distance_to_mesh]),
           )
           #let gen_cells = gen_rows.flatten()
-          #table(
+          #presentation-table(
             columns: (14em, auto),
             align: (left, left),
-            toprule(),
-            table.header([Setting], [Value]),
-            midrule(),
-            ..gen_cells,
-            bottomrule(),
+            text-size: 12pt,
+            header: ([Setting], [Value]),
+            rows: gen_cells,
           )
         ],
       )
@@ -1265,16 +1262,21 @@
   }
 
 
-  #table(
+  #presentation-table(
     columns: (auto, auto),
     align: (left, left),
-    toprule(),
-    table.header([Metric], [Start #sym.arrow.r finish]),
-    midrule(), [Training $#(symb.vin.loss) _("rel")$],
-    [#fmt(r.metrics, "train/coral_loss_rel_random_step")], [Validation $#(symb.vin.loss) _("rel")$],
-    [#fmt(r.metrics, "val/coral_loss_rel_random")], [Spearman $rho$],
-    [#fmt(r.metrics, "val-aux/spearman")], [Top-3 $"TopKAcc"(3)$],
-    [#fmt(r.metrics, "val-aux/top3_accuracy")], bottomrule(),
+    text-size: 17pt,
+    header: ([Metric], [Start #sym.arrow.r finish]),
+    rows: (
+      [Training $#(symb.vin.loss) _("rel")$],
+      [#fmt(r.metrics, "train/coral_loss_rel_random_step")],
+      [Validation $#(symb.vin.loss) _("rel")$],
+      [#fmt(r.metrics, "val/coral_loss_rel_random")],
+      [Spearman $rho$],
+      [#fmt(r.metrics, "val-aux/spearman")],
+      [Top-3 $"TopKAcc"(3)$],
+      [#fmt(r.metrics, "val-aux/top3_accuracy")],
+    ),
   )
 ]
 
@@ -1302,22 +1304,21 @@
       ]
       #color-block(title: [Final validation metrics (last logged)])[
         #set text(size: 13pt)
-        #table(
+        #presentation-table(
           columns: (9em, 1fr, 1fr, 1fr),
           align: (left, left, left, left),
-          toprule(),
-          table.header([Run], [$#(symb.vin.loss) _("rel")$], [$rho$], [$"TopKAcc"(3)$]),
-          midrule(),
-          [`base`],
-          [#round(r1.metrics.at("val/coral_loss_rel_random").end, digits: 3)],
-          [#round(r1.metrics.at("val-aux/spearman").end, digits: 3)],
-
-          [#round(r1.metrics.at("val-aux/top3_accuracy").end, digits: 3)],
-          [`ablation`],
-          [#round(r2.metrics.at("val/coral_loss_rel_random").end, digits: 3)],
-          [#round(r2.metrics.at("val-aux/spearman").end, digits: 3)],
-
-          [#round(r2.metrics.at("val-aux/top3_accuracy").end, digits: 3)], bottomrule(),
+          text-size: 13pt,
+          header: ([Run], [$#(symb.vin.loss) _("rel")$], [$rho$], [$"TopKAcc"(3)$]),
+          rows: (
+            [`base`],
+            [#round(r1.metrics.at("val/coral_loss_rel_random").end, digits: 3)],
+            [#round(r1.metrics.at("val-aux/spearman").end, digits: 3)],
+            [#round(r1.metrics.at("val-aux/top3_accuracy").end, digits: 3)],
+            [`ablation`],
+            [#round(r2.metrics.at("val/coral_loss_rel_random").end, digits: 3)],
+            [#round(r2.metrics.at("val-aux/spearman").end, digits: 3)],
+            [#round(r2.metrics.at("val-aux/top3_accuracy").end, digits: 3)],
+          ),
         )
       ]
     ],
