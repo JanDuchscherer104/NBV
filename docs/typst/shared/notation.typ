@@ -1,6 +1,7 @@
 // Thesis-facing notation lists backed by generated notation metadata.
 
 #import "notation.generated.typ": notation-symbols-list
+#import "tables.typ": group-header, publication-table
 
 #let thesis-symbol-entries() = notation-symbols-list.filter(entry => entry.thesis_list)
 #let thesis-symbol-domain(key) = key.split(".").first()
@@ -22,9 +23,7 @@
     let domain = thesis-symbol-domain(entry.key)
     if domain != current-domain {
       current-domain = domain
-      cells.push(table.cell(colspan: 3, fill: rgb("#f0f0f0"))[
-        #text(weight: 700, thesis-symbol-domain-title(domain))
-      ])
+      cells.push(group-header(thesis-symbol-domain-title(domain), colspan: 3))
     }
     cells.push([#entry.body])
     cells.push([#entry.description])
@@ -38,16 +37,14 @@
   if entries.len() == 0 {
     [No thesis symbols have been marked for the printed notation list.]
   } else {
-    text(size: 9pt)[
-      #table(
-        columns: (1.15fr, 4.6fr, 2fr),
-        column-gutter: 8pt,
-        row-gutter: 5pt,
-        inset: (x: 0pt, y: 3pt),
-        align: (center + horizon, left, left + horizon),
-        table.header([*Symbol*], [*Meaning*], [*Key*]),
-        ..thesis-symbol-table-cells(entries),
-      )
-    ]
+    publication-table(
+      columns: (1.15fr, 4.6fr, 2fr),
+      column-gutter: 8pt,
+      row-gutter: 5pt,
+      text-size: 9pt,
+      align: (center + horizon, left, left + horizon),
+      header: ([*Symbol*], [*Meaning*], [*Key*]),
+      rows: thesis-symbol-table-cells(entries),
+    )
   }
 }

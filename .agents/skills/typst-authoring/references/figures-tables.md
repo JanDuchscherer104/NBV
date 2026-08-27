@@ -42,29 +42,34 @@ context from counterfactual candidate rendering (@fig:vin-offline-store)."
 Use tables for exact values and compact comparisons. Use figures for trends,
 architecture, flow, or spatial relationships.
 
-ARIA-NBV thesis/proposal tables use the Typst Universe `booktabs` package by
-default. At the document root, import and enable it once:
+Active ARIA-NBV scientific tables use the shared presentation owner at
+`docs/typst/shared/tables.typ`. Import the constructor matching the surface:
 
 ```typst
-#import "@preview/booktabs:0.0.4": *
-#show: booktabs-default-table-style
+#import "../../shared/tables.typ": publication-table
 ```
 
-Then include explicit rules in every publication-facing table:
+Use `publication-table` for papers and thesis sections, `development-table` for
+development-only reports, and `presentation-table` for slides. Keep columns,
+rows, alignment, captions, and labels at the call site; the shared owner emits
+the semantic header and restrained Booktabs rules:
 
 ```typst
 #figure(
-  table(
+  publication-table(
     columns: (1fr, 1fr, 1fr),
-    toprule(),
-    table.header([*Claim*], [*Evidence*], [*Decision*]),
-    midrule(),
-    [Target utility], [Endpoint target gain], [Primary metric],
-    bottomrule(),
+    header: ([*Claim*], [*Evidence*], [*Decision*]),
+    rows: (
+      [Target utility], [Endpoint target gain], [Primary metric],
+    ),
   ),
   caption: [Claim-to-evidence mapping.],
 ) <tab:claim-evidence>
 ```
+
+The structural title-page helper remains local layout. Archived sources and
+package manuals remain historical/reference material. Run
+`make typst-authoring-contract` after changing any active table surface.
 
 For thesis result tables:
 

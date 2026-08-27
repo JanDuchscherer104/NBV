@@ -3,9 +3,8 @@
 
 #import "../shared/slide-template.typ": *
 #import "@preview/muchpdf:0.1.1": muchpdf
-#import "@preview/booktabs:0.0.4": *
 #import "@preview/dashy-todo:0.1.3": todo as dashy_todo
-#show: booktabs-default-table-style
+#import "../shared/tables.typ": presentation-table
 
 #import "../shared/macros.typ": *
 
@@ -184,12 +183,12 @@
     supplement: [Table],
     caption: [Classification used by this deck to separate implemented evidence, current claims, WIP, and open advisor locks.],
     text(size: 8.9pt)[
-      #table(
+      #presentation-table(
         columns: (0.72fr, 1.58fr, 1.2fr),
         align: (left, left, left),
-        toprule(),
-        table.header([State], [Meaning], [Owner / action]),
-        midrule(), [Implemented substrate], [Code, data paths, diagnostics, or historical results already present.],
+        text-size: 8.9pt,
+        header: ([State], [Meaning], [Owner / action]),
+        rows: ([Implemented substrate], [Code, data paths, diagnostics, or historical results already present.],
         [deck summary plus code/API/seminar links],
         [Current thesis core],
         [Required claim path for thesis success: target-RRI, finite candidates, offline $Q_H$.],
@@ -202,7 +201,7 @@
         [Older source that contradicts the current contract unless demoted.],
 
         [typed TODO or archive note], [Prune candidate], [Operational detail that should leave the main flow.],
-        [appendix/backlog/debrief], bottomrule(),
+        [appendix/backlog/debrief]),
       )
     ],
   )
@@ -269,12 +268,12 @@
     [
       #color-block(title: [Gated Research Questions], spacing: 0.32em)[
         #text(size: 8.6pt)[
-          #table(
+          #presentation-table(
             columns: (0.55fr, 2.08fr),
             align: (left, left),
-            toprule(),
-            table.header([RQ], [Question]),
-            midrule(),
+            text-size: 8.6pt,
+            header: ([RQ], [Question]),
+            rows: (
 
             [*RQ1 Method*],
             [Which target-RRI objective, RL methodology and offline finite-candidate $Q_H$ formulation are most idiomatic? Fixed vs variable horizon?
@@ -295,7 +294,7 @@
 
             [*RQ6 Cont.*],
             [Do continuous/hierarchical target-then-pose policies, e.g. actor-critic, yield headroom over the best finite-candidate policy under the same target-RRI objective?],
-            bottomrule(),
+            ),
           )
         ]
       ]
@@ -364,12 +363,12 @@
     [
       #color-block(title: [Three visibility regimes], spacing: 0.35em)[
         #text(size: 10.55pt)[
-          #table(
+          #presentation-table(
             columns: (0.38fr, 1.34fr, 1.22fr),
             align: (left, left, left),
-            toprule(),
-            table.header([State], [Contains], [Allowed use]),
-            midrule(),
+            text-size: 10.55pt,
+            header: ([State], [Contains], [Allowed use]),
+            rows: (
             [#symb.rl.s_hist],
             [logged RGB/pose, semidense history, root EVL, observed or predicted target hypotheses],
             [target selection and root descriptor construction],
@@ -381,7 +380,7 @@
             [#symb.rl.s_oracle],
             [#symb.rl.s_cf0 plus GT mesh, matched target mesh, all-candidate renders, oracle labels],
             [labels, upper bounds, matching checks, evaluation only],
-            bottomrule(),
+            ),
           )
         ]
       ]
@@ -421,18 +420,18 @@
     [
       #color-block(title: [Protocol variants], spacing: 0.34em)[
         #text(size: 10.7pt)[
-          #table(
+          #presentation-table(
             columns: (0.38fr, 1.5fr, 1.08fr),
             align: (left, left, left),
-            toprule(),
-            table.header([Mode], [Meaning], [Status]),
-            midrule(),
+            text-size: 10.7pt,
+            header: ([Mode], [Meaning], [Status]),
+            rows: (
             [V0], [GT OBB target input], [diagnostic upper bound],
             [V1], [actor-visible target hypotheses only], [main thesis protocol],
             [OBS-SEL], [choose observed/predicted target hypothesis from #symb.rl.s_hist], [selection step],
             [PRED-Q], [$hat(r)_psi^e$ or $Q_H$ conditions on actor-visible target descriptor], [learned policy input],
             [GT-EVAL], [GT OBBs/meshes used for labels, deterministic matching, evaluation], [privileged evaluation],
-            bottomrule(),
+            ),
           )
         ]
       ]
@@ -560,12 +559,12 @@
     supplement: [Table],
     caption: [Actor-visible feature budget and missing ablations before interpreting set-interaction gains.],
     text(size: 8.55pt)[
-      #table(
+      #presentation-table(
         columns: (0.48fr, 1.25fr, 1.18fr),
         align: (left, left, left),
-        toprule(),
-        table.header([Block], [Baseline], [Extensions]),
-        midrule(),
+        text-size: 8.55pt,
+        header: ([Block], [Baseline], [Extensions]),
+        rows: (
         [Target encoding],
         [observed/predicted OBB geometry; class/confidence; projected area; semidense/EVL features; relative target pose],
 
@@ -582,7 +581,7 @@
         [hard mask; invalid reason; valid count; strategy/mixture ids; per-family support and gain diagnostics],
 
         [row shuffle; duplicate-row; mask isolation; valid-count sensitivity; with/without-strategy tests],
-        bottomrule(),
+        ),
       )
     ],
   )
@@ -684,18 +683,18 @@
         supplement: [Table],
         caption: [Support and model controls before interpreting value-model gains.],
         text(size: 9.65pt)[
-          #table(
+          #presentation-table(
             columns: (0.32fr, 0.98fr, 1.44fr),
             align: (left, left, left),
-            toprule(),
-            table.header([Gate], [Check], [Purpose]),
-            midrule(), [S0], [H=1 label profile],
+            text-size: 9.65pt,
+            header: ([Gate], [Check], [Purpose]),
+            rows: ([S0], [H=1 label profile],
             [target gain is non-flat and valid rows exist], [S1], [mixed candidate preflight],
             [target-aware support plus exploration], [S2], [H>1 replay traces],
             [successor tables and selected-depth lineage], [S3], [stochastic support],
             [avoid fitting only greedy chains], [S4], [scene-level scale],
             [held-out generalization without split leakage], [M0], [MLP / DeepSets / Set Transformer],
-            [model-control ladder for attribution], bottomrule(),
+            [model-control ladder for attribution]),
           )
         ],
       )
@@ -964,18 +963,18 @@
         supplement: [Table],
         caption: [Milestones from current docs; current focus is M1/M2 scale readiness before target rollout scale-up.],
         text(size: 10.6pt)[
-          #table(
+          #presentation-table(
             columns: (0.36fr, 1.05fr, 1.3fr),
             align: (left, left, left),
-            toprule(),
-            table.header([M], [Gate], [Exit]),
-            midrule(), [M1], [data, cache, oracle],
+            text-size: 10.6pt,
+            header: ([M], [Gate], [Exit]),
+            rows: ([M1], [data, cache, oracle],
             [frame/CW90/RRI contract and throughput], [M2], [one-step baseline],
             [calibration/ranking and scale plan], [M3], [target RRI],
             [V0/V1 target contract and sharding gate], [M4], [target scorer],
             [observed/predicted target-conditioned RRI], [M5], [rollouts and $Q_H$],
             [headroom, $eta_Q$, oracle-evaluated actions], [M6], [online / continuous],
-            [RQ5/RQ6 only after offline finite-candidate evidence], bottomrule(),
+            [RQ5/RQ6 only after offline finite-candidate evidence]),
           )
         ],
       )
@@ -1104,20 +1103,19 @@
     supplement: [Table],
     caption: [Hypothesis, controls, and ablations from the advisor distillation source. Escalate only after support and scorer gates pass.],
     text(size: 8.45pt)[
-      #table(
+      #presentation-table(
         columns: (0.58fr, 1.76fr),
         align: (left, left),
-        toprule(),
-        table.header([Role], [Candidate design]),
-        midrule(), [A0 control],
+        text-size: 8.45pt,
+        header: ([Role], [Candidate design]),
+        rows: ([A0 control],
         [independent candidate scorer], [A1 control],
         [pooled DeepSets context over valid candidate rows], [A2 hypothesis],
         [masked Set Transformer candidate interaction], [A3 ablation],
         [QCNet-style query-centric relative pose encoding], [A4 ablation],
         [Fisher/SCONE-style support-overlap attention bias], [A5 value head],
         [uncentred residual $Q_H$ with hard masks and matched-budget oracle re-scoring], [Deferred bridges],
-        [privileged-teacher distillation, distributional $Q_H$, EGNN candidate graph, Hestia-style target-then-pose],
-        bottomrule(),
+        [privileged-teacher distillation, distributional $Q_H$, EGNN candidate graph, Hestia-style target-then-pose]),
       )
     ],
   )
@@ -1221,12 +1219,12 @@
     supplement: [Table],
     caption: [Literature families used as anchors without promoting them beyond the current ARIA-NBV evidence gate.],
     text(size: 8.55pt)[
-      #table(
+      #presentation-table(
         columns: (0.82fr, 1.28fr, 1.42fr),
         align: (left, left, left),
-        toprule(),
-        table.header([Family], [Adopt], [Reject / gate]),
-        midrule(), [VIN-NBV @VIN-NBV-frahm2025], [quality-driven RRI ranking and ordinal scorer precedent],
+        text-size: 8.55pt,
+        header: ([Family], [Adopt], [Reject / gate]),
+        rows: ([VIN-NBV @VIN-NBV-frahm2025], [quality-driven RRI ranking and ordinal scorer precedent],
         [unqualified transfer of object-centric results],
         [Project Aria / ASE @projectaria-engel2023 @ProjectAria-ASE-2025],
         [egocentric streams, poses, meshes, and supervised oracle labels],
@@ -1243,7 +1241,7 @@
         [GenNBV / Hestia / SceneScript @GenNBV-chen2024 @Hestia-lu2026 @SceneScript-avetisyan2024],
         [continuous, hierarchical, or semantic/global bridge ideas],
 
-        [thesis-core replacement before offline $Q_H$ evidence], bottomrule(),
+        [thesis-core replacement before offline $Q_H$ evidence]),
       )
     ],
   )

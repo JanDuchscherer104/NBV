@@ -1,7 +1,8 @@
 = Results <sec:thesis-results>
 
-#import "../experiment_data.typ": thesis-report-settings, load-thesis-report, short-store-label, format-report-value
+#import "../experiment_data.typ": thesis-report-settings, load-thesis-report, report-store-fact, short-store-label, format-report-value
 #import "../draft_markers.typ": validation_todo
+#import "../../shared/tables.typ": publication-table, index-cell
 
 #validation_todo(
   [Replace fixture- and readiness-oriented output with confirmatory results that answer each research question using matched endpoint evaluation, denominators, exclusions, aggregation units, independent-run uncertainty, and immutable artifact provenance.],
@@ -17,17 +18,12 @@
   required-role: report-settings.required-role,
 )
 #let all-stores-valid = thesis_data.tables.stores.rows.len() > 0 and thesis_data.tables.stores.rows.all(store => store.validation_ok == true)
-#let store-fact(store-id, key) = {
-  let matches = thesis_data.tables.facts.rows.filter(row => row.store_id == store-id and row.key == key)
-  assert(matches.len() == 1, message: "expected one thesis result fact per store and key")
-  matches.first()
-}
 #let stores-have-facts(keys, denominators: false) = thesis_data.tables.stores.rows.len() > 0 and thesis_data.tables.stores.rows.all(store => keys.all(key => {
   let matches = thesis_data.tables.facts.rows.filter(row => row.store_id == store.store_id and row.key == key)
   matches.len() == 1 and matches.first().value != none and (not denominators or (matches.first().n != none and matches.first().n > 0))
 }))
 #let fact-value(store-id, key, digits: none, with-unit: false) = {
-  let row = store-fact(store-id, key)
+  let row = report-store-fact(thesis_data, store-id, key)
   format-report-value(row.value, digits: digits, unit: if with-unit { row.unit } else { none })
 }
 #let result-status(predicate) = if predicate [available] else [not available]
@@ -43,22 +39,82 @@
 #let paired-effect-available = confirmatory-evidence and stores-have-facts(paired-effect-facts)
 #let resource-available = confirmatory-evidence and stores-have-facts(resource-facts)
 
+#let result-summary-families = {
+  let families = ()
+  if population-available {
+    families.push((label: [Population], metrics: (
+      (label: [Scenes], key: "study.population.scenes"),
+      (label: [Targets], key: "study.population.targets"),
+      (label: [Exclusions], key: "study.population.exclusions"),
+    )))
+  }
+  if candidate-support-available {
+    families.push((label: [Candidate support], metrics: (
+      (label: [Valid candidates], key: "candidate_validity.valid"),
+      (label: [Candidate total], key: "candidate_validity.total"),
+      (label: [No-valid-action failures], key: "candidate_support.no_valid_action_failures"),
+    )))
+  }
+  if paired-effect-available {
+    families.push((label: [Policy comparison], metrics: (
+      (
+        label: [Paired endpoint effect],
+        key: "policy.paired_scene_endpoint.effect",
+        low-key: "policy.paired_scene_endpoint.ci_low",
+        high-key: "policy.paired_scene_endpoint.ci_high",
+        denominator-key: "policy.paired_scene_endpoint.n_scenes",
+        digits: 3,
+      ),
+      (
+        label: [Headroom gate],
+        key: "headroom_gate.passed",
+        denominator-key: "policy.paired_scene_endpoint.n_scenes",
+      ),
+    )))
+  }
+  if resource-available {
+    families.push((label: [Resources], metrics: (
+      (label: [Wall time], key: "runtime.wall_time_s", digits: 1),
+      (label: [Peak GPU memory], key: "runtime.peak_gpu_bytes"),
+      (label: [Storage], key: "storage.total_bytes"),
+    )))
+  }
+  families
+}
 #let result-summary-rows = {
   let rows = ()
+  let profile-span = result-summary-families.fold(0, (total, family) => total + family.metrics.len())
   for store in thesis_data.tables.stores.rows {
     let store-id = store.store_id
     let label = short-store-label(thesis_data, store-id)
-    if population-available {
-      rows.push(([Population], [#label], [scenes #fact-value(store-id, "study.population.scenes"); targets #fact-value(store-id, "study.population.targets"); exclusions #fact-value(store-id, "study.population.exclusions")]))
-    }
-    if candidate-support-available {
-      rows.push(([Candidate support], [#label], [#fact-value(store-id, "candidate_validity.valid") / #fact-value(store-id, "candidate_validity.total") valid; zero-action failures #fact-value(store-id, "candidate_support.no_valid_action_failures")]))
-    }
-    if paired-effect-available {
-      rows.push(([Paired effect], [#label], [#fact-value(store-id, "policy.paired_scene_endpoint.effect", digits: 3) [#fact-value(store-id, "policy.paired_scene_endpoint.ci_low", digits: 3), #fact-value(store-id, "policy.paired_scene_endpoint.ci_high", digits: 3)]; $n$=#fact-value(store-id, "policy.paired_scene_endpoint.n_scenes"); headroom #fact-value(store-id, "headroom_gate.passed")]))
-    }
-    if resource-available {
-      rows.push(([Resources], [#label], [wall #fact-value(store-id, "runtime.wall_time_s", digits: 1, with-unit: true); peak GPU #fact-value(store-id, "runtime.peak_gpu_bytes", with-unit: true); storage #fact-value(store-id, "storage.total_bytes", with-unit: true)]))
+    let first-profile-row = true
+    for family in result-summary-families {
+      let first-family-row = true
+      for metric in family.metrics {
+        if first-profile-row {
+          rows.push(index-cell([#label], rowspan: profile-span))
+          first-profile-row = false
+        }
+        if first-family-row {
+          rows.push(index-cell(family.label, rowspan: family.metrics.len()))
+          first-family-row = false
+        }
+        let digits = metric.at("digits", default: none)
+        let low-key = metric.at("low-key", default: none)
+        let high-key = metric.at("high-key", default: none)
+        let denominator-key = metric.at("denominator-key", default: none)
+        let fact = report-store-fact(thesis_data, store-id, metric.key)
+        rows.push(metric.label)
+        rows.push([#format-report-value(fact.value, digits: digits)])
+        rows.push(if low-key == none { [—] } else { [#fact-value(store-id, low-key, digits: digits)] })
+        rows.push(if high-key == none { [—] } else { [#fact-value(store-id, high-key, digits: digits)] })
+        rows.push(if fact.unit == none { [—] } else { [#fact.unit] })
+        rows.push(if denominator-key == none {
+          [#format-report-value(fact.n)]
+        } else {
+          [#fact-value(store-id, denominator-key)]
+        })
+      }
     }
   }
   rows
@@ -67,27 +123,31 @@
 The thesis report bundle is loaded through the strict schema checked in `experiment_data.typ`. Its declared evidence class is #emph(thesis_evidence_status). Schema validity establishes only that provenance, missingness, and table contracts are readable; it does not turn a development fixture or an incomplete pilot into scientific evidence.
 
 #figure(
-  table(
+  publication-table(
     columns: (1.05fr, 1.75fr, 0.7fr),
-    inset: 5pt,
-    table.header([*Result*], [*Required evidence*], [*Status*]),
-    [Population and targets], [population facts with denominators in every validated store], [#result-status(population-available)],
-    [Candidate support], [valid/total candidates and zero-action failures in every validated store], [#result-status(candidate-support-available)],
-    [Paired policy effect], [effect, interval, scene count, and headroom gate in every validated store], [#result-status(paired-effect-available)],
-    [Resource feasibility], [wall time, peak GPU memory, and storage in every validated store], [#result-status(resource-available)],
+    header: ([*Result*], [*Required evidence*], [*Status*]),
+    rows: (
+      index-cell([Population and targets]), [population facts with denominators in every validated store], [#result-status(population-available)],
+      index-cell([Candidate support]), [valid/total candidates and zero-action failures in every validated store], [#result-status(candidate-support-available)],
+      index-cell([Paired policy effect]), [effect, interval, scene count, and headroom gate in every validated store], [#result-status(paired-effect-available)],
+      index-cell([Resource feasibility]), [wall time, peak GPU memory, and storage in every validated store], [#result-status(resource-available)],
+    ),
   ),
-  caption: [Evidence availability in the loaded report bundle. “Not available” means that no thesis result is inferred from fixture values, train-only attempts, or an incomplete store.],
+  caption: [Evidence availability in the loaded report bundle. A status of “not available” means that no thesis result is inferred from fixture values, train-only attempts, or an incomplete store.],
 ) <tab:thesis-result-availability>
 
 #if result-summary-rows.len() > 0 [
   #figure(
-    table(
-      columns: (0.85fr, 0.7fr, 2.35fr),
-      inset: 4pt,
-      table.header([*Result*], [*Profile*], [*Confirmatory value*]),
-      ..result-summary-rows.flatten(),
+    publication-table(
+      columns: (0.72fr, 0.95fr, 1.05fr, 0.62fr, 0.62fr, 0.62fr, 0.55fr, 0.5fr),
+      align: (left, left, left, right, right, right, left, right),
+      text-size: 7.3pt,
+      header: (
+        [*Profile*], [*Result family*], [*Measure*], [*Estimate*], [*CI low*], [*CI high*], [*Unit*], [*$n$*],
+      ),
+      rows: result-summary-rows,
     ),
-    caption: [Compact confirmatory values, reported per validated store/profile. No aggregation across profiles is performed in Typst.],
+    caption: [Confirmatory values by profile and result family. Estimates, interval bounds, units, and denominators remain separate; Typst groups neutral report rows without aggregating across profiles.],
   ) <tab:thesis-confirmatory-values>
 ]
 

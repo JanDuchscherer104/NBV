@@ -2,7 +2,7 @@
 #import "../../../shared/symbols.typ": symb
 #import "../../../shared/equations.typ": eqs
 #import "../../draft_markers.typ": thesis_status
-#import "@preview/booktabs:0.0.4": *
+#import "../../../shared/tables.typ": publication-table
 
 == Replay Eligibility and Finite-Horizon Learning Gate
 
@@ -11,42 +11,41 @@ The factual rollout tables determine which records may supervise each learning p
 All eligible candidate rows can support dense one-step supervision. Exact H=2 supervision is narrower: the factual first action must have a stored reward and either an explicit terminal outcome, whose continuation is exactly zero, or a valid successor step with finite one-step root-gain labels for every hard-valid successor candidate. This completeness condition makes the masked successor maximum exact over the stored action set; one finite label is insufficient because an unlabeled hard-valid action could have the true maximum. General recursive supervision is narrower again: it requires a factual selected action, reward, terminal flag, discount, a defined training horizon, and—when nonterminal—a reproducible successor state, hard mask, and lower-horizon factual support. The derived `q_h/` arrays align these fields on a padded state--candidate view; they do not create labels for unobserved transitions, make selected GT depth actor-visible, or turn sparse long-horizon action support into dense support.
 
 #figure(
-  table(
+  publication-table(
     columns: (0.78fr, 1.10fr, 1.42fr),
-    toprule(),
-    table.header([*Learning surface*], [*Purpose*], [*Minimum factual evidence*]),
-    midrule(),
-    [dense $h=1$], [immediate candidate value],
-    [actor-selectable row with finite one-step root-gain label],
-    [exact $h=2$], [base-case finite-support value],
-    [selected reward plus either terminal outcome or complete finite one-step labels over the hard-valid successor action set],
-    [recursive $h>1$], [variable-horizon fitted value],
-    [selected transition, terminal and discount; nonterminal rows also require successor actor state, hard mask, and lower-horizon target support],
-    [behavior return], [policy-conditioned Monte-Carlo control],
-    [complete retained reward prefix and behavior-policy identity],
-    bottomrule(),
+    header: ([*Learning surface*], [*Purpose*], [*Minimum factual evidence*]),
+    rows: (
+      [dense $h=1$], [immediate candidate value],
+      [actor-selectable row with finite one-step root-gain label],
+      [exact $h=2$], [base-case finite-support value],
+      [selected reward plus either terminal outcome or complete finite one-step labels over the hard-valid successor action set],
+      [recursive $h>1$], [variable-horizon fitted value],
+      [selected transition, terminal and discount; nonterminal rows also require successor actor state, hard mask, and lower-horizon target support],
+      [behavior return], [policy-conditioned Monte-Carlo control],
+      [complete retained reward prefix and behavior-policy identity],
+    ),
   ),
   caption: [Required replay evidence by learning target. Dense immediate labels, exact H=2 targets, recursive optimal-continuation targets, and behavior-policy returns are distinct supervision surfaces.],
 ) <tab:thesis-support-coverage>
 
 #figure(
-  table(
+  publication-table(
     columns: (0.72fr, 1.18fr, 1.25fr),
-    toprule(),
-    table.header([*Gate*], [*Available evidence*], [*Required before inference*]),
-    midrule(),
-    [Oracle data], [target labels, masks, lineage, replay validation, and selected-depth persistence],
-    [held-out coverage, source-role audit, and matched endpoint evaluation],
-    [Myopic control], [scene-level VIN substrate],
-    [actor-visible target-conditioned $Q_1$ scorer and frozen checkpoint],
-    [Finite-horizon scorer], [feature-matched A0/A1--S0-pose/root-moments scalar-horizon controls and fitted-Q seam],
-    [exact-Q2 certification, parameter/runtime report, compatible checkpoint, frozen state protocol, and oracle-rescored policy],
-    [Requested horizons], [fail-closed scalar query and exact $h arrow.l h-1$ recursion tests],
-    [supported targets through $H_"max"$, positive headroom, and per-horizon validation],
-    [Dynamic #symb.rl.qh], [selected-observation persistence and planned state update],
-    [typed dynamic-state reader, deterministic fusion, source masks, and held-out policy evaluation],
-    [Policy claim], [train-only feasibility pilots],
-    [completed held-out paired comparison under equal budget], bottomrule(),
+    header: ([*Gate*], [*Available evidence*], [*Required before inference*]),
+    rows: (
+      [Oracle data], [target labels, masks, lineage, replay validation, and selected-depth persistence],
+      [held-out coverage, source-role audit, and matched endpoint evaluation],
+      [Myopic control], [scene-level VIN substrate],
+      [actor-visible target-conditioned $Q_1$ scorer and frozen checkpoint],
+      [Finite-horizon scorer], [feature-matched A0/A1--S0-pose/root-moments scalar-horizon controls and fitted-Q seam],
+      [exact-Q2 certification, parameter/runtime report, compatible checkpoint, frozen state protocol, and oracle-rescored policy],
+      [Requested horizons], [fail-closed scalar query and exact $h arrow.l h-1$ recursion tests],
+      [supported targets through $H_"max"$, positive headroom, and per-horizon validation],
+      [Dynamic #symb.rl.qh], [selected-observation persistence and planned state update],
+      [typed dynamic-state reader, deterministic fusion, source masks, and held-out policy evaluation],
+      [Policy claim], [train-only feasibility pilots],
+      [completed held-out paired comparison under equal budget],
+    ),
   ),
   caption: [Learning-readiness gates. A runnable scorer establishes executable readiness, not a scientific policy result.],
 ) <tab:thesis-learning-readiness>
@@ -81,9 +80,7 @@ Prediction support and loss support are therefore different. The scorer may emit
 
 === Scalar requested-horizon targets
 
-The scorer represents $Q_theta(s_t,e,i,h)$ for each residual horizon $h$ admitted by $1 <= h <= b_t <= H_"max"$. Remaining budget $b_t$ is a factual field of the represented state; requested horizon $h$ selects how many rewards the current value is meant to summarize. Consequently, a shorter query $h<b_t$ changes the value estimand without changing the state or pretending that less acquisition budget was available. Truncating the return of an eight-step suffix to five steps is conceptually valid only when that five-step target is explicitly constructed and factually supported; changing $b_t$ itself is not ordinary data augmentation.
-
-The boundary target is
+The scorer represents $Q_theta(s_t,e,i,h)$ for each residual horizon $h$ admitted by $1 <= h <= b_t <= H_"max"$. Remaining budget $b_t$ is a factual field of the represented state; requested horizon $h$ selects how many rewards the current value is meant to summarize. Consequently, a shorter query $h<b_t$ changes the value estimand without changing the state or pretending that less acquisition budget was available. Truncating the return of an eight-step suffix to five steps is conceptually valid only when that five-step target is explicitly constructed and factually supported; changing $b_t$ itself is not ordinary data augmentation. The boundary target is
 
 #eqs.rl.target_root_gain_reward
 

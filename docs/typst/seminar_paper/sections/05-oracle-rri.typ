@@ -1,8 +1,7 @@
 = Oracle RRI Computation <sec:oracle-rri>
 
 #import "../../shared/macros.typ": *
-#import "@preview/booktabs:0.0.4": *
-#show: booktabs-default-table-style
+#import "../../shared/tables.typ": publication-table
 
 // NOTE(paper-cleanup): Treat this as the single “ground truth” description of the oracle
 // pipeline. Remove or shorten duplicated pipeline explanations in other sections and refer
@@ -64,7 +63,7 @@ constrained shell around the reference and prune invalid proposals.
   supplement: [Table],
   placement: none,
   caption: [Key parameters (candidate generation).],
-  text(size: 8.5pt)[
+  [
     #let gen_rows = (
       ([$#symb.shape.Nq$], [#gen_cfg.num_samples]),
       ([$r_"min"$], [#gen_cfg.min_radius]),
@@ -79,14 +78,11 @@ constrained shell around the reference and prune invalid proposals.
       (code-inline("min_dist_to_mesh"), [#gen_cfg.min_distance_to_mesh]),
     )
     #let gen_cells = gen_rows.flatten()
-    #table(
+    #publication-table(
       columns: (14em, auto),
+      header: ([Setting], [Value]),
       align: (left, left),
-      toprule(),
-      table.header([Setting], [Value]),
-      midrule(),
-      ..gen_cells,
-      bottomrule(),
+      rows: gen_cells,
     )
   ],
 ) <tab:oracle-cfg-candgen>
@@ -260,19 +256,20 @@ Candidates are oversampled and then filtered by modular rule objects
   supplement: [Table],
   placement: none,
   caption: [Candidate pruning configuration (effective).],
-  text(size: 8.5pt)[
-    #table(
+  [
+    #publication-table(
       columns: (14em, auto),
+      header: ([Parameter], [Value]),
       align: (left, left),
-      toprule(),
-      table.header([Parameter], [Value]),
-      midrule(), [min_distance_to_mesh],
+      rows: (
+      [min_distance_to_mesh],
       [#gen_cfg.min_distance_to_mesh m], [ensure_collision_free],
       [#gen_cfg.ensure_collision_free], [collision_backend],
       [#gen_cfg.collision_backend], [ray_subsample],
       [#gen_cfg.ray_subsample], [step_clearance],
       [#gen_cfg.step_clearance m], [ensure_free_space],
-      [#gen_cfg.ensure_free_space], bottomrule(),
+      [#gen_cfg.ensure_free_space],
+      ),
     )
   ],
 ) <tab:oracle-cfg-prune>
@@ -328,13 +325,13 @@ knobs such as `bin_size` via the renderer config.
   supplement: [Table],
   placement: none,
   caption: [Depth rendering configuration (effective).],
-  text(size: 8.5pt)[
-    #table(
+  [
+    #publication-table(
       columns: (14em, auto),
+      header: ([Parameter], [Value]),
       align: (left, left),
-      toprule(),
-      table.header([Parameter], [Value]),
-      midrule(), [max_candidates_final],
+      rows: (
+      [max_candidates_final],
       [#depth_cfg.max_candidates_final], [resolution_scale],
       [#depth_cfg.resolution_scale], [znear],
       [#renderer_cfg.znear m], [zfar],
@@ -342,7 +339,8 @@ knobs such as `bin_size` via the renderer config.
       [#renderer_cfg.cull_backfaces], [blur_radius],
       [#renderer_cfg.blur_radius], [bin_size],
       [#renderer_cfg.bin_size], [dtype],
-      [#renderer_cfg.dtype], bottomrule(),
+      [#renderer_cfg.dtype],
+      ),
     )
   ],
 ) <tab:oracle-cfg-render>

@@ -2,7 +2,7 @@
 #import "../../../shared/symbols.typ": symb
 #import "../../../shared/equations.typ": eqs
 #import "../../draft_markers.typ": thesis_status
-#import "@preview/booktabs:0.0.4": *
+#import "../../../shared/tables.typ": publication-table
 
 == Descriptor and Encoding Protocol
 
@@ -18,18 +18,18 @@
 The rollout store preserves source, target, rollout, step, candidate, diagnostic, and lineage tables. Its derived `q_h/` arrays provide a padded state--candidate view without changing factual identities or labels. Target pose and extents in the current oracle task remain privileged ground-truth-derived instructions. The implemented finite-horizon scorer consumes actor-side candidate geometry, selected-pose history, remaining budget, root evidence, and materialization support; target gains, ground-truth associations, mesh diagnostics, crops, current all-candidate renders, and Q labels remain supervision or audit fields. Previously selected depth becomes a later actor input only under a named counterfactual-observation protocol.
 
 #figure(
-  text(size: 8.3pt, table(
+  publication-table(
+    text-size: 8.3pt,
     columns: (0.72fr, 1.45fr, 1.05fr),
-    toprule(),
-    table.header([*Carrier*], [*Persisted content*], [*Learning role*]),
-    midrule(),
-    [Target], [identity, class, pose, extents, reference-relative pose, source and validity provenance], [privileged oracle-task instruction; learned actors need observed or predicted equivalents],
-    [Candidate], [stable row identities, world/root-relative pose, masks, reasons, sampler provenance, support fields], [finite action row; privileged diagnostics remain source-gated],
-    [Selected chain], [selected row, shell index, step order, policy, seed, successor link, terminal state], [history and temporal-difference linkage],
-    [Selected observation], [selected depth, valid mask, calibration, pose and source], [later dynamic-state input only under a declared privileged, sensor-like, or actor-visible protocol; never an all-candidate student input],
-    [Oracle labels], [target RRI, target root gain, errors, optional crops and candidate renders], [supervision, evaluation, and audit only],
-    bottomrule(),
-  )),
+    header: ([*Carrier*], [*Persisted content*], [*Learning role*]),
+    rows: (
+      [Target], [identity, class, pose, extents, reference-relative pose, source and validity provenance], [privileged oracle-task instruction; learned actors need observed or predicted equivalents],
+      [Candidate], [stable row identities, world/root-relative pose, masks, reasons, sampler provenance, support fields], [finite action row; privileged diagnostics remain source-gated],
+      [Selected chain], [selected row, shell index, step order, policy, seed, successor link, terminal state], [history and temporal-difference linkage],
+      [Selected observation], [selected depth, valid mask, calibration, pose and source], [later dynamic-state input only under a declared privileged, sensor-like, or actor-visible protocol; never an all-candidate student input],
+      [Oracle labels], [target RRI, target root gain, errors, optional crops and candidate renders], [supervision, evaluation, and audit only],
+    ),
+  ),
   caption: [Implemented replay carriers and admissible learning roles.],
 ) <tab:thesis-descriptor-schema>
 
@@ -52,27 +52,27 @@ $
 This equation is an information contract rather than one flat tensor. The corresponding DTO roles are:
 
 #figure(
-  text(size: 8.1pt, table(
+  publication-table(
+    text-size: 8.1pt,
     columns: (0.92fr, 1.35fr, 1.05fr),
-    toprule(),
-    table.header([*DTO role*], [*Candidate content*], [*Visibility*]),
-    midrule(),
-    [`StaticSceneContext`], [root semidense evidence, supported EVL tokens, root frame and EVL extent], [actor input; immutable within one rollout],
-    [`DynamicSceneState`], [selected geometry, free/unknown support, recency, source masks and ordered history], [actor input; causal update only],
-    [`TargetState`], [protocol-specific descriptor, target-local support and field-availability masks], [oracle-task instruction or actor-visible target],
-    [`CandidateTable`], [row identity, local pose, target relation, actor validity and padding mask], [actor input; row-aligned],
-    [`ValueQuery`], [scalar requested residual horizon $h$ per state; omission means $h=b_t$], [`bounded_scalar_v1` admits $1 <= h <= b_t$ syntactically; bundle support gates deployment],
-    [`CandidateSupervision`], [one-step root gain, diagnostic target RRI and `q_train_mask`], [supervision only],
-    [`SelectedTransition`], [factual action index and row id, reward, discount, terminal and successor identity], [training linkage only],
-    [`AuditLineage`], [source/store/config hashes, policy, seed and reason vocabulary], [CPU audit data; not a learned feature],
-    bottomrule(),
-  )),
+    header: ([*DTO role*], [*Candidate content*], [*Visibility*]),
+    rows: (
+      [`StaticSceneContext`], [root semidense evidence, supported EVL tokens, root frame and EVL extent], [actor input; immutable within one rollout],
+      [`DynamicSceneState`], [selected geometry, free/unknown support, recency, source masks and ordered history], [actor input; causal update only],
+      [`TargetState`], [protocol-specific descriptor, target-local support and field-availability masks], [oracle-task instruction or actor-visible target],
+      [`CandidateTable`], [row identity, local pose, target relation, actor validity and padding mask], [actor input; row-aligned],
+      [`ValueQuery`], [scalar requested residual horizon $h$ per state; omission means $h=b_t$], [`bounded_scalar_v1`: $1 <= h <= b_t$; bundle support gates deployment],
+      [`CandidateSupervision`], [one-step root gain, diagnostic target RRI and `q_train_mask`], [supervision only],
+      [`SelectedTransition`], [factual action index and row id, reward, discount, terminal and successor identity], [training linkage only],
+      [`AuditLineage`], [source/store/config hashes, policy, seed and reason vocabulary], [CPU audit data; not a learned feature],
+    ),
+  ),
   caption: [Finite-horizon scorer DTO roles. Model inputs, scalar horizon queries, supervision, transition linkage, and provenance remain distinct even when collated in one training batch.],
 ) <tab:thesis-qh-dto-contract>
 
-The maximum supported horizon $H_"max"$ is a scorer, data, and checkpoint contract. Remaining budget $b_t$ is a factual rollout-state field, whereas requested horizon $h$ selects one member of the scalar family $1 <= h <= b_t <= H_"max"$. The pairs form a triangular rather than rectangular query domain: the diagonal $h=b_t$ asks for the complete factual residual budget, while $h<b_t$ asks for a shorter return from that same state. Implemented `bounded_scalar_v1` validates this full syntactic domain: `None` selects the diagonal, realized off-diagonal calls may request a shorter supported return, and padding alone uses $h=0$. This admission is not an empirical capability claim. Lightning records the horizons that actually receive targets, and a verified inference bundle rejects any syntactically valid horizon absent from its manifest-bound promoted support. The public output remains $[B,S,N_q]$; multiple horizons use separate scalar calls, while a public vectorized horizon axis remains evidence-gated. The step index $t$ remains lineage by default and becomes a learned feature only in a named non-stationarity ablation.
+The maximum supported horizon $H_"max"$ is a scorer, data, and checkpoint contract. Remaining budget $b_t$ is a factual rollout-state field, whereas requested horizon $h$ selects one member of the scalar family $1 <= h <= b_t <= H_"max"$. Implemented `bounded_scalar_v1` validates this full syntactic domain: `None` means $h=b_t$, realized off-diagonal calls may request a shorter supported return, and padding alone uses $h=0$. This admission is not an empirical capability claim. Lightning records the horizons that actually receive targets, and a verified inference bundle rejects any syntactically valid horizon absent from its manifest-bound promoted support. The public output remains $[B,S,N_q]$; multiple horizons use separate scalar calls, while a public vectorized horizon axis remains evidence-gated. The step index $t$ remains lineage by default and becomes a learned feature only in a named non-stationarity ablation.
 
-The executable boundary is `score(actor, requested_horizon=None)`. It hides scene, target, candidate, history, and time encoding behind one deep module and returns conditional Q plus feasibility logits in stored candidate order. `conditional_q` is the return conditional on choosing that candidate first for the represented state, target, requested horizon, and named continuation rule; it is independent of the action mask and is not multiplied by feasibility. The continuous field retains this one meaning for regression and CORAL: it alone enters Bellman backup and, after authoritative hard masking, online ranking. CORAL additionally carries cumulative logits and its fixed support as training metadata. Static encodings may be reused privately, but the interface exposes no cache lifecycle, encoder handles, candidate sorting, or public horizon axis.
+The executable boundary is `score(actor, requested_horizon=None)`. It hides scene, target, candidate, history, and time encoding behind one deep module and returns conditional Q plus feasibility logits in stored candidate order. The continuous `conditional_q` field retains one meaning for regression and CORAL: it alone enters Bellman backup and online ranking. CORAL additionally carries cumulative logits and its fixed support as training metadata. Static encodings may be reused privately, but the interface exposes no cache lifecycle, encoder handles, candidate sorting, or public horizon axis.
 
 Padding masks, modality-presence masks, source-role masks, action masks, and training masks remain distinct. Out-of-range requests and bundle-unsupported in-range horizons fail closed and are never clamped to the available budget. This does not break recursion from $h$ to $h-1$: the target scorer receives the explicit supported scalar query $h-1$ at the factual successor, whose remaining budget is $b_t-1$. A missing modality must never be encoded as an ordinary zero observation or confused with padding.
 

@@ -1,5 +1,5 @@
 #import "../../../shared/macros.typ": *
-#import "@preview/booktabs:0.0.4": *
+#import "../../../shared/tables.typ": publication-table
 
 == Related-Work Synthesis and Research Gap <sec:thesis-related-work-synthesis>
 
@@ -21,18 +21,18 @@ as a greedy scorer trained on reconstruction quality.
   {
     set text(size: 7.25pt)
     set par(justify: false)
-    table(
+    publication-table(
+      text-size: 7.25pt,
       columns: (0.95fr, 1.35fr, 1.35fr, 1.2fr),
-      toprule(),
-      table.header([*Family*], [*Utility and target scope*], [*Represented evidence*], [*Decision structure*]),
-      midrule(),
-      [PB-NBV @PB-NBV-jia2025], [Projected frontier and occupied coverage; reconstruction object], [Classified voxel clusters and compact projection proxies], [Finite proposed views; greedy score],
-      [SCONE / MACARONS @SCONE-guedon2022 @MACARONS-guedon2023], [Expected surface coverage; scene-wide], [Occupancy, visibility, or online reconstruction state], [Iterative candidate selection],
-      [GenNBV / Hestia @GenNBV-chen2024 @Hestia-lu2026], [Coverage gain; reconstruction object], [Observation history plus geometric or directional state], [Continuous or hierarchical sequential policy],
-      [FisherRF @FisherRF-jiang2024], [Information gain; radiance-field scene model], [Model-parameter uncertainty], [Candidate views; greedy score],
-      [VIN-NBV @VIN-NBV-frahm2025], [Direct reconstruction improvement; reconstructed object], [Candidate-conditioned projections of current reconstruction], [Sampled candidates; greedy score],
-      [Object-centric 3DGS @ObjectCentricNBV-jeong2026], [Object-conditioned information gain; requested object], [Per-Gaussian geometry, appearance, and object confidence], [Candidate views; greedy score],
-      bottomrule(),
+      header: ([*Family*], [*Utility and target scope*], [*Represented evidence*], [*Decision structure*]),
+      rows: (
+        [PB-NBV @PB-NBV-jia2025], [Projected frontier and occupied coverage; reconstruction object], [Classified voxel clusters and compact projection proxies], [Finite proposed views; greedy score],
+        [SCONE / MACARONS @SCONE-guedon2022 @MACARONS-guedon2023], [Expected surface coverage; scene-wide], [Occupancy, visibility, or online reconstruction state], [Iterative candidate selection],
+        [GenNBV / Hestia @GenNBV-chen2024 @Hestia-lu2026], [Coverage gain; reconstruction object], [Observation history plus geometric or directional state], [Continuous or hierarchical sequential policy],
+        [FisherRF @FisherRF-jiang2024], [Information gain; radiance-field scene model], [Model-parameter uncertainty], [Candidate views; greedy score],
+        [VIN-NBV @VIN-NBV-frahm2025], [Direct reconstruction improvement; reconstructed object], [Candidate-conditioned projections of current reconstruction], [Sampled candidates; greedy score],
+        [Object-centric 3DGS @ObjectCentricNBV-jeong2026], [Object-conditioned information gain; requested object], [Per-Gaussian geometry, appearance, and object confidence], [Candidate views; greedy score],
+      ),
     )
   },
   caption: [Concept-centred comparison of the literature families that bound the thesis question. Rows are distinguished by utility, target scope, represented evidence, and decision structure; they are not ranked by reported performance across incompatible settings.],
