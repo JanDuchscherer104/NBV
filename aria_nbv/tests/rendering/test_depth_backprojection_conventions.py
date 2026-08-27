@@ -26,9 +26,21 @@ from efm3d.aria import CameraTW, PoseTW  # noqa: E402
 
 from aria_nbv.rendering.pytorch3d_depth_renderer import Pytorch3DDepthRendererConfig  # noqa: E402
 from aria_nbv.rendering.unproject import (  # noqa: E402
+    _pixel_grid,
     backproject_depths_camera_tw_batch,
     backproject_depths_p3d_batch,
 )
+
+
+def test_unprojection_reuses_pixel_grid_for_same_shape() -> None:
+    """Pixel-coordinate preparation is deterministic and cached by shape/stride/device."""
+
+    _pixel_grid.cache_clear()
+    first = _pixel_grid(8, 10, 2, torch.device("cpu"))
+    second = _pixel_grid(8, 10, 2, torch.device("cpu"))
+
+    assert first[0] is second[0]
+    assert first[1] is second[1]
 
 
 def test_p3d_world_to_view_matches_pose_inverse_transform() -> None:

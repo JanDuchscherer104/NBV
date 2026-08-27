@@ -95,6 +95,8 @@ class Efm3dDepthRenderer:
             .set_debug(self.config.is_debug)
         )
         self._device = BaseConfig._resolve_device(self.config.device)
+        self._ray_engine_cache: dict[int, object] = {}
+        self._camera_ray_grid_cache: dict[tuple[object, ...], np.ndarray] = {}
 
     @property
     def device(self) -> torch.device:
@@ -250,12 +252,16 @@ class Efm3dDepthRenderer:
     ) -> tuple[np.ndarray, np.ndarray]:
         """Generate per-pixel ray origins and directions in world frame."""
 
-        u = np.arange(width, dtype=np.float32)
-        v = np.arange(height, dtype=np.float32)
-        uu, vv = np.meshgrid(u, v)
-        dirs_cam = np.stack([(uu - cx) / fx, (vv - cy) / fy, np.ones_like(uu)], axis=-1)  # (H,W,3)
-        norms = np.linalg.norm(dirs_cam, axis=-1, keepdims=True) + 1e-8
-        dirs_cam /= norms
+        key = (width, height, fx, fy, cx, cy)
+        dirs_cam = self._camera_ray_grid_cache.get(key)
+        if dirs_cam is None:
+            u = np.arange(width, dtype=np.float32)
+            v = np.arange(height, dtype=np.float32)
+            uu, vv = np.meshgrid(u, v)
+            dirs_cam = np.stack([(uu - cx) / fx, (vv - cy) / fy, np.ones_like(uu)], axis=-1)
+            norms = np.linalg.norm(dirs_cam, axis=-1, keepdims=True) + 1e-8
+            dirs_cam /= norms
+            self._camera_ray_grid_cache = {key: dirs_cam}
         dirs_world = dirs_cam.reshape(-1, 3) @ r_wc.T
         origins = np.repeat(t_wc.reshape(1, 3), dirs_world.shape[0], axis=0)
         return origins.astype(np.float32), dirs_world.astype(np.float32)
@@ -263,16 +269,25 @@ class Efm3dDepthRenderer:
     def _ray_engine(self, mesh: Trimesh):
         """Return a ray-mesh intersector."""
 
+        key = id(mesh)
+        cached = self._ray_engine_cache.get(key)
+        if cached is not None:
+            return cached
+
         if self.config.backend in {"auto", "pyembree"}:
             try:
                 from trimesh.ray.ray_pyembree import RayMeshIntersector
 
-                return RayMeshIntersector(mesh)
+                engine = RayMeshIntersector(mesh)
+                self._ray_engine_cache = {key: engine}
+                return engine
             except Exception as exc:  # pragma: no cover - optional dependency
                 if self.config.backend == "pyembree":
                     raise ImportError("pyembree backend requested but unavailable") from exc
                 self.console.warn("pyembree unavailable; falling back to trimesh.ray.")
-        return mesh.ray
+        engine = mesh.ray
+        self._ray_engine_cache = {key: engine}
+        return engine
 
     def _intersect(self, mesh: Trimesh, origins: np.ndarray, directions: np.ndarray) -> np.ndarray:
         """Chunked ray-mesh intersection returning flat depth array."""

@@ -152,6 +152,8 @@ class Pytorch3DDepthRenderer:
         )
 
         self.device = self.config.device
+        self._mesh_cache: dict[tuple[object, ...], Meshes] = {}
+        self._raster_settings_cache: dict[tuple[object, ...], RasterizationSettings] = {}
 
     # ------------------------------------------------------------------
     # Public API
@@ -209,24 +211,13 @@ class Pytorch3DDepthRenderer:
             }
         )
 
-        poses_cw = poses.inverse().to(self.device)
-        self.console.dbg_summary("poses_cw", poses_cw)
-        batch_size = poses_cw.shape[0]
+        batch_size = int(poses.shape[0])
 
         # Keep one base mesh and replicate it only for each bounded view batch.
         verts_t, faces_t = mesh
 
-        mesh_struct_single = Meshes(verts=[verts_t.to(self.device)], faces=[faces_t.to(self.device)])
-        raster_settings = RasterizationSettings(
-            image_size=(int(height), int(width)),
-            blur_radius=self.config.blur_radius,
-            faces_per_pixel=1,  # Closest simplex only
-            cull_backfaces=self.config.cull_backfaces,
-            bin_size=self.config.bin_size,
-            max_faces_per_bin=self.config.max_faces_per_bin,
-            cull_to_frustum=False,
-            z_clip_value=self.config.znear,
-        )
+        mesh_struct_single = self._prepared_mesh(verts_t, faces_t)
+        raster_settings = self._raster_settings(height=int(height), width=int(width))
         autocast_enable = dtype != torch.float32 and self.device.type == "cuda"
         depth_batches: list[Tensor] = []
         pix_to_face_batches: list[Tensor] = []
@@ -253,6 +244,57 @@ class Pytorch3DDepthRenderer:
             pix_to_face,
             cameras,
         )
+
+    def _prepared_mesh(self, verts: Tensor, faces: Tensor) -> Meshes:
+        """Return a device-local base mesh, reusing unchanged tensor inputs."""
+
+        key = (
+            verts.data_ptr(),
+            tuple(verts.shape),
+            verts.dtype,
+            verts.device,
+            verts._version,
+            faces.data_ptr(),
+            tuple(faces.shape),
+            faces.dtype,
+            faces.device,
+            faces._version,
+            self.device,
+        )
+        cached = self._mesh_cache.get(key)
+        if cached is None:
+            verts_device = verts.to(self.device)
+            faces_device = faces.to(self.device)
+            cached = Meshes(verts=[verts_device], faces=[faces_device])
+            self._mesh_cache = {key: cached}
+        return cached
+
+    def _raster_settings(self, *, height: int, width: int) -> RasterizationSettings:
+        """Return raster settings for one image size and stable renderer config."""
+
+        key = (
+            height,
+            width,
+            self.config.blur_radius,
+            self.config.cull_backfaces,
+            self.config.bin_size,
+            self.config.max_faces_per_bin,
+            self.config.znear,
+        )
+        cached = self._raster_settings_cache.get(key)
+        if cached is None:
+            cached = RasterizationSettings(
+                image_size=(height, width),
+                blur_radius=self.config.blur_radius,
+                faces_per_pixel=1,
+                cull_backfaces=self.config.cull_backfaces,
+                bin_size=self.config.bin_size,
+                max_faces_per_bin=self.config.max_faces_per_bin,
+                cull_to_frustum=False,
+                z_clip_value=self.config.znear,
+            )
+            self._raster_settings_cache[key] = cached
+        return cached
 
     # ------------------------------------------------------------------
     # Helpers
