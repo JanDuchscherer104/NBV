@@ -77,6 +77,9 @@ class CandidatePointClouds:
 class PreparedSampleGeometry:
     """Device-local sample geometry reused across candidate batches."""
 
+    _source_sample: object
+    """Exact sample whose static geometry was prepared."""
+
     semidense_points: Tensor
     """Collapsed observed points ``Tensor["K 3", float]`` in world metres."""
 
@@ -100,6 +103,7 @@ def prepare_sample_geometry(
     snippet_bounds = sample.get_occupancy_extend().to(device=device, dtype=dtype)
     static_bounds = _merge_point_bounds(snippet_bounds, semidense)
     return PreparedSampleGeometry(
+        _source_sample=sample,
         semidense_points=semidense,
         semidense_length=semidense_length,
         static_bounds=static_bounds,
@@ -130,6 +134,8 @@ def build_candidate_pointclouds(
     device, dtype = padded.device, padded.dtype
 
     prepared = prepared_sample or prepare_sample_geometry(sample, device=device, dtype=dtype)
+    if prepared._source_sample is not sample:
+        raise ValueError("prepared_sample was created for a different sample.")
     if prepared.semidense_points.device != device or prepared.semidense_points.dtype != dtype:
         raise ValueError("prepared_sample must match the candidate point-cloud device and dtype.")
     occupancy_bounds = _compute_bounds(prepared.static_bounds, padded, lengths)
@@ -137,8 +143,8 @@ def build_candidate_pointclouds(
     return CandidatePointClouds(
         points=padded,
         lengths=lengths,
-        semidense_points=prepared.semidense_points,
-        semidense_length=prepared.semidense_length,
+        semidense_points=prepared.semidense_points.clone(),
+        semidense_length=prepared.semidense_length.clone(),
         occupancy_bounds=occupancy_bounds,
     )
 
