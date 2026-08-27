@@ -113,3 +113,30 @@ def test_capped_union_preserves_candidate_points_when_root_saturates() -> None:
 
     assert int(fused_lengths[0].item()) == 10
     assert torch.isclose(fused[0, :10, 0], torch.tensor(1000.0)).any()
+
+
+def test_prepared_reference_reuses_crop_mesh_and_baseline(monkeypatch: pytest.MonkeyPatch) -> None:
+    import aria_nbv.oracle._scoring as scoring
+
+    verts, faces = _unit_square_mesh(torch.device("cpu"), dtype=torch.float32)
+    points_t = torch.randn((16, 3), dtype=torch.float32)
+    extend = torch.tensor([-2, 2, -2, 2, -2, 2], dtype=torch.float32)
+    scorer = PreparedRriScorerConfig().setup_target()
+    crop_calls = 0
+    original_crop = scoring._crop_mesh_to_aabb
+
+    def record_crop(*args, **kwargs):
+        nonlocal crop_calls
+        crop_calls += 1
+        return original_crop(*args, **kwargs)
+
+    monkeypatch.setattr(scoring, "_crop_mesh_to_aabb", record_crop)
+
+    first = scorer._prepare_reference(points_t=points_t, gt_verts=verts, gt_faces=faces, extend=extend)
+    second = scorer._prepare_reference(points_t=points_t, gt_verts=verts, gt_faces=faces, extend=extend)
+    points_t.add_(1.0)
+    third = scorer._prepare_reference(points_t=points_t, gt_verts=verts, gt_faces=faces, extend=extend)
+
+    assert first is second
+    assert third is not first
+    assert crop_calls == 2

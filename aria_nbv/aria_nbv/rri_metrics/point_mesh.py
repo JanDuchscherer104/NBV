@@ -27,6 +27,8 @@ from pytorch3d.loss.point_mesh_distance import (  # type: ignore[import-untyped]
 )
 from torch import Tensor
 
+from ..geometry import PreparedMeshQuery
+
 
 @dataclass(slots=True)
 class DistanceBreakdown:
@@ -46,6 +48,8 @@ def chamfer_point_mesh(
     points: Tensor,
     gt_verts: Tensor,
     gt_faces: Tensor,
+    *,
+    prepared_mesh: PreparedMeshQuery | None = None,
 ) -> DistanceBreakdown:
     r"""Compute directional mean-squared distances for one point cloud and mesh.
 
@@ -76,7 +80,13 @@ def chamfer_point_mesh(
     lengths = torch.tensor([points.shape[0]], device=points.device, dtype=torch.long)
     padded = points.unsqueeze(0)
 
-    dist = chamfer_point_mesh_batched(padded, lengths, gt_verts, gt_faces)
+    dist = chamfer_point_mesh_batched(
+        padded,
+        lengths,
+        gt_verts,
+        gt_faces,
+        prepared_mesh=prepared_mesh,
+    )
     return DistanceBreakdown(
         accuracy=dist.accuracy.squeeze(0),
         completeness=dist.completeness.squeeze(0),
@@ -89,6 +99,9 @@ def chamfer_point_mesh_batched(
     lengths: Tensor,
     gt_verts: Tensor,
     gt_faces: Tensor,
+    *,
+    prepared_mesh: PreparedMeshQuery | None = None,
+    candidate_chunk_size: int | None = None,
 ) -> DistanceBreakdown:
     """Compute candidate-batched squared point--mesh distances.
 
@@ -116,8 +129,61 @@ def chamfer_point_mesh_batched(
     if points.ndim != 3:
         raise ValueError(f"Expected batched points of shape (C,P,3); got {tuple(points.shape)}")
 
+    bsz = points.shape[0]
+    if candidate_chunk_size is None or candidate_chunk_size >= bsz:
+        return _chamfer_point_mesh_batch(
+            points,
+            lengths,
+            gt_verts,
+            gt_faces,
+            prepared_mesh=prepared_mesh,
+        )
+    if candidate_chunk_size < 1:
+        raise ValueError("candidate_chunk_size must be positive when provided.")
+
+    query = prepared_mesh or PreparedMeshQuery(
+        gt_verts,
+        gt_faces,
+        device=points.device,
+        dtype=points.dtype,
+    )
+    chunks = [
+        _chamfer_point_mesh_batch(
+            points[start : start + candidate_chunk_size],
+            lengths[start : start + candidate_chunk_size],
+            gt_verts,
+            gt_faces,
+            prepared_mesh=query,
+        )
+        for start in range(0, bsz, candidate_chunk_size)
+    ]
+    return DistanceBreakdown(
+        accuracy=torch.cat([chunk.accuracy for chunk in chunks], dim=0),
+        completeness=torch.cat([chunk.completeness for chunk in chunks], dim=0),
+        bidirectional=torch.cat([chunk.bidirectional for chunk in chunks], dim=0),
+    )
+
+
+def _chamfer_point_mesh_batch(
+    points: Tensor,
+    lengths: Tensor,
+    gt_verts: Tensor,
+    gt_faces: Tensor,
+    *,
+    prepared_mesh: PreparedMeshQuery | None,
+) -> DistanceBreakdown:
+    """Compute one bounded candidate chunk against a shared prepared mesh."""
+
     bsz, max_p, _ = points.shape
-    lengths = lengths.clamp(max=max_p)
+    lengths = lengths.to(device=points.device, dtype=torch.long).clamp(max=max_p)
+    query = prepared_mesh or PreparedMeshQuery(
+        gt_verts,
+        gt_faces,
+        device=points.device,
+        dtype=points.dtype,
+    )
+    if not query.matches(gt_verts, gt_faces, device=points.device, dtype=points.dtype, mesh=None):
+        raise ValueError("prepared_mesh does not match the supplied shared mesh tensors.")
 
     mask = torch.arange(max_p, device=points.device).unsqueeze(0) < lengths.unsqueeze(1)
     points_packed = points[mask]  # (Ptot, 3)
@@ -127,12 +193,8 @@ def chamfer_point_mesh_batched(
     max_points = int(lengths.max().item())
     point_to_cloud_idx = torch.repeat_interleave(torch.arange(bsz, device=points.device), lengths)
 
-    v = gt_verts.shape[0]
-    f = gt_faces.shape[0]
-    verts_packed = gt_verts.repeat(bsz, 1)
-    face_offsets = torch.arange(bsz, device=gt_faces.device, dtype=gt_faces.dtype).unsqueeze(1) * v
-    faces_packed = (gt_faces.unsqueeze(0) + face_offsets.unsqueeze(-1)).reshape(-1, 3)
-    tris = verts_packed[faces_packed]
+    f = query.faces.shape[0]
+    tris = query.triangles.repeat(bsz, 1, 1)
     tris_first_idx = torch.arange(0, bsz * f, f, device=points.device, dtype=torch.int64)
     max_tris = f
     tri_to_mesh_idx = torch.repeat_interleave(torch.arange(bsz, device=points.device), f)

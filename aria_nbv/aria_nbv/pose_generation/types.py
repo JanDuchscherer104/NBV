@@ -34,8 +34,8 @@ from ..utils.typed_payloads import from_serializable, to_serializable
 if TYPE_CHECKING:
     from trimesh import Trimesh  # type: ignore[import-untyped]
 
+    from ..geometry import PreparedMeshQuery
     from .candidate_generation import CandidateViewGeneratorConfig
-    from .geometry import PreparedMeshQuery
 
 
 class SamplingStrategy(StrEnum):

@@ -69,6 +69,7 @@ def test_cuda_backend_error_propagates_without_cpu_fallback(monkeypatch: pytest.
         fail_point_face_distance,
     )
     monkeypatch.setattr(geometry, "torch", _TorchProxy)
+    monkeypatch.setattr("aria_nbv.geometry.point_mesh.torch", _TorchProxy)
 
     with pytest.raises(RuntimeError, match="Not compiled with GPU support") as raised:
         geometry.point_mesh_distance(points, verts, faces)

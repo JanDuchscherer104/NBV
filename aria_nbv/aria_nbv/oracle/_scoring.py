@@ -26,14 +26,16 @@ the upstream hard mask: a finite negative RRI is low utility, not invalidity.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 import torch
 from pydantic import Field
 
+from ..geometry import PreparedMeshQuery
 from ..rendering.candidate_depth_renderer import CandidateDepthRendererConfig, CandidateDepths
 from ..rendering.candidate_pointclouds import CandidatePointClouds, build_candidate_pointclouds
-from ..rri_metrics.point_mesh import chamfer_point_mesh, chamfer_point_mesh_batched
+from ..rri_metrics.point_mesh import DistanceBreakdown, chamfer_point_mesh, chamfer_point_mesh_batched
 from ..rri_metrics.rri import RriResult, compute_rri
 from ..utils.base_config import TargetConfig
 from .evidence import (
@@ -66,6 +68,30 @@ class PreparedRriScorerConfig(TargetConfig["PreparedRriScorer"]):
     fusion_max_points: int | None = Field(default=None, ge=1)
     """Optional point cap applied after fusion, with candidate evidence reserved in capped unions."""
 
+    candidate_mesh_batch_size: int = Field(default=8, ge=1)
+    """Maximum candidates sharing one materialized mesh batch in PyTorch3D."""
+
+
+@dataclass(slots=True)
+class _PreparedRriReference:
+    """Cached current evidence, target mesh, and pre-view distance."""
+
+    points_t: torch.Tensor
+    mesh: PreparedMeshQuery
+    dist_before: DistanceBreakdown
+
+
+def _tensor_cache_token(tensor: torch.Tensor) -> tuple[object, ...]:
+    """Return a mutation-sensitive identity token without copying tensor data."""
+
+    return (
+        tensor.data_ptr(),
+        getattr(tensor, "_version", None),
+        tuple(tensor.shape),
+        tensor.device,
+        tensor.dtype,
+    )
+
 
 class PreparedRriScorer:
     r"""Compute geometry-grounded oracle labels for candidate views.
@@ -90,6 +116,8 @@ class PreparedRriScorer:
 
     def __init__(self, config: PreparedRriScorerConfig) -> None:
         self.config = config
+        self._reference_token: tuple[object, ...] | None = None
+        self._reference: _PreparedRriReference | None = None
 
     def score(
         self,
@@ -135,32 +163,82 @@ class PreparedRriScorer:
             the caller's hard-validity contract, not assigned a low RRI.
         """
 
-        gt_verts_crop, gt_faces_crop = _crop_mesh_to_aabb(gt_verts, gt_faces, extend)
-        lengths_q = lengths_q.to(device=points_q.device)
-
-        points_t = canonical_fuse_points(
-            points_t,
-            voxel_size_m=float(self.config.fusion_voxel_size_m),
-            max_points=self.config.fusion_max_points,
+        reference = self._prepare_reference(
+            points_t=points_t,
+            gt_verts=gt_verts,
+            gt_faces=gt_faces,
+            extend=extend,
         )
-        dist_before = chamfer_point_mesh(points_t, gt_verts_crop, gt_faces_crop)
+        lengths_q = lengths_q.to(device=points_q.device)
         if self.config.fusion_voxel_size_m > 0.0 or self.config.fusion_max_points is not None:
             points_tq, lengths_tq = _canonical_fused_unions(
-                points_t=points_t,
+                points_t=reference.points_t,
                 points_q=points_q,
                 lengths_q=lengths_q,
                 voxel_size_m=float(self.config.fusion_voxel_size_m),
                 max_points=self.config.fusion_max_points,
             )
         else:
-            num_t = points_t.shape[0]
-            points_t_exp = points_t.unsqueeze(0).expand(points_q.shape[0], num_t, 3)
+            num_t = reference.points_t.shape[0]
+            points_t_exp = reference.points_t.unsqueeze(0).expand(points_q.shape[0], num_t, 3)
             points_tq = torch.cat([points_t_exp, points_q], dim=1)
             lengths_tq = lengths_q + num_t
 
-        dist_after = chamfer_point_mesh_batched(points_tq, lengths_tq, gt_verts_crop, gt_faces_crop)
+        dist_after = chamfer_point_mesh_batched(
+            points_tq,
+            lengths_tq,
+            reference.mesh.verts,
+            reference.mesh.faces,
+            prepared_mesh=reference.mesh,
+            candidate_chunk_size=int(self.config.candidate_mesh_batch_size),
+        )
 
-        return compute_rri(dist_before, dist_after)
+        return compute_rri(reference.dist_before, dist_after)
+
+    def _prepare_reference(
+        self,
+        *,
+        points_t: torch.Tensor,
+        gt_verts: torch.Tensor,
+        gt_faces: torch.Tensor,
+        extend: torch.Tensor,
+    ) -> _PreparedRriReference:
+        """Prepare or reuse the immutable pre-view RRI reference state."""
+
+        token = (
+            _tensor_cache_token(points_t),
+            _tensor_cache_token(gt_verts),
+            _tensor_cache_token(gt_faces),
+            _tensor_cache_token(extend),
+        )
+        if self._reference is not None and self._reference_token == token:
+            return self._reference
+
+        gt_verts_crop, gt_faces_crop = _crop_mesh_to_aabb(gt_verts, gt_faces, extend)
+        fused_points = canonical_fuse_points(
+            points_t,
+            voxel_size_m=float(self.config.fusion_voxel_size_m),
+            max_points=self.config.fusion_max_points,
+        )
+        mesh = PreparedMeshQuery(
+            gt_verts_crop,
+            gt_faces_crop,
+            device=fused_points.device,
+            dtype=fused_points.dtype,
+        )
+        reference = _PreparedRriReference(
+            points_t=fused_points,
+            mesh=mesh,
+            dist_before=chamfer_point_mesh(
+                fused_points,
+                mesh.verts,
+                mesh.faces,
+                prepared_mesh=mesh,
+            ),
+        )
+        self._reference_token = token
+        self._reference = reference
+        return reference
 
 
 class _CandidateRriScoringEngine:
@@ -346,8 +424,9 @@ def _canonical_fused_unions(
 
     rows: list[torch.Tensor] = []
     lengths: list[int] = []
-    for row_index in range(points_q.shape[0]):
-        q_len = int(lengths_q[row_index].detach().cpu().item())
+    row_lengths = lengths_q.to(dtype=torch.long).clamp(min=0, max=points_q.shape[1]).detach().cpu().tolist()
+    for row_index, q_length in enumerate(row_lengths):
+        q_len = int(q_length)
         query = canonical_fuse_points(points_q[row_index, :q_len, :3], voxel_size_m=voxel_size_m, max_points=None)
         if max_points is None:
             fused = canonical_fuse_points(

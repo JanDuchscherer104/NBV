@@ -59,6 +59,7 @@ from efm3d.aria.pose import PoseTW
 from pydantic import AliasChoices, Field, field_validator, model_validator
 
 from ..data_handling import EfmSnippetView
+from ..geometry import PreparedMeshQuery
 from ..utils import BaseConfig, Console, TargetConfig, Verbosity
 from ..utils.frames import rotate_yaw_cw90, world_up_tensor
 from .candidate_generation_rules import (
@@ -68,7 +69,6 @@ from .candidate_generation_rules import (
     PathCollisionRule,
     Rule,
 )
-from .geometry import PreparedMeshQuery
 from .orientations import OrientationBuilder
 from .positional_sampling import PositionSampler
 from .types import (

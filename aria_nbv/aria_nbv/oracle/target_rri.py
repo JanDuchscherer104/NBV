@@ -192,6 +192,10 @@ class TargetRriScorer:
             eval_fusion_voxel_size_m=config.eval_fusion_voxel_size_m,
         )
         self._target_obb_world: ObbTW | None = None
+        self._prepared_target_geometry: dict[
+            tuple[torch.device, torch.dtype],
+            tuple[ObbTW, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor],
+        ] = {}
         self._initial_invalidity: TargetRriInvalidity | None = None
         try:
             self._target_obb_world = target_gt_obb_world(target_task, target_sample)
@@ -236,16 +240,29 @@ class TargetRriScorer:
         crop_start_s = perf_counter()
         device = point_clouds.points.device
         dtype = point_clouds.points.dtype
-        target_obb = self._target_obb_world.to(device=device, dtype=dtype)
-        mesh_verts = self.sample.mesh_verts.to(device=device, dtype=dtype)
-        mesh_faces = self.sample.mesh_faces.to(device=device)
-        target_mesh_verts, target_mesh_faces = crop_mesh_to_obb(
-            mesh_verts,
-            mesh_faces,
-            target_obb,
-            margin_m=self.config.target_crop_margin_m,
-        )
-        target_extent = target_aabb_from_points(target_mesh_verts, margin_m=self.config.target_crop_margin_m)
+        geometry_key = (device, dtype)
+        prepared_geometry = self._prepared_target_geometry.get(geometry_key)
+        if prepared_geometry is None:
+            target_obb = self._target_obb_world.to(device=device, dtype=dtype)
+            mesh_verts = self.sample.mesh_verts.to(device=device, dtype=dtype)
+            mesh_faces = self.sample.mesh_faces.to(device=device)
+            target_mesh_verts, target_mesh_faces = crop_mesh_to_obb(
+                mesh_verts,
+                mesh_faces,
+                target_obb,
+                margin_m=self.config.target_crop_margin_m,
+            )
+            target_extent = target_aabb_from_points(target_mesh_verts, margin_m=self.config.target_crop_margin_m)
+            prepared_geometry = (
+                target_obb,
+                mesh_verts,
+                mesh_faces,
+                target_mesh_verts,
+                target_mesh_faces,
+                target_extent,
+            )
+            self._prepared_target_geometry[geometry_key] = prepared_geometry
+        target_obb, mesh_verts, mesh_faces, target_mesh_verts, target_mesh_faces, target_extent = prepared_geometry
 
         target_points_t = crop_points_to_obb(
             self._engine.current_eval_points(state, device=device, dtype=dtype, max_points=None),
