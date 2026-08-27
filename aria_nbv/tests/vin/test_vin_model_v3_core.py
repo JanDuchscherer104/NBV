@@ -350,6 +350,29 @@ def test_vin_model_v3_prepared_scene_context_is_disabled_for_training(
     assert field_calls == 2
 
 
+def test_vin_model_v3_prepared_scene_context_bypasses_untrackable_snippets(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    model = VinModelV3(VinModelV3Config(backbone=None)).eval()
+    prepare_calls = 0
+    context = object()
+
+    def prepare(*_args, **_kwargs):
+        nonlocal prepare_calls
+        prepare_calls += 1
+        return context
+
+    monkeypatch.setattr(model, "_prepare_scene_context", prepare)
+    efm = object()
+    backbone_out = _make_backbone_out(batch=1, grid=2)
+    with torch.no_grad():
+        first = model._get_prepared_scene_context(efm, backbone_out, device=torch.device("cpu"))  # type: ignore[arg-type]
+        second = model._get_prepared_scene_context(efm, backbone_out, device=torch.device("cpu"))  # type: ignore[arg-type]
+
+    assert first is second is context
+    assert prepare_calls == 2
+
+
 def test_vin_model_v3_prepared_scene_context_invalidates_after_weight_update(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
