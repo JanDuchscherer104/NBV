@@ -8,10 +8,16 @@ actor-only ``Q_H`` scorer over persisted chain views.
 from __future__ import annotations
 
 from .scene_myopic import VinModelV3, VinModelV3Config
-from .target_finite_horizon import QhScoreOutput, TargetFiniteHorizonScorer, TargetFiniteHorizonScorerConfig
+from .target_finite_horizon import (
+    QhAdmittedActor,
+    QhScoreOutput,
+    TargetFiniteHorizonScorer,
+    TargetFiniteHorizonScorerConfig,
+)
 
 __all__ = [
     "QhScoreOutput",
+    "QhAdmittedActor",
     "TargetFiniteHorizonScorer",
     "TargetFiniteHorizonScorerConfig",
     "VinModelV3",

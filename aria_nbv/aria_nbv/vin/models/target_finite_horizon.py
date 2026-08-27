@@ -76,6 +76,8 @@ from ..modules.qh_value_decoders import (
 )
 
 if TYPE_CHECKING:
+    from efm3d.aria.camera import CameraTW
+
     from ...data_handling.qh_data import QhActorTensors
 
 
@@ -103,6 +105,20 @@ class QhScoreOutput:
 
     value_auxiliary: QhCoralAuxiliary | None = None
     """Optional decoder training payload; policy backup and ranking never consume it."""
+
+
+@dataclass(frozen=True, slots=True)
+class QhAdmittedActor:
+    """An actor whose static scorer admission has already been validated.
+
+    The wrapper is intentionally tied to the exact tensor objects admitted by
+    :meth:`TargetFiniteHorizonScorer.admit_actor`.  In-place mutation of any
+    actor payload invalidates the wrapper through tensor version checks, while
+    request-dependent horizon validation remains part of every hot forward.
+    """
+
+    actor: "QhActorTensors"
+    tensor_versions: tuple[tuple[int, int], ...]
 
 
 class TargetFiniteHorizonScorerConfig(TargetConfig["TargetFiniteHorizonScorer"]):
@@ -398,6 +414,18 @@ class TargetFiniteHorizonScorer(nn.Module):
             if require_publishable:
                 self.value_decoder.require_publishable_support()
 
+    def admit_actor(self, actor: QhActorTensors) -> QhAdmittedActor:
+        """Validate an actor once for reuse across repeated scorer queries.
+
+        Admission performs the complete actor/profile validation. The returned
+        wrapper can be passed to :meth:`forward_admitted` for repeated horizon
+        queries without repeating those CUDA reductions. Any in-place mutation
+        of the admitted tensors invalidates the wrapper before scoring.
+        """
+
+        self._validate_actor(actor)
+        return QhAdmittedActor(actor=actor, tensor_versions=self._actor_tensor_versions(actor))
+
     def forward(
         self,
         actor: QhActorTensors,
@@ -425,7 +453,24 @@ class TargetFiniteHorizonScorer(nn.Module):
             policy backup and ranking still use only ``conditional_q``.
         """
 
-        self._validate_actor(actor)
+        return self.forward_admitted(self.admit_actor(actor), requested_horizon=requested_horizon)
+
+    def forward_admitted(
+        self,
+        admitted: QhAdmittedActor,
+        *,
+        requested_horizon: Tensor | None = None,
+    ) -> QhScoreOutput:
+        """Score an actor after one-time admission validation.
+
+        ``requested_horizon`` is deliberately validated on every call because
+        it is a query-dependent part of the public Q_H contract. The actor
+        payload itself must remain unchanged since admission.
+        """
+
+        actor = admitted.actor
+        if admitted.tensor_versions != self._actor_tensor_versions(actor):
+            raise ValueError("Q_H admitted actor was mutated after admission; admit it again before scoring.")
         horizon = self._validated_requested_horizon(actor, requested_horizon)
         candidate_mask = actor.candidate_mask & actor.step_mask.unsqueeze(-1)
         batch_size, steps, width = candidate_mask.shape
@@ -443,8 +488,9 @@ class TargetFiniteHorizonScorer(nn.Module):
             raise ValueError("Q_H active target extents must be finite.")
 
         current_pose = self._current_pose_relative_root(actor, history_pose)
+        current_to_root = current_pose.inverse()
         root_candidate_features = self.pose_encoder.encode(candidate_pose).pose_enc
-        current_from_candidate = self._expand_pose(current_pose.inverse(), width) @ candidate_pose
+        current_from_candidate = self._expand_pose(current_to_root, width) @ candidate_pose
         current_candidate_features = self.pose_encoder.encode(current_from_candidate).pose_enc
         scene_summary = (
             self.scene_encoder(actor)
@@ -469,7 +515,7 @@ class TargetFiniteHorizonScorer(nn.Module):
         target_features = self.pose_encoder.encode(target_pose).pose_enc
         target_token = self.target_projection(torch.cat((target_features, actor.target_extents.float()), dim=-1))
 
-        current_from_history = self._expand_pose(current_pose.inverse(), steps) @ history_pose
+        current_from_history = self._expand_pose(current_to_root, steps) @ history_pose
         history_features = self.pose_encoder.encode(current_from_history).pose_enc
         history_summary = self.history_encoder(history_features, history_mask, actor.step_mask)
         history_token = self.history_projection(history_summary)
@@ -680,5 +726,58 @@ class TargetFiniteHorizonScorer(nn.Module):
                 f"TargetFiniteHorizonScorer {self.config.experiment_profile} requires all eight root EVL fields."
             )
 
+    @staticmethod
+    def _actor_tensor_versions(actor: QhActorTensors) -> tuple[tuple[int, int], ...]:
+        """Return identity/version facts for every mutable actor tensor."""
 
-__all__ = ["QhScoreOutput", "TargetFiniteHorizonScorer", "TargetFiniteHorizonScorerConfig"]
+        tensors: list[Tensor] = []
+
+        def add(value: Tensor | PoseTW | CameraTW | None) -> None:
+            if value is not None:
+                tensors.append(value if isinstance(value, Tensor) else value.tensor())
+
+        add(actor.vin_snippet.points_world)
+        add(actor.vin_snippet.lengths)
+        add(actor.vin_snippet.t_world_rig)
+        add(actor.vin_snippet.t_world_snippet)
+        add(actor.root_pose_world)
+        add(actor.target_pose_relative_root)
+        add(actor.target_extents)
+        add(actor.candidate_pose_relative_root)
+        add(actor.candidate_mask)
+        add(actor.action_mask)
+        add(actor.history_pose_relative_root)
+        add(actor.history_mask)
+        add(actor.horizon_remaining)
+        add(actor.step_mask)
+        context = actor.static_context
+        if context is not None:
+            add(context.vin_snippet.points_world)
+            add(context.vin_snippet.lengths)
+            add(context.vin_snippet.t_world_rig)
+            add(context.vin_snippet.t_world_snippet)
+            add(context.t_world_voxel)
+            add(context.voxel_extent)
+            add(context.occ_pr)
+            add(context.occ_input)
+            add(context.free_input)
+            add(context.counts)
+            add(context.cent_pr)
+            add(context.pts_world)
+            add(context.evl_presence)
+        prefix = actor.selected_observation_prefix
+        if prefix is not None:
+            add(prefix.depth_m)
+            add(prefix.valid_mask)
+            add(prefix.camera)
+            add(prefix.camera_pose_relative_root)
+            add(prefix.prefix_mask)
+        return tuple((id(tensor), tensor._version) for tensor in tensors)
+
+
+__all__ = [
+    "QhAdmittedActor",
+    "QhScoreOutput",
+    "TargetFiniteHorizonScorer",
+    "TargetFiniteHorizonScorerConfig",
+]

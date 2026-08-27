@@ -625,6 +625,42 @@ def test_qh_scorer_explicit_remaining_horizon_matches_default_query() -> None:
     assert torch.equal(default.feasibility_logits, queried.feasibility_logits)
 
 
+def test_qh_admitted_forward_matches_public_forward_and_skips_revalidation(monkeypatch: pytest.MonkeyPatch) -> None:
+    actor = _actor()
+    scorer = _scorer()
+    admitted = scorer.admit_actor(actor)
+    expected = scorer(actor)
+
+    def fail_validation(_: QhActorTensors) -> None:
+        raise AssertionError("admitted forward must not repeat actor admission")
+
+    monkeypatch.setattr(scorer, "_validate_actor", fail_validation)
+    actual = scorer.forward_admitted(admitted)
+
+    torch.testing.assert_close(actual.conditional_q, expected.conditional_q, rtol=0.0, atol=0.0)
+    torch.testing.assert_close(actual.feasibility_logits, expected.feasibility_logits, rtol=0.0, atol=0.0)
+
+
+def test_qh_admitted_forward_rejects_in_place_actor_mutation() -> None:
+    actor = _actor()
+    scorer = _scorer()
+    admitted = scorer.admit_actor(actor)
+    actor.action_mask[..., 0] = ~actor.action_mask[..., 0]
+
+    with pytest.raises(ValueError, match="mutated after admission"):
+        scorer.forward_admitted(admitted)
+
+
+def test_qh_admitted_forward_retains_requested_horizon_validation() -> None:
+    actor = _actor()
+    scorer = _scorer()
+    admitted = scorer.admit_actor(actor)
+    invalid = torch.zeros_like(actor.horizon_remaining)
+
+    with pytest.raises(ValueError, match="at least one"):
+        scorer.forward_admitted(admitted, requested_horizon=invalid)
+
+
 def test_qh_scorer_accepts_bounded_off_diagonal_horizon_query() -> None:
     actor = _actor()
     scorer = _scorer()
