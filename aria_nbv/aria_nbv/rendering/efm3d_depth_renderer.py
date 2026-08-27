@@ -95,7 +95,7 @@ class Efm3dDepthRenderer:
             .set_debug(self.config.is_debug)
         )
         self._device = BaseConfig._resolve_device(self.config.device)
-        self._ray_engine_cache: dict[int, object] = {}
+        self._ray_engine_cache: dict[tuple[int, int], tuple[Trimesh, object]] = {}
         self._camera_ray_grid_cache: dict[tuple[object, ...], np.ndarray] = {}
 
     @property
@@ -269,24 +269,24 @@ class Efm3dDepthRenderer:
     def _ray_engine(self, mesh: Trimesh):
         """Return a ray-mesh intersector."""
 
-        key = id(mesh)
-        cached = self._ray_engine_cache.get(key)
-        if cached is not None:
-            return cached
+        key = (id(mesh), hash(mesh))
+        entry = self._ray_engine_cache.get(key)
+        if entry is not None:
+            return entry[1]
 
         if self.config.backend in {"auto", "pyembree"}:
             try:
                 from trimesh.ray.ray_pyembree import RayMeshIntersector
 
                 engine = RayMeshIntersector(mesh)
-                self._ray_engine_cache = {key: engine}
+                self._ray_engine_cache = {key: (mesh, engine)}
                 return engine
             except Exception as exc:  # pragma: no cover - optional dependency
                 if self.config.backend == "pyembree":
                     raise ImportError("pyembree backend requested but unavailable") from exc
                 self.console.warn("pyembree unavailable; falling back to trimesh.ray.")
         engine = mesh.ray
-        self._ray_engine_cache = {key: engine}
+        self._ray_engine_cache = {key: (mesh, engine)}
         return engine
 
     def _intersect(self, mesh: Trimesh, origins: np.ndarray, directions: np.ndarray) -> np.ndarray:

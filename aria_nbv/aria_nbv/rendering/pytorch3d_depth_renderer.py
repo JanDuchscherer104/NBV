@@ -152,7 +152,7 @@ class Pytorch3DDepthRenderer:
         )
 
         self.device = self.config.device
-        self._mesh_cache: dict[tuple[object, ...], Meshes] = {}
+        self._mesh_cache: dict[tuple[object, ...], tuple[Tensor, Tensor, Meshes]] = {}
         self._raster_settings_cache: dict[tuple[object, ...], RasterizationSettings] = {}
 
     # ------------------------------------------------------------------
@@ -249,25 +249,30 @@ class Pytorch3DDepthRenderer:
         """Return a device-local base mesh, reusing unchanged tensor inputs."""
 
         key = (
-            verts.data_ptr(),
+            id(verts),
             tuple(verts.shape),
+            tuple(verts.stride()),
+            verts.storage_offset(),
             verts.dtype,
             verts.device,
             verts._version,
-            faces.data_ptr(),
+            id(faces),
             tuple(faces.shape),
+            tuple(faces.stride()),
+            faces.storage_offset(),
             faces.dtype,
             faces.device,
             faces._version,
             self.device,
         )
-        cached = self._mesh_cache.get(key)
-        if cached is None:
+        entry = self._mesh_cache.get(key)
+        if entry is None:
             verts_device = verts.to(self.device)
             faces_device = faces.to(self.device)
-            cached = Meshes(verts=[verts_device], faces=[faces_device])
-            self._mesh_cache = {key: cached}
-        return cached
+            mesh = Meshes(verts=[verts_device], faces=[faces_device])
+            entry = (verts, faces, mesh)
+            self._mesh_cache = {key: entry}
+        return entry[2]
 
     def _raster_settings(self, *, height: int, width: int) -> RasterizationSettings:
         """Return raster settings for one image size and stable renderer config."""

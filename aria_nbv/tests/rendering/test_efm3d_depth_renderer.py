@@ -89,3 +89,20 @@ def test_camera_ray_grid_is_reused_for_same_calibration() -> None:
     assert len(renderer._camera_ray_grid_cache) == 1
     assert np.array_equal(first_origins, second_origins)
     assert np.array_equal(first_dirs, second_dirs)
+
+
+def test_ray_engine_cache_invalidates_after_mesh_mutation() -> None:
+    mesh = trimesh.Trimesh(
+        vertices=np.array([[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]]),
+        faces=np.array([[0, 1, 2]]),
+        process=False,
+    )
+    renderer = Efm3dDepthRendererConfig(device="cpu", backend="trimesh", add_proxy_walls=False).setup_target()
+
+    renderer._ray_engine(mesh)
+    first_key = next(iter(renderer._ray_engine_cache))
+    mesh.vertices[0, 0] = 2.0
+    renderer._ray_engine(mesh)
+    second_key = next(iter(renderer._ray_engine_cache))
+
+    assert second_key != first_key

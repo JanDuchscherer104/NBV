@@ -141,3 +141,15 @@ def test_renderer_reuses_mesh_and_raster_settings_for_same_inputs() -> None:
 
     assert first_mesh is second_mesh
     assert first_settings is second_settings
+
+
+def test_renderer_rebuilds_mesh_after_source_mutation() -> None:
+    verts = torch.tensor([[-1.0, -1.0, 2.0], [1.0, -1.0, 2.0], [0.0, 1.0, 2.0]])
+    faces = torch.tensor([[0, 1, 2]], dtype=torch.int64)
+    renderer = Pytorch3DDepthRenderer(Pytorch3DDepthRendererConfig(device="cpu", verbosity=0))
+
+    first_mesh = renderer._prepared_mesh(verts, faces)
+    verts.add_(1.0)
+    second_mesh = renderer._prepared_mesh(verts, faces)
+
+    assert second_mesh is not first_mesh
