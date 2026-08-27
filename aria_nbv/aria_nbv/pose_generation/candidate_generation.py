@@ -68,6 +68,7 @@ from .candidate_generation_rules import (
     PathCollisionRule,
     Rule,
 )
+from .geometry import PreparedMeshQuery
 from .orientations import OrientationBuilder
 from .positional_sampling import PositionSampler
 from .types import (
@@ -410,13 +411,21 @@ class CandidateViewGenerator:
 
     """
 
-    def __init__(self, config: CandidateViewGeneratorConfig):
+    def __init__(
+        self,
+        config: CandidateViewGeneratorConfig,
+        *,
+        mesh_query: PreparedMeshQuery | None = None,
+    ) -> None:
         self.config = config
         self.console = (
             Console.with_prefix(self.__class__.__name__)
             .set_verbosity(self.config.verbosity)
             .set_debug(self.config.is_debug)
         )
+        self._position_sampler = PositionSampler(config)
+        self._orientation_builder = OrientationBuilder(config)
+        self._mesh_query = mesh_query
         self._rules: list[Rule] = self._build_default_rules(config)
 
     # ------------------------------------------------------------------ public
@@ -529,7 +538,7 @@ class CandidateViewGenerator:
         sampling_pose = _gravity_align_pose(reference_pose) if self.config.align_to_gravity else reference_pose
 
         with _maybe_seed(self.config.seed if seed is None else seed, device=torch.device(device)):
-            centers_world, offsets_ref = PositionSampler(self.config).sample(
+            centers_world, offsets_ref = self._position_sampler.sample(
                 sampling_pose,
             )
             return self._generate_for_centers(
@@ -599,7 +608,7 @@ class CandidateViewGenerator:
 
         device = self.config.device
         with _maybe_seed(seed, device=torch.device(device)):
-            shell_poses, view_dirs_delta = OrientationBuilder(self.config).build(
+            shell_poses, view_dirs_delta = self._orientation_builder.build(
                 sampling_pose,
                 centers_world,
             )
@@ -647,6 +656,29 @@ class CandidateViewGenerator:
             # frame used to construct positions.
             offsets_ref = reference_pose.inverse().transform(centers_world)
 
+        mesh_query = self._mesh_query
+        needs_mesh_query = self.config.min_distance_to_mesh > 0 or self.config.ensure_collision_free
+        if needs_mesh_query and (
+            mesh_query is None
+            or not mesh_query.matches(
+                mesh_verts,
+                mesh_faces,
+                device=device,
+                dtype=centers_world.dtype,
+                mesh=gt_mesh,
+            )
+        ):
+            mesh_query = PreparedMeshQuery(
+                mesh_verts,
+                mesh_faces,
+                device=device,
+                dtype=centers_world.dtype,
+                mesh=gt_mesh,
+            )
+            self._mesh_query = mesh_query
+        elif not needs_mesh_query:
+            mesh_query = None
+
         ctx = CandidateContext(
             cfg=self.config,
             reference_pose=reference_pose,
@@ -664,6 +696,7 @@ class CandidateViewGenerator:
                 dtype=torch.bool,
                 device=device,
             ),
+            mesh_query=mesh_query,
             debug=jitter_debug,
         )
         if self.config.collect_debug_stats:

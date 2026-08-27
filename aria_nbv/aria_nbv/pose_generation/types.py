@@ -35,6 +35,7 @@ if TYPE_CHECKING:
     from trimesh import Trimesh  # type: ignore[import-untyped]
 
     from .candidate_generation import CandidateViewGeneratorConfig
+    from .geometry import PreparedMeshQuery
 
 
 class SamplingStrategy(StrEnum):
@@ -175,6 +176,9 @@ class CandidateContext:
 
     mask_valid: torch.Tensor
     """Cumulative action-validity mask ``Tensor[\"N\", bool]`` over the full shell."""
+
+    mesh_query: "PreparedMeshQuery | None" = None
+    """Prepared mesh-query state shared by distance and collision rules."""
 
     rule_masks: dict[str, torch.Tensor] = field(default_factory=dict)
     """Named cumulative validity masks, each ``Tensor[\"N\", bool]``."""

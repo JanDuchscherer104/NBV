@@ -182,6 +182,36 @@ def test_paired_variants_keep_original_component_id() -> None:
     assert result.gaze_variant_id.tolist() == [0, 0, 1, 1, -1, -1]
 
 
+def test_mixture_prepares_mesh_query_once_for_all_components(monkeypatch: pytest.MonkeyPatch) -> None:
+    import aria_nbv.pose_generation.candidate_mixture as mixture_module
+
+    prepared: list[object] = []
+
+    class FakePreparedMeshQuery:
+        def __init__(self, *_args, **_kwargs) -> None:
+            prepared.append(self)
+
+        def matches(self, *_args, **_kwargs) -> bool:
+            return True
+
+        def point_distance(self, points: torch.Tensor) -> torch.Tensor:
+            return torch.ones(points.shape[0], device=points.device, dtype=points.dtype)
+
+    monkeypatch.setattr(mixture_module, "PreparedMeshQuery", FakePreparedMeshQuery)
+    cfg = CandidateMixtureViewGeneratorConfig(
+        base=_base_cfg().model_copy(update={"min_distance_to_mesh": 0.1}),
+        components=[
+            CandidateMixtureComponentConfig(name="forward", count=2, strategy=ViewDirectionMode.FORWARD_RIG),
+            CandidateMixtureComponentConfig(name="away", count=2, strategy=ViewDirectionMode.RADIAL_AWAY),
+        ],
+    )
+
+    result = _run_generate(cfg)
+
+    assert result.mask_valid.shape[0] == 4
+    assert len(prepared) == 1
+
+
 def test_paired_seed_is_derived_from_resolved_component_seed_for_direct_and_replay(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
