@@ -586,6 +586,9 @@ class RolloutZarrStoreReader:
                 raise ValueError(
                     "Candidate shell index requires aligned candidate_row_id, step_row_id, and shell_index arrays."
                 )
+            if candidate_ids.size == 0:
+                self._candidate_shell_index = _CandidateShellIndex(candidate_ids=candidate_ids, positions_by_step={})
+                return self._candidate_shell_index
             order = np.lexsort((candidate_ids, shell_indices, step_ids))
             ordered_steps = step_ids[order]
             boundaries = np.flatnonzero(np.r_[True, ordered_steps[1:] != ordered_steps[:-1]])

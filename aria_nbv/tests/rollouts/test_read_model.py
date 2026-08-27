@@ -117,6 +117,31 @@ def test_rollout_steps_reuse_reader_local_candidate_shell_index(tmp_path) -> Non
     }
 
 
+def test_candidate_shell_index_caches_empty_candidate_table(tmp_path) -> None:
+    """A completed zero-candidate store still has a reusable empty index."""
+
+    reader = _reader(tmp_path)
+    calls: dict[str, int] = {}
+
+    def empty_array(path: str) -> np.ndarray:
+        calls[path] = calls.get(path, 0) + 1
+        dtype = np.int32 if path == "candidates/shell_index" else np.int64
+        return np.empty(0, dtype=dtype)
+
+    reader.array = empty_array  # type: ignore[method-assign]
+    first = reader.candidate_shell_index()
+    second = reader.candidate_shell_index()
+
+    assert first is second
+    assert first.candidate_ids.size == 0
+    assert first.positions_by_step == {}
+    assert calls == {
+        "candidates/candidate_row_id": 1,
+        "candidates/step_row_id": 1,
+        "candidates/shell_index": 1,
+    }
+
+
 def test_target_rows_decode_factual_and_audit_fields(tmp_path) -> None:
     reader = _reader(tmp_path)
 
