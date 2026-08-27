@@ -759,7 +759,9 @@ class TargetFiniteHorizonScorer(nn.Module):
 
         def add(value: Tensor | PoseTW | CameraTW | None) -> None:
             if value is not None:
-                tensors.append(value if isinstance(value, Tensor) else value.tensor())
+                tensors.append(
+                    value if isinstance(value, Tensor) else value.tensor()  # type: ignore[no-untyped-call]
+                )
 
         add(actor.vin_snippet.points_world)
         add(actor.vin_snippet.lengths)
