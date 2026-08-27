@@ -1,7 +1,12 @@
 import pytest
 import torch
 
-from aria_nbv.oracle._scoring import PreparedRriScorerConfig, _canonical_fused_unions, _crop_mesh_to_aabb
+from aria_nbv.oracle._scoring import (
+    PreparedRriScorerConfig,
+    _CandidateRriScoringEngine,
+    _canonical_fused_unions,
+    _crop_mesh_to_aabb,
+)
 
 
 def _unit_square_mesh(device: torch.device, *, dtype: torch.dtype) -> tuple[torch.Tensor, torch.Tensor]:
@@ -113,3 +118,28 @@ def test_capped_union_preserves_candidate_points_when_root_saturates() -> None:
 
     assert int(fused_lengths[0].item()) == 10
     assert torch.isclose(fused[0, :10, 0], torch.tensor(1000.0)).any()
+
+
+def test_candidate_engine_reuses_prepared_sample_geometry(monkeypatch: pytest.MonkeyPatch) -> None:
+    import aria_nbv.oracle._scoring as scoring
+
+    engine = object.__new__(_CandidateRriScoringEngine)
+    engine.sample = object()
+    engine.backprojection_stride = 1
+    engine._sample_geometry = {}
+    depths = type("Depths", (), {"depths": torch.ones((1, 2, 2), dtype=torch.float32)})()
+    prepared = object()
+    prepare_calls = 0
+
+    def prepare(*_args, **_kwargs):
+        nonlocal prepare_calls
+        prepare_calls += 1
+        return prepared
+
+    monkeypatch.setattr(scoring, "prepare_sample_geometry", prepare)
+    monkeypatch.setattr(scoring, "build_candidate_pointclouds", lambda *_args, **_kwargs: object())
+
+    engine.backproject_candidate_points(depths)
+    engine.backproject_candidate_points(depths)
+
+    assert prepare_calls == 1
