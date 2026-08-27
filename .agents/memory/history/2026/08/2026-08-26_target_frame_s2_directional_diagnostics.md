@@ -11,6 +11,9 @@ touched_owner_paths:
   - aria_nbv/aria_nbv/app/panels/_stored_rollouts/session.py
   - aria_nbv/aria_nbv/app/panels/_stored_rollouts/qh_admission.py
   - aria_nbv/aria_nbv/app/panels/_stored_rollouts/s2_directions.py
+  - aria_nbv/aria_nbv/reporting/_rollouts.py
+  - aria_nbv/aria_nbv/reporting/config.py
+  - aria_nbv/aria_nbv/rollouts/s2_reporting.py
   - aria_nbv/aria_nbv/app/panels/campaign_generation.py
   - aria_nbv/aria_nbv/oracle/pipelines/admission_evidence.py
   - aria_nbv/tests/rollouts/test_inspection.py
@@ -18,10 +21,11 @@ touched_owner_paths:
   - aria_nbv/tests/app/panels/test_stored_rollouts_projection_laziness.py
   - docs/typst/shared/symbols/spatial.typ
   - docs/typst/shared/equations/spatial.typ
+  - docs/typst/thesis/sections/03-oracle-and-data-generation/03-03-replay-stores-and-diagnostics.typ
   - docs/typst/thesis/sections/04-method/04-02-descriptor-and-encoding-plan.typ
 codex_thread: codex://threads/01a033b8-ed20-76a0-9627-2679b556cbff
 repo_object_format: sha1
-repo_head: 8d8ea08930cecbcc266aa4011a873bb77b09dd47
+repo_head: c86e4b4cdd9a9e9522e93abf6d441af7d9de8282
 repo_branch: "codex/s2-target-direction-spheres"
 worktree_kind: linked
 ---
@@ -33,20 +37,22 @@ support provenance on factual rollout paths.
 
 ## Method
 The store-owned reducer transforms selected camera increments and local ``+Z``
-axes from world into each target OBB frame. Movement uses the
-volume-equivalent OBB radius before projection. For every calibrated selected
-view, it tests front-facing points on the target-centred proxy sphere against
-the persisted LUF pinhole image rectangle. Streamlit renders complete
-equal-solid-angle count surfaces with bounded deterministic overlays carrying
-rollout-chain and acquisition-step provenance.
+axes from world into each target OBB frame. Movement uses the geometric-mean
+OBB semi-axis scale before projection. For every calibrated selected view, it
+tests front-facing points on the target-centred proxy sphere against the
+persisted LUF half-pixel pinhole image rectangle. One rollout-owned Plotly
+builder renders complete equal-solid-angle count surfaces with bounded
+deterministic overlays for both Streamlit and immutable thesis reports.
 
 ## Findings
 - `aria_nbv/aria_nbv/rollouts/inspection.py` owns target-frame reduction,
   equal-solid-angle bins, calibration joins, analytic rectangular-pinhole
   solid angle, proxy-surface coverage, explicit exclusions, and reservoirs.
-- `_stored_rollouts/s2_directions.py` owns the shared Plotly and scientific
-  explanation surface. Both Q_H stored-rollout admission and Campaign
-  Generation reuse it after explicit full-store dispatch.
+- `rollouts/s2_reporting.py` owns the shared Plotly specification;
+  `_stored_rollouts/s2_directions.py` owns the interactive scientific
+  explanation. Both Q_H stored-rollout admission and Campaign Generation reuse
+  the presentation after explicit full-store dispatch, while scientific
+  reporting freezes the same Plotly payload for Typst.
 - Colour preserves rollout-chain index `j`; marker symbol preserves persisted
   decision step `t`. Complete heat fields are never replaced by the bounded
   display overlay.
@@ -54,9 +60,8 @@ rollout-chain and acquisition-step provenance.
   snippet, one scene, one target, one rollout, five selected steps, five
   movement directions, five view directions, and five calibrated frusta with
   no missing calibration or geometry issues.
-- At 72 by 36 equal-area cells its mean intrinsic FOV was 2.489985 sr, mean
-  per-view proxy support was 16.6049%, and factual-view union support was
-  31.2114%.
+- The frozen 36 by 18-cell thesis pilot reports mean intrinsic FOV 2.489833 sr,
+  mean per-view proxy support 16.8210%, and factual-view union support 31.1728%.
 - The thesis labels this geometric potential visibility. It does not claim
   true target-mesh visibility because proxy-sphere shape error and scene
   occlusion are not resolved.
@@ -64,22 +69,24 @@ rollout-chain and acquisition-step provenance.
 ## Commits
 - https://github.com/JanDuchscherer104/ARIA-NBV/commit/690cedb325f52d93f78207b9b115b3b7c90f448b
 - https://github.com/JanDuchscherer104/ARIA-NBV/commit/8d8ea08930cecbcc266aa4011a873bb77b09dd47
+- https://github.com/JanDuchscherer104/ARIA-NBV/commit/72b93aa8e3ecc18f7f1c9b8cc8b29ac9be94693c
+- https://github.com/JanDuchscherer104/ARIA-NBV/commit/c86e4b4cdd9a9e9522e93abf6d441af7d9de8282
 
 ## Verification
 - Targeted Ruff check and `git diff --check`: passed.
-- Rollout reducer, presentation, campaign page, and admission evidence suites:
-  192 passed.
-- Stored-rollout projection-laziness suite: 42 passed.
+- Reporting, rollout inspection, stored-rollout projection, geometry, and
+  theory suites: 190 passed.
 - Shared glossary and notation regeneration: 57 terms, 110 symbols, and 112
   equations validated.
-- Development thesis compiled and the two affected pages were visually
-  inspected.
+- Development thesis compiled and all three generated S² figure pages were
+  visually inspected.
 - Targeted mypy remains informational because its imported package baseline
   reports pre-existing failures; newly changed lines were repaired and the
   focused runtime/test contracts pass.
 
 ## Canonical Owner Impact
-Executable rollout inspection owns the numerical diagnostic; the shared
-Streamlit renderer owns presentation; shared symbols/equations and the active
-method chapter own notation and interpretation. The implementation remains an
-admission diagnostic and does not promote S² memory into scorer state.
+Executable rollout inspection owns the numerical diagnostic; the rollout-owned
+Plotly builder owns shared presentation; reporting owns immutable snapshot and
+export; shared symbols/equations and the active method/data chapters own
+notation and interpretation. The implementation remains an admission
+diagnostic and does not promote S² memory into scorer state.
