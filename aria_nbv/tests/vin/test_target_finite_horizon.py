@@ -651,6 +651,16 @@ def test_qh_admitted_forward_rejects_in_place_actor_mutation() -> None:
         scorer.forward_admitted(admitted)
 
 
+def test_qh_admitted_forward_rejects_another_scorers_admission() -> None:
+    actor = _actor()
+    admitting_scorer = _scorer()
+    consuming_scorer = _scorer()
+    admitted = admitting_scorer.admit_actor(actor)
+
+    with pytest.raises(ValueError, match="different scorer"):
+        consuming_scorer.forward_admitted(admitted)
+
+
 def test_qh_admitted_forward_retains_requested_horizon_validation() -> None:
     actor = _actor()
     scorer = _scorer()

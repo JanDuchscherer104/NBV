@@ -108,7 +108,7 @@ class QhScoreOutput:
 
 
 @dataclass(frozen=True, slots=True)
-class QhAdmittedActor:
+class _QhAdmittedActor:
     """An actor whose static scorer admission has already been validated.
 
     The wrapper is intentionally tied to the exact tensor objects admitted by
@@ -119,6 +119,7 @@ class QhAdmittedActor:
 
     actor: "QhActorTensors"
     tensor_versions: tuple[tuple[int, int], ...]
+    owner_token: object
 
 
 class TargetFiniteHorizonScorerConfig(TargetConfig["TargetFiniteHorizonScorer"]):
@@ -322,6 +323,7 @@ class TargetFiniteHorizonScorer(nn.Module):
 
         super().__init__()
         self.config = config
+        self._admission_owner_token = object()
         self.pose_encoder: R6dLffPoseEncoder = config.pose_encoder.setup_target()
         pose_dim = self.pose_encoder.out_dim
         hidden_dim = int(config.hidden_dim)
@@ -414,7 +416,7 @@ class TargetFiniteHorizonScorer(nn.Module):
             if require_publishable:
                 self.value_decoder.require_publishable_support()
 
-    def admit_actor(self, actor: QhActorTensors) -> QhAdmittedActor:
+    def admit_actor(self, actor: QhActorTensors) -> _QhAdmittedActor:
         """Validate an actor once for reuse across repeated scorer queries.
 
         Admission performs the complete actor/profile validation. The returned
@@ -424,7 +426,11 @@ class TargetFiniteHorizonScorer(nn.Module):
         """
 
         self._validate_actor(actor)
-        return QhAdmittedActor(actor=actor, tensor_versions=self._actor_tensor_versions(actor))
+        return _QhAdmittedActor(
+            actor=actor,
+            tensor_versions=self._actor_tensor_versions(actor),
+            owner_token=self._admission_owner_token,
+        )
 
     def forward(
         self,
@@ -457,7 +463,7 @@ class TargetFiniteHorizonScorer(nn.Module):
 
     def forward_admitted(
         self,
-        admitted: QhAdmittedActor,
+        admitted: _QhAdmittedActor,
         *,
         requested_horizon: Tensor | None = None,
     ) -> QhScoreOutput:
@@ -468,6 +474,8 @@ class TargetFiniteHorizonScorer(nn.Module):
         payload itself must remain unchanged since admission.
         """
 
+        if admitted.owner_token is not self._admission_owner_token:
+            raise ValueError("Q_H admitted actor belongs to a different scorer; admit it with this scorer.")
         actor = admitted.actor
         if admitted.tensor_versions != self._actor_tensor_versions(actor):
             raise ValueError("Q_H admitted actor was mutated after admission; admit it again before scoring.")
@@ -776,7 +784,6 @@ class TargetFiniteHorizonScorer(nn.Module):
 
 
 __all__ = [
-    "QhAdmittedActor",
     "QhScoreOutput",
     "TargetFiniteHorizonScorer",
     "TargetFiniteHorizonScorerConfig",
