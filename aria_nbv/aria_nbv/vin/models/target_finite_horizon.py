@@ -426,9 +426,14 @@ class TargetFiniteHorizonScorer(nn.Module):
         """
 
         self._validate_actor(actor)
+        versions = self._actor_tensor_versions(actor)
+        if versions is None:
+            raise ValueError(
+                "Q_H inference tensors cannot be reused through admitted forward; call the fully validated forward path."
+            )
         return _QhAdmittedActor(
             actor=actor,
-            tensor_versions=self._actor_tensor_versions(actor),
+            tensor_versions=versions,
             owner_token=self._admission_owner_token,
         )
 
@@ -459,7 +464,8 @@ class TargetFiniteHorizonScorer(nn.Module):
             policy backup and ranking still use only ``conditional_q``.
         """
 
-        return self.forward_admitted(self.admit_actor(actor), requested_horizon=requested_horizon)
+        self._validate_actor(actor)
+        return self._forward_validated(actor, requested_horizon=requested_horizon)
 
     def forward_admitted(
         self,
@@ -477,8 +483,19 @@ class TargetFiniteHorizonScorer(nn.Module):
         if admitted.owner_token is not self._admission_owner_token:
             raise ValueError("Q_H admitted actor belongs to a different scorer; admit it with this scorer.")
         actor = admitted.actor
-        if admitted.tensor_versions != self._actor_tensor_versions(actor):
+        current_versions = self._actor_tensor_versions(actor)
+        if current_versions is None or admitted.tensor_versions != current_versions:
             raise ValueError("Q_H admitted actor was mutated after admission; admit it again before scoring.")
+        return self._forward_validated(actor, requested_horizon=requested_horizon)
+
+    def _forward_validated(
+        self,
+        actor: QhActorTensors,
+        *,
+        requested_horizon: Tensor | None,
+    ) -> QhScoreOutput:
+        """Score an actor whose full or reusable admission already succeeded."""
+
         horizon = self._validated_requested_horizon(actor, requested_horizon)
         candidate_mask = actor.candidate_mask & actor.step_mask.unsqueeze(-1)
         batch_size, steps, width = candidate_mask.shape
@@ -735,7 +752,7 @@ class TargetFiniteHorizonScorer(nn.Module):
             )
 
     @staticmethod
-    def _actor_tensor_versions(actor: QhActorTensors) -> tuple[tuple[int, int], ...]:
+    def _actor_tensor_versions(actor: QhActorTensors) -> tuple[tuple[int, int], ...] | None:
         """Return identity/version facts for every mutable actor tensor."""
 
         tensors: list[Tensor] = []
@@ -781,16 +798,16 @@ class TargetFiniteHorizonScorer(nn.Module):
             add(prefix.camera_pose_relative_root)
             add(prefix.prefix_mask)
 
-        def version(tensor: Tensor) -> int:
+        def version(tensor: Tensor) -> int | None:
             try:
                 return tensor._version
             except RuntimeError:
-                # Inference tensors intentionally omit version counters and
-                # cannot be mutated outside inference mode. Identity still
-                # binds the admitted payload for that lifecycle.
-                return -1
+                return None
 
-        return tuple((id(tensor), version(tensor)) for tensor in tensors)
+        versions = tuple((id(tensor), version(tensor)) for tensor in tensors)
+        if any(version_value is None for _, version_value in versions):
+            return None
+        return tuple((tensor_id, int(version_value)) for tensor_id, version_value in versions)
 
 
 __all__ = [

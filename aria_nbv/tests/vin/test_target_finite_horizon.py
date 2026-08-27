@@ -661,13 +661,14 @@ def test_qh_admitted_forward_rejects_another_scorers_admission() -> None:
         consuming_scorer.forward_admitted(admitted)
 
 
-def test_qh_admitted_forward_accepts_inference_tensors() -> None:
+def test_qh_inference_tensors_use_fully_validated_forward() -> None:
     scorer = _scorer().eval()
 
     with torch.inference_mode():
         actor = _actor()
-        admitted = scorer.admit_actor(actor)
-        output = scorer.forward_admitted(admitted)
+        output = scorer(actor)
+        with pytest.raises(ValueError, match="cannot be reused"):
+            scorer.admit_actor(actor)
 
     assert torch.isfinite(output.conditional_q).all()
 
