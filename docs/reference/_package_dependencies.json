@@ -47,14 +47,14 @@
       "target": "data_handling"
     },
     {
-      "importing_modules": 7,
-      "source": "oracle",
-      "target": "rollouts"
+      "importing_modules": 8,
+      "source": "rollouts",
+      "target": "utils"
     },
     {
       "importing_modules": 7,
-      "source": "rollouts",
-      "target": "utils"
+      "source": "oracle",
+      "target": "rollouts"
     },
     {
       "importing_modules": 6,

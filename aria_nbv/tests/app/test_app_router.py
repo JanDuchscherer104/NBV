@@ -5,6 +5,7 @@ from __future__ import annotations
 import sys
 from dataclasses import dataclass
 from inspect import getsource
+from pathlib import Path
 from typing import Any
 
 from aria_nbv.app.app import NbvStreamlitApp
@@ -74,12 +75,30 @@ def test_router_uses_grouped_top_navigation_without_loading_panels(monkeypatch) 
 
 def test_campaign_generation_callback_imports_and_calls_only_its_renderer(monkeypatch) -> None:
     """Selecting the page owns the one lazy campaign-panel import."""
-    calls: list[str] = []
-    fake_panel = type("Panel", (), {"render_campaign_generation_page": lambda: calls.append("render")})
+    recipe = object()
+    calls: list[dict[str, Any]] = []
+    fake_panel = type(
+        "Panel",
+        (),
+        {"render_campaign_generation_page": lambda **kwargs: calls.append(kwargs)},
+    )
+
+    class Config:
+        s2_report_section_id = "s2"
+
+        def load_s2_report_recipe(self) -> tuple[object, Path]:
+            return recipe, Path("/repo/.configs/reports/s2.toml")
+
     monkeypatch.setitem(sys.modules, "aria_nbv.app.panels.campaign_generation", fake_panel)
-    app = NbvStreamlitApp(config=object())
+    app = NbvStreamlitApp(config=Config())  # type: ignore[arg-type]
     app._page_campaign_generation()
-    assert calls == ["render"]
+    assert calls == [
+        {
+            "s2_recipe": recipe,
+            "s2_section_id": "s2",
+            "s2_recipe_label": "/repo/.configs/reports/s2.toml",
+        }
+    ]
 
 
 def test_root_store_page_has_no_nested_rollout_route() -> None:

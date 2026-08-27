@@ -7,6 +7,8 @@ from __future__ import annotations
 import inspect
 from contextlib import nullcontext
 from dataclasses import asdict, replace
+from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import numpy as np
@@ -18,7 +20,10 @@ import streamlit as st
 pytest.importorskip("efm3d")
 
 from aria_nbv.app.panels._stored_rollouts import candidate_generation, s2_directions, validity_support
+from aria_nbv.reporting import ReportColumn, ReportSnapshot, ReportTable, SourceIdentity
 from aria_nbv.rollouts.inspection import GeometryFrame
+from aria_nbv.rollouts.s2_analysis import S2AnalysisConfig
+from aria_nbv.rollouts.s2_plotting import s2_direction_figure
 
 
 def _frame(frame_id: str = "proposal:7:10:target_aligned_z_up", *, step_index: int = 0) -> GeometryFrame:
@@ -123,9 +128,9 @@ def test_target_s2_figures_render_complete_heatmaps_and_projection_overlays() ->
         "frustum_projection_step_indices": np.asarray([1], dtype=np.int64),
     }
 
-    movement = s2_directions.s2_direction_figure(payload, channel="movement")
-    view = s2_directions.s2_direction_figure(payload, channel="view_direction")
-    frustum = s2_directions.s2_direction_figure(payload, channel="frustum")
+    movement = s2_direction_figure(payload, channel="movement")
+    view = s2_direction_figure(payload, channel="view_direction")
+    frustum = s2_direction_figure(payload, channel="frustum")
 
     for figure, expected_count, expected_name in (
         (movement, 3, "acquisition 1 (t=0)"),
@@ -142,116 +147,136 @@ def test_target_s2_figures_render_complete_heatmaps_and_projection_overlays() ->
         assert np.asarray(figure.data[1].marker.color).tolist() == [7]
 
 
-def test_target_s2_panel_dispatches_the_complete_store_reducer_only_after_toggle(
+def test_target_s2_panel_dispatches_one_shared_report_transaction(
     monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
 ) -> None:
-    """The panel owns controls and rendering, while the session owns the full-store read."""
+    """The panel binds a store but delegates acquisition, analysis, and plotting."""
 
-    class Column:
-        def __enter__(self) -> "Column":
+    snapshot = _s2_snapshot()
+    bound_paths: list[tuple[Path, ...]] = []
+    requests: list[tuple[str, ...]] = []
+    rendered: list[ReportSnapshot] = []
+
+    class Builder:
+        def build(self, request: Any) -> ReportSnapshot:
+            requests.append(request.section_ids)
+            return snapshot
+
+    class Recipe:
+        def rollout_s2_section(self, section_id: str) -> Any:
+            assert section_id == "s2"
+            return SimpleNamespace(analysis=S2AnalysisConfig())
+
+        def bind_rollout_stores(self, store_paths: tuple[Path, ...]) -> "Recipe":
+            bound_paths.append(store_paths)
             return self
 
-        def __exit__(self, *_args: Any) -> None:
-            return None
+        def setup_target(self) -> Builder:
+            return Builder()
 
-        def number_input(self, _label: str, *, value: int, **_kwargs: Any) -> int:
-            return value
-
-    payload = {
-        "movement_counts": np.asarray([[1]], dtype=np.int64),
-        "view_direction_counts": np.asarray([[1]], dtype=np.int64),
-        "frustum_counts": np.asarray([[1]], dtype=np.int64),
-        "movement_projection": np.asarray([[1.0, 0.0, 0.0]], dtype=np.float32),
-        "movement_projection_normalized_lengths": np.asarray([0.5], dtype=np.float32),
-        "movement_projection_rollout_row_ids": np.asarray([11], dtype=np.int64),
-        "movement_projection_step_indices": np.asarray([0], dtype=np.int64),
-        "view_direction_projection": np.asarray([[0.0, 0.0, 1.0]], dtype=np.float32),
-        "view_direction_projection_rollout_row_ids": np.asarray([11], dtype=np.int64),
-        "view_direction_projection_step_indices": np.asarray([0], dtype=np.int64),
-        "frustum_projection": np.asarray([[0.0, 0.0, 1.0]], dtype=np.float32),
-        "frustum_projection_rollout_row_ids": np.asarray([11], dtype=np.int64),
-        "frustum_projection_step_indices": np.asarray([0], dtype=np.int64),
-        "movement_count": 1,
-        "view_direction_count": 1,
-        "frustum_count": 1,
-        "frustum_missing_calibration_count": 0,
-        "frustum_mean_fov_solid_angle_sr": 1.0,
-        "frustum_mean_target_surface_fraction_approx": 0.1,
-        "frustum_union_target_surface_fraction_approx": 0.1,
-        "movement_skipped_zero_count": 0,
-        "rollout_count": 1,
-        "store_rollout_count": 1,
-        "source_sample_count": 1,
-        "source_snippet_count": 1,
-        "source_scene_count": 1,
-        "target_count": 1,
-        "selected_step_count": 1,
-        "issues": (),
-    }
-    calls: list[tuple[int, int]] = []
-    rendered: list[go.Figure] = []
-
-    class Handle:
-        def s2_direction_histogram(self, *, azimuth_bins: int, elevation_bins: int) -> dict[str, Any]:
-            calls.append((azimuth_bins, elevation_bins))
-            return payload
+        def to_toml(self) -> str:
+            return "schema_version = 'aria-nbv-report-config-v1'\n"
 
     monkeypatch.setattr(st, "markdown", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(st, "caption", lambda *_args, **_kwargs: None)
-    monkeypatch.setattr(st, "columns", lambda _count: [Column(), Column()])
-    monkeypatch.setattr(st, "toggle", lambda *_args, **_kwargs: True)
+    monkeypatch.setattr(st, "button", lambda *_args, **_kwargs: True)
+    monkeypatch.setattr(st, "status", lambda *_args, **_kwargs: nullcontext())
+    monkeypatch.setattr(st, "session_state", {})
+    monkeypatch.setattr(st, "info", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(st, "warning", lambda *_args, **_kwargs: None)
-    monkeypatch.setattr(st, "dataframe", lambda *_args, **_kwargs: None)
-    monkeypatch.setattr(s2_directions, "_render_plot", lambda figure, *_args, **_kwargs: rendered.append(figure))
+    monkeypatch.setattr(s2_directions, "render_report_snapshot", lambda value, **_kwargs: rendered.append(value))
 
-    s2_directions.render_s2_direction_histograms(Handle(), key_prefix="test")
-
-    assert calls == [(36, 18)]
-    assert [figure.layout.title.text for figure in rendered] == [
-        "δ̂ᵉ[j,t] — target-frame movement direction",
-        "v̂ᵉ[j,t] — target-frame camera +Z direction",
-        "ℱᵉ[j,t] — calibrated target-proxy surface support",
-    ]
-
-
-def test_target_s2_panel_shows_exclusion_issues_when_no_direction_survives(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """An empty histogram must retain the diagnostic explaining its empty support."""
-
-    class Column:
-        def number_input(self, _label: str, *, value: int, **_kwargs: Any) -> int:
-            return value
-
-    class Handle:
-        def s2_direction_histogram(self, *, azimuth_bins: int, elevation_bins: int) -> dict[str, Any]:
-            assert (azimuth_bins, elevation_bins) == (36, 18)
-            return {
-                "movement_count": 0,
-                "view_direction_count": 0,
-                "issues": ({"code": "missing_target", "rollout_row_id": 7},),
-            }
-
-    warnings: list[str] = []
-    messages: list[str] = []
-    tables: list[pd.DataFrame] = []
-    monkeypatch.setattr(st, "markdown", lambda *_args, **_kwargs: None)
-    monkeypatch.setattr(st, "columns", lambda _count: [Column(), Column()])
-    monkeypatch.setattr(st, "toggle", lambda *_args, **_kwargs: True)
-    monkeypatch.setattr(st, "warning", lambda message, **_kwargs: warnings.append(message))
-    monkeypatch.setattr(st, "info", lambda message, **_kwargs: messages.append(message))
-    monkeypatch.setattr(st, "dataframe", lambda frame, **_kwargs: tables.append(frame))
-    monkeypatch.setattr(
-        s2_directions,
-        "_render_plot",
-        lambda *_args, **_kwargs: pytest.fail("empty evidence must not render a plot"),
+    store_path = tmp_path / "store.zarr"
+    s2_directions.render_s2_report_preview(
+        store_path=store_path,
+        store_identity="store-content",
+        recipe=Recipe(),  # type: ignore[arg-type]
+        section_id="s2",
+        recipe_label="test-recipe.toml",
+        key_prefix="test",
     )
 
-    s2_directions.render_s2_direction_histograms(Handle(), key_prefix="empty")
+    assert bound_paths == [(store_path,)]
+    assert requests == [("s2",)]
+    assert rendered == [snapshot]
 
-    assert warnings == ["All rollout paths were excluded because their target frame or factual path was invalid."]
-    assert messages == ["No finite factual selected-action directions were available in the selected store."]
-    assert tables[0].to_dict("records") == [{"code": "missing_target", "rollout_row_id": 7}]
+
+def test_target_s2_support_summary_keeps_empty_support_and_exclusions_visible(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An empty snapshot retains both support and addressed exclusion evidence."""
+
+    warnings: list[str] = []
+    monkeypatch.setattr(st, "warning", lambda message, **_kwargs: warnings.append(message))
+    monkeypatch.setattr(st, "caption", lambda *_args, **_kwargs: None)
+
+    snapshot = _s2_snapshot(movement_count=0, view_direction_count=0, issue_count=1)
+    s2_directions._render_support_summary(snapshot, section_id="s2")
+
+    assert warnings == [
+        "No finite factual selected-action directions survived the rollout-owned reducer.",
+        "The reducer retained 1 addressed exclusions; inspect `s2.table.issues` below.",
+    ]
+    assert snapshot.result("s2.table.issues").rows == (("s01", "missing_target"),)
+
+
+def test_target_s2_streamlit_adapter_has_no_domain_computation_or_plot_builder() -> None:
+    """Keep the app adapter presentation-only as the owner boundary evolves."""
+
+    source = Path(s2_directions.__file__).read_text(encoding="utf-8")
+    assert "numpy" not in source
+    assert "pandas" not in source
+    assert "import plotly" not in source.lower()
+    assert "from plotly" not in source.lower()
+    assert "RolloutZarrStoreReader" not in source
+    assert "s2_target_direction_histogram" not in source
+    assert "def s2_direction_figure" not in source
+
+
+def _s2_snapshot(
+    *,
+    movement_count: int = 1,
+    view_direction_count: int = 1,
+    issue_count: int = 0,
+) -> ReportSnapshot:
+    columns = tuple(
+        ReportColumn(name, None)
+        for name in (
+            "source_sample_count",
+            "source_snippet_count",
+            "source_scene_count",
+            "target_count",
+            "rollout_count",
+            "store_rollout_count",
+            "selected_step_count",
+            "movement_count",
+            "view_direction_count",
+            "issue_count",
+        )
+    )
+    support = ReportTable(
+        id="s2.table.support",
+        columns=columns,
+        rows=((1, 1, 1, 1, 1, 1, 1, movement_count, view_direction_count, issue_count),),
+        source_ids=("rollout",),
+    )
+    issues = ReportTable(
+        id="s2.table.issues",
+        columns=(ReportColumn("store_slot", None), ReportColumn("code", None)),
+        rows=(("s01", "missing_target"),) if issue_count else (),
+        source_ids=("rollout",),
+    )
+    return ReportSnapshot.create(
+        evidence_status="pilot",
+        config_sha256="a" * 64,
+        notation_sha256="b" * 64,
+        source_identities=(SourceIdentity("rollout", "rollout", "c" * 64, ()),),
+        quantities=(),
+        tables=(support, issues),
+        figures=(),
+        resolved_recipe=b"schema_version = 'aria-nbv-report-config-v1'\n",
+    )
 
 
 def test_bounded_geometry_is_default_visible_in_admission_surface() -> None:

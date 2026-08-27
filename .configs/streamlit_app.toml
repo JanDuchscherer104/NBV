@@ -1,0 +1,4 @@
+# Shared application composition. S2 analysis and Plotly settings remain owned
+# by the referenced scientific-report recipe, which is also used for thesis export.
+s2_report_recipe_path = ".configs/reports/s2-thesis-pilot.toml"
+s2_report_section_id = "s2"

@@ -8,10 +8,11 @@ markup. Runtime sources and clients are injected when the builder is created.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import TYPE_CHECKING, Annotated, Literal
+from typing import TYPE_CHECKING, Annotated, Literal, Self
 
 from pydantic import Field, field_validator, model_validator
 
+from ..rollouts.s2_analysis import S2AnalysisConfig
 from ..utils import TargetConfig
 
 if TYPE_CHECKING:
@@ -108,14 +109,8 @@ class S2RolloutReportSectionConfig(TargetConfig[object]):
     id: str = "s2"
     """Stable section identifier used as the result-ID prefix."""
 
-    azimuth_bins: int = Field(default=36, ge=8, le=144)
-    """Number of uniform target-frame azimuth cells."""
-
-    elevation_bins: int = Field(default=18, ge=4, le=72)
-    """Number of uniform target-frame ``z`` cells, yielding equal solid angle."""
-
-    projection_limit: int = Field(default=2_000, ge=1)
-    """Maximum deterministic incidence points per channel and store."""
+    analysis: S2AnalysisConfig = Field(default_factory=S2AnalysisConfig)
+    """Rollout-owned binning and bounded incidence-reservoir configuration."""
 
     channels: tuple[Literal["movement", "view_direction", "frustum"], ...] = (
         "movement",
@@ -278,6 +273,34 @@ class ScientificReportConfig(TargetConfig["ScientificReportBuilder"]):
         from .builder import ScientificReportBuilder
 
         return ScientificReportBuilder(self, wandb_api=wandb_api, root=root)
+
+    def bind_rollout_stores(
+        self,
+        store_paths: tuple[Path, ...],
+        *,
+        sidecar_paths: tuple[Path, ...] = (),
+    ) -> Self:
+        """Return a validated recipe bound to an explicit rollout population.
+
+        This immutable composition helper is shared by interactive previews and
+        report automation. It replaces only the rollout source selection;
+        section analysis, Plotly theme, evidence status, export policy, and any
+        configured W&B source remain unchanged.
+        """
+
+        rollout = RolloutSourceConfig(store_paths=store_paths, sidecar_paths=sidecar_paths)
+        sources = self.sources.model_copy(update={"rollout": rollout})
+        return self.model_copy(update={"sources": sources})
+
+    def rollout_s2_section(self, section_id: str) -> S2RolloutReportSectionConfig:
+        """Return one configured S2 section or fail before evidence acquisition."""
+
+        for section in self.sections:
+            if section.id == section_id:
+                if isinstance(section, S2RolloutReportSectionConfig):
+                    return section
+                raise ValueError(f"Report section {section_id!r} is not a rollout_s2 section.")
+        raise ValueError(f"Report recipe has no section {section_id!r}.")
 
     def validate_build_readiness(self, *, section_ids: tuple[str, ...] = ()) -> None:
         """Fail before client construction when selected source selectors are incomplete."""

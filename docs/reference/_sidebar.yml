@@ -236,6 +236,10 @@ website:
             file: reference/rollouts.replay.types.qmd
         - text: reporting
           file: reference/rollouts.reporting.qmd
+        - text: s2_analysis
+          file: reference/rollouts.s2_analysis.qmd
+        - text: s2_plotting
+          file: reference/rollouts.s2_plotting.qmd
         - text: shard_manifest
           file: reference/rollouts.shard_manifest.qmd
         - text: trace

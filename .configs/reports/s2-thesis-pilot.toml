@@ -13,10 +13,12 @@ sidecar_paths = []
 [[sections]]
 kind = "rollout_s2"
 id = "s2"
+channels = ["movement", "view_direction", "frustum"]
+
+[sections.analysis]
 azimuth_bins = 36
 elevation_bins = 18
 projection_limit = 2000
-channels = ["movement", "view_direction", "frustum"]
 
 [theme]
 template = "plotly_white"

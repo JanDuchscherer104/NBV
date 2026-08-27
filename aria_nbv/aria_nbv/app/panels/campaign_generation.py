@@ -10,9 +10,9 @@ import shutil
 import subprocess
 import sys
 from collections.abc import Callable
-from dataclasses import asdict, dataclass
+from dataclasses import asdict
 from pathlib import Path
-from typing import Any, cast
+from typing import Any
 
 import pandas as pd
 import plotly.express as px
@@ -20,11 +20,12 @@ import streamlit as st
 
 from aria_nbv.oracle.pipelines.admission_evidence import read_campaign_admission_evidence
 from aria_nbv.oracle.pipelines.campaign import CudaRolloutCampaign, CudaRolloutCampaignConfig
+from aria_nbv.reporting import ScientificReportConfig
 from aria_nbv.utils.config_paths import resolve_config_toml_path
 
 from ..scientific_labels import TheoryReferences
-from ._stored_rollouts.s2_directions import render_s2_direction_histograms
-from ._stored_rollouts.session import open_stored_rollout_session
+from ._stored_rollouts.s2_directions import render_s2_report_preview
+from ._stored_rollouts.session import _store_projection_identity
 from ._stored_rollouts.shared import ExplanationSection, ScientificExplanation
 from ._stored_rollouts.shared import plot_control_key as _plot_control_key
 from ._stored_rollouts.shared import render_plot as _render_plot
@@ -39,24 +40,6 @@ _MAX_NEW_UNITS = 100
 _MAX_TIME_BUDGET_MINUTES = 24 * 60
 _MAX_FREE_DISK_FLOOR_GB = 1024
 _ADMISSION_STATE_KEY = "campaign_generation_admission_evidence"
-
-
-@dataclass(frozen=True, slots=True)
-class _CampaignS2Handle:
-    """Lazy completed-shard adapter preserving explicit full-store dispatch."""
-
-    store_path: Path
-
-    def s2_direction_histogram(self, *, azimuth_bins: int, elevation_bins: int) -> dict[str, Any]:
-        """Open and validate the selected immutable shard only after dispatch."""
-
-        return cast(
-            dict[str, Any],
-            open_stored_rollout_session(self.store_path).s2_direction_histogram(
-                azimuth_bins=azimuth_bins,
-                elevation_bins=elevation_bins,
-            ),
-        )
 
 
 def _admission_audit_identity(path: Path) -> tuple[str, int, int, int, int] | None:
@@ -236,7 +219,14 @@ def _render_admission_audit(payload: dict[str, Any], *, threshold: float) -> Non
         )
 
 
-def _render_admission_section(campaign: Any, plan_path: Path) -> None:
+def _render_admission_section(
+    campaign: Any,
+    plan_path: Path,
+    *,
+    s2_recipe: ScientificReportConfig,
+    s2_section_id: str,
+    s2_recipe_label: str,
+) -> None:
     """Load campaign admission evidence only after explicit user dispatch."""
 
     cfg = campaign.config
@@ -274,7 +264,12 @@ def _render_admission_section(campaign: Any, plan_path: Path) -> None:
         st.info("Render a deterministic plan, then load the provenance-bound admission audit.")
         return
     _render_admission_audit(state[1], threshold=cfg.observed_target_iou_threshold)
-    _render_campaign_rollout_s2_evidence(state[2] if len(state) > 2 else ())
+    _render_campaign_rollout_s2_evidence(
+        state[2] if len(state) > 2 else (),
+        s2_recipe=s2_recipe,
+        s2_section_id=s2_section_id,
+        s2_recipe_label=s2_recipe_label,
+    )
 
 
 def _validated_campaign_store_paths(summary: dict[str, Any]) -> tuple[Path, ...]:
@@ -291,7 +286,13 @@ def _validated_campaign_store_paths(summary: dict[str, Any]) -> tuple[Path, ...]
     return tuple(sorted(paths, key=Path.as_posix))
 
 
-def _render_campaign_rollout_s2_evidence(validated_store_paths: tuple[Path, ...]) -> None:
+def _render_campaign_rollout_s2_evidence(
+    validated_store_paths: tuple[Path, ...],
+    *,
+    s2_recipe: ScientificReportConfig,
+    s2_section_id: str,
+    s2_recipe_label: str,
+) -> None:
     """Render one current-plan validated shard through the shared S² view."""
 
     stores = validated_store_paths
@@ -307,8 +308,13 @@ def _render_campaign_rollout_s2_evidence(validated_store_paths: tuple[Path, ...]
         help="Each selection is a current-plan validated immutable shard; stores are not pooled across incompatible campaign identities.",
     )
     st.caption(f"Selected current-plan validated shard: {selected}")
-    render_s2_direction_histograms(
-        _CampaignS2Handle(Path(selected)),
+    selected_path = Path(selected)
+    render_s2_report_preview(
+        store_path=selected_path,
+        store_identity=_store_projection_identity(selected_path.as_posix()),
+        recipe=s2_recipe,
+        section_id=s2_section_id,
+        recipe_label=s2_recipe_label,
         key_prefix=f"campaign_admission_{Path(selected).name}",
     )
 
@@ -439,7 +445,12 @@ def _disk_usage_path(path: Path) -> Path:
     return candidate
 
 
-def render_campaign_generation_page() -> None:  # pragma: no cover - Streamlit presentation
+def render_campaign_generation_page(
+    *,
+    s2_recipe: ScientificReportConfig,
+    s2_section_id: str,
+    s2_recipe_label: str,
+) -> None:  # pragma: no cover - Streamlit presentation
     """Render controls and typed status without owning campaign semantics."""
     st.header("Campaign Generation")
     config_text = st.selectbox("Reviewed campaign config", _REVIEWED_CONFIGS, key="campaign_config_path")
@@ -554,7 +565,13 @@ def render_campaign_generation_page() -> None:  # pragma: no cover - Streamlit p
             },
         }
     )
-    _render_admission_section(campaign, plan_path)
+    _render_admission_section(
+        campaign,
+        plan_path,
+        s2_recipe=s2_recipe,
+        s2_section_id=s2_section_id,
+        s2_recipe_label=s2_recipe_label,
+    )
 
     action = None
     cols = st.columns(6)

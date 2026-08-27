@@ -13,6 +13,7 @@ import plotly.express as px
 import streamlit as st
 
 from ....configs import PathConfig
+from ....reporting import ScientificReportConfig
 from ....rerun_inspector import RolloutLayerName, RolloutLayerPreset
 from ...rerun_launch import (
     RerunLaunchMode,
@@ -384,6 +385,9 @@ def _render_inspect_export_rerun(
     store_path: Path,
     manifest_payload: dict[str, Any],
     paths: PathConfig,
+    s2_recipe: ScientificReportConfig,
+    s2_section_id: str,
+    s2_recipe_label: str,
 ) -> None:
     st.subheader("Drill-down")
     store_identity = _canonical_query_store_identity(store_path)
@@ -539,7 +543,12 @@ def _render_inspect_export_rerun(
         st.json(manifest_payload, expanded=False)
         st.dataframe(steps, hide_index=True, width="stretch")
     _download_json("Download selected metadata JSON", f"rollout-{rollout_id}-metadata.json", manifest_payload)
-    _render_q_h_evidence(session_handle)
+    _render_q_h_evidence(
+        session_handle,
+        s2_recipe=s2_recipe,
+        s2_section_id=s2_section_id,
+        s2_recipe_label=s2_recipe_label,
+    )
     _render_evidence_bundle_download(session_handle)
     _render_rerun_launcher(store_path=store_path, rollout_id=rollout_id, paths=paths)
 

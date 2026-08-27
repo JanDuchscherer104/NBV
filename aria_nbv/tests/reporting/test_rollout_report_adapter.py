@@ -6,10 +6,18 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+import pytest
 
-from aria_nbv.reporting._rollouts import _build_rollout_section, _RolloutEvidence, _S2StoreEvidence
-from aria_nbv.reporting.config import ReportThemeConfig, RolloutReportSectionConfig, S2RolloutReportSectionConfig
+import aria_nbv.reporting._rollouts as rollout_adapter
+from aria_nbv.reporting._rollouts import _acquire_rollout_evidence, _build_rollout_section, _RolloutEvidence
+from aria_nbv.reporting.config import (
+    ReportThemeConfig,
+    RolloutReportSectionConfig,
+    RolloutSourceConfig,
+    S2RolloutReportSectionConfig,
+)
 from aria_nbv.reporting.results import SourceIdentity
+from aria_nbv.rollouts.s2_analysis import S2AnalysisConfig, S2StoreEvidence
 
 
 def test_rollout_facts_remain_store_qualified_in_snapshot_results() -> None:
@@ -61,19 +69,19 @@ def test_s2_section_freezes_shared_figures_support_and_named_values() -> None:
         identity=SourceIdentity("rollout", "rollout", "a" * 64, (("store_count", 1),)),
         frames={"facts": pd.DataFrame()},
         s2_stores=(
-            _S2StoreEvidence(
+            S2StoreEvidence(
                 slot=1,
                 store_id="b" * 64,
                 path=Path("store.zarr"),
-                azimuth_bins=8,
-                elevation_bins=4,
-                projection_limit=16,
+                config=S2AnalysisConfig(azimuth_bins=8, elevation_bins=4, projection_limit=16),
                 payload=_s2_payload(),
                 payload_sha256="c" * 64,
             ),
         ),
     )
-    section = S2RolloutReportSectionConfig(azimuth_bins=8, elevation_bins=4, projection_limit=16)
+    section = S2RolloutReportSectionConfig(
+        analysis=S2AnalysisConfig(azimuth_bins=8, elevation_bins=4, projection_limit=16)
+    )
 
     results = _build_rollout_section(evidence, section, ReportThemeConfig(), requested_result_ids=None)
 
@@ -84,8 +92,9 @@ def test_s2_section_freezes_shared_figures_support_and_named_values() -> None:
     )
     assert all(figure.uses_webgl for figure in results.figures)
     assert all(figure.source_result_ids == ("s2.table.support",) for figure in results.figures)
-    assert len(results.tables) == 1
+    assert tuple(table.id for table in results.tables) == ("s2.table.support", "s2.table.issues")
     assert results.tables[0].rows[0][0:3] == ("s01", "b" * 64, "c" * 64)
+    assert results.tables[1].rows == ()
     assert {quantity.id for quantity in results.quantities} == {
         "s2.quantity.s01.source-sample-count",
         "s2.quantity.s01.source-snippet-count",
@@ -107,19 +116,19 @@ def test_s2_figure_request_keeps_its_support_table_dependency() -> None:
         identity=SourceIdentity("rollout", "rollout", "a" * 64, (("store_count", 1),)),
         frames={"facts": pd.DataFrame()},
         s2_stores=(
-            _S2StoreEvidence(
+            S2StoreEvidence(
                 slot=1,
                 store_id="b" * 64,
                 path=Path("store.zarr"),
-                azimuth_bins=8,
-                elevation_bins=4,
-                projection_limit=16,
+                config=S2AnalysisConfig(azimuth_bins=8, elevation_bins=4, projection_limit=16),
                 payload=_s2_payload(),
                 payload_sha256="c" * 64,
             ),
         ),
     )
-    section = S2RolloutReportSectionConfig(azimuth_bins=8, elevation_bins=4, projection_limit=16)
+    section = S2RolloutReportSectionConfig(
+        analysis=S2AnalysisConfig(azimuth_bins=8, elevation_bins=4, projection_limit=16)
+    )
 
     results = _build_rollout_section(
         evidence,
@@ -129,7 +138,65 @@ def test_s2_figure_request_keeps_its_support_table_dependency() -> None:
     )
 
     assert tuple(figure.id for figure in results.figures) == ("s2.figure.s01.movement",)
-    assert tuple(table.id for table in results.tables) == ("s2.table.support",)
+    assert tuple(table.id for table in results.tables) == ("s2.table.support", "s2.table.issues")
+
+    issue_results = _build_rollout_section(
+        evidence,
+        section,
+        ReportThemeConfig(),
+        requested_result_ids=frozenset({"s2.table.issues"}),
+    )
+    assert tuple(table.id for table in issue_results.tables) == ("s2.table.issues",)
+
+
+def test_s2_store_slots_follow_manifest_identity_not_input_path(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """Support-table slots remain aligned with canonical report store order."""
+
+    first_path = tmp_path / "a-path.zarr"
+    second_path = tmp_path / "z-path.zarr"
+    ids = {first_path.resolve(): "b" * 64, second_path.resolve(): "a" * 64}
+    stores = pd.DataFrame(
+        (
+            {"store_id": "a" * 64, "manifest_sha256": "a" * 64},
+            {"store_id": "b" * 64, "manifest_sha256": "b" * 64},
+        )
+    )
+    monkeypatch.setattr(
+        rollout_adapter,
+        "build_thesis_report_frames",
+        lambda *_args, **_kwargs: {"stores": stores, "facts": pd.DataFrame()},
+    )
+    monkeypatch.setattr(rollout_adapter, "serialize_thesis_report_bundle", lambda _frames: b"report")
+
+    def acquire(path: Path, *, slot: int, config: S2AnalysisConfig) -> S2StoreEvidence:
+        assert slot == 0
+        resolved = path.resolve()
+        return S2StoreEvidence(
+            slot=slot,
+            store_id=ids[resolved],
+            path=resolved,
+            config=config,
+            payload=_s2_payload(),
+            payload_sha256=("c" if resolved == first_path.resolve() else "d") * 64,
+        )
+
+    monkeypatch.setattr(rollout_adapter, "acquire_s2_store_evidence", acquire)
+    config = S2AnalysisConfig(azimuth_bins=8, elevation_bins=4, projection_limit=16)
+
+    evidence = _acquire_rollout_evidence(
+        RolloutSourceConfig(store_paths=(first_path, second_path)),
+        evidence_status="pilot",
+        required_tables=frozenset({"stores", "facts"}),
+        s2_configs=(config,),
+    )
+
+    assert [(store.store_id, store.slot) for store in evidence.s2_stores] == [
+        ("a" * 64, 1),
+        ("b" * 64, 2),
+    ]
 
 
 def _s2_payload() -> dict[str, object]:

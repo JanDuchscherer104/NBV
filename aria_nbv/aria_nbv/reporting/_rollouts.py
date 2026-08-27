@@ -4,18 +4,16 @@ from __future__ import annotations
 
 import hashlib
 import json
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any, Literal
 
-import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 
-from ..rollouts import RolloutZarrStoreReader
-from ..rollouts.inspection import build_manifest_facts, s2_target_direction_histogram
 from ..rollouts.reporting import build_thesis_report_frames, serialize_thesis_report_bundle
-from ..rollouts.s2_reporting import S2Channel, s2_direction_figure
+from ..rollouts.s2_analysis import S2AnalysisConfig, S2StoreEvidence, acquire_s2_store_evidence
+from ..rollouts.s2_plotting import S2Channel, s2_direction_figure
 from .config import (
     ReportThemeConfig,
     RolloutReportSectionConfig,
@@ -46,21 +44,7 @@ class _RolloutEvidence:
 
     identity: SourceIdentity
     frames: dict[str, pd.DataFrame]
-    s2_stores: tuple["_S2StoreEvidence", ...] = ()
-
-
-@dataclass(frozen=True, slots=True)
-class _S2StoreEvidence:
-    """One immutable store's complete spherical reducer output."""
-
-    slot: int
-    store_id: str
-    path: Path
-    azimuth_bins: int
-    elevation_bins: int
-    projection_limit: int
-    payload: dict[str, Any]
-    payload_sha256: str
+    s2_stores: tuple[S2StoreEvidence, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -75,7 +59,7 @@ def _acquire_rollout_evidence(
     *,
     evidence_status: Literal["pilot", "confirmatory"],
     required_tables: frozenset[str],
-    s2_specs: frozenset[tuple[int, int, int]] = frozenset(),
+    s2_configs: tuple[S2AnalysisConfig, ...] = (),
 ) -> _RolloutEvidence:
     frames = build_thesis_report_frames(
         source.store_paths,
@@ -92,44 +76,44 @@ def _acquire_rollout_evidence(
         (f"store.{index}.manifest_sha256", _scalar(row.manifest_sha256))
         for index, row in enumerate(stores.itertuples(index=False))
     )
-    s2_stores: list[_S2StoreEvidence] = []
-    s2_sources: list[tuple[str, Path, RolloutZarrStoreReader]] = []
-    if s2_specs:
-        for path in _resolved_store_paths(source):
-            reader = RolloutZarrStoreReader(path)
-            manifest_payload = build_manifest_facts(reader).payload
-            store_id = str(manifest_payload["root_attrs"]["manifest_sha256"])
-            s2_sources.append((store_id, path, reader))
-    for slot, (store_id, path, reader) in enumerate(sorted(s2_sources, key=lambda item: (item[0], item[1])), start=1):
-        for azimuth_bins, elevation_bins, projection_limit in sorted(s2_specs):
-            payload_mapping = asdict(
-                s2_target_direction_histogram(
-                    reader,
-                    azimuth_bins=azimuth_bins,
-                    elevation_bins=elevation_bins,
-                    projection_limit=projection_limit,
-                )
+    acquired_s2: list[S2StoreEvidence] = []
+    ordered_configs = tuple(
+        sorted(
+            s2_configs,
+            key=lambda item: (item.azimuth_bins, item.elevation_bins, item.projection_limit),
+        )
+    )
+    for path in _resolved_store_paths(source):
+        for analysis_config in ordered_configs:
+            acquired_s2.append(acquire_s2_store_evidence(path, slot=0, config=analysis_config))
+    source_order = {
+        key: slot
+        for slot, key in enumerate(
+            sorted(
+                {(store.store_id, store.path) for store in acquired_s2},
+                key=lambda item: (item[0], item[1].as_posix()),
+            ),
+            start=1,
+        )
+    }
+    s2_stores = [replace(store, slot=source_order[(store.store_id, store.path)]) for store in acquired_s2]
+    s2_stores.sort(
+        key=lambda store: (
+            store.slot,
+            store.config.azimuth_bins,
+            store.config.elevation_bins,
+            store.config.projection_limit,
+        )
+    )
+    for store in s2_stores:
+        analysis_config = store.config
+        provenance_rows.append(
+            (
+                f"store.{store.slot - 1}.s2.{analysis_config.azimuth_bins}x"
+                f"{analysis_config.elevation_bins}.{analysis_config.projection_limit}.sha256",
+                store.payload_sha256,
             )
-            payload_bytes = _canonical_s2_payload(payload_mapping)
-            payload_sha256 = hashlib.sha256(payload_bytes).hexdigest()
-            provenance_rows.append(
-                (
-                    f"store.{slot - 1}.s2.{azimuth_bins}x{elevation_bins}.{projection_limit}.sha256",
-                    payload_sha256,
-                )
-            )
-            s2_stores.append(
-                _S2StoreEvidence(
-                    slot=slot,
-                    store_id=store_id,
-                    path=path,
-                    azimuth_bins=azimuth_bins,
-                    elevation_bins=elevation_bins,
-                    projection_limit=projection_limit,
-                    payload=payload_mapping,
-                    payload_sha256=payload_sha256,
-                )
-            )
+        )
     identity_payload = payload + b"".join(item.payload_sha256.encode("ascii") for item in s2_stores)
     identity = SourceIdentity(
         id="rollout",
@@ -174,29 +158,22 @@ def _build_s2_section(
 ) -> _SectionResults:
     """Freeze support, named values, and shared Plotly S2 specifications."""
 
-    stores = tuple(
-        store
-        for store in evidence.s2_stores
-        if (
-            store.azimuth_bins,
-            store.elevation_bins,
-            store.projection_limit,
-        )
-        == (section.azimuth_bins, section.elevation_bins, section.projection_limit)
-    )
+    stores = tuple(store for store in evidence.s2_stores if store.config == section.analysis)
     if not stores:
         raise ValueError(f"No acquired S2 evidence matches report section {section.id!r}.")
     table_id = f"{section.id}.table.support"
     table = _s2_support_table(table_id, stores, evidence.identity.id)
+    issues_table_id = f"{section.id}.table.issues"
+    issues_table = _s2_issues_table(issues_table_id, stores, evidence.identity.id)
     figure_ids = {
         f"{section.id}.figure.s{store.slot:02d}.{channel.replace('_', '-')}"
         for store in stores
         for channel in section.channels
     }
-    table_required = _requested(table_id, requested_result_ids) or (
-        requested_result_ids is not None and bool(figure_ids.intersection(requested_result_ids))
+    figure_requested = requested_result_ids is not None and bool(figure_ids.intersection(requested_result_ids))
+    tables = tuple(
+        result for result in (table, issues_table) if _requested(result.id, requested_result_ids) or figure_requested
     )
-    tables = (table,) if table_required else ()
     quantities = tuple(
         quantity
         for store in stores
@@ -273,7 +250,7 @@ _S2_FIGURE_SYMBOLS: dict[S2Channel, tuple[str, ...]] = {
 
 def _s2_support_table(
     result_id: str,
-    stores: tuple[_S2StoreEvidence, ...],
+    stores: tuple[S2StoreEvidence, ...],
     source_id: str,
 ) -> ReportTable:
     columns = (
@@ -291,13 +268,43 @@ def _s2_support_table(
             f"s{store.slot:02d}",
             store.store_id,
             store.payload_sha256,
-            store.azimuth_bins,
-            store.elevation_bins,
-            store.projection_limit,
+            store.config.azimuth_bins,
+            store.config.elevation_bins,
+            store.config.projection_limit,
             *(_scalar(store.payload[field]) for field in _S2_SUPPORT_FIELDS),
             len(store.payload["issues"]),
         )
         for store in stores
+    )
+    return ReportTable(id=result_id, columns=columns, rows=rows, source_ids=(source_id,))
+
+
+def _s2_issues_table(
+    result_id: str,
+    stores: tuple[S2StoreEvidence, ...],
+    source_id: str,
+) -> ReportTable:
+    """Retain addressed reducer exclusions as an immutable report table."""
+
+    columns = (
+        ReportColumn("store_slot", None),
+        ReportColumn("store_id", None),
+        ReportColumn("code", None),
+        ReportColumn("message", None),
+        ReportColumn("rollout_row_id", None),
+        ReportColumn("step_row_id", None),
+    )
+    rows = tuple(
+        (
+            f"s{store.slot:02d}",
+            store.store_id,
+            _scalar(issue.get("code")),
+            _scalar(issue.get("message")),
+            _scalar(issue.get("rollout_row_id")),
+            _scalar(issue.get("step_row_id")),
+        )
+        for store in stores
+        for issue in store.payload["issues"]
     )
     return ReportTable(id=result_id, columns=columns, rows=rows, source_ids=(source_id,))
 
@@ -309,7 +316,7 @@ _S2_COLUMN_SYMBOLS = {
 }
 
 
-def _s2_quantities(section_id: str, store: _S2StoreEvidence, source_id: str) -> tuple[NamedQuantity, ...]:
+def _s2_quantities(section_id: str, store: S2StoreEvidence, source_id: str) -> tuple[NamedQuantity, ...]:
     slot = f"s{store.slot:02d}"
     specs = (
         ("source-sample-count", "source_sample_count", "count", "count", None, "source_sample_count"),
@@ -362,28 +369,6 @@ def _s2_quantities(section_id: str, store: _S2StoreEvidence, source_id: str) -> 
 
 def _resolved_store_paths(source: RolloutSourceConfig) -> tuple[Path, ...]:
     return tuple(sorted({path.expanduser().resolve() for path in source.store_paths}, key=Path.as_posix))
-
-
-def _canonical_s2_payload(payload: dict[str, Any]) -> bytes:
-    """Serialize one reducer result for immutable source identity."""
-
-    def normalize(value: Any) -> Any:
-        if isinstance(value, dict):
-            return {str(key): normalize(item) for key, item in sorted(value.items())}
-        if isinstance(value, list | tuple):
-            return [normalize(item) for item in value]
-        if isinstance(value, np.ndarray):
-            return normalize(value.tolist())
-        if isinstance(value, np.generic):
-            return value.item()
-        return value
-
-    return json.dumps(
-        normalize(payload),
-        sort_keys=True,
-        separators=(",", ":"),
-        allow_nan=False,
-    ).encode("utf-8")
 
 
 def _fact_quantities(

@@ -62,10 +62,12 @@ stored-rollout application:
 [[sections]]
 kind = "rollout_s2"
 id = "s2"
+channels = ["movement", "view_direction", "frustum"]
+
+[sections.analysis]
 azimuth_bins = 36
 elevation_bins = 18
 projection_limit = 2000
-channels = ["movement", "view_direction", "frustum"]
 ```
 
 The complete equal-solid-angle histograms and scalar support quantities are
@@ -97,8 +99,9 @@ the exporter rejects explicit remote resources before launching Kaleido.
 ## Ownership
 
 - `aria_nbv.rollouts` owns Zarr validation, evidence compatibility, rollout
-  reductions, and the shared S² Plotly builder used by Streamlit and this
-  module. Reporting freezes its result without reimplementing geometry.
+  reductions, configured S² acquisition, and the shared Plotly builder used by
+  Streamlit and this module. Reporting freezes those products without
+  reimplementing geometry.
 - W&B remains an external evidence store. Confirmatory recipes name exact,
   finished run IDs and acquire complete `scan_history` rows.
 - `docs/typst/shared/symbols.typ` and `equations.typ` own notation and theory.

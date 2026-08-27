@@ -8,8 +8,10 @@ single-step pipeline state only after the user selects that page.
 from __future__ import annotations
 
 import traceback
+from collections.abc import Callable
+from contextlib import AbstractContextManager
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 import streamlit as st
 
@@ -98,7 +100,10 @@ class NbvStreamlitApp:
         controller = PipelineController(
             state,
             console=console,
-            progress=lambda message: st.status(message, expanded=False),
+            progress=cast(
+                Callable[[str], AbstractContextManager[None, bool | None]],
+                lambda message: st.status(message, expanded=False),
+            ),
         )
         if run_all:
             controller.get_sample(force=True)
@@ -127,7 +132,12 @@ class NbvStreamlitApp:
 
         from aria_nbv.app.panels.stored_rollouts import render_stored_rollouts_panel
 
-        render_stored_rollouts_panel()
+        recipe, recipe_path = self.config.load_s2_report_recipe()
+        render_stored_rollouts_panel(
+            s2_recipe=recipe,
+            s2_section_id=self.config.s2_report_section_id,
+            s2_recipe_label=recipe_path.as_posix(),
+        )
 
     def _page_live_rollout_lab(self) -> None:
         """Render the interactive counterfactual-rollout laboratory."""
@@ -166,7 +176,12 @@ class NbvStreamlitApp:
 
         from aria_nbv.app.panels.campaign_generation import render_campaign_generation_page
 
-        render_campaign_generation_page()
+        recipe, recipe_path = self.config.load_s2_report_recipe()
+        render_campaign_generation_page(
+            s2_recipe=recipe,
+            s2_section_id=self.config.s2_report_section_id,
+            s2_recipe_label=recipe_path.as_posix(),
+        )
 
     def _page_vin_diagnostics(self) -> None:
         """Render VIN model diagnostics."""

@@ -1,10 +1,10 @@
 """Canonical Plotly construction for target-frame spherical rollout evidence.
 
-The factual reducer remains in :mod:`aria_nbv.rollouts.inspection`. This module
-owns only the deterministic visual encoding shared by the stored-rollout
-Streamlit panel and :mod:`aria_nbv.reporting`. Keeping figure construction here
-ensures interactive preview and immutable thesis export consume identical
-Plotly specifications rather than parallel plotting implementations.
+The factual reducer remains in :mod:`aria_nbv.rollouts.inspection`, while
+:mod:`aria_nbv.rollouts.s2_analysis` owns configured store acquisition. This
+module owns only deterministic visual encoding. Streamlit and immutable thesis
+reporting consume its Plotly specifications through the shared report snapshot
+instead of defining plots in either presentation adapter.
 """
 
 from __future__ import annotations

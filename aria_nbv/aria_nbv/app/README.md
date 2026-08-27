@@ -12,20 +12,57 @@ From `aria_nbv/` in the active worktree:
 uv run nbv-st
 ```
 
-Pass Streamlit options before `--`, for example:
+The launcher reads `../.configs/streamlit_app.toml` by default. That composition
+config selects the shared scientific-report recipe and S² section used by
+Rollout Supervision and Campaign Generation. Override it with a script argument
+after Streamlit's `--` delimiter:
+
+```bash
+uv run nbv-st -- --config-path .configs/streamlit_app.toml
+```
+
+Pass Streamlit server options before `--`, for example:
 
 ```bash
 uv run nbv-st --server.port 8502
 ```
 
-The wrapper disables Streamlit's file watcher by default to avoid exhausting
-inotify limits in the large source tree. Override it when needed:
+The wrapper uses Streamlit's automatic watcher and rerun-on-save by default.
+Override either server setting when needed:
 
 ```bash
 uv run nbv-st --server.fileWatcherType=poll
 ```
 
 or set `STREAMLIT_SERVER_FILE_WATCHER_TYPE=poll`.
+
+## Ownership boundary
+
+```mermaid
+flowchart LR
+  A["Streamlit app config"] --> R["Shared report recipe"]
+  U["Active rollout store selection"] --> B["ScientificReportBuilder"]
+  R --> B
+  B --> D["Rollout-owned acquisition and analysis"]
+  D --> P["Rollout-owned Plotly construction"]
+  P --> S["Immutable ReportSnapshot"]
+  S --> V["Streamlit renderer"]
+  S --> T["Static and Typst export"]
+
+  classDef input fill:#D5E8D4,stroke:#82B366,color:#17202A,stroke-width:1.5px,rx:0,ry:0;
+  classDef output fill:#F8CECC,stroke:#B85450,color:#17202A,stroke-width:1.5px,rx:0,ry:0;
+  classDef compute fill:#E1D5E7,stroke:#9673A6,color:#17202A,stroke-width:1.5px,rx:8,ry:8;
+  classDef data fill:#F5F5F5,stroke:#9E9E9E,color:#17202A,stroke-width:1.2px,rx:0,ry:0;
+  class A,R,U input;
+  class B,D,P compute;
+  class S data;
+  class V,T output;
+```
+
+Streamlit panels own widget state, explicit dispatch, and rendering only. They
+must not open rollout stores, reduce evidence, or build figures. The rollout
+package owns acquisition, analysis, and deterministic Plotly specifications;
+`aria_nbv.reporting` seals those products for identical app and thesis use.
 
 ## Navigation
 
@@ -50,7 +87,8 @@ pages expose typed path or store selectors where their owner permits overrides.
 Scientific Reporting builds one immutable snapshot only after explicit user
 dispatch and exports that exact preview without reacquiring evidence. The
 [reporting module](../reporting/README.md) owns the snapshot architecture and
-bundle layout. Configuration Workspace inspects a code-owned catalog of root
+bundle layout. The app composition config points to a report recipe rather than
+copying its analysis or theme fields. Configuration Workspace inspects a code-owned catalog of root
 models, derives widgets and help from Pydantic plus source docstrings, and
 defaults to comment-preserving save-as-copy; see the
 [config authoring workflow](../configs/README.md).
@@ -91,6 +129,8 @@ behavior.
    group.
 2. Keep the page presentation-only; put reusable computation in its typed
    package owner.
-3. Namespace page/session keys and gate expensive work behind explicit
+3. Consume sealed DTOs or report snapshots; do not construct domain plots or
+   open domain stores in a panel.
+4. Namespace page/session keys and gate expensive work behind explicit
    dispatch.
-4. Add a focused AppTest or router regression for the changed contract.
+5. Add a focused AppTest or router regression for the changed contract.

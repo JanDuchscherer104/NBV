@@ -35,8 +35,8 @@ flowchart LR
   data_handling -->|"9"| configs
   oracle -->|"9"| pose_generation
   lightning -->|"8"| data_handling
+  rollouts -->|"8"| utils
   oracle -->|"7"| rollouts
-  rollouts -->|"7"| utils
   data_handling -->|"6"| vin
   lightning -->|"6"| configs
   oracle -->|"6"| targets
