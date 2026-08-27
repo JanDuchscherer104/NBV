@@ -5,7 +5,6 @@
 #import "../shared/notation.typ": print-thesis-symbols
 #import "experiment_data.typ": thesis-report-settings, load-thesis-report
 #import "draft_markers.typ": development_only
-#import "@preview/booktabs:0.0.4": *
 
 #let report-settings = thesis-report-settings()
 #let _publication-gate = load-thesis-report(
@@ -17,7 +16,6 @@
 #set document(title: titleEnglish, author: author)
 #set text(font: "New Computer Modern")
 
-#show: booktabs-default-table-style
 #show: make-aria-glossary
 #register-aria-glossary()
 
@@ -43,10 +41,10 @@
   submissionDate: submissionDate,
   submissionDateText: submissionDateText,
   abstract_en: [
-    This thesis studies target-conditioned, quality-driven @next-best-view planning for egocentric 3D reconstruction in @aria-synthetic-environments. It defines target-specific @relative-reconstruction-improvement as an oracle signal, constructs finite candidate and replay contracts, and separates privileged label generation from the actor-visible inputs available to a learned finite-horizon value model. The evaluation is designed to measure oracle-lookahead headroom and the fraction recovered by a learned policy under matched oracle re-evaluation. The evidence available for this version establishes the evaluation contract and implementation readiness, but does not contain confirmatory held-out policy outcomes; it therefore supports no claim that a learned policy improves over the specified baselines. The main remaining limitation is the absence of a validated, population-level rollout bundle with paired endpoint estimates and uncertainty.
+    Active perception couples sensing and reconstruction: what can be reconstructed depends on what a sensing action makes visible. Under a limited acquisition budget, next-best-view planning must therefore choose which feasible observation should come next. The literature reviewed in Chapter 2 treats scene coverage, one-step reconstruction-quality ranking, target-aware information criteria, and sequential coverage separately, but leaves their conjunction for target-specific egocentric reconstruction unresolved. This thesis studies that conjunction as finite candidate selection under hard validity constraints in @aria-synthetic-environments. It adapts @relative-reconstruction-improvement to a target-cropped point--mesh objective, separates privileged task construction and oracle evaluation from the deployable actor path, and marks GT-derived target or selected-depth inputs as non-deployable controls. The primary experiment first tests whether bounded oracle lookahead provides endpoint-quality headroom over one-step oracle greedy; a learned policy is evaluated only if that headroom passes a prespecified meaningful-effect and uncertainty rule. The current implementation supports target-specific oracle scoring and selected-action replay, with rendering memory limiting scale. Actor-visible target matching, metric repeatability, a validated held-out population, headroom, and paired policy outcomes remain unestablished. The present contribution is therefore an auditable method and experimental design, not evidence of policy superiority or deployment readiness.
   ],
   abstract_de: [
-    Diese Arbeit untersucht zielkonditionierte, qualitätsgetriebene Planung der nächsten besten Ansicht für die egozentrische 3D-Rekonstruktion in @aria-synthetic-environments. Sie definiert die zielspezifische @relative-reconstruction-improvement als Orakelsignal, legt Verträge für endliche Kandidatenmengen und Replay-Daten fest und trennt die privilegierte Erzeugung von Trainingssignalen von den für ein gelerntes Modell mit endlichem Horizont sichtbaren Eingaben. Die Evaluation soll den Spielraum einer vorausschauenden Orakelstrategie und den durch eine gelernte Strategie erreichten Anteil unter identischer Orakel-Neubewertung messen. Die für diese Fassung verfügbare Evidenz belegt den Evaluationsvertrag und die Implementierungsbereitschaft, enthält jedoch keine bestätigenden Ergebnisse auf zurückgehaltenen Daten. Daher wird keine Überlegenheit einer gelernten Strategie gegenüber den festgelegten Baselines behauptet. Die wesentliche verbleibende Einschränkung ist das Fehlen eines validierten Rollout-Datensatzes auf Populationsebene mit gepaarten Endpunktschätzungen und Unsicherheitsangaben.
+    Aktive Wahrnehmung beruht auf einer geometrischen Prämisse: Was rekonstruiert werden kann, hängt davon ab, was eine Sensorhandlung sichtbar macht. Bei begrenztem Aufnahmebudget muss die Next-Best-View-Planung daher entscheiden, welche zulässige Beobachtung als Nächstes erfolgen soll. Die in Kapitel 2 ausgewertete Literatur behandelt Szenenabdeckung, einstufige Rekonstruktionsqualität, zielbezogene Informationsmaße und sequenzielle Abdeckung getrennt, lässt deren Verbindung für die zielspezifische egozentrische Rekonstruktion jedoch offen. Diese Arbeit untersucht diese Verbindung als Auswahl aus einer endlichen Kandidatenmenge unter harten Zulässigkeitsbedingungen in @aria-synthetic-environments. Sie überträgt die @relative-reconstruction-improvement auf ein zielbeschnittenes Punkt--Mesh-Maß, trennt privilegierte Aufgabenerzeugung und Orakelevaluation vom einsatzfähigen Akteurpfad und kennzeichnet GT-basierte Ziel- oder Tiefeneingaben als nicht einsetzbare Kontrollen. Das primäre Experiment prüft zunächst, ob eine beschränkte Orakelvorausschau gegenüber einer einstufigen gierigen Orakelstrategie einen Vorteil bei der Endpunktqualität bietet; eine gelernte Strategie wird nur bewertet, wenn dieser Vorteil ein vorab festgelegtes Relevanz- und Unsicherheitskriterium erfüllt. Die aktuelle Implementierung unterstützt zielspezifische Orakelbewertung und Replay ausgewählter Aktionen, wobei der Speicherbedarf des Renderers die Skalierung begrenzt. Nicht belegt sind bislang eine beobachtungsbasierte Zielzuordnung, die Wiederholbarkeit des Qualitätsmaßes, eine validierte zurückgehaltene Studienpopulation, ein Vorteil der Orakelvorausschau und gepaarte Strategieergebnisse. Der gegenwärtige Beitrag ist daher ein prüfbarer Methoden- und Versuchsaufbau, kein Nachweis für Strategieüberlegenheit oder Einsatzreife.
   ],
   acknowledgement: [
     Acknowledgements are omitted from this version.
@@ -82,8 +80,7 @@
 #include "sections/07-discussion.typ"
 #include "sections/08-conclusion.typ"
 
-// Development planning and gate reports are omitted from submission output.
-#development_only(() => [
-  #include "development/roadmap.typ"
-  #include "development/m1-contract-report.typ"
-])
+// Development planning and gate reports own their own lazy development-only
+// boundaries, so they can also be compiled as standalone development sources.
+#include "development/roadmap.typ"
+#include "development/m1-contract-report.typ"

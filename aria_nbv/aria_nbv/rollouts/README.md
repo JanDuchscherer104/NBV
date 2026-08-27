@@ -89,11 +89,14 @@ mask.
 | `qh_reader` | Multi-store QH chain decoding and learning/data identity. |
 | `qh_geometry` | Stored relative-pose composition into actor tensors. |
 | `read_model` | Presentation-free typed projections. |
-| `inspection` / `reporting` | Read-only summaries and evidence tables. |
+| `inspection` / `reporting` | Rollout-owned read-only summaries, evidence tables, validation, and compatibility strata. |
 | `audits` | Provenance, validity, path, entropy, and order diagnostics. |
 
 Detailed table schemas, shapes, and validation failures live in source
 docstrings and the [generated API reference](../../../docs/reference/index.qmd).
+The shared [scientific reporting module](../reporting/README.md) wraps these
+canonical frames into immutable cross-source snapshots; it does not own or
+reimplement rollout calculations, Zarr admission, or compatibility decisions.
 
 ## Verification
 

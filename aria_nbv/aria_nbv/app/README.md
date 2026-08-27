@@ -35,6 +35,7 @@ or set `STREAMLIT_SERVER_FILE_WATCHER_TYPE=poll`.
 | Training Data | Immutable root-store inspection and persisted rollout supervision. |
 | Generation | Bounded campaign operation, live rollout experiments, and candidate proposals. |
 | Models & Experiments | VIN, RRI binning, W&B, and Optuna diagnostics. |
+| Reporting & Configuration | Immutable report preview/export and safe trusted-TOML authoring. |
 | Foundations / Single-step | One observed snippet, candidate rendering, and oracle RRI. |
 
 Rollout Supervision and Root Observation Store are read-mostly inspection
@@ -45,6 +46,14 @@ they do not alter persisted rollout evidence.
 The default path configuration resolves data beneath `.data/` and external
 dependencies beneath `external/`, relative to the repository root. Individual
 pages expose typed path or store selectors where their owner permits overrides.
+
+Scientific Reporting builds one immutable snapshot only after explicit user
+dispatch and exports that exact preview without reacquiring evidence. The
+[reporting module](../reporting/README.md) owns the snapshot architecture and
+bundle layout. Configuration Workspace inspects a code-owned catalog of root
+models, derives widgets and help from Pydantic plus source docstrings, and
+defaults to comment-preserving save-as-copy; see the
+[config authoring workflow](../configs/README.md).
 
 ## Troubleshooting
 

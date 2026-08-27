@@ -13,16 +13,40 @@ import subprocess
 import sys
 import tempfile
 
+import check_graphify_freshness as freshness
+
 
 PINNED_GRAPHIFY_VERSION = "0.9.48"
 GRAPH = Path("graphify-out/graph.json")
 PROJECTION = Path("graphify-input")
-SEED = Path("graphify-out/.aria-worktree-seed.json")
 _HEX_OID = re.compile(r"[0-9a-f]+\Z")
 
 
 def fail(message: str) -> None:
     raise ValueError(message)
+
+
+def git_temporary_root(root: Path) -> Path:
+    """Return repository-local administrative storage for transient work."""
+    marker = root / ".git"
+    if marker.is_dir():
+        temporary_root = marker.resolve()
+    elif marker.is_file():
+        try:
+            binding = marker.read_text(encoding="utf-8").strip()
+        except (OSError, UnicodeDecodeError) as error:
+            fail(f"Git administrative directory is unavailable: {error}")
+        if not binding.startswith("gitdir: "):
+            fail("Git administrative directory is unavailable")
+        configured = Path(binding.removeprefix("gitdir: "))
+        temporary_root = (
+            configured if configured.is_absolute() else root / configured
+        ).resolve()
+    else:
+        fail("Git administrative directory is unavailable")
+    if not temporary_root.is_dir():
+        fail("Git administrative directory is unavailable")
+    return temporary_root
 
 
 def trusted_graphify_cli(root: Path) -> Path:
@@ -67,7 +91,9 @@ def trusted_graphify_runtime(root: Path) -> tuple[Path, Path]:
     if configured != canonical_interpreter:
         fail("Graphify interpreter marker does not match trusted CLI")
 
-    with tempfile.TemporaryDirectory(prefix="aria-graphify-reconcile-trust-") as neutral:
+    with tempfile.TemporaryDirectory(
+        prefix="aria-graphify-reconcile-trust-", dir=git_temporary_root(root)
+    ) as neutral:
         environment = {
             key: value
             for key, value in os.environ.items()
@@ -144,25 +170,6 @@ def head(root: Path) -> str:
     return commit_oid(root, result.stdout.strip(), "current Git HEAD")
 
 
-def semantic_counts(root: Path) -> tuple[int, int]:
-    """Count semantic graph content so an AST update cannot silently discard it."""
-    path = root / GRAPH
-    if path.is_symlink() or not path.is_file():
-        fail("Graphify graph is missing or unsafe")
-    try:
-        graph = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
-        fail(f"Graphify graph is invalid: {error}")
-    nodes = graph.get("nodes")
-    edges = graph.get("links", graph.get("edges"))
-    if not isinstance(nodes, list) or not isinstance(edges, list):
-        fail("Graphify graph is invalid")
-    return (
-        sum(isinstance(node, dict) and node.get("_origin") == "semantic" for node in nodes),
-        sum(isinstance(edge, dict) and edge.get("_origin") == "semantic" for edge in edges),
-    )
-
-
 def graph_revision(root: Path) -> str:
     """Return the provenance revision carried by the seeded graph."""
     path = root / GRAPH
@@ -194,79 +201,6 @@ def commit_tree(root: Path, revision: str) -> str:
 def graph_tree_matches_head(root: Path, graph_revision: str, revision: str) -> bool:
     """Whether the inherited graph was built from the destination's exact tree."""
     return commit_tree(root, graph_revision) == commit_tree(root, revision)
-
-
-def seeded_tree_matches_head(root: Path, revision: str) -> bool:
-    """Keep an inherited graph only when its registered seed still matches."""
-    path = root / SEED
-    if not path.exists():
-        return False
-    if path.is_symlink() or not path.is_file():
-        fail("Graphify worktree seed is missing or unsafe")
-    try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
-        fail(f"Graphify worktree seed is invalid: {error}")
-    source_value = payload.get("source_worktree")
-    if not isinstance(source_value, str):
-        fail("Graphify worktree seed source worktree is invalid")
-    source_candidate = Path(source_value)
-    if not source_candidate.is_absolute():
-        fail("Graphify worktree seed source worktree is invalid")
-    try:
-        source = source_candidate.resolve(strict=True)
-    except (OSError, RuntimeError):
-        fail("Graphify worktree seed source worktree is unavailable")
-    if not source.is_dir() or source == root:
-        fail("Graphify worktree seed source worktree is invalid")
-
-    def common_dir(worktree: Path) -> Path:
-        result = subprocess.run(
-            ["git", "rev-parse", "--git-common-dir"],
-            cwd=worktree,
-            check=False,
-            capture_output=True,
-            text=True,
-        )
-        if result.returncode or not result.stdout.strip():
-            fail("Graphify worktree seed Git common directory is unavailable")
-        candidate = Path(result.stdout.strip())
-        if not candidate.is_absolute():
-            candidate = worktree / candidate
-        try:
-            return candidate.resolve(strict=True)
-        except (OSError, RuntimeError):
-            fail("Graphify worktree seed Git common directory is unavailable")
-
-    if common_dir(source) != common_dir(root):
-        fail("Graphify worktree seed source worktree is foreign")
-    listed = subprocess.run(
-        ["git", "worktree", "list", "--porcelain"],
-        cwd=root,
-        check=False,
-        capture_output=True,
-        text=True,
-    )
-    if listed.returncode:
-        fail("Graphify worktree seed cannot enumerate registered worktrees")
-    registered: set[Path] = set()
-    for line in listed.stdout.splitlines():
-        if not line.startswith("worktree "):
-            continue
-        try:
-            registered.add(Path(line.removeprefix("worktree ")).resolve(strict=True))
-        except (OSError, RuntimeError):
-            continue
-    if root not in registered or source not in registered:
-        fail("Graphify worktree seed source worktree is not registered")
-
-    recorded = commit_oid(
-        root, payload.get("source_worktree_head"), "Graphify worktree seed source revision"
-    )
-    actual = head(source)
-    if actual != recorded:
-        fail("Graphify worktree seed source revision does not match source worktree HEAD")
-    return commit_tree(root, actual) == commit_tree(root, revision)
 
 
 def stamp_graph_provenance(root: Path, revision: str) -> None:
@@ -339,44 +273,54 @@ def _restore_generation(root: Path, backup: Path) -> None:
         shutil.copytree(backup / relative, destination, symlinks=True)
 
 
-def run(root: Path) -> None:
+def configured_modes(raw: str | None = None) -> tuple[str, ...]:
+    """Return the setup-declared upstream semantic consumers."""
+    value = raw if raw is not None else os.environ.get("ARIA_NBV_GRAPHIFY_MODES", "standard")
+    modes = tuple(item.strip() for item in value.split(",") if item.strip())
+    if modes not in {("standard",), ("deep",), ("standard", "deep")}:
+        fail("Graphify modes must be standard, deep, or standard,deep")
+    return modes
+
+
+def run(root: Path, *, modes: tuple[str, ...] | None = None) -> None:
     root = root.resolve()
     if not (root / ".git").exists():
         fail(f"Graphify reconciliation root is not a Git worktree: {root}")
     cli, interpreter = trusted_graphify_runtime(root)
     revision = head(root)
-    inherited_revision = graph_revision(root)
-    before_counts = semantic_counts(root)
-    equivalent_tree = (
-        graph_tree_matches_head(root, inherited_revision, revision)
-        or seeded_tree_matches_head(root, revision)
-    )
+    active_modes = configured_modes() if modes is None else modes
+    rebuild_projection = bool(freshness.projection_owner_changes(root))
 
     scripts = Path(__file__).resolve().parent
-    with tempfile.TemporaryDirectory(prefix="aria-graphify-reconcile-backup-") as temporary:
+    with tempfile.TemporaryDirectory(
+        prefix="aria-graphify-reconcile-backup-", dir=git_temporary_root(root)
+    ) as temporary:
         backup = Path(temporary)
         _backup_generation(root, backup)
         try:
-            subprocess.run(
-                [
-                    sys.executable,
-                    str(scripts / "build_graphify_projection.py"),
-                    "--output",
-                    str(PROJECTION),
-                    "--aria-code-ref",
-                    revision,
-                ],
-                cwd=root,
-                check=True,
-            )
-            if not equivalent_tree:
-                subprocess.run([str(cli), "update", str(root)], cwd=root, check=True)
-                after_counts = semantic_counts(root)
-                if after_counts != before_counts:
-                    fail("Graphify AST reconciliation changed inherited semantic graph content")
-            # A tree-equivalent inherited graph has the same source corpus even
-            # across unrelated commit histories. Stamp the destination commit
-            # after that proof so freshness does not reject portable seeds.
+            if rebuild_projection:
+                subprocess.run(
+                    [
+                        sys.executable,
+                        str(scripts / "build_graphify_projection.py"),
+                        "--output",
+                        str(PROJECTION),
+                        "--aria-code-ref",
+                        revision,
+                    ],
+                    cwd=root,
+                    check=True,
+                )
+            # Graphify's detector and mode-specific cache are the only source
+            # of truth for no-op, dirty-input, and cold-deep decisions. A Git
+            # tree match cannot prove any of those runtime states.
+            for mode in active_modes:
+                command = [str(cli), "extract", str(root)]
+                if mode == "deep":
+                    command.extend(("--mode", "deep"))
+                subprocess.run(command, cwd=root, check=True)
+            # The extractor has reconciled the actual worktree inputs. Stamp
+            # its local graph with this worktree's commit after success.
             stamp_graph_provenance(root, revision)
             subprocess.run(
                 [
@@ -396,9 +340,10 @@ def run(root: Path) -> None:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", type=Path, default=Path.cwd())
+    parser.add_argument("--modes", default=None)
     args = parser.parse_args(argv)
     try:
-        run(args.root)
+        run(args.root, modes=configured_modes(args.modes))
     except (OSError, ValueError, subprocess.CalledProcessError) as error:
         print(f"error: Graphify reconciliation failed: {error}", file=sys.stderr)
         return 1

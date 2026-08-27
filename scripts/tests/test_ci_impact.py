@@ -338,8 +338,9 @@ class SelectionTests(unittest.TestCase):
             "[`references/graphify-aria-boundary.md`](references/graphify-aria-boundary.md)",
             graphify_branch,
         )
-        self.assertIn("scripts/check_graphify_freshness.py --json", boundary_guidance)
-        self.assertIn("make graphify-state-check", boundary_guidance)
+        self.assertNotIn("scripts/check_graphify_freshness.py", boundary_guidance)
+        self.assertNotIn("make graphify-state-check", boundary_guidance)
+        self.assertIn("internal CI and pre-push", boundary_guidance)
         self.assertIn("scripts/setup_worktree_env.sh", boundary_guidance)
         self.assertIn("graphify hook install", boundary_guidance)
         self.assertIn("## Upstream Lifecycle And Hooks", boundary_guidance)
@@ -354,10 +355,18 @@ class SelectionTests(unittest.TestCase):
         self.assertTrue((skill_root / "references/query.md").is_file())
 
         hooks = (REPO_ROOT / ".pre-commit-config.yaml").read_text(encoding="utf-8")
-        self.assertIn("id: graphify-usable-check", hooks)
-        self.assertIn("entry: make graphify-usable-check", hooks)
+        self.assertIn("id: graphify-maintain", hooks)
+        self.assertIn(
+            "entry: bash -c 'if [[ -n \"${GEMINI_API_KEY:-}${GOOGLE_API_KEY:-}\" ]]; then exec make graphify-maintain; fi'",
+            hooks,
+        )
+        self.assertNotIn("entry: make graphify-maintain", hooks)
         self.assertIn("id: graphify-state-check", hooks)
         self.assertIn("entry: make graphify-state-check", hooks)
+        self.assertIn(
+            "entry: bash -c 'unset GIT_DIR GIT_WORK_TREE; export TMPDIR=",
+            hooks,
+        )
         self.assertIn("- pre-push", hooks)
 
     def test_multi_family_diff_unions_selections(self) -> None:

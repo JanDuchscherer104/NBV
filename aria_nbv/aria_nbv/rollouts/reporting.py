@@ -597,6 +597,7 @@ def build_thesis_report_frames(
     *,
     sidecar_paths: Iterable[Path | str] = (),
     evidence_status: Literal["pilot", "confirmatory"],
+    table_names: Iterable[str] | None = None,
 ) -> dict[str, pd.DataFrame]:
     """Build deterministic named DataFrames from rollout stores and sidecars.
 
@@ -609,6 +610,10 @@ def build_thesis_report_frames(
         evidence_status: Explicit scientific status for all projected facts.
             Callers must choose ``pilot`` or ``confirmatory``; file names and
             paths never determine this status.
+        table_names: Optional output dependency closure. ``None`` preserves the
+            complete report-v1 projection. The bounded ``stores``/``facts``
+            reporting path may stop before unrelated target, tree, depth, and
+            Q_H diagnostics while retaining full store admission.
 
     Returns:
         Mapping whose keys and columns exactly match
@@ -619,12 +624,21 @@ def build_thesis_report_frames(
 
     if evidence_status not in {"pilot", "confirmatory"}:
         raise ValueError("evidence_status must be 'pilot' or 'confirmatory'.")
+    required_tables = set(THESIS_REPORT_TABLE_COLUMNS) if table_names is None else set(table_names)
+    unknown_tables = required_tables - set(THESIS_REPORT_TABLE_COLUMNS)
+    if unknown_tables:
+        raise ValueError(f"Unknown thesis report tables: {sorted(unknown_tables)}")
     rows: dict[str, list[dict[str, Any]]] = {name: [] for name in THESIS_REPORT_TABLE_COLUMNS}
     resolved_stores = sorted({Path(path).expanduser().resolve() for path in store_paths}, key=Path.as_posix)
     if not resolved_stores:
         raise ValueError("At least one rollout store is required to build thesis report frames.")
     for store_path in resolved_stores:
-        _append_store_rows(rows, store_path, evidence_status=evidence_status)
+        _append_store_rows(
+            rows,
+            store_path,
+            evidence_status=evidence_status,
+            required_tables=required_tables,
+        )
     for sidecar_path in sorted(
         {Path(path).expanduser().resolve() for path in sidecar_paths},
         key=Path.as_posix,
@@ -1695,6 +1709,7 @@ def _append_store_rows(
     store_path: Path,
     *,
     evidence_status: Literal["pilot", "confirmatory"],
+    required_tables: set[str],
 ) -> None:
     reader = RolloutZarrStoreReader(store_path)
     validation = reader.validate()
@@ -1763,6 +1778,9 @@ def _append_store_rows(
     rows["statistics"].extend(_typed_leaf_rows("store_id", store_id, stats))
     rows["facts"].extend(_fact_rows(store_id, stats, evidence_status=evidence_status))
     rows["source_coverage"].extend(_source_coverage_rows(store_id, stats.get("source_coverage", {})))
+    shallow_tables = {"stores", "parameters", "statistics", "facts", "source_coverage"}
+    if required_tables.issubset(shallow_tables):
+        return
     rows["targets"].extend(_with_store_id(store_id, target_audit_rows(reader)))
     rows["validity"].extend(_with_store_id(store_id, validity_waterfall_rows(reader)))
     step_rows = rollout_step_objective_rows(reader)

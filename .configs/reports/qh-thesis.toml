@@ -1,0 +1,45 @@
+schema_version = "aria-nbv-report-config-v1"
+evidence_status = "pilot"
+
+# Authoring template: select immutable rollout stores and exact W&B runs before
+# Preview or `nbv-report build`. Empty source lists deliberately fail at build.
+
+[sources.rollout]
+store_paths = []
+sidecar_paths = []
+
+[sources.wandb]
+entity = ""
+project = "aria-nbv"
+run_ids = []
+history_keys = ["trainer/global_step", "train/loss", "val/loss"]
+history_mode = "sampled"
+max_rows = 2000
+
+[[sections]]
+kind = "rollout"
+id = "rollout"
+include_tables = ["stores", "facts"]
+quantity_fact_key = "candidate_validity.fraction"
+quantity_symbol_id = "rl.validity_mask"
+figure_fact_keys = ["candidate_validity.valid", "candidate_validity.total"]
+
+[[sections]]
+kind = "wandb"
+id = "training"
+metric = "val/loss"
+ema_alpha = 0.2
+show_raw = true
+segment_fraction = 0.2
+
+[theme]
+template = "plotly_white"
+font_family = "Arial"
+colorway = ["#3B6FB6", "#B85450", "#6F4A8E", "#2E7D6E", "#A66A2C"]
+
+[export]
+width = 1400
+height = 900
+scale = 2.0
+two_dimensional_format = "svg"
+webgl_format = "png"

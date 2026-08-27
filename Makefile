@@ -1,5 +1,5 @@
 .DEFAULT_GOAL := help
-.PHONY: help ci ci-impact-self-test ownership-consolidation-contract typst-authoring-contract thesis-literature-provenance skill-source-self-test graphify-skill-upstream-self-test graphify-projection-self-test graphify-projection-live-check graphify-usable-check graphify-state-check scaffold-check agents-db-validate package-smoke qh-ci replay-oracle-golden docs-render-core quarto-docs-ci typst-paper-ci thesis-pdf-ci thesis-marker-contract ruff-full ruff-targeted mypy-contract mypy-full mypy-targeted coverage-targeted agent-status
+.PHONY: help ci ci-impact-self-test ownership-consolidation-contract typst-authoring-contract thesis-literature-provenance skill-source-self-test graphify-skill-upstream-self-test graphify-projection-self-test graphify-projection-live-check graphify-usable-check graphify-state-check graphify-maintain graphify-session-readiness-integration scaffold-check agents-db-validate package-smoke qh-ci replay-oracle-golden docs-render-core quarto-docs-ci typst-paper-ci thesis-pdf-ci thesis-marker-contract ruff-full ruff-targeted mypy-contract mypy-full mypy-targeted coverage-targeted agent-status
 .PHONY: api-docs-self-test
 .PHONY: context-qmd-tree qmd-frontmatter-check
 .PHONY: context-index context-get context-contracts context-modules context-classes context-functions
@@ -294,6 +294,9 @@ skill-source-self-test: _check_python ## 🔗 Validate explicit upstream skill-s
 graphify-skill-upstream-self-test: _check_python ## 🕸️ Verify the project Graphify skill is byte-identical to upstream
 	@$(PYTHON_INTERPRETER) scripts/tests/test_graphify_upstream_skill.py
 
+graphify-session-readiness-integration: _check_python ## 🕸️ Exercise real explicit and parentless Codex worktree setup
+	@ARIA_NBV_RUN_GRAPHIFY_SESSION_INTEGRATION=1 $(PYTHON_INTERPRETER) scripts/tests/test_graphify_session_readiness_integration.py
+
 graphify-projection-self-test: _check_python ## 🕸️ Verify the deterministic literature projection builder
 	@$(PYTHON_INTERPRETER) scripts/tests/test_build_graphify_projection.py
 
@@ -305,6 +308,9 @@ graphify-usable-check: _check_python ## 🕸️ Require a valid Graphify snapsho
 
 graphify-state-check: _check_python ## 🕸️ Require indexed Graphify bytes to match the current worktree
 	@$(PYTHON_INTERPRETER) scripts/check_graphify_freshness.py
+
+graphify-maintain: ## 🕸️ Maintain and admit the current worktree's Graphify state
+	@CODEX_WORKTREE_PATH="$$PWD" bash scripts/setup_codex_worktree_env.sh --maintain --quiet
 
 ci-impact-self-test: ## 🧭 Verify path-to-CI-family routing and fail-closed behavior
 	@$(PYTHON_INTERPRETER) scripts/tests/test_ci_impact.py
@@ -757,7 +763,7 @@ quarto-preview: ## Preview the Quarto website locally
 #  🧾 Typst builds
 #  ═══════════════════════════════════════════════════════════════════════
 
-.PHONY: typst-paper typst-slide thesis-pdf thesis-pdf-ci thesis-watch
+.PHONY: typst-paper typst-slide thesis-pdf thesis-pdf-ci thesis-watch scientific-report-v2-smoke
 typst-paper: ## Compile the Typst paper (docs/typst/seminar_paper/main.typ)
 	@$(TYPST) compile --root $(TYPST_ROOT) $(TYPST_PAPER) $(TYPST_PAPER_PDF)
 
@@ -775,6 +781,11 @@ thesis-pdf-ci: ## Compile the development thesis into an ignored CI artifact pat
 	@mkdir -p "$(CI_RENDER_DIR)"
 	@$(TYPST) compile --root $(TYPST_ROOT) $(TYPST_THESIS) "$(CI_RENDER_DIR)/thesis.pdf"
 
+scientific-report-v2-smoke: ## Compile bundle-v2 and prove pilot evidence fails its publication gate
+	@mkdir -p "$(CI_RENDER_DIR)"
+	@$(TYPST) compile --root $(TYPST_ROOT) docs/typst/thesis/tests/report_data_v2_smoke.typ "$(CI_RENDER_DIR)/report-data-v2-smoke.pdf"
+	@! $(TYPST) compile --root $(TYPST_ROOT) docs/typst/thesis/tests/report_data_v2_submission_reject.typ "$(CI_RENDER_DIR)/report-data-v2-reject.pdf" >/dev/null 2>&1
+
 thesis-watch: ## Watch and recompile the DEVELOPMENT/DRAFT thesis PDF
 	@$(TYPST) watch --root $(TYPST_ROOT) $(TYPST_THESIS) $(TYPST_THESIS_PDF)
 
@@ -787,7 +798,7 @@ typst-authoring-contract: _check_python ## Enforce shared-equation, notation, la
 thesis-literature-provenance: _check_python ## Check Related Work citation identity and source locators
 	@$(PYTHON_INTERPRETER) -m pytest --import-mode=importlib scripts/tests/test_thesis_literature_provenance.py
 
-docs-render-core: graphify-projection-self-test graphify-projection-live-check quarto-docs-ci typst-paper-ci thesis-pdf-ci typst-authoring-contract thesis-marker-contract thesis-literature-provenance ## Render the core docs surfaces used by root CI
+docs-render-core: graphify-projection-self-test graphify-projection-live-check quarto-docs-ci typst-paper-ci thesis-pdf-ci scientific-report-v2-smoke typst-authoring-contract thesis-marker-contract thesis-literature-provenance ## Render the core docs surfaces used by root CI
 
 qh-ci: ## Run the focused CPU-only Q_H training and distributed contracts
 	@cd $(PKG_DIR) && $(QH_CI_PYTHON) -m ruff format --check $(QH_CI_RUFF_PATHS)

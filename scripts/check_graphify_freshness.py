@@ -259,12 +259,23 @@ def _graph_revision(root: Path) -> str:
     return revision
 
 
-def _owner_reasons(root: Path, owners: dict[str, str]) -> list[str]:
+def _owner_reasons(
+    root: Path,
+    owners: dict[str, str],
+    *,
+    missing_is_change: bool = False,
+) -> list[str]:
     reasons: list[str] = []
     for relative, expected in owners.items():
         owner = root / relative
         try:
             resolved = owner.resolve(strict=True)
+        except FileNotFoundError as error:
+            reason = f"projection owner is unavailable: {relative}: {error}"
+            if missing_is_change and not owner.is_symlink():
+                reasons.append(reason)
+                continue
+            raise ValueError(reason) from error
         except (OSError, RuntimeError) as error:
             raise ValueError(
                 f"projection owner is unavailable: {relative}: {error}"
@@ -284,6 +295,23 @@ def _owner_reasons(root: Path, owners: dict[str, str]) -> list[str]:
         raise ValueError("projection owner worktree status is unavailable")
     if status.stdout.strip():
         reasons.append("projection owner worktree is dirty")
+    return reasons
+
+
+def projection_owner_changes(root: Path) -> list[str]:
+    """Return exact projection-owner changes for setup-owned reconciliation."""
+    _local_regular(root, PROJECTION_INDEX, "projection index")
+    projection_revision, _, owner_state, owners = _projection_metadata(
+        root / PROJECTION_INDEX
+    )
+    if owner_state == "dirty":
+        raise ValueError("projection was built from a dirty owner worktree")
+    reasons = _owner_reasons(root, owners, missing_is_change=True)
+    head = _head(root)
+    if _tree_oid(root, projection_revision, "projection") != _tree_oid(
+        root, head, "HEAD"
+    ):
+        reasons.append("projection source tree differs from HEAD")
     return reasons
 
 
@@ -403,7 +431,21 @@ def _raw_commit_snapshot(
     root: Path, commit: str, projection: Path
 ) -> tempfile.TemporaryDirectory[str]:
     """Materialize ``commit`` from Git blobs without applying worktree filters."""
-    temporary = tempfile.TemporaryDirectory(prefix="aria-graphify-head-")
+    git_dir = subprocess.run(
+        ["git", "rev-parse", "--absolute-git-dir"],
+        cwd=root,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if git_dir.returncode or not git_dir.stdout.strip():
+        raise ValueError("Git administrative directory is unavailable")
+    temporary_root = Path(git_dir.stdout.strip()).resolve()
+    if not temporary_root.is_dir():
+        raise ValueError("Git administrative directory is unavailable")
+    temporary = tempfile.TemporaryDirectory(
+        prefix="aria-graphify-head-", dir=temporary_root
+    )
     snapshot = Path(temporary.name)
     result = subprocess.run(
         ["git", "ls-tree", "-r", "-z", "--full-tree", commit],
@@ -478,6 +520,60 @@ def _raw_commit_snapshot(
     _regular(graph, "graph")
     (snapshot / GRAPH).parent.mkdir(parents=True, exist_ok=True)
     (snapshot / GRAPH).write_bytes(graph.read_bytes())
+    # Graphify preserves tracked files from .gitignore exclusions.  The raw
+    # blob snapshot intentionally has no checkout index, so give it a private
+    # index for exactly ``commit`` without consulting the mutable source index
+    # or applying checkout filters.
+    common = subprocess.run(
+        ["git", "rev-parse", "--path-format=absolute", "--git-common-dir"],
+        cwd=root,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    common_dir = Path(common.stdout.strip())
+    objects = common_dir / "objects"
+    if common.returncode or not common.stdout.strip() or not objects.is_dir():
+        temporary.cleanup()
+        raise ValueError("Git common object directory is unavailable")
+    snapshot_env = {
+        key: value
+        for key, value in os.environ.items()
+        if not key.startswith("GIT_")
+    }
+    initialized = subprocess.run(
+        ["git", "init", "-q", str(snapshot)],
+        check=False,
+        capture_output=True,
+        text=True,
+        env=snapshot_env,
+    )
+    if initialized.returncode:
+        temporary.cleanup()
+        raise ValueError(
+            "Git HEAD snapshot index initialization failed: "
+            f"{initialized.stderr.strip() or initialized.stdout.strip()}"
+        )
+    alternates = snapshot / ".git" / "objects" / "info" / "alternates"
+    try:
+        alternates.parent.mkdir(parents=True, exist_ok=True)
+        alternates.write_text(f"{objects}\n", encoding="utf-8")
+    except OSError as error:
+        temporary.cleanup()
+        raise ValueError(f"Git HEAD snapshot index initialization failed: {error}") from error
+    indexed = subprocess.run(
+        ["git", "-C", str(snapshot), "read-tree", commit],
+        check=False,
+        capture_output=True,
+        text=True,
+        env=snapshot_env,
+    )
+    if indexed.returncode:
+        temporary.cleanup()
+        raise ValueError(
+            "Git HEAD snapshot index initialization failed: "
+            f"{indexed.stderr.strip() or indexed.stdout.strip()}"
+        )
     return temporary
 
 
