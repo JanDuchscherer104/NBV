@@ -661,6 +661,17 @@ def test_qh_admitted_forward_rejects_another_scorers_admission() -> None:
         consuming_scorer.forward_admitted(admitted)
 
 
+def test_qh_admitted_forward_accepts_inference_tensors() -> None:
+    scorer = _scorer().eval()
+
+    with torch.inference_mode():
+        actor = _actor()
+        admitted = scorer.admit_actor(actor)
+        output = scorer.forward_admitted(admitted)
+
+    assert torch.isfinite(output.conditional_q).all()
+
+
 def test_qh_admitted_forward_retains_requested_horizon_validation() -> None:
     actor = _actor()
     scorer = _scorer()

@@ -780,7 +780,17 @@ class TargetFiniteHorizonScorer(nn.Module):
             add(prefix.camera)
             add(prefix.camera_pose_relative_root)
             add(prefix.prefix_mask)
-        return tuple((id(tensor), tensor._version) for tensor in tensors)
+
+        def version(tensor: Tensor) -> int:
+            try:
+                return tensor._version
+            except RuntimeError:
+                # Inference tensors intentionally omit version counters and
+                # cannot be mutated outside inference mode. Identity still
+                # binds the admitted payload for that lifecycle.
+                return -1
+
+        return tuple((id(tensor), version(tensor)) for tensor in tensors)
 
 
 __all__ = [
