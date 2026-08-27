@@ -2,15 +2,13 @@
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
-import pandas as pd
-import plotly.io as pio
 import streamlit as st
 
 from ...configs import ConfigAuthoringError, ConfigDocument, PathConfig
 from ...reporting import ScientificReportConfig, ScientificReportError, write_report_snapshot
+from .report_results import render_report_snapshot
 
 _SNAPSHOT_KEY = "reporting_workspace_snapshot"
 _SOURCE_DIGEST_KEY = "reporting_workspace_source_digest"
@@ -84,24 +82,11 @@ def render_reporting_workspace(*, configs_dir: Path | None = None) -> None:
         f"Snapshot `{snapshot.snapshot_sha256}` contains {len(snapshot.quantities)} quantities, "
         f"{len(snapshot.tables)} tables, and {len(snapshot.figures)} figures."
     )
-    for quantity in snapshot.quantities:
-        label = quantity.symbol_id or quantity.id
-        st.metric(label, quantity.value if quantity.value is not None else "—")
-    for figure in snapshot.figures:
-        st.subheader(figure.id)
-        st.plotly_chart(pio.from_json(figure.plotly_json.decode("utf-8")), width="stretch")
-        specification = st.expander("Canonical Plotly specification", on_change="rerun")
-        if specification.open:
-            with specification:
-                st.json(json.loads(figure.plotly_json))
-    for table in snapshot.tables:
-        expander = st.expander(table.id, on_change="rerun")
-        if expander.open:
-            with expander:
-                st.dataframe(
-                    pd.DataFrame(table.rows, columns=[column.id for column in table.columns]),
-                    hide_index=True,
-                )
+    render_report_snapshot(
+        snapshot,
+        key_prefix="reporting_workspace",
+        show_plotly_specifications=True,
+    )
     export_path = st.text_input(
         "Export directory",
         value=(PathConfig().root / "build" / "reports" / recipe_path.stem).as_posix(),

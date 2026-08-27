@@ -52,6 +52,44 @@ Plotly JSON under `figures/`, static assets under `assets/`, and an integrity
 `manifest.json`. Two-dimensional figures default to SVG; WebGL/3D figures use
 configured high-resolution PNG.
 
+### Target-frame S² reports
+
+The `rollout_s2` section freezes the same target-frame movement,
+camera-forward, and calibrated proxy-frustum Plotly figures shown by the
+stored-rollout application:
+
+```toml
+[[sections]]
+kind = "rollout_s2"
+id = "s2"
+channels = ["movement", "view_direction", "frustum"]
+
+[sections.analysis]
+azimuth_bins = 36
+elevation_bins = 18
+projection_limit = 2000
+```
+
+The complete equal-solid-angle histograms and scalar support quantities are
+computed from every admitted selected step. `projection_limit` bounds only the
+incidence overlay. Surface colour represents complete cell counts; incidence
+colour represents rollout-chain index and marker shape represents persisted
+step index. The frustum channel reports geometric potential support on a
+geometric-mean-scale target proxy, not observed target-mesh visibility.
+
+`.configs/reports/s2-thesis-pilot.toml` is the exact pilot recipe used by the
+development thesis. Regenerate its immutable bundle with:
+
+```sh
+cd aria_nbv
+uv run nbv-report build \
+  --config ../.configs/reports/s2-thesis-pilot.toml \
+  --output ../docs/typst/thesis/data/s2-rollout-pilot
+```
+
+Typst loads the resulting `report.json` and resolves figure paths through
+`experiment_data.typ`; it does not execute Python or reacquire rollout data.
+
 The manifest fingerprints Plotly, Kaleido, Chrome, the resolved font files,
 template payloads, locale, timezone, and Plotly's MathJax/TopoJSON defaults.
 Report execution never installs browser assets. Recipes intended for isolated
@@ -60,8 +98,10 @@ the exporter rejects explicit remote resources before launching Kaleido.
 
 ## Ownership
 
-- `aria_nbv.rollouts` owns Zarr validation, evidence compatibility, and rollout
-  reductions. This module wraps its canonical report frames.
+- `aria_nbv.rollouts` owns Zarr validation, evidence compatibility, rollout
+  reductions, configured S² acquisition, and the shared Plotly builder used by
+  Streamlit and this module. Reporting freezes those products without
+  reimplementing geometry.
 - W&B remains an external evidence store. Confirmatory recipes name exact,
   finished run IDs and acquire complete `scan_history` rows.
 - `docs/typst/shared/symbols.typ` and `equations.typ` own notation and theory.

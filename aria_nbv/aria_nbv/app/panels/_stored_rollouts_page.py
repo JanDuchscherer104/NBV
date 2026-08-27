@@ -11,6 +11,7 @@ from pathlib import Path
 import streamlit as st
 
 from ...configs import PathConfig
+from ...reporting import ScientificReportConfig
 from ._stored_rollouts import failure_triage, inspect_rerun, session, validity_support
 from ._stored_rollouts import overview_topology as overview
 from ._stored_rollouts import reconstruction_return as reconstruction
@@ -43,7 +44,12 @@ def _render_target_quality_handoff() -> None:
     )
 
 
-def render_stored_rollouts_page() -> None:
+def render_stored_rollouts_page(
+    *,
+    s2_recipe: ScientificReportConfig,
+    s2_section_id: str,
+    s2_recipe_label: str,
+) -> None:
     """Render corpus summaries and one active-store inspection workflow."""
 
     st.header("Rollout Supervision")
@@ -152,7 +158,13 @@ def render_stored_rollouts_page() -> None:
                 with st.expander("Active-store scientific evidence"):
                     reconstruction._render_scientific_evidence(active_session)
                 inspect_rerun._render_inspect_export_rerun(
-                    active_session, store_path=store_path, manifest_payload=manifest_payload, paths=paths
+                    active_session,
+                    store_path=store_path,
+                    manifest_payload=manifest_payload,
+                    paths=paths,
+                    s2_recipe=s2_recipe,
+                    s2_section_id=s2_section_id,
+                    s2_recipe_label=s2_recipe_label,
                 )
                 overview._render_corpus_details(corpus_summary)
             else:

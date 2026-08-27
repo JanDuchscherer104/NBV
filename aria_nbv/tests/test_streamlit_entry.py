@@ -11,7 +11,8 @@ import pytest
 from aria_nbv.app.app import NbvStreamlitApp
 from aria_nbv.app.config import NbvStreamlitAppConfig
 from aria_nbv.configs import PathConfig
-from aria_nbv.streamlit_app import _build_streamlit_argv, streamlit_entry
+from aria_nbv.streamlit_app import _build_streamlit_argv, _extract_config_path, _load_app_config, streamlit_entry
+from aria_nbv.utils import BaseConfig
 
 
 def _seed_default_ase_paths(root: Path) -> None:
@@ -127,6 +128,69 @@ def test_streamlit_app_config_targets_streamlit_app(tmp_path: Path) -> None:
         PathConfig(**original_paths)
 
     assert target_type is NbvStreamlitApp
+
+
+def test_streamlit_app_config_loads_and_validates_shared_s2_recipe(tmp_path: Path) -> None:
+    original_paths = PathConfig().model_dump()
+    _seed_default_ase_paths(tmp_path)
+    recipe_path = tmp_path / ".configs" / "reports" / "s2.toml"
+    recipe_path.parent.mkdir(parents=True)
+    recipe_path.write_text(
+        """schema_version = "aria-nbv-report-config-v1"
+evidence_status = "pilot"
+
+[sources.rollout]
+store_paths = ["store.zarr"]
+
+[[sections]]
+kind = "rollout_s2"
+id = "s2"
+channels = ["movement"]
+
+[sections.analysis]
+azimuth_bins = 12
+elevation_bins = 6
+projection_limit = 32
+""",
+        encoding="utf-8",
+    )
+    try:
+        PathConfig(data_root=tmp_path / ".data", external_dir=tmp_path / "external")
+        config = NbvStreamlitAppConfig(s2_report_recipe_path=Path(".configs/reports/s2.toml"))
+        recipe, resolved = config.load_s2_report_recipe(root=tmp_path)
+    finally:
+        PathConfig(**original_paths)
+
+    assert resolved == recipe_path
+    assert recipe.rollout_s2_section("s2").analysis.model_dump() == {
+        "azimuth_bins": 12,
+        "elevation_bins": 6,
+        "projection_limit": 32,
+    }
+
+
+def test_streamlit_entry_loads_canonical_or_explicit_app_config(tmp_path: Path) -> None:
+    class AppConfigProbe(BaseConfig):
+        s2_report_section_id: str = "default"
+
+    canonical = tmp_path / ".configs" / "streamlit_app.toml"
+    explicit = tmp_path / "custom.toml"
+    canonical.parent.mkdir(parents=True)
+    canonical.write_text('s2_report_section_id = "canonical"\n', encoding="utf-8")
+    explicit.write_text('s2_report_section_id = "explicit"\n', encoding="utf-8")
+
+    assert _load_app_config([], config_type=AppConfigProbe, root=tmp_path).s2_report_section_id == "canonical"
+    assert (
+        _load_app_config(
+            ["--config-path", explicit.as_posix()],
+            config_type=AppConfigProbe,
+            root=tmp_path,
+        ).s2_report_section_id
+        == "explicit"
+    )
+    assert _extract_config_path(["--config-path=custom.toml"]) == Path("custom.toml")
+    with pytest.raises(ValueError, match="only once"):
+        _extract_config_path(["--config-path", "one.toml", "--config-path=two.toml"])
 
 
 def test_streamlit_entry_module_is_import_light() -> None:

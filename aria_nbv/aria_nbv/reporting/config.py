@@ -8,10 +8,11 @@ markup. Runtime sources and clients are injected when the builder is created.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import TYPE_CHECKING, Annotated, Literal
+from typing import TYPE_CHECKING, Annotated, Literal, Self
 
 from pydantic import Field, field_validator, model_validator
 
+from ..rollouts.s2_analysis import S2AnalysisConfig
 from ..utils import TargetConfig
 
 if TYPE_CHECKING:
@@ -92,6 +93,43 @@ class RolloutReportSectionConfig(TargetConfig[object]):
     """Fact keys shown by the section's deterministic Plotly bar figure."""
 
 
+class S2RolloutReportSectionConfig(TargetConfig[object]):
+    """Materialize target-frame spherical evidence from immutable rollouts.
+
+    The section invokes the rollout-owned complete-population reducer once per
+    selected store. It emits movement, optical-axis, and calibrated proxy-
+    surface figures from the same canonical Plotly builder used by Streamlit.
+    The bounded projection limit affects incidence overlays only; complete
+    equal-solid-angle counts are never subsampled.
+    """
+
+    kind: Literal["rollout_s2"] = "rollout_s2"
+    """Closed discriminator for target-frame spherical rollout evidence."""
+
+    id: str = "s2"
+    """Stable section identifier used as the result-ID prefix."""
+
+    analysis: S2AnalysisConfig = Field(default_factory=S2AnalysisConfig)
+    """Rollout-owned binning and bounded incidence-reservoir configuration."""
+
+    channels: tuple[Literal["movement", "view_direction", "frustum"], ...] = (
+        "movement",
+        "view_direction",
+        "frustum",
+    )
+    """Ordered figure channels to freeze into the report snapshot."""
+
+    @field_validator("channels")
+    @classmethod
+    def _unique_channels(
+        cls,
+        channels: tuple[Literal["movement", "view_direction", "frustum"], ...],
+    ) -> tuple[Literal["movement", "view_direction", "frustum"], ...]:
+        if not channels or len(channels) != len(set(channels)):
+            raise ValueError("S2 report channels must be non-empty and unique.")
+        return channels
+
+
 class WandbReportSectionConfig(TargetConfig[object]):
     """Materialize one exact W&B metric curve and dynamics summary."""
 
@@ -118,7 +156,7 @@ class WandbReportSectionConfig(TargetConfig[object]):
 
 
 ReportSectionConfig = Annotated[
-    RolloutReportSectionConfig | WandbReportSectionConfig,
+    RolloutReportSectionConfig | S2RolloutReportSectionConfig | WandbReportSectionConfig,
     Field(discriminator="kind"),
 ]
 
@@ -143,6 +181,19 @@ class ReportThemeConfig(TargetConfig[object]):
         min_length=1,
     )
     """Ordered, high-contrast categorical palette shared by report figures."""
+
+    s2_surface_colorscale: str = "Cividis"
+    """Sequential Plotly scale for complete target-frame S2 cell counts."""
+
+    s2_rollout_colorscale: str = "Turbo"
+    """Continuous Plotly scale for rollout-chain incidence heritage."""
+
+    @field_validator("template", "font_family", "s2_surface_colorscale", "s2_rollout_colorscale")
+    @classmethod
+    def _nonempty_theme_name(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("Report theme names must be non-empty.")
+        return value
 
 
 class ReportExportConfig(TargetConfig[object]):
@@ -201,7 +252,7 @@ class ScientificReportConfig(TargetConfig["ScientificReportBuilder"]):
     @model_validator(mode="after")
     def _validate_source_requirements(self) -> "ScientificReportConfig":
         kinds = {section.kind for section in self.sections}
-        if "rollout" in kinds and self.sources.rollout is None:
+        if kinds.intersection({"rollout", "rollout_s2"}) and self.sources.rollout is None:
             raise ValueError("Rollout report sections require sources.rollout.")
         if "wandb" in kinds and self.sources.wandb is None:
             raise ValueError("W&B report sections require sources.wandb.")
@@ -223,6 +274,34 @@ class ScientificReportConfig(TargetConfig["ScientificReportBuilder"]):
 
         return ScientificReportBuilder(self, wandb_api=wandb_api, root=root)
 
+    def bind_rollout_stores(
+        self,
+        store_paths: tuple[Path, ...],
+        *,
+        sidecar_paths: tuple[Path, ...] = (),
+    ) -> Self:
+        """Return a validated recipe bound to an explicit rollout population.
+
+        This immutable composition helper is shared by interactive previews and
+        report automation. It replaces only the rollout source selection;
+        section analysis, Plotly theme, evidence status, export policy, and any
+        configured W&B source remain unchanged.
+        """
+
+        rollout = RolloutSourceConfig(store_paths=store_paths, sidecar_paths=sidecar_paths)
+        sources = self.sources.model_copy(update={"rollout": rollout})
+        return self.model_copy(update={"sources": sources})
+
+    def rollout_s2_section(self, section_id: str) -> S2RolloutReportSectionConfig:
+        """Return one configured S2 section or fail before evidence acquisition."""
+
+        for section in self.sections:
+            if section.id == section_id:
+                if isinstance(section, S2RolloutReportSectionConfig):
+                    return section
+                raise ValueError(f"Report section {section_id!r} is not a rollout_s2 section.")
+        raise ValueError(f"Report recipe has no section {section_id!r}.")
+
     def validate_build_readiness(self, *, section_ids: tuple[str, ...] = ()) -> None:
         """Fail before client construction when selected source selectors are incomplete."""
 
@@ -231,7 +310,7 @@ class ScientificReportConfig(TargetConfig["ScientificReportBuilder"]):
         selected = frozenset(section_ids)
         kinds = {section.kind for section in self.sections if not selected or section.id in selected}
         rollout = self.sources.rollout
-        if "rollout" in kinds and (rollout is None or not rollout.store_paths):
+        if kinds.intersection({"rollout", "rollout_s2"}) and (rollout is None or not rollout.store_paths):
             raise ScientificReportError("config_invalid", "Rollout report sections require at least one store path.")
         wandb = self.sources.wandb
         if "wandb" in kinds and (
@@ -250,6 +329,7 @@ __all__ = [
     "ReportThemeConfig",
     "RolloutReportSectionConfig",
     "RolloutSourceConfig",
+    "S2RolloutReportSectionConfig",
     "ScientificReportConfig",
     "WandbReportSectionConfig",
     "WandbSourceConfig",

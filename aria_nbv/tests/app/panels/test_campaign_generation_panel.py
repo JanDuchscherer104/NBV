@@ -20,6 +20,16 @@ from aria_nbv.app.panels import campaign_generation as panel
 _T = TypeVar("_T")
 _R = TypeVar("_R")
 
+_S2_RECIPE = object()
+
+
+def _render_campaign_page() -> None:
+    panel.render_campaign_generation_page(
+        s2_recipe=_S2_RECIPE,  # type: ignore[arg-type]
+        s2_section_id="s2",
+        s2_recipe_label="test-recipe.toml",
+    )
+
 
 def _record(items: list[_T], item: _T, result: _R) -> _R:
     items.append(item)
@@ -461,7 +471,7 @@ def _patch_fake_page(
 
 def test_page_exposes_bounded_operational_controls(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     _, fake_st, _ = _patch_fake_page(monkeypatch, tmp_path)
-    panel.render_campaign_generation_page()
+    _render_campaign_page()
     assert fake_st.number_inputs["campaign_max_units"]["max_value"] == 100
     assert fake_st.number_inputs["campaign_time_budget"]["max_value"] == 1440
     assert fake_st.number_inputs["campaign_free_disk_floor"]["max_value"] == 1024
@@ -471,7 +481,7 @@ def test_page_exposes_only_explicitly_reviewed_configs_with_default_unchanged(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     _, fake_st, _ = _patch_fake_page(monkeypatch, tmp_path)
-    panel.render_campaign_generation_page()
+    _render_campaign_page()
     assert fake_st.selectboxes["campaign_config_path"] == panel._REVIEWED_CONFIGS
     assert fake_st.selectboxes["campaign_config_path"][0] == panel._DEFAULT_CONFIG
 
@@ -506,7 +516,7 @@ def test_selected_reviewed_config_drives_admission_audit_without_launch(
     monkeypatch.setattr(panel, "_render_admission_audit", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(panel, "build_campaign_argv", lambda *args, **kwargs: ["not", "invoked"])
 
-    panel.render_campaign_generation_page()
+    _render_campaign_page()
 
     assert resolved == [selected]
     assert loaded == [audit_path.as_posix()]
@@ -520,7 +530,7 @@ def test_page_disables_launch_for_invalid_operational_control(monkeypatch: pytes
         buttons={"Launch in tmux"},
         controls={"campaign_max_units": 101},
     )
-    panel.render_campaign_generation_page()
+    _render_campaign_page()
     assert fake_st.messages == []
     assert any("within their displayed bounds" in warning for warning in fake_st.warnings)
 
@@ -537,7 +547,7 @@ def test_page_does_not_read_admission_audit_until_explicit_load(
         lambda path, *_args, **_kwargs: _record(calls, path, {}),
     )
 
-    panel.render_campaign_generation_page()
+    _render_campaign_page()
 
     assert calls == []
 
@@ -563,7 +573,7 @@ def test_page_loads_and_renders_identity_bound_admission_evidence(
         lambda value, *, threshold: rendered.append((value, threshold)),
     )
 
-    panel.render_campaign_generation_page()
+    _render_campaign_page()
 
     assert calls == [
         (
@@ -586,22 +596,37 @@ def test_page_loads_and_renders_identity_bound_admission_evidence(
 def test_campaign_admission_evidence_routes_completed_shard_to_shared_s2_renderer(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    """The campaign page reuses the rollout S² owner without moving plots into the oracle reducer."""
+    """The campaign page passes a validated shard to the shared report adapter."""
 
     stores = (tmp_path / "shards" / "unit-a", tmp_path / "shards" / "unit-b")
-    rendered: list[tuple[Path, str]] = []
+    rendered: list[dict[str, Any]] = []
     monkeypatch.setattr(st, "subheader", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(st, "caption", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(st, "selectbox", lambda _label, options, **_kwargs: options[1])
+    monkeypatch.setattr(panel, "_store_projection_identity", lambda path: f"identity:{path}")
     monkeypatch.setattr(
         panel,
-        "render_s2_direction_histograms",
-        lambda handle, *, key_prefix: rendered.append((handle.store_path, key_prefix)),
+        "render_s2_report_preview",
+        lambda **kwargs: rendered.append(kwargs),
     )
 
-    panel._render_campaign_rollout_s2_evidence(stores)
+    panel._render_campaign_rollout_s2_evidence(
+        stores,
+        s2_recipe=_S2_RECIPE,  # type: ignore[arg-type]
+        s2_section_id="s2",
+        s2_recipe_label="test-recipe.toml",
+    )
 
-    assert rendered == [(stores[1], "campaign_admission_unit-b")]
+    assert rendered == [
+        {
+            "store_path": stores[1],
+            "store_identity": f"identity:{stores[1]}",
+            "recipe": _S2_RECIPE,
+            "section_id": "s2",
+            "recipe_label": "test-recipe.toml",
+            "key_prefix": "campaign_admission_unit-b",
+        }
+    ]
 
 
 def test_campaign_s2_selector_excludes_nonvalidated_artifact_records(tmp_path: Path) -> None:
@@ -622,7 +647,7 @@ def test_campaign_s2_selector_excludes_nonvalidated_artifact_records(tmp_path: P
 def test_page_warns_and_disables_launch_below_free_disk_floor(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     _, fake_st, _ = _patch_fake_page(monkeypatch, tmp_path, buttons={"Launch in tmux"})
     monkeypatch.setattr(shutil, "disk_usage", lambda _: SimpleNamespace(free=2 * 1024**3))
-    panel.render_campaign_generation_page()
+    _render_campaign_page()
     assert any("below the configured floor" in warning for warning in fake_st.warnings)
     assert fake_st.messages == []
 
@@ -640,7 +665,7 @@ def test_page_checks_nearest_existing_ancestor_for_fresh_output_root(
         "disk_usage",
         lambda path: _record(usage_paths, Path(path), SimpleNamespace(free=100 * 1024**3)),
     )
-    panel.render_campaign_generation_page()
+    _render_campaign_page()
     assert usage_paths == [tmp_path]
     assert not output_root.exists()
 
@@ -649,7 +674,7 @@ def test_page_does_not_read_progress_until_explicit_refresh(monkeypatch: pytest.
     campaign, fake_st, _ = _patch_fake_page(monkeypatch, tmp_path)
     capture_calls: list[str] = []
     monkeypatch.setattr(panel, "capture_tmux_tail", lambda session: _record(capture_calls, session, "tail"))
-    panel.render_campaign_generation_page()
+    _render_campaign_page()
     assert campaign.progress_calls == 0
     assert campaign.event_calls == 0
     assert capture_calls == []
@@ -660,7 +685,7 @@ def test_page_refresh_reads_summary_and_events_once(monkeypatch: pytest.MonkeyPa
     campaign, fake_st, _ = _patch_fake_page(monkeypatch, tmp_path, buttons={"Refresh status"})
     capture_calls: list[str] = []
     monkeypatch.setattr(panel, "capture_tmux_tail", lambda session: _record(capture_calls, session, "tail"))
-    panel.render_campaign_generation_page()
+    _render_campaign_page()
     assert campaign.progress_calls == 1
     assert campaign.event_calls == 1
     assert capture_calls == ["cuda-campaign-campaign"]
@@ -680,13 +705,13 @@ def test_page_inspect_handoff_sets_only_validated_absolute_path(
         "counts": {"completed": 1},
         "validated_artifacts": [{"work_unit_hash": "unit-1", "store_path": str(store), "validation": "passed"}],
     }
-    panel.render_campaign_generation_page()
+    _render_campaign_page()
     assert fake_st.session_state["rollout_store_manual_path"] == str(store)
 
 
 def test_page_renders_full_read_only_scientific_recipe_summary(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     _, fake_st, _ = _patch_fake_page(monkeypatch, tmp_path)
-    panel.render_campaign_generation_page()
+    _render_campaign_page()
     scientific = next(
         payload["scientific_contract"] for payload in fake_st.json_payloads if "scientific_contract" in payload
     )
@@ -712,7 +737,7 @@ def test_page_invalidates_cached_view_when_plan_changes(monkeypatch: pytest.Monk
         "events": [],
     }
     plan_path.write_text("changed", encoding="utf-8")
-    panel.render_campaign_generation_page()
+    _render_campaign_page()
     assert campaign.progress_calls == 0
     assert "campaign_generation_view" not in fake_st.session_state
 
@@ -725,7 +750,7 @@ def test_page_launch_passes_canonical_claim_path(monkeypatch: pytest.MonkeyPatch
         "launch_campaign_tmux",
         lambda *args, **kwargs: _record(calls, kwargs, (True, "ok")),
     )
-    panel.render_campaign_generation_page()
+    _render_campaign_page()
     assert calls == [{"claim_path": tmp_path / "run-claim.json"}]
 
 
@@ -739,7 +764,7 @@ def test_page_truncates_synchronous_command_output_before_render_and_cache(
         "run",
         lambda *args, **kwargs: type("Result", (), {"returncode": 0, "stdout": huge, "stderr": huge})(),
     )
-    panel.render_campaign_generation_page()
+    _render_campaign_page()
     last_action = fake_st.session_state["campaign_generation_last_action"]
     assert len(last_action["stdout"]) == 4000
     assert len(last_action["stderr"]) == 4000

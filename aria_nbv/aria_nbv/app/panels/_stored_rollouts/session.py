@@ -46,7 +46,6 @@ from ....rollouts.inspection import (
     rollout_store_inventory_rows,
     rollout_trajectory_geometry,
     rollout_tree_summary_rows,
-    s2_target_direction_histogram,
     selected_candidate_rank_rows,
     selected_depth_preview,
     selected_depth_summary_rows,
@@ -340,21 +339,6 @@ class StoredRolloutSession:
 
         return _cached_trajectory_geometry(self._projection_path(), store_identity=self.store_identity)
 
-    def s2_direction_histogram(self, *, azimuth_bins: int, elevation_bins: int) -> Any:
-        """Return complete target-frame S² movement and view-direction counts.
-
-        This explicit full-store factual-path projection returns complete
-        equal-solid-angle histograms with bounded display-only vector overlays.
-        It never mutates the rollout store.
-        """
-
-        return _cached_s2_direction_histogram(
-            self._projection_path(),
-            azimuth_bins=azimuth_bins,
-            elevation_bins=elevation_bins,
-            store_identity=self.store_identity,
-        )
-
     def depth_summary(self, rollout_row_id: int | None = None, limit: int | None = None) -> Any:
         return _cached_depth_summary(self._projection_path(), rollout_row_id, limit, store_identity=self.store_identity)
 
@@ -611,20 +595,6 @@ def _cached_trajectory_geometry(store_path: str) -> Any:
 
 
 @_identity_cache
-def _cached_s2_direction_histogram(store_path: str, *, azimuth_bins: int, elevation_bins: int) -> Any:
-    """Cache one complete target-frame S² reducer by store identity and binning."""
-
-    reader, _, _ = _cached_store_bundle(store_path)
-    return asdict(
-        s2_target_direction_histogram(
-            reader,
-            azimuth_bins=azimuth_bins,
-            elevation_bins=elevation_bins,
-        )
-    )
-
-
-@_identity_cache
 def _cached_depth_summary(store_path: str, rollout_row_id: int | None = None, limit: int | None = None) -> Any:
     reader, _, _ = _cached_store_bundle(store_path)
     return selected_depth_summary_rows(reader, rollout_row_id=rollout_row_id, limit=limit)
@@ -783,7 +753,6 @@ def _clear_stored_rollout_caches() -> None:
         _cached_depth_summary,
         _cached_proposal_geometry,
         _cached_trajectory_geometry,
-        _cached_s2_direction_histogram,
     ):
         clear: Any = getattr(projection, "clear", None)
         if callable(clear):

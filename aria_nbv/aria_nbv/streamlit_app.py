@@ -26,6 +26,8 @@ _DEFAULT_FILE_WATCHER_TYPE = "auto"
 _RUN_ON_SAVE_ENV = "STREAMLIT_SERVER_RUN_ON_SAVE"
 _RUN_ON_SAVE_FLAG = "--server.runOnSave"
 _DEFAULT_RUN_ON_SAVE = "true"
+_APP_CONFIG_FLAG = "--config-path"
+_DEFAULT_APP_CONFIG = Path(".configs/streamlit_app.toml")
 
 
 def main() -> None:  # pragma: no cover - Streamlit runner
@@ -33,7 +35,48 @@ def main() -> None:  # pragma: no cover - Streamlit runner
 
     from aria_nbv.app.config import NbvStreamlitAppConfig
 
-    NbvStreamlitAppConfig().setup_target().run()
+    _load_app_config(sys.argv[1:], config_type=NbvStreamlitAppConfig).setup_target().run()
+
+
+def _load_app_config(
+    args: Sequence[str],
+    *,
+    config_type: type[Any],
+    root: Path | None = None,
+) -> Any:
+    """Load the explicit or canonical TOML app config without importing panels."""
+
+    from aria_nbv.configs import PathConfig
+
+    repository_root = (root or PathConfig().root).expanduser().resolve()
+    requested = _extract_config_path(args)
+    configured = requested or _DEFAULT_APP_CONFIG
+    config_path = configured.expanduser()
+    resolved = config_path.resolve() if config_path.is_absolute() else (repository_root / config_path).resolve()
+    if requested is not None or resolved.is_file():
+        return config_type.from_toml(resolved)
+    return config_type()
+
+
+def _extract_config_path(args: Sequence[str]) -> Path | None:
+    """Extract one script-level app config path from Streamlit arguments."""
+
+    matches: list[Path] = []
+    index = 0
+    while index < len(args):
+        value = args[index]
+        if value == _APP_CONFIG_FLAG:
+            if index + 1 >= len(args):
+                raise ValueError(f"{_APP_CONFIG_FLAG} requires a TOML path.")
+            matches.append(Path(args[index + 1]))
+            index += 2
+            continue
+        if value.startswith(f"{_APP_CONFIG_FLAG}="):
+            matches.append(Path(value.split("=", 1)[1]))
+        index += 1
+    if len(matches) > 1:
+        raise ValueError(f"{_APP_CONFIG_FLAG} may be provided only once.")
+    return matches[0] if matches else None
 
 
 def __getattr__(name: str) -> Any:

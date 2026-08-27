@@ -10,7 +10,7 @@ from pathlib import Path
 from ..configs import PathConfig
 from ._rollouts import _acquire_rollout_evidence, _build_rollout_section
 from ._wandb import _acquire_wandb_evidence, _build_wandb_section
-from .config import ScientificReportConfig
+from .config import RolloutReportSectionConfig, S2RolloutReportSectionConfig, ScientificReportConfig
 from .errors import ScientificReportError
 from .notation import TheoryReferences, TheoryResolutionError, notation_sha256, validate_theory_registry
 from .results import NamedQuantity, ReportFigure, ReportSnapshot, ReportTable, SourceIdentity
@@ -82,11 +82,21 @@ class ScientificReportBuilder:
                 ),
             }
         )
+        s2_configs_by_key = {
+            (
+                section.analysis.azimuth_bins,
+                section.analysis.elevation_bins,
+                section.analysis.projection_limit,
+            ): section.analysis
+            for section in self.config.sections
+            if section.kind == "rollout_s2" and (requested_sections is None or section.id in requested_sections)
+        }
+        s2_configs = tuple(s2_configs_by_key[key] for key in sorted(s2_configs_by_key))
         try:
             for section in self.config.sections:
                 if requested_sections is not None and section.id not in requested_sections:
                     continue
-                if section.kind == "rollout":
+                if isinstance(section, RolloutReportSectionConfig | S2RolloutReportSectionConfig):
                     rollout_source = self.config.sources.rollout
                     assert rollout_source is not None
                     if rollout_evidence is None:
@@ -94,6 +104,7 @@ class ScientificReportBuilder:
                             rollout_source,
                             evidence_status=self.config.evidence_status,
                             required_tables=rollout_tables,
+                            s2_configs=s2_configs,
                         )
                         sources.append(rollout_evidence.identity)
                     rollout_results = _build_rollout_section(
@@ -105,7 +116,7 @@ class ScientificReportBuilder:
                     quantities.extend(rollout_results.quantities)
                     tables.extend(rollout_results.tables)
                     figures.extend(rollout_results.figures)
-                else:
+                elif section.kind == "wandb":
                     wandb_source = self.config.sources.wandb
                     assert wandb_source is not None
                     if self._wandb_api is None:
@@ -126,6 +137,8 @@ class ScientificReportBuilder:
                     quantities.extend(wandb_results.quantities)
                     tables.extend(wandb_results.tables)
                     figures.extend(wandb_results.figures)
+                else:
+                    raise ScientificReportError("config_invalid", f"Unsupported report section kind: {section.kind}")
         except ScientificReportError:
             raise
         except Exception as exc:

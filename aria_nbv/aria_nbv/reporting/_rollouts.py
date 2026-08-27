@@ -4,14 +4,22 @@ from __future__ import annotations
 
 import hashlib
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
+from pathlib import Path
 from typing import Any, Literal
 
 import pandas as pd
 import plotly.graph_objects as go
 
 from ..rollouts.reporting import build_thesis_report_frames, serialize_thesis_report_bundle
-from .config import ReportThemeConfig, RolloutReportSectionConfig, RolloutSourceConfig
+from ..rollouts.s2_analysis import S2AnalysisConfig, S2StoreEvidence, acquire_s2_store_evidence
+from ..rollouts.s2_plotting import S2Channel, s2_direction_figure
+from .config import (
+    ReportThemeConfig,
+    RolloutReportSectionConfig,
+    RolloutSourceConfig,
+    S2RolloutReportSectionConfig,
+)
 from .results import (
     JsonScalar,
     NamedQuantity,
@@ -36,6 +44,7 @@ class _RolloutEvidence:
 
     identity: SourceIdentity
     frames: dict[str, pd.DataFrame]
+    s2_stores: tuple[S2StoreEvidence, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -50,6 +59,7 @@ def _acquire_rollout_evidence(
     *,
     evidence_status: Literal["pilot", "confirmatory"],
     required_tables: frozenset[str],
+    s2_configs: tuple[S2AnalysisConfig, ...] = (),
 ) -> _RolloutEvidence:
     frames = build_thesis_report_frames(
         source.store_paths,
@@ -66,22 +76,63 @@ def _acquire_rollout_evidence(
         (f"store.{index}.manifest_sha256", _scalar(row.manifest_sha256))
         for index, row in enumerate(stores.itertuples(index=False))
     )
+    acquired_s2: list[S2StoreEvidence] = []
+    ordered_configs = tuple(
+        sorted(
+            s2_configs,
+            key=lambda item: (item.azimuth_bins, item.elevation_bins, item.projection_limit),
+        )
+    )
+    for path in _resolved_store_paths(source):
+        for analysis_config in ordered_configs:
+            acquired_s2.append(acquire_s2_store_evidence(path, slot=0, config=analysis_config))
+    source_order = {
+        key: slot
+        for slot, key in enumerate(
+            sorted(
+                {(store.store_id, store.path) for store in acquired_s2},
+                key=lambda item: (item[0], item[1].as_posix()),
+            ),
+            start=1,
+        )
+    }
+    s2_stores = [replace(store, slot=source_order[(store.store_id, store.path)]) for store in acquired_s2]
+    s2_stores.sort(
+        key=lambda store: (
+            store.slot,
+            store.config.azimuth_bins,
+            store.config.elevation_bins,
+            store.config.projection_limit,
+        )
+    )
+    for store in s2_stores:
+        analysis_config = store.config
+        provenance_rows.append(
+            (
+                f"store.{store.slot - 1}.s2.{analysis_config.azimuth_bins}x"
+                f"{analysis_config.elevation_bins}.{analysis_config.projection_limit}.sha256",
+                store.payload_sha256,
+            )
+        )
+    identity_payload = payload + b"".join(item.payload_sha256.encode("ascii") for item in s2_stores)
     identity = SourceIdentity(
         id="rollout",
         kind="rollout",
-        sha256=hashlib.sha256(payload).hexdigest(),
+        sha256=hashlib.sha256(identity_payload).hexdigest(),
         provenance=tuple(sorted(provenance_rows)),
     )
-    return _RolloutEvidence(identity=identity, frames=frames)
+    return _RolloutEvidence(identity=identity, frames=frames, s2_stores=tuple(s2_stores))
 
 
 def _build_rollout_section(
     evidence: _RolloutEvidence,
-    section: RolloutReportSectionConfig,
+    section: RolloutReportSectionConfig | S2RolloutReportSectionConfig,
     theme: ReportThemeConfig,
     *,
     requested_result_ids: frozenset[str] | None,
 ) -> _SectionResults:
+    if isinstance(section, S2RolloutReportSectionConfig):
+        return _build_s2_section(evidence, section, theme, requested_result_ids=requested_result_ids)
     unknown_tables = set(section.include_tables) - set(evidence.frames)
     if unknown_tables:
         raise ValueError(f"Unknown rollout report tables: {sorted(unknown_tables)}")
@@ -96,6 +147,228 @@ def _build_rollout_section(
     if _requested(figure_id, requested_result_ids):
         figures = (_fact_figure(evidence, section, theme),)
     return _SectionResults(quantities=quantities, tables=tables, figures=figures)
+
+
+def _build_s2_section(
+    evidence: _RolloutEvidence,
+    section: S2RolloutReportSectionConfig,
+    theme: ReportThemeConfig,
+    *,
+    requested_result_ids: frozenset[str] | None,
+) -> _SectionResults:
+    """Freeze support, named values, and shared Plotly S2 specifications."""
+
+    stores = tuple(store for store in evidence.s2_stores if store.config == section.analysis)
+    if not stores:
+        raise ValueError(f"No acquired S2 evidence matches report section {section.id!r}.")
+    table_id = f"{section.id}.table.support"
+    table = _s2_support_table(table_id, stores, evidence.identity.id)
+    issues_table_id = f"{section.id}.table.issues"
+    issues_table = _s2_issues_table(issues_table_id, stores, evidence.identity.id)
+    figure_ids = {
+        f"{section.id}.figure.s{store.slot:02d}.{channel.replace('_', '-')}"
+        for store in stores
+        for channel in section.channels
+    }
+    figure_requested = requested_result_ids is not None and bool(figure_ids.intersection(requested_result_ids))
+    tables = tuple(
+        result for result in (table, issues_table) if _requested(result.id, requested_result_ids) or figure_requested
+    )
+    quantities = tuple(
+        quantity
+        for store in stores
+        for quantity in _s2_quantities(section.id, store, evidence.identity.id)
+        if _requested(quantity.id, requested_result_ids)
+    )
+    figures: list[ReportFigure] = []
+    for store in stores:
+        slot = f"s{store.slot:02d}"
+        title_suffix = f"{slot} · {store.store_id[:12]}"
+        for channel in section.channels:
+            figure_id = f"{section.id}.figure.{slot}.{channel.replace('_', '-')}"
+            if not _requested(figure_id, requested_result_ids):
+                continue
+            figure = s2_direction_figure(
+                store.payload,
+                channel=channel,
+                template=theme.template,
+                font_family=theme.font_family,
+                surface_colorscale=theme.s2_surface_colorscale,
+                rollout_colorscale=theme.s2_rollout_colorscale,
+                title_suffix=title_suffix,
+            )
+            figures.append(
+                ReportFigure(
+                    id=figure_id,
+                    plotly_json=canonical_plotly_json(figure),
+                    source_ids=(evidence.identity.id,),
+                    source_result_ids=(table_id,),
+                    symbol_ids=_S2_FIGURE_SYMBOLS[channel],
+                    uses_webgl=True,
+                )
+            )
+    return _SectionResults(quantities=quantities, tables=tables, figures=tuple(figures))
+
+
+_S2_SUPPORT_FIELDS = (
+    "source_sample_count",
+    "source_snippet_count",
+    "source_scene_count",
+    "target_count",
+    "rollout_count",
+    "store_rollout_count",
+    "selected_step_count",
+    "movement_count",
+    "view_direction_count",
+    "frustum_count",
+    "frustum_missing_calibration_count",
+    "movement_skipped_zero_count",
+    "frustum_mean_fov_solid_angle_sr",
+    "frustum_mean_target_surface_fraction_approx",
+    "frustum_union_target_surface_fraction_approx",
+)
+
+_S2_FIGURE_SYMBOLS: dict[S2Channel, tuple[str, ...]] = {
+    "movement": (
+        "spatial.target_frame_motion_direction",
+        "spatial.target_obb_scale",
+        "rl.rollout_index",
+    ),
+    "view_direction": (
+        "spatial.target_frame_view_direction",
+        "rl.rollout_index",
+    ),
+    "frustum": (
+        "spatial.target_frame_frustum",
+        "spatial.target_frame_frustum_fraction",
+        "spatial.frustum_solid_angle",
+        "spatial.target_obb_scale",
+        "rl.rollout_index",
+    ),
+}
+
+
+def _s2_support_table(
+    result_id: str,
+    stores: tuple[S2StoreEvidence, ...],
+    source_id: str,
+) -> ReportTable:
+    columns = (
+        ReportColumn("store_slot", None),
+        ReportColumn("store_id", None),
+        ReportColumn("payload_sha256", None),
+        ReportColumn("azimuth_bins", None),
+        ReportColumn("elevation_bins", None),
+        ReportColumn("projection_limit", None),
+        *(ReportColumn(field, _S2_COLUMN_SYMBOLS.get(field)) for field in _S2_SUPPORT_FIELDS),
+        ReportColumn("issue_count", None),
+    )
+    rows = tuple(
+        (
+            f"s{store.slot:02d}",
+            store.store_id,
+            store.payload_sha256,
+            store.config.azimuth_bins,
+            store.config.elevation_bins,
+            store.config.projection_limit,
+            *(_scalar(store.payload[field]) for field in _S2_SUPPORT_FIELDS),
+            len(store.payload["issues"]),
+        )
+        for store in stores
+    )
+    return ReportTable(id=result_id, columns=columns, rows=rows, source_ids=(source_id,))
+
+
+def _s2_issues_table(
+    result_id: str,
+    stores: tuple[S2StoreEvidence, ...],
+    source_id: str,
+) -> ReportTable:
+    """Retain addressed reducer exclusions as an immutable report table."""
+
+    columns = (
+        ReportColumn("store_slot", None),
+        ReportColumn("store_id", None),
+        ReportColumn("code", None),
+        ReportColumn("message", None),
+        ReportColumn("rollout_row_id", None),
+        ReportColumn("step_row_id", None),
+    )
+    rows = tuple(
+        (
+            f"s{store.slot:02d}",
+            store.store_id,
+            _scalar(issue.get("code")),
+            _scalar(issue.get("message")),
+            _scalar(issue.get("rollout_row_id")),
+            _scalar(issue.get("step_row_id")),
+        )
+        for store in stores
+        for issue in store.payload["issues"]
+    )
+    return ReportTable(id=result_id, columns=columns, rows=rows, source_ids=(source_id,))
+
+
+_S2_COLUMN_SYMBOLS = {
+    "frustum_mean_fov_solid_angle_sr": "spatial.frustum_solid_angle",
+    "frustum_mean_target_surface_fraction_approx": "spatial.target_frame_frustum_fraction",
+    "frustum_union_target_surface_fraction_approx": "spatial.target_frame_frustum_fraction",
+}
+
+
+def _s2_quantities(section_id: str, store: S2StoreEvidence, source_id: str) -> tuple[NamedQuantity, ...]:
+    slot = f"s{store.slot:02d}"
+    specs = (
+        ("source-sample-count", "source_sample_count", "count", "count", None, "source_sample_count"),
+        ("source-snippet-count", "source_snippet_count", "count", "count", None, "source_snippet_count"),
+        ("source-scene-count", "source_scene_count", "count", "count", None, "source_scene_count"),
+        ("target-count", "target_count", "count", "count", None, "target_count"),
+        ("rollout-count", "rollout_count", "count", "count", None, "store_rollout_count"),
+        ("selected-step-count", "selected_step_count", "count", "count", None, "selected_step_count"),
+        ("movement-count", "movement_count", "count", "count", None, "selected_step_count"),
+        ("view-direction-count", "view_direction_count", "count", "count", None, "selected_step_count"),
+        ("frustum-count", "frustum_count", "count", "count", None, "selected_step_count"),
+        (
+            "mean-frustum-solid-angle",
+            "frustum_mean_fov_solid_angle_sr",
+            "sr",
+            "mean",
+            "spatial.frustum_solid_angle",
+            "frustum_count",
+        ),
+        (
+            "mean-proxy-surface-fraction",
+            "frustum_mean_target_surface_fraction_approx",
+            "fraction",
+            "mean",
+            "spatial.target_frame_frustum_fraction",
+            "frustum_count",
+        ),
+        (
+            "union-proxy-surface-fraction",
+            "frustum_union_target_surface_fraction_approx",
+            "fraction",
+            "union",
+            "spatial.target_frame_frustum_fraction",
+            "frustum_count",
+        ),
+    )
+    return tuple(
+        NamedQuantity(
+            id=f"{section_id}.quantity.{slot}.{suffix}",
+            value=_scalar(store.payload[field]),
+            unit=unit,
+            n=int(store.payload[support_field]),
+            aggregation=aggregation,
+            source_ids=(source_id,),
+            symbol_id=symbol_id,
+        )
+        for suffix, field, unit, aggregation, symbol_id, support_field in specs
+    )
+
+
+def _resolved_store_paths(source: RolloutSourceConfig) -> tuple[Path, ...]:
+    return tuple(sorted({path.expanduser().resolve() for path in source.store_paths}, key=Path.as_posix))
 
 
 def _fact_quantities(

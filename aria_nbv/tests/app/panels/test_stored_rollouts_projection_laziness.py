@@ -316,9 +316,11 @@ def test_q_h_render_wires_progress_and_chunk_boundary_cancellation(monkeypatch: 
     monkeypatch.setattr(st, "empty", lambda: status)
     monkeypatch.setattr(st, "dataframe", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(qh_admission, "_download_frame", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(qh_admission, "render_s2_report_preview", lambda **_kwargs: None)
 
     class Handle:
         canonical_path = Path("/fixture.zarr")
+        store_identity = "store:test"
         reader = object()
         validation = object()
 
@@ -343,7 +345,12 @@ def test_q_h_render_wires_progress_and_chunk_boundary_cancellation(monkeypatch: 
         ]
 
     handle = Handle()
-    qh_admission._render_q_h_evidence(handle)
+    qh_admission._render_q_h_evidence(
+        handle,
+        s2_recipe=object(),  # type: ignore[arg-type]
+        s2_section_id="s2",
+        s2_recipe_label="test-recipe.toml",
+    )
 
     assert callback_results == [False]
     assert progress.calls == [(0.5, "Q_H count: 2/4 state rows")]
@@ -787,7 +794,6 @@ def test_stored_rollout_session_clear_invalidates_every_matrix_owner_once(monkey
         "_cached_depth_summary",
         "_cached_proposal_geometry",
         "_cached_trajectory_geometry",
-        "_cached_s2_direction_histogram",
         "_cached_topology_cached",
         "_cached_failures_cached",
         "_cached_evidence_bundle_cached",

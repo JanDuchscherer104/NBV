@@ -11,7 +11,8 @@ from typing import Any
 import pandas as pd
 import streamlit as st
 
-from .s2_directions import render_s2_direction_histograms as _render_s2_direction_histograms
+from ....reporting import ScientificReportConfig
+from .s2_directions import render_s2_report_preview
 from .shared import download_frame as _download_frame
 
 
@@ -33,7 +34,13 @@ def _s2_widget_prefix(session_handle: Any) -> str:
     return f"stored_rollouts_qh_{digest}"
 
 
-def _render_q_h_evidence(session_handle: Any) -> None:
+def _render_q_h_evidence(
+    session_handle: Any,
+    *,
+    s2_recipe: ScientificReportConfig,
+    s2_section_id: str,
+    s2_recipe_label: str,
+) -> None:
     """Render metadata-only Q_H facts and gate mask counts behind an explicit toggle."""
 
     st.markdown("#### Store-local Q_H evidence")
@@ -101,4 +108,11 @@ def _render_q_h_evidence(session_handle: Any) -> None:
     if not rows.empty and not bool(rows.iloc[0].get("available", False)):
         st.info(f"Q_H evidence unavailable: {rows.iloc[0].get('blocking_reason', 'unknown reason')}")
     _download_frame("Download Q_H evidence CSV", "q-h-evidence.csv", rows)
-    _render_s2_direction_histograms(session_handle, key_prefix=_s2_widget_prefix(session_handle))
+    render_s2_report_preview(
+        store_path=session_handle.canonical_path,
+        store_identity=session_handle.store_identity,
+        recipe=s2_recipe,
+        section_id=s2_section_id,
+        recipe_label=s2_recipe_label,
+        key_prefix=_s2_widget_prefix(session_handle),
+    )
