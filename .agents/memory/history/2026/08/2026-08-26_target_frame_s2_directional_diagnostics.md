@@ -8,12 +8,13 @@ confidence: high
 canonical_updates_needed: []
 touched_owner_paths:
   - aria_nbv/aria_nbv/rollouts/inspection.py
+  - aria_nbv/aria_nbv/rollouts/read_model.py
+  - aria_nbv/aria_nbv/rollouts/s2_reporting.py
   - aria_nbv/aria_nbv/app/panels/_stored_rollouts/session.py
   - aria_nbv/aria_nbv/app/panels/_stored_rollouts/qh_admission.py
   - aria_nbv/aria_nbv/app/panels/_stored_rollouts/s2_directions.py
   - aria_nbv/aria_nbv/reporting/_rollouts.py
   - aria_nbv/aria_nbv/reporting/config.py
-  - aria_nbv/aria_nbv/rollouts/s2_reporting.py
   - aria_nbv/aria_nbv/app/panels/campaign_generation.py
   - aria_nbv/aria_nbv/oracle/pipelines/admission_evidence.py
   - aria_nbv/tests/rollouts/test_inspection.py
@@ -40,9 +41,10 @@ The store-owned reducer transforms selected camera increments and local ``+Z``
 axes from world into each target OBB frame. Movement uses the geometric-mean
 OBB semi-axis scale before projection. For every calibrated selected view, it
 tests front-facing points on the target-centred proxy sphere against the
-persisted LUF half-pixel pinhole image rectangle. One rollout-owned Plotly
+persisted LUF half-pixel pinhole image rectangle. The rollout-owned Plotly
 builder renders complete equal-solid-angle count surfaces with bounded
-deterministic overlays for both Streamlit and immutable thesis reports.
+deterministic overlays carrying rollout-chain and acquisition-step provenance
+for both Streamlit and immutable thesis reports.
 
 ## Findings
 - `aria_nbv/aria_nbv/rollouts/inspection.py` owns target-frame reduction,
@@ -53,6 +55,8 @@ deterministic overlays for both Streamlit and immutable thesis reports.
   explanation. Both Q_H stored-rollout admission and Campaign Generation reuse
   the presentation after explicit full-store dispatch, while scientific
   reporting freezes the same Plotly payload for Typst.
+- Q_H widget state is scoped to immutable store identity, and Campaign
+  Generation admits only validator-returned current-plan shard paths.
 - Colour preserves rollout-chain index `j`; marker symbol preserves persisted
   decision step `t`. Complete heat fields are never replaced by the bounded
   display overlay.
@@ -72,6 +76,9 @@ deterministic overlays for both Streamlit and immutable thesis reports.
 - https://github.com/JanDuchscherer104/ARIA-NBV/commit/72b93aa8e3ecc18f7f1c9b8cc8b29ac9be94693c
 - https://github.com/JanDuchscherer104/ARIA-NBV/commit/c86e4b4cdd9a9e9522e93abf6d441af7d9de8282
 - https://github.com/JanDuchscherer104/ARIA-NBV/commit/76d2a84b3bee132465f6cfb5252f0f5f69d00b23
+- https://github.com/JanDuchscherer104/ARIA-NBV/commit/c1a2180a360a4d181574f8b49d744ce4a5e86710
+- https://github.com/JanDuchscherer104/ARIA-NBV/commit/4b8832dffaa42dc6183183589022d0b0cd7716ec
+- https://github.com/JanDuchscherer104/ARIA-NBV/commit/965c0fd640db2a30ab74ce1674f204a0271cf6d1
 
 ## Verification
 - Targeted Ruff check and `git diff --check`: passed.
