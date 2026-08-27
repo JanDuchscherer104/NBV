@@ -486,11 +486,7 @@ class VinModelV3(nn.Module):
         device: torch.device,
     ) -> _PreparedSceneContext:
         """Return reusable scene state only for frozen, gradient-free inference."""
-        cache_allowed = (
-            not self.training
-            and not torch.is_grad_enabled()
-            and is_vin_snippet_view_instance(efm)
-        )
+        cache_allowed = not self.training and not torch.is_grad_enabled() and is_vin_snippet_view_instance(efm)
         key = self._scene_cache_key(efm, backbone_out, device=device) if cache_allowed else None
         if cache_allowed and key == self._prepared_scene_cache_key and self._prepared_scene_context is not None:
             return self._prepared_scene_context
