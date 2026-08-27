@@ -116,6 +116,38 @@ def test_mixed_sampler_fixed_counts_and_full_shell_provenance() -> None:
         torch.full((6,), 1.0 / 6.0, device=result.sampler_probability.device),
     )
     assert result.views.tensor().shape[0] == int(result.mask_valid.sum().item())
+    assert result.extras["target_view_evaluated_mask"].all()
+    assert result.extras["target_view_angle_deg"].shape == (6,)
+    assert result.extras["target_pixel_margin_px"].shape == (6,)
+    assert result.extras["target_in_fov_mask"].dtype == torch.bool
+
+
+def test_target_point_family_projects_actor_visible_target_inside_camera() -> None:
+    """Exact CameraTW projection distinguishes target framing from line of sight."""
+
+    cfg = CandidateMixtureViewGeneratorConfig(
+        base=_base_cfg().model_copy(
+            update={
+                "view_max_azimuth_deg": 1.0,
+                "view_max_elevation_deg": 1.0,
+            }
+        ),
+        components=[
+            CandidateMixtureComponentConfig(
+                name="target",
+                count=6,
+                view_mode=ViewDirectionMode.TARGET_POINT,
+                position_mode=CandidatePositionMode.TARGET_BEARING_LOCAL,
+            )
+        ],
+    )
+
+    result = _run_generate(cfg, seed=3)
+
+    assert result.extras["target_view_evaluated_mask"].all()
+    assert result.extras["target_in_fov_mask"].all()
+    assert torch.all(result.extras["target_pixel_margin_px"] > 0.0)
+    assert torch.all(result.extras["target_view_angle_deg"] < 2.0)
 
 
 def test_paired_variants_keep_original_component_id() -> None:

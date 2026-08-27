@@ -836,6 +836,11 @@ def test_rollout_inspection_helpers_join_candidates_targets_and_groups(tmp_path:
     assert first["target_protocol"] == "v0_gt_input"
     assert first["target_evidence_role"] == "oracle/evaluation"
     assert "decision_relative_x_m" in first
+    assert first["view_jitter_is_bounded"] is None
+    assert first["view_jitter_yaw_deg"] is None
+    assert first["view_jitter_pitch_deg"] is None
+    assert first["target_view_evaluated"] is False
+    assert first["target_in_fov"] is None
 
     target_rows = target_audit_rows(reader)
     assert len(target_rows) == 1
@@ -1653,6 +1658,42 @@ def test_candidate_target_view_exposes_unavailable_fov_and_pixel_evidence() -> N
         if row["evidence"] in {"target_fov_margin", "target_pixel_margin"}:
             assert row["available"] is False
             assert row["missing_count"] == 1
+
+
+def test_candidate_target_view_summarizes_measured_projection_without_claiming_los() -> None:
+    """Camera framing is measurable while scene visibility remains unavailable."""
+
+    from aria_nbv.rollouts.inspection import candidate_target_view_evidence
+
+    rows = [
+        {
+            **_direction_fixture_rows()[0],
+            "target_distance_m": 2.0,
+            "target_view_angle_deg": 5.0,
+            "target_pixel_margin_px": 12.0,
+            "target_in_fov": True,
+        },
+        {
+            **_direction_fixture_rows()[0],
+            "candidate_row_id": 2,
+            "target_distance_m": 3.0,
+            "target_view_angle_deg": 50.0,
+            "target_pixel_margin_px": -8.0,
+            "target_in_fov": False,
+        },
+    ]
+
+    state = {
+        row["evidence"]: row
+        for row in candidate_target_view_evidence(rows)
+        if row["aggregation_level"] == "state" and row["population"] == "all"
+    }
+
+    assert state["target_view_angle"]["mean"] == pytest.approx(27.5)
+    assert state["target_pixel_margin"]["mean"] == pytest.approx(2.0)
+    assert state["target_in_fov"]["mean"] == pytest.approx(0.5)
+    assert state["target_line_of_sight"]["available"] is False
+    assert "not persisted" in str(state["target_line_of_sight"]["reason"])
 
 
 def test_candidate_motion_support_reports_all_motion_fields_and_collision_applicability_matrix() -> None:

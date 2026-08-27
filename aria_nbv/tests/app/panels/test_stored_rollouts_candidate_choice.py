@@ -359,6 +359,36 @@ def test_complete_candidate_support_renders_reducer_target_view_counts(monkeypat
     assert sum(sum(float(value) for value in trace.y) for trace in availability.data) > 0
 
 
+def test_stored_view_jitter_plot_preserves_bounded_and_uncapped_support() -> None:
+    """Stored jitter plots retain box envelopes without inventing legacy limits."""
+
+    bounded = pd.DataFrame(
+        {
+            "view_jitter_yaw_deg": [-20.0, 10.0],
+            "view_jitter_pitch_deg": [-5.0, 8.0],
+            "view_jitter_azimuth_limit_deg": [60.0, 60.0],
+            "view_jitter_elevation_limit_deg": [30.0, 30.0],
+            "view_jitter_is_bounded": [True, True],
+        }
+    )
+    bounded_figure = candidate_generation._view_jitter_figure(bounded)
+    assert len(bounded_figure.layout.shapes) == 1
+    assert bounded_figure.layout.shapes[0].line.dash == "dot"
+
+    uncapped = bounded.assign(
+        view_jitter_yaw_deg=[-130.0, 95.0],
+        view_jitter_pitch_deg=[-70.0, 45.0],
+        view_jitter_azimuth_limit_deg=0.0,
+        view_jitter_elevation_limit_deg=0.0,
+        view_jitter_is_bounded=False,
+    )
+    uncapped_figure = candidate_generation._view_jitter_figure(uncapped)
+    assert not uncapped_figure.layout.shapes
+    assert list(uncapped_figure.layout.xaxis.range) == [-180.0, 180.0]
+    assert list(uncapped_figure.layout.yaxis.range) == [-90.0, 90.0]
+    assert [annotation.text for annotation in uncapped_figure.layout.annotations] == ["uncapped spherical support"]
+
+
 def test_rollout_scientific_reference_owners_and_count_units_are_current() -> None:
     sources = {
         "candidate_generation": inspect.getsource(candidate_generation),
