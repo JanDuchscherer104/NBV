@@ -23,7 +23,7 @@ touched_owner_paths:
   - docs/typst/thesis/sections/04-method/04-02-descriptor-and-encoding-plan.typ
 codex_thread: codex://threads/01a033b8-ed20-76a0-9627-2679b556cbff
 repo_object_format: sha1
-repo_head: 4b8832dffaa42dc6183183589022d0b0cd7716ec
+repo_head: 965c0fd640db2a30ab74ce1674f204a0271cf6d1
 repo_branch: "codex/s2-target-direction-spheres-pr"
 worktree_kind: linked
 ---
@@ -68,6 +68,7 @@ deterministic overlays carrying rollout-chain and acquisition-step provenance.
 - https://github.com/JanDuchscherer104/ARIA-NBV/commit/076789a49b375c2c86962c8151b404de7caacd6e
 - https://github.com/JanDuchscherer104/ARIA-NBV/commit/c1a2180a360a4d181574f8b49d744ce4a5e86710
 - https://github.com/JanDuchscherer104/ARIA-NBV/commit/4b8832dffaa42dc6183183589022d0b0cd7716ec
+- https://github.com/JanDuchscherer104/ARIA-NBV/commit/965c0fd640db2a30ab74ce1674f204a0271cf6d1
 
 ## Verification
 - Targeted Ruff check and `git diff --check`: passed.
