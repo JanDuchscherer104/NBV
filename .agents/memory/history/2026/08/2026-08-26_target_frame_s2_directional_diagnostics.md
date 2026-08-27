@@ -25,7 +25,7 @@ touched_owner_paths:
   - docs/typst/thesis/sections/04-method/04-02-descriptor-and-encoding-plan.typ
 codex_thread: codex://threads/01a033b8-ed20-76a0-9627-2679b556cbff
 repo_object_format: sha1
-repo_head: c86e4b4cdd9a9e9522e93abf6d441af7d9de8282
+repo_head: 76d2a84b3bee132465f6cfb5252f0f5f69d00b23
 repo_branch: "codex/s2-target-direction-spheres"
 worktree_kind: linked
 ---
@@ -71,6 +71,7 @@ deterministic overlays for both Streamlit and immutable thesis reports.
 - https://github.com/JanDuchscherer104/ARIA-NBV/commit/8d8ea08930cecbcc266aa4011a873bb77b09dd47
 - https://github.com/JanDuchscherer104/ARIA-NBV/commit/72b93aa8e3ecc18f7f1c9b8cc8b29ac9be94693c
 - https://github.com/JanDuchscherer104/ARIA-NBV/commit/c86e4b4cdd9a9e9522e93abf6d441af7d9de8282
+- https://github.com/JanDuchscherer104/ARIA-NBV/commit/76d2a84b3bee132465f6cfb5252f0f5f69d00b23
 
 ## Verification
 - Targeted Ruff check and `git diff --check`: passed.
