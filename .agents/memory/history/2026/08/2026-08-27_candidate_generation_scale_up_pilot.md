@@ -12,7 +12,7 @@ touched_owner_paths:
   - scripts/render_candidate_generation_scaleup_pilot.py
 codex_thread: codex://threads/01a033a6-100a-73d2-83bb-4a4153903cc4
 repo_object_format: sha1
-repo_head: b79c865ae86901443e8a846b992b5c018f1f75c1
+repo_head: 5fcb4b7aee63563fd37c5b30c25af802385475c7
 repo_branch: "codex/candidate-family-experiments"
 worktree_kind: linked
 ---
@@ -38,14 +38,21 @@ scale decision at NO-GO and prioritizes family-aware bounded refill before new
 families. The public report and exact limitations live in
 `docs/contents/evidence/candidate_generation_scaleup_pilot.qmd`; its generated
 evidence bundle is reproducible with
-`scripts/render_candidate_generation_scaleup_pilot.py`.
+`scripts/render_candidate_generation_scaleup_pilot.py`. Independent review
+then required fail-closed input-hash/count checks, family-state invalid-reason
+diagnostics, actor-valid motion envelopes, oracle-signal distributions, and a
+hashed public artifact manifest; those were added before publication.
 
 ## Commits
 - [b79c865ae86901443e8a846b992b5c018f1f75c1](https://github.com/JanDuchscherer104/ARIA-NBV/commit/b79c865ae86901443e8a846b992b5c018f1f75c1)
+- [5fcb4b7aee63563fd37c5b30c25af802385475c7](https://github.com/JanDuchscherer104/ARIA-NBV/commit/5fcb4b7aee63563fd37c5b30c25af802385475c7)
 
 ## Verification
 - Deterministic regeneration: two independent renders matched each other and
   the committed evidence bundle byte-for-byte.
+- Public evidence contract: three profiles, 120 audit rows each, zero dropped
+  plot rows, exact source/config/metrics/store hashes, family-state diagnostics,
+  and committed artifact hashes all passed.
 - `ruff check scripts/render_candidate_generation_scaleup_pilot.py`: passed.
 - `python3 scripts/validate_qmd_frontmatter.py docs/contents`: passed.
 - `quarto render docs/contents/evidence/candidate_generation_scaleup_pilot.qmd --no-execute`:
