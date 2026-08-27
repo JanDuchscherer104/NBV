@@ -2,9 +2,34 @@
 # Configure a linked ARIA-NBV worktree without copying the runtime or data cache.
 set -euo pipefail
 
+# See the public Codex boundary: hook-provided bindings are valid only for the
+# hook's administrative directory, not for the independent parent and primary
+# worktree topology checks below.
+unset GIT_DIR GIT_WORK_TREE
+
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-repo_git_dir="$(git -C "$repo_root" rev-parse --absolute-git-dir)"
+
+git_dir_for_worktree() {
+  local worktree="$1" marker gitdir
+  marker="$worktree/.git"
+  if [[ -d "$marker" ]]; then
+    printf '%s\n' "$marker"
+    return 0
+  fi
+  [[ -f "$marker" ]] || return 1
+  IFS= read -r gitdir <"$marker" || return 1
+  [[ "$gitdir" == "gitdir: "* ]] || return 1
+  gitdir="${gitdir#gitdir: }"
+  [[ "$gitdir" = /* ]] || gitdir="$worktree/$gitdir"
+  cd "$gitdir" && pwd -P
+}
+
+repo_git_dir="$(git_dir_for_worktree "$repo_root")" || {
+  printf 'error: destination Git metadata is unavailable\n' >&2
+  exit 1
+}
 shared_root="${ARIA_NBV_SHARED_ROOT:-}"
+canonical_primary="${ARIA_NBV_CANONICAL_PRIMARY:-}"
 check_only=false
 
 usage() {
@@ -38,16 +63,16 @@ realpath_portable() {
 }
 
 git_in_worktree() {
-  git --git-dir="$repo_git_dir" --work-tree="$repo_root" "$@"
+  git -c core.worktree="$repo_root" --git-dir="$repo_git_dir" --work-tree="$repo_root" "$@"
 }
 
 [[ -n "$shared_root" ]] || fail "ARIA_NBV_SHARED_ROOT must identify the parent worktree"
 [[ -d "$shared_root" ]] || fail "shared root does not exist: $shared_root"
 shared_root="$(cd "$shared_root" && pwd -P)"
 [[ "$shared_root" != "$repo_root" ]] || fail "shared root must be another worktree"
-source_git_dir="$(git -C "$shared_root" rev-parse --absolute-git-dir 2>/dev/null)" || \
+source_git_dir="$(git_dir_for_worktree "$shared_root")" || \
   fail "shared root is not a Git worktree; cannot seed Graphify"
-source_common_dir="$(git --git-dir="$source_git_dir" --work-tree="$shared_root" \
+source_common_dir="$(git -c core.worktree="$shared_root" --git-dir="$source_git_dir" --work-tree="$shared_root" \
   rev-parse --git-common-dir 2>/dev/null)" || fail "shared root Git metadata is unavailable"
 destination_common_dir="$(git_in_worktree rev-parse --git-common-dir)" || \
   fail "destination Git metadata is unavailable"
@@ -62,9 +87,40 @@ registered_destination=false
 while IFS= read -r worktree_line; do
   [[ "$worktree_line" == "worktree $shared_root" ]] && registered_source=true
   [[ "$worktree_line" == "worktree $repo_root" ]] && registered_destination=true
-done < <(git --git-dir="$source_git_dir" --work-tree="$shared_root" worktree list --porcelain)
+done < <(git -c core.worktree="$shared_root" --git-dir="$source_git_dir" --work-tree="$shared_root" worktree list --porcelain)
 [[ "$registered_source" == true && "$registered_destination" == true ]] || \
   fail "source and destination must both be registered Git worktrees"
+
+# Cache identity belongs to the registered primary checkout, not to whichever
+# sibling was selected to provide inherited Graphify artifacts.  Authenticate
+# it before invoking a parent runtime or mutating the destination.
+[[ -n "$canonical_primary" && -d "$canonical_primary" ]] || \
+  fail "canonical primary worktree is unavailable"
+canonical_primary="$(cd "$canonical_primary" && pwd -P)"
+canonical_git_dir="$(git_dir_for_worktree "$canonical_primary")" || \
+  fail "canonical primary worktree is not a Git worktree"
+canonical_common_dir="$(git -c core.worktree="$canonical_primary" --git-dir="$canonical_git_dir" --work-tree="$canonical_primary" \
+  rev-parse --git-common-dir 2>/dev/null)" || fail "canonical primary Git metadata is unavailable"
+[[ "$canonical_common_dir" = /* ]] || canonical_common_dir="$canonical_primary/$canonical_common_dir"
+canonical_common_dir="$(cd "$canonical_common_dir" && pwd -P)"
+[[ "$canonical_common_dir" == "$destination_common_dir" && -d "$canonical_primary/.git" ]] || \
+  fail "canonical primary worktree does not own this repository"
+registered_primary=false
+while IFS= read -r worktree_line; do
+  [[ "$worktree_line" == "worktree $canonical_primary" ]] && registered_primary=true
+done < <(git -c core.worktree="$canonical_primary" --git-dir="$canonical_git_dir" --work-tree="$canonical_primary" worktree list --porcelain)
+[[ "$registered_primary" == true ]] || fail "canonical primary worktree is not registered"
+canonical_cache_root="$canonical_primary/.data/graphify-semantic-cache"
+for cache_path in "$canonical_primary/.data" "$canonical_cache_root" \
+  "$canonical_cache_root/semantic" "$canonical_cache_root/semantic-deep"; do
+  if [[ "$check_only" == true || -e "$cache_path" || -L "$cache_path" ]]; then
+    [[ ! -L "$cache_path" && -d "$cache_path" ]] || \
+      fail "canonical Graphify cache is missing or unsafe: $cache_path"
+  fi
+done
+if [[ "$check_only" == false ]]; then
+  mkdir -p "$canonical_cache_root/semantic" "$canonical_cache_root/semantic-deep"
+fi
 
 # Everything above is Git metadata only. Do not invoke a parent-provided
 # executable or create child links until the source topology is proven.
@@ -79,12 +135,13 @@ shared_python="$shared_root/aria_nbv/.venv/bin/python"
   >/dev/null 2>&1 || fail "shared Python cannot run: $shared_python"
 [[ -d "$shared_root/.data" ]] || fail "shared data cache is missing: $shared_root/.data"
 
-shared_graphify_semantic_cache="$shared_root/graphify-out/cache/semantic"
-shared_graphify_semantic_deep_cache="$shared_root/graphify-out/cache/semantic-deep"
+shared_graphify_semantic_cache="$canonical_cache_root/semantic"
+shared_graphify_semantic_deep_cache="$canonical_cache_root/semantic-deep"
 
 if [[ "$check_only" == false ]]; then
   "$shared_python" "$repo_root/scripts/graphify_worktree_seed.py" \
-    --prepare-cache --destination "$repo_root"
+    --prepare-cache --destination "$repo_root" \
+    --canonical-cache-root "$canonical_cache_root"
 fi
 
 shared_graphify_semantic_cache="$(realpath_portable "$shared_graphify_semantic_cache")"
@@ -127,7 +184,14 @@ while IFS= read -r -d '' source; do
 done < <(find "$shared_root/.data" -mindepth 1 -maxdepth 1 -type d \
   ! -name aria_download_urls ! -name graphify-semantic-cache -print0)
 
-if [[ -e "$shared_root/docs/literature/pdf" ]]; then
+# A tracked paper must remain an exact local checkout input. Older revisions
+# ignored this directory wholesale and could share it as one cache symlink;
+# mixed tracked/untracked directories cannot safely be replaced that way.
+tracked_pdf_inputs="$(git_in_worktree ls-files -- docs/literature/pdf)"
+if [[ -n "$tracked_pdf_inputs" ]]; then
+  [[ -d docs/literature/pdf && ! -L docs/literature/pdf ]] || \
+    fail "tracked PDF inputs require a local docs/literature/pdf directory"
+elif [[ -e "$shared_root/docs/literature/pdf" ]]; then
   link_or_check "$shared_root/docs/literature/pdf" "docs/literature/pdf"
 fi
 
@@ -136,6 +200,7 @@ fi
 # only shared Graphify state.
 seed_args=(--source "$shared_root" --destination "$repo_root")
 seed_args+=(--destination-git-dir "$repo_git_dir")
+seed_args+=(--canonical-cache-root "$canonical_cache_root")
 [[ "$check_only" == true ]] && seed_args+=(--check)
 "$shared_python" "$repo_root/scripts/graphify_worktree_seed.py" "${seed_args[@]}"
 
@@ -151,7 +216,8 @@ fi
 # stay local. Clearing either cache increases future extraction cost everywhere
 # but cannot make a stale graph current.
 "$shared_python" "$repo_root/scripts/graphify_worktree_seed.py" \
-  --prepare-cache --destination "$repo_root" --check
+  --prepare-cache --destination "$repo_root" \
+  --canonical-cache-root "$canonical_cache_root" --check
 link_or_check "$shared_graphify_semantic_cache" "graphify-out/cache/semantic"
 link_or_check "$shared_graphify_semantic_deep_cache" "graphify-out/cache/semantic-deep"
 

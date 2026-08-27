@@ -7,6 +7,10 @@ website:
       - text: configs
         file: reference/configs.qmd
         contents:
+        - text: authoring
+          file: reference/configs.authoring.qmd
+        - text: field_docs
+          file: reference/configs.field_docs.qmd
         - text: optuna_config
           file: reference/configs.optuna_config.qmd
         - text: path_config
@@ -145,6 +149,8 @@ website:
           file: reference/oracle.target_rri.qmd
         - text: target_selection
           file: reference/oracle.target_selection.qmd
+      - text: performance_checkpoint
+        file: reference/performance_checkpoint.qmd
       - text: pose_generation
         file: reference/pose_generation.qmd
         contents:
@@ -181,11 +187,30 @@ website:
           file: reference/rendering.pytorch3d_depth_renderer.qmd
         - text: unproject
           file: reference/rendering.unproject.qmd
+      - text: reporting
+        file: reference/reporting.qmd
+        contents:
+        - text: builder
+          file: reference/reporting.builder.qmd
+        - text: cli
+          file: reference/reporting.cli.qmd
+        - text: config
+          file: reference/reporting.config.qmd
+        - text: errors
+          file: reference/reporting.errors.qmd
+        - text: export
+          file: reference/reporting.export.qmd
+        - text: notation
+          file: reference/reporting.notation.qmd
+        - text: results
+          file: reference/reporting.results.qmd
       - text: rollouts
         file: reference/rollouts.qmd
         contents:
         - text: audits
           file: reference/rollouts.audits.qmd
+        - text: candidate_benchmark
+          file: reference/rollouts.candidate_benchmark.qmd
         - text: info_cli
           file: reference/rollouts.info_cli.qmd
         - text: inspection

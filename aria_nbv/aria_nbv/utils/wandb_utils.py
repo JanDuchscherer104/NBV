@@ -59,6 +59,10 @@ class WandbRun(Protocol):
         """Return history data (typically a pandas.DataFrame or list of dicts)."""
         ...  # pragma: no cover - protocol signature only
 
+    def scan_history(self, keys: list[str] | None = None) -> Any:
+        """Iterate every matching history row without W&B downsampling."""
+        ...  # pragma: no cover - protocol signature only
+
 
 class WandbApi(Protocol):
     """Minimal W&B API interface used by these utilities."""

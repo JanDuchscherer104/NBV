@@ -7,37 +7,12 @@ lifecycle behavior for the DTOs that reuse them.
 
 from __future__ import annotations
 
-import re
 from dataclasses import fields
-from inspect import cleandoc, getsource
 from pprint import pformat
 from typing import Any, ClassVar
 
+from ..configs.field_docs import inherited_field_docstring
 from ..utils import summarize
-
-_FIELD_DOC_CACHE: dict[type, dict[str, str]] = {}
-
-
-def _extract_field_docs(cls: type) -> dict[str, str]:
-    """Extract inline dataclass field docstrings when source is available."""
-
-    try:
-        source = getsource(cls)
-    except OSError:
-        return {}
-    source = cleandoc(source)
-    pattern = re.compile(r'^\s*(\w+)\s*:[^\n]*\n\s*"""(.*?)"""', re.MULTILINE | re.DOTALL)
-    return {name: cleandoc(doc) for name, doc in pattern.findall(source)}
-
-
-def _get_field_doc(cls: type, field_name: str) -> str | None:
-    """Return the cached inline documentation for one dataclass field."""
-
-    docs = _FIELD_DOC_CACHE.get(cls)
-    if docs is None:
-        docs = _extract_field_docs(cls)
-        _FIELD_DOC_CACHE[cls] = docs
-    return docs.get(field_name)
 
 
 def _compact_dataclass_repr(obj: Any, *, include_docstrings: bool) -> str:
@@ -50,7 +25,7 @@ def _compact_dataclass_repr(obj: Any, *, include_docstrings: bool) -> str:
         if include_docstrings:
             doc = field.metadata.get("doc") if field.metadata else None
             if doc is None:
-                doc = _get_field_doc(cls, field.name)
+                doc = inherited_field_docstring(cls, field.name)
             items[field.name] = {"value": value, "doc": doc} if doc else {"value": value}
         else:
             items[field.name] = value

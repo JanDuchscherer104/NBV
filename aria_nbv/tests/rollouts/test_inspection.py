@@ -26,6 +26,7 @@ from aria_nbv.rollouts.inspection import (
     RolloutSuspiciousQueryConfig,
     _decision_relative_vector,
     _iter_candidate_state_chunks,
+    _selected_path_lengths,
     candidate_audit_rows,
     candidate_collision_support_rows,
     candidate_composition_rows,
@@ -115,6 +116,66 @@ def test_runtime_storage_statistics_does_not_fabricate_zero_candidate_ratio(tmp_
     stats = inspection_module.runtime_storage_statistics(tmp_path, candidate_count=0)
     assert stats["bytes_per_candidate"] is None
     assert stats["bytes_per_candidate_reason"] == "unavailable: no persisted candidate rows"
+
+
+def test_selected_path_lengths_match_scalar_ordered_paths_and_empty_rollouts(tmp_path: Path) -> None:
+    """Batched path reduction preserves stable selected-step ordering exactly."""
+
+    result = write_rollout_zarr_store(
+        tmp_path / "selected-paths.zarr", build_rollout_records(horizon=2, num_samples=6, seed=712)[:2]
+    )
+    root = zarr.open_group(result.store_dir, mode="a")
+    rollout_ids = np.asarray(_zarr_array(root, "rollouts/rollout_row_id"), dtype=np.int64).reshape(-1)
+    candidate_rollout_ids = np.asarray(_zarr_array(root, "candidates/rollout_row_id"), dtype=np.int64).reshape(-1)
+    candidate_steps = _zarr_array(root, "candidates/step_index")
+    selected = _zarr_array(root, "candidates/selected_mask")
+    candidate_poses = _zarr_array(root, "candidates/pose_world_cam")
+    root_poses = _zarr_array(root, "rollouts/root_pose_world")
+
+    first_positions = np.flatnonzero(candidate_rollout_ids == rollout_ids[0])[:3]
+    assert first_positions.size == 3
+    selected[:] = np.asarray(False, dtype=np.bool_)
+    selected[first_positions] = np.asarray(True, dtype=np.bool_)
+    candidate_steps[first_positions] = np.asarray([1, 0, 1], dtype=np.int16)
+    root_pose = np.asarray(root_poses[0], dtype=np.float32)
+    root_pose[9:12] = np.asarray([0.0, 0.0, 0.0], dtype=np.float32)
+    root_poses[0] = root_pose
+    poses = np.asarray(candidate_poses[first_positions], dtype=np.float32)
+    poses[:, 9:12] = np.asarray([[0.0, 3.0, 4.0], [0.0, 3.0, 0.0], [0.0, 3.0, 16.0]], dtype=np.float32)
+    candidate_poses[first_positions] = poses
+
+    reader = RolloutZarrStoreReader(result.store_dir)
+    actual = _selected_path_lengths(reader)
+    expected: list[float] = []
+    for rollout_row, rollout_id in enumerate(rollout_ids):
+        indices = np.flatnonzero(np.asarray(selected, dtype=np.bool_) & (candidate_rollout_ids == int(rollout_id)))
+        ordered = indices[np.argsort(np.asarray(candidate_steps)[indices], kind="stable")]
+        points = [
+            np.asarray(root_poses[rollout_row])[9:12],
+            *[np.asarray(candidate_poses[index])[9:12] for index in ordered],
+        ]
+        expected.append(
+            float(sum(np.linalg.norm(points[index + 1] - points[index]) for index in range(len(points) - 1)))
+        )
+
+    assert actual == pytest.approx(expected)
+    assert actual.tolist() == pytest.approx([19.0, 0.0])
+
+
+def test_selected_path_lengths_ignore_orphaned_selected_rows_without_rollouts() -> None:
+    """A malformed empty rollout table keeps the historical empty result."""
+
+    arrays = {
+        "rollouts/rollout_row_id": np.asarray([], dtype=np.int64),
+        "rollouts/root_pose_world": np.empty((0, 12), dtype=np.float32),
+        "candidates/rollout_row_id": np.asarray([99], dtype=np.int64),
+        "candidates/step_index": np.asarray([0], dtype=np.int64),
+        "candidates/selected_mask": np.asarray([True], dtype=np.bool_),
+        "candidates/pose_world_cam": np.zeros((1, 12), dtype=np.float32),
+    }
+    reader = cast(RolloutZarrStoreReader, SimpleNamespace(array=arrays.__getitem__))
+
+    assert _selected_path_lengths(reader).tolist() == []
 
 
 def test_geometry_projections_keep_complete_shells_and_factual_selected_path(

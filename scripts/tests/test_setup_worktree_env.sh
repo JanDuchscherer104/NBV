@@ -11,6 +11,7 @@ SECOND_WORKTREE_ROOT="${SANDBOX}/second-worktree"
 EXPLICIT_CHILD_ROOT="${SANDBOX}/explicit-child"
 STALE_CHILD_ROOT="${SANDBOX}/stale-child"
 AMBIGUOUS_CHILD_ROOT="${SANDBOX}/ambiguous-child"
+TRACKED_PDF_ROOT="${SANDBOX}/tracked-pdf-worktree"
 COLLISION_ROOT="${SANDBOX}/collision-worktree"
 UNSAFE_OUT_ROOT="${SANDBOX}/unsafe-out-worktree"
 UNSAFE_CACHE_ROOT="${SANDBOX}/unsafe-cache-worktree"
@@ -90,6 +91,7 @@ git -C "${SHARED_ROOT}" worktree add -qb seed-second "${SECOND_WORKTREE_ROOT}"
 git -C "${SHARED_ROOT}" worktree add -qb seed-explicit-child "${EXPLICIT_CHILD_ROOT}"
 git -C "${SHARED_ROOT}" worktree add -qb seed-stale-child "${STALE_CHILD_ROOT}"
 git -C "${SHARED_ROOT}" worktree add -qb seed-ambiguous-child "${AMBIGUOUS_CHILD_ROOT}"
+git -C "${SHARED_ROOT}" worktree add -qb seed-tracked-pdf "${TRACKED_PDF_ROOT}"
 git -C "${SHARED_ROOT}" worktree add -qb seed-collision "${COLLISION_ROOT}"
 git -C "${SHARED_ROOT}" worktree add -qb seed-unsafe-out "${UNSAFE_OUT_ROOT}"
 git -C "${SHARED_ROOT}" worktree add -qb seed-unsafe-cache "${UNSAFE_CACHE_ROOT}"
@@ -171,7 +173,7 @@ git -C "${SECOND_WORKTREE_ROOT}" config --worktree core.worktree "${SANDBOX}/sta
 [[ "$(git -C "${SECOND_WORKTREE_ROOT}" rev-parse --is-inside-work-tree)" == false ]]
 
 run_setup() {
-  ARIA_NBV_SHARED_ROOT="${SHARED_ROOT}" PATH="${FAKE_BIN}:${PATH}" \
+  ARIA_NBV_SHARED_ROOT="${SHARED_ROOT}" ARIA_NBV_CANONICAL_PRIMARY="${SHARED_ROOT}" PATH="${FAKE_BIN}:${PATH}" \
     bash "$1/scripts/setup_worktree_env.sh" "${@:2}"
 }
 
@@ -213,6 +215,21 @@ snapshot_tree() {
   find "${root}" -type f -print0 | LC_ALL=C sort -z | xargs -0 -r sha256sum
 }
 
+# The public Codex boundary rejects malformed mode declarations before it ranks
+# a parent or can mutate the destination, and reports one actionable line.
+mode_before="$(snapshot_tree "${STALE_CHILD_ROOT}")"
+if ARIA_NBV_GRAPHIFY_MODES="deep,standard" \
+  run_codex_setup "${STALE_CHILD_ROOT}" "${SHARED_ROOT}" \
+  >"${SANDBOX}/bad-mode.out" 2>"${SANDBOX}/bad-mode.err"; then
+  echo "Codex setup unexpectedly accepted a reordered Graphify mode list" >&2
+  exit 1
+fi
+[[ ! -s "${SANDBOX}/bad-mode.out" ]]
+[[ "$(wc -l <"${SANDBOX}/bad-mode.err")" -eq 1 ]]
+grep -Fqx "error: ARIA_NBV_GRAPHIFY_MODES must be standard, deep, or standard,deep" \
+  "${SANDBOX}/bad-mode.err"
+[[ "$(snapshot_tree "${STALE_CHILD_ROOT}")" == "${mode_before}" ]]
+
 # A foreign explicit parent must fail solely from Git topology. Its executable
 # must not run and an unseeded child must remain byte-for-byte untouched.
 foreign_before="$(snapshot_tree "${FOREIGN_WORKTREE_ROOT}")"
@@ -235,7 +252,7 @@ touch "${SANDBOX}/stale-parent-python-executed"
 EOF
 chmod +x "${SECOND_WORKTREE_ROOT}/aria_nbv/.venv/bin/python"
 stale_before="$(snapshot_tree "${STALE_CHILD_ROOT}")"
-if ARIA_NBV_SHARED_ROOT="${SECOND_WORKTREE_ROOT}" PATH="${PATH}" \
+if ARIA_NBV_SHARED_ROOT="${SECOND_WORKTREE_ROOT}" ARIA_NBV_CANONICAL_PRIMARY="${SHARED_ROOT}" PATH="${PATH}" \
   bash "${STALE_CHILD_ROOT}/scripts/setup_worktree_env.sh" --check \
   >"${SANDBOX}/stale-parent.out" 2>"${SANDBOX}/stale-parent.err"; then
   echo "setup unexpectedly accepted a Graphify-unusable explicit parent" >&2
@@ -300,7 +317,14 @@ fi
 grep -Fq ".venv is not linked" "${SANDBOX}/fresh.err"
 [[ ! -e "${WORKTREE_ROOT}/graphify-out/graph.json" ]]
 
+# A mutating setup creates only missing regular leaves under the authenticated
+# primary cache root; read-only setup keeps the stricter absence failure above.
+rmdir "${SHARED_ROOT}/.data/graphify-semantic-cache/semantic" \
+  "${SHARED_ROOT}/.data/graphify-semantic-cache/semantic-deep" \
+  "${SHARED_ROOT}/.data/graphify-semantic-cache"
 run_setup "${WORKTREE_ROOT}"
+[[ -d "${SHARED_ROOT}/.data/graphify-semantic-cache/semantic" ]]
+[[ -d "${SHARED_ROOT}/.data/graphify-semantic-cache/semantic-deep" ]]
 grep -Fqx -- "--root ${WORKTREE_ROOT}" "${SANDBOX}/reconcile.log"
 [[ -d "${WORKTREE_ROOT}/.data" ]]
 [[ -L "${WORKTREE_ROOT}/.data/ase_efm" ]]
@@ -318,8 +342,27 @@ done
 [[ ! -e "${WORKTREE_ROOT}/graphify-out/report.md" ]]
 [[ ! -e "${WORKTREE_ROOT}/graphify-out/wiki" ]]
 [[ ! -e "${WORKTREE_ROOT}/graphify-out/query.json" ]]
+
+# A newly tracked paper makes the PDF directory an exact local input. Setup
+# must preserve it instead of trying to replace its parent directory with the
+# legacy shared-cache symlink.
+mkdir -p "${TRACKED_PDF_ROOT}/docs/literature/pdf"
+printf 'tracked paper\n' >"${TRACKED_PDF_ROOT}/docs/literature/pdf/tracked.pdf"
+git -C "${TRACKED_PDF_ROOT}" add -f docs/literature/pdf/tracked.pdf
+git -C "${TRACKED_PDF_ROOT}" commit -qm "track paper fixture"
+run_setup "${TRACKED_PDF_ROOT}" \
+  >"${SANDBOX}/tracked-pdf.out" 2>"${SANDBOX}/tracked-pdf.err"
+[[ -f "${TRACKED_PDF_ROOT}/docs/literature/pdf/tracked.pdf" ]]
+[[ ! -L "${TRACKED_PDF_ROOT}/docs/literature/pdf" ]]
 [[ -L "${WORKTREE_ROOT}/graphify-out/cache/semantic" ]]
 [[ -L "${WORKTREE_ROOT}/graphify-out/cache/semantic-deep" ]]
+
+# The canonical primary has no parent seed requirement: its maintenance route
+# validates its own cache root and reconciles the existing local graph quietly.
+CODEX_WORKTREE_PATH="${SHARED_ROOT}" \
+  bash "${SHARED_ROOT}/scripts/setup_codex_worktree_env.sh" --maintain --quiet \
+  >"${SANDBOX}/maintain-primary.out" 2>"${SANDBOX}/maintain-primary.err"
+[[ ! -s "${SANDBOX}/maintain-primary.out" && ! -s "${SANDBOX}/maintain-primary.err" ]]
 
 # Execute the exact Codex environment bridge with the source variable empty.
 # When the canonical primary is unusable, it must choose the nearest admitted
@@ -327,7 +370,9 @@ done
 # one empty commit so the seeded worktree is its only admitted ancestor.
 git --git-dir="$(git -C "${SECOND_WORKTREE_ROOT}" rev-parse --absolute-git-dir)" \
   --work-tree="${SECOND_WORKTREE_ROOT}" commit --allow-empty -qm "destination ahead"
-ARIA_TEST_PRIMARY_UNUSABLE=1 run_codex_setup "${SECOND_WORKTREE_ROOT}" ""
+ARIA_TEST_PRIMARY_UNUSABLE=1 run_codex_setup "${SECOND_WORKTREE_ROOT}" "" \
+  >"${SANDBOX}/second-codex.out" 2>"${SANDBOX}/second-codex.err"
+[[ ! -s "${SANDBOX}/second-codex.out" && ! -s "${SANDBOX}/second-codex.err" ]]
 python3 - "${SECOND_WORKTREE_ROOT}/graphify-out/.aria-worktree-seed.json" "${WORKTREE_ROOT}" <<'PY'
 import json
 import sys
@@ -341,26 +386,40 @@ PY
 [[ ! -e "${SECOND_WORKTREE_ROOT}/.data/graphify-semantic-cache" ]]
 [[ ! -L "${SECOND_WORKTREE_ROOT}/.data/graphify-semantic-cache" ]]
 
-# Equally ranked admitted ancestor siblings are ambiguous; the resolver must
-# not select whichever worktree happened to appear first, and must not mutate
-# the child.
+# A real Codex fork parent remains authoritative even though the canonical
+# primary checkout and an admitted sibling are also available. Set this child
+# up before the tie-break fixture so each admitted candidate is a valid shared
+# runtime as well as a query-admissible Graphify source.
+ARIA_TEST_ADMIT_SECOND=1 run_codex_setup "${EXPLICIT_CHILD_ROOT}" "${SECOND_WORKTREE_ROOT}" \
+  >"${SANDBOX}/explicit-codex.out" 2>"${SANDBOX}/explicit-codex.err"
+[[ ! -s "${SANDBOX}/explicit-codex.out" && ! -s "${SANDBOX}/explicit-codex.err" ]]
+
+# Equally ranked admitted ancestor siblings use a deterministic path tie-break.
 git --git-dir="$(git -C "${AMBIGUOUS_CHILD_ROOT}" rev-parse --absolute-git-dir)" \
   --work-tree="${AMBIGUOUS_CHILD_ROOT}" merge --ff-only \
   "$(git --git-dir="$(git -C "${SECOND_WORKTREE_ROOT}" rev-parse --absolute-git-dir)" \
     --work-tree="${SECOND_WORKTREE_ROOT}" rev-parse HEAD)"
-ambiguous_before="$(snapshot_tree "${AMBIGUOUS_CHILD_ROOT}")"
-if ARIA_TEST_PRIMARY_UNUSABLE=1 ARIA_TEST_ADMIT_EXPLICIT=1 \
+ARIA_TEST_PRIMARY_UNUSABLE=1 ARIA_TEST_ADMIT_EXPLICIT=1 \
   run_codex_setup "${AMBIGUOUS_CHILD_ROOT}" "" \
-  >"${SANDBOX}/ambiguous.out" 2>"${SANDBOX}/ambiguous.err"; then
-  echo "Codex setup unexpectedly selected an ambiguous parent" >&2
-  exit 1
-fi
-grep -Fq "ambiguous query-admissible Graphify parent candidates" "${SANDBOX}/ambiguous.err"
-[[ "$(snapshot_tree "${AMBIGUOUS_CHILD_ROOT}")" == "${ambiguous_before}" ]]
+  >"${SANDBOX}/ambiguous.out" 2>"${SANDBOX}/ambiguous.err"
+[[ ! -s "${SANDBOX}/ambiguous.out" && ! -s "${SANDBOX}/ambiguous.err" ]]
+python3 - "${AMBIGUOUS_CHILD_ROOT}/graphify-out/.aria-worktree-seed.json" \
+  "${EXPLICIT_CHILD_ROOT}" <<'PY'
+import json
+import sys
+from pathlib import Path
 
-# A real Codex fork parent remains authoritative even though the canonical
-# primary checkout and an admitted sibling are also available.
-ARIA_TEST_ADMIT_SECOND=1 run_codex_setup "${EXPLICIT_CHILD_ROOT}" "${SECOND_WORKTREE_ROOT}"
+sentinel = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+assert sentinel["source_worktree"] == str(Path(sys.argv[2]).resolve())
+PY
+
+# Git hooks export destination bindings. The top-level bridge must discard
+# those bindings before it validates independent sibling and primary paths.
+GIT_DIR="$(git -C "${EXPLICIT_CHILD_ROOT}" rev-parse --absolute-git-dir)" \
+GIT_WORK_TREE="${EXPLICIT_CHILD_ROOT}" ARIA_TEST_ADMIT_SECOND=1 \
+  run_codex_setup "${EXPLICIT_CHILD_ROOT}" "${SECOND_WORKTREE_ROOT}" \
+  >"${SANDBOX}/hook-bound-codex.out" 2>"${SANDBOX}/hook-bound-codex.err"
+[[ ! -s "${SANDBOX}/hook-bound-codex.out" && ! -s "${SANDBOX}/hook-bound-codex.err" ]]
 python3 - "${EXPLICIT_CHILD_ROOT}/graphify-out/.aria-worktree-seed.json" "${SECOND_WORKTREE_ROOT}" <<'PY'
 import json
 import sys
@@ -369,6 +428,28 @@ from pathlib import Path
 sentinel = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
 assert sentinel["source_worktree"] == str(Path(sys.argv[2]).resolve())
 PY
+
+# Linked-worktree maintenance first validates the owned local seed and cache
+# links; unlike primary maintenance, it cannot reconcile an arbitrary graph.
+CODEX_WORKTREE_PATH="${EXPLICIT_CHILD_ROOT}" \
+  bash "${EXPLICIT_CHILD_ROOT}/scripts/setup_codex_worktree_env.sh" --maintain --quiet \
+  >"${SANDBOX}/maintain-linked.out" 2>"${SANDBOX}/maintain-linked.err"
+[[ ! -s "${SANDBOX}/maintain-linked.out" && ! -s "${SANDBOX}/maintain-linked.err" ]]
+unlink "${EXPLICIT_CHILD_ROOT}/graphify-out/cache/semantic"
+ln -s "${SHARED_ROOT}/.data/offline_cache" "${EXPLICIT_CHILD_ROOT}/graphify-out/cache/semantic"
+if CODEX_WORKTREE_PATH="${EXPLICIT_CHILD_ROOT}" \
+  bash "${EXPLICIT_CHILD_ROOT}/scripts/setup_codex_worktree_env.sh" --maintain --quiet \
+  >"${SANDBOX}/maintain-invalid.out" 2>"${SANDBOX}/maintain-invalid.err"; then
+  echo "linked maintenance unexpectedly accepted a tampered cache link" >&2
+  exit 1
+fi
+[[ ! -s "${SANDBOX}/maintain-invalid.out" ]]
+[[ "$(wc -l <"${SANDBOX}/maintain-invalid.err")" -eq 1 ]]
+grep -Fqx "error: linked worktree Graphify seed is invalid; rerun Codex worktree setup" \
+  "${SANDBOX}/maintain-invalid.err"
+unlink "${EXPLICIT_CHILD_ROOT}/graphify-out/cache/semantic"
+ln -s "${SHARED_ROOT}/.data/graphify-semantic-cache/semantic" \
+  "${EXPLICIT_CHILD_ROOT}/graphify-out/cache/semantic"
 printf 'cache-hit\n' >"${WORKTREE_ROOT}/graphify-out/cache/semantic/cache-hit.json"
 grep -Fqx cache-hit "${SECOND_WORKTREE_ROOT}/graphify-out/cache/semantic/cache-hit.json"
 printf '{"built_at_commit":"%s","nodes":[{"source_file":"graphify-input/index.md"}],"fixture":"child"}\n' \

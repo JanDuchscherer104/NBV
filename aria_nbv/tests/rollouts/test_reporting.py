@@ -150,6 +150,32 @@ def test_report_export_preserves_one_manifest_validation_promotion_and_statistic
     assert frames["steps"]["generation_cohort"].notna().all()
 
 
+def test_requested_shallow_tables_skip_unrelated_deep_projections(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    result = write_rollout_zarr_store(
+        tmp_path / "rollouts.zarr",
+        build_rollout_records(horizon=1, num_samples=6, seed=103)[:1],
+    )
+
+    def unexpected_target_projection(*args: Any, **kwargs: Any) -> Any:
+        raise AssertionError("target projection is outside the requested report dependency closure")
+
+    monkeypatch.setattr(reporting, "target_audit_rows", unexpected_target_projection)
+
+    frames = build_thesis_report_frames(
+        [result.store_dir],
+        evidence_status="pilot",
+        table_names=("stores", "facts"),
+    )
+
+    assert not frames["stores"].empty
+    assert not frames["facts"].empty
+    assert frames["targets"].empty
+    assert b'"schema_version":"aria-nbv-thesis-report-v1"' in serialize_thesis_report_bundle(frames)
+
+
 def test_report_export_requests_only_candidate_facets_it_serializes(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

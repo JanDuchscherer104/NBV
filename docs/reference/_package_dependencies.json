@@ -33,13 +33,13 @@
     },
     {
       "importing_modules": 9,
-      "source": "oracle",
-      "target": "pose_generation"
-    },
-    {
-      "importing_modules": 8,
       "source": "data_handling",
       "target": "configs"
+    },
+    {
+      "importing_modules": 9,
+      "source": "oracle",
+      "target": "pose_generation"
     },
     {
       "importing_modules": 8,
@@ -84,6 +84,7 @@
     "oracle",
     "pose_generation",
     "rendering",
+    "reporting",
     "rollouts",
     "rri_metrics",
     "targets",

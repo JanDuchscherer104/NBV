@@ -16,18 +16,18 @@ repository owners remain authoritative for behavior and scientific claims.
    mutating the child, the setup owner proves that both paths are registered,
    distinct worktrees in the same Git common directory and that the selected
    parent's graph is query-admissible. It then copies that generation locally,
-   links the selected parent's content-addressed `semantic` and `semantic-deep` namespaces,
-   regenerates the deterministic child projection, then runs upstream
-   incremental `graphify update` before reporting readiness.
+   links the canonical primary's content-addressed `semantic` and
+   `semantic-deep` namespaces, rebuilds the deterministic child projection only
+   when its owners changed, then runs setup-owned upstream incremental maintenance
+   before reporting readiness.
 2. Mutable projection, graph, manifest, stat, interpreter, root, run, and
    provenance state are worktree-local regular-file copies. Only the two
    content-addressed cache namespaces are shared; neither cache identity nor a
    matching commit alone proves graph validity.
-3. Setup admits a session only after `scripts/check_graphify_freshness.py
-   --usable` succeeds. Models query the admitted graph and do not perform
-   freshness repair. `scripts/check_graphify_freshness.py --json` remains the
-   read-only diagnostic view; `--check` verifies setup admission without
-   writing.
+3. Setup admits a session only after its internal admission check succeeds.
+   Models query the admitted graph and do not perform freshness repair. CI and
+   maintainers may inspect admission diagnostics, but that is not a normal
+   agent action.
 4. Query the byte-identical upstream Graphify skill first for `fresh` and
    `usable-stale`. Then open exact repository owners; for `usable-stale`, verify
    every consequential path in the exact bounded `stale_sources` list.
@@ -56,14 +56,14 @@ delta is `unusable`; an ancestor committed delta or bounded overlay delta is
 
 ## Freshness And Refresh
 
-Setup owns the ordinary session reconciliation: it regenerates the deterministic
-child projection and invokes upstream's no-LLM incremental code update. A
+Setup owns the ordinary session reconciliation: it rebuilds the deterministic
+child projection only for owner changes and invokes upstream's incremental
+extractor for every declared active mode. A
 receipt, matching semantic counts, or matching Git commit never substitutes for
 the pinned upstream detector and ancestry checks. A parent whose detector result
 is unbounded or otherwise unusable requires a factual semantic refresh before a
-new session can start. `make graphify-state-check` remains
-strict for scaffold and pre-push validation, while `make graphify-usable-check`
-proves navigation safety. A Git HEAD mismatch alone is not staleness when the
+new session can start. Strict state diagnostics are internal CI and pre-push
+owners, not ordinary model actions. A Git HEAD mismatch alone is not staleness when the
 recorded graph and projection revisions are ancestors and indexed bytes still
 match. Semantic refreshes use `fork_turns="none"` and account for every
 dispatched file. Incomplete or unreconciled semantic refreshes remain strict-gate
@@ -79,7 +79,9 @@ verification of affected sources.
 - `graphify hook install` is the upstream post-commit and post-checkout
   no-LLM accelerator. It refreshes changed code and the pinned executable may
   AST-quick-scan changed Markdown headings. It does not semantically refresh
-  documents or images or prove their freshness; refresh those semantic inputs explicitly.
+  documents or images or prove their freshness. ARIA's automatic
+  `graphify-maintain` completion and pre-commit ownership handles declared-mode
+  semantic maintenance; ordinary models do not refresh semantic inputs manually.
 - The vendored `../../graphify/references/hooks.md` still says document and image changes are
   ignored. Preserve that upstream byte, but follow verified `0.9.48` executable
   behavior and treat either outcome as non-semantic navigation only.
@@ -95,9 +97,8 @@ verification of affected sources.
 - ARIA owns the freshness preflight, `.graphifyignore`, the ignored Markdown
   projection, and source-scoped degradation metadata. Freshness validation must
   not disable a structurally valid graph globally.
-- Build the projection with `python3 scripts/build_graphify_projection.py
-  --output graphify-input --aria-code-ref "$(git rev-parse HEAD)"`, then use the
-  repository root as Graphify's corpus root.
+- Setup owns deterministic projection maintenance; use the repository root as
+  Graphify's corpus root.
 - Do not patch, overlay, append to, or add helper scripts beneath the upstream
   Graphify skill bundle. Use its lifecycle, dispatch, cache, merge, manifest,
   and semantic-reconciliation behavior.
