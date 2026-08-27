@@ -31,7 +31,7 @@ from pydantic import Field, field_validator
 from ..rendering.candidate_depth_renderer import CandidateDepthRendererConfig
 from ..rri_metrics.returns import log_error_gain, root_normalized_gain
 from ..utils import BaseConfig, Console, TargetConfig, Verbosity
-from ._scoring import PreparedRriScorerConfig, _CandidateRriScoringEngine, _root_error_tensor
+from ._scoring import PreparedRriScorerConfig, _CandidateRriScoringEngine, _root_error_tensor, _tensor_cache_token
 from .evidence import (
     OracleEvidenceInvalidReason,
     OracleRriState,
@@ -193,7 +193,7 @@ class TargetRriScorer:
         )
         self._target_obb_world: ObbTW | None = None
         self._prepared_target_geometry: dict[
-            tuple[torch.device, torch.dtype],
+            tuple[object, ...],
             tuple[ObbTW, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor],
         ] = {}
         self._initial_invalidity: TargetRriInvalidity | None = None
@@ -240,7 +240,14 @@ class TargetRriScorer:
         crop_start_s = perf_counter()
         device = point_clouds.points.device
         dtype = point_clouds.points.dtype
-        geometry_key = (device, dtype)
+        geometry_key = (
+            device,
+            dtype,
+            _tensor_cache_token(self.sample.mesh_verts),
+            _tensor_cache_token(self.sample.mesh_faces),
+            _tensor_cache_token(self._target_obb_world.tensor()),
+            float(self.config.target_crop_margin_m),
+        )
         prepared_geometry = self._prepared_target_geometry.get(geometry_key)
         if prepared_geometry is None:
             target_obb = self._target_obb_world.to(device=device, dtype=dtype)

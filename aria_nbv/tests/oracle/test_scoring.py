@@ -136,7 +136,10 @@ def test_prepared_reference_reuses_crop_mesh_and_baseline(monkeypatch: pytest.Mo
     second = scorer._prepare_reference(points_t=points_t, gt_verts=verts, gt_faces=faces, extend=extend)
     points_t.add_(1.0)
     third = scorer._prepare_reference(points_t=points_t, gt_verts=verts, gt_faces=faces, extend=extend)
+    fourth = scorer._prepare_reference(points_t=points_t.clone(), gt_verts=verts, gt_faces=faces, extend=extend)
 
     assert first is second
+    assert all(source is expected for source, expected in zip(first.sources, (points_t, verts, faces, extend), strict=True))
     assert third is not first
-    assert crop_calls == 2
+    assert fourth is not third
+    assert crop_calls == 3

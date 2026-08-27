@@ -76,6 +76,7 @@ class PreparedRriScorerConfig(TargetConfig["PreparedRriScorer"]):
 class _PreparedRriReference:
     """Cached current evidence, target mesh, and pre-view distance."""
 
+    sources: tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]
     points_t: torch.Tensor
     mesh: PreparedMeshQuery
     dist_before: DistanceBreakdown
@@ -85,9 +86,11 @@ def _tensor_cache_token(tensor: torch.Tensor) -> tuple[object, ...]:
     """Return a mutation-sensitive identity token without copying tensor data."""
 
     return (
-        tensor.data_ptr(),
+        id(tensor),
         getattr(tensor, "_version", None),
         tuple(tensor.shape),
+        tuple(tensor.stride()),
+        tensor.storage_offset(),
         tensor.device,
         tensor.dtype,
     )
@@ -227,6 +230,7 @@ class PreparedRriScorer:
             dtype=fused_points.dtype,
         )
         reference = _PreparedRriReference(
+            sources=(points_t, gt_verts, gt_faces, extend),
             points_t=fused_points,
             mesh=mesh,
             dist_before=chamfer_point_mesh(
