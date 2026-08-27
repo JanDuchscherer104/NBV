@@ -36,6 +36,18 @@ The candidate-family implementation is
 single-family sampling and view-jitter semantics are owned by
 [`candidate_generation.py`](../../../aria_nbv/aria_nbv/pose_generation/candidate_generation.py).
 
+The two experimental arms change only the following mixture entries; all
+other writer settings, feasibility rules, and the 60°/30° view-jitter caps
+remain fixed:
+
+| profile | exact delta from `realistic_core` |
+|---|---|
+| forward_target_glance | reduce `forward_local` and `target_bearing_local` from 24 to 18 each; add 12 `forward_target_glance` rows with `position=forward_local`, `view=target_point` |
+| radius_stratified | replace 24 `target_bearing_local` rows at radius `[0.4, 1.1]` m with 12 `target_bearing_near` rows at `[0.4, 0.65]` m and 12 `target_bearing_far` rows at `[0.65, 1.1]` m |
+
+These discarded experimental deltas are also embedded in the public evidence
+JSON; they are not production configuration options.
+
 ## Matched results
 
 All values below are copied from the evaluator's per-profile evidence JSON.
@@ -69,6 +81,28 @@ The challenger framing changes are geometric diagnostics only. The zero
 selected-regret values in the challengers do not demonstrate better policy
 learning: the pilot has two states, a V0/GT oracle, and no downstream Q-model
 fit.
+
+### Motion envelope and oracle-signal distribution
+
+The motion columns report the 5th percentile / median / 95th percentile over
+actor-valid candidates. The target-root gain column reports the same quantiles
+over candidates with an oracle label; missing values are counted in the public
+JSON. These are finite-proposal diagnostics, not a learned human-motion prior.
+
+| profile | step length (m) | absolute height delta (m) | absolute yaw delta (deg) | target-root gain | path evaluated / proposed | path collisions | clearance-invalid |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| realistic_core | 0.309 / 0.620 / 0.962 | 0.001 / 0.028 / 0.100 | 4.43 / 29.43 / 61.94 | -5.29e-7 / 0.000346 / 0.03863 | 74 / 120 | 0 | 46 |
+| forward_target_glance | 0.307 / 0.612 / 0.961 | 0.001 / 0.028 / 0.097 | 4.48 / 31.76 / 60.97 | 3.14e-7 / 0.000933 / 0.02711 | 66 / 120 | 0 | 54 |
+| radius_stratified | 0.309 / 0.608 / 0.920 | 0.001 / 0.028 / 0.094 | 4.43 / 30.87 / 60.35 | -4.52e-7 / 0.000771 / 0.03336 | 74 / 120 | 0 | 46 |
+
+Every hard-invalid row in this pilot is labelled `CLEARANCE_TOO_SMALL`; the
+challengers therefore do not reveal a new failure class, but
+`forward_target_glance` increases its count from 46 to 54. The available path
+predicate is evaluated only after earlier feasibility checks and reports no
+collision among those evaluated. It is a reference-to-centre chord check, not
+a swept-body or navigability guarantee. Per-family and per-state invalid
+counts, motion quantiles, target-RRI quantiles, and path-evaluation denominators
+are retained in `evidence.json`.
 
 ### Per-family support
 
@@ -106,17 +140,25 @@ The public evidence bundle contains static exports suitable for review:
 
 ![Candidate support in target-normalized coordinates](candidate_generation_scaleup_pilot/candidate-support.svg)
 
-The machine-readable summary is
-[`evidence.json`](candidate_generation_scaleup_pilot/evidence.json). It links
-the three profile metrics, the family funnel, the evaluator identity, and the
-plot provenance. The interactive candidate-centre, target-framing, view-jitter,
-support, and family-funnel views are generated from the same persisted audit
-rows; they are intended for exploratory inspection, not as independent
-measurements. In particular, a candidate inside a geometric shell is not proof
-of line of sight, collision-free execution, depth-rendering fidelity, or visual
-realism.
+![Actor-valid motion envelopes and oracle target-root gain](candidate_generation_scaleup_pilot/motion-signal.svg)
 
-The diagnostic persistence and inspection seam under review in
+![Hard-invalid reasons by candidate family](candidate_generation_scaleup_pilot/invalid-reasons.svg)
+
+The machine-readable summary is
+[`evidence.json`](candidate_generation_scaleup_pilot/evidence.json). It retains
+all 120 audit rows per profile, exact input hashes, zero dropped plot rows,
+profile and family-state diagnostics, evaluator identity, and missing-value
+denominators. The generated
+[`artifact-manifest.json`](candidate_generation_scaleup_pilot/artifact-manifest.json)
+records the committed JSON and SVG hashes. Rerendering requires the local frozen
+measurement bundle; the raw rollout stores and their interactive
+candidate-centre, target-framing, view-jitter, support, and family-funnel views
+are not published in this PR. Those private exploratory views were generated
+from the same persisted rows but are not independent measurements. In
+particular, a candidate inside a geometric shell is not proof of line of sight,
+collision-free execution, depth-rendering fidelity, or visual realism.
+
+The diagnostic persistence and inspection seam is under review in
 [PR #178](https://github.com/JanDuchscherer104/ARIA-NBV/pull/178). It keeps
 per-candidate target framing fields and view-jitter provenance in the rollout
 store, so reviewers can inspect the generated support instead of relying on
@@ -168,9 +210,10 @@ families are added.
   setting does not validate ARIA-NBV's target-RRI mixture. The local source is
   [`arXiv-Hestia`](../../literature/tex-src/arXiv-Hestia/main.tex).
 - [Project Aria MPS](https://facebookresearch.github.io/projectaria_tools/docs/ARK/mps)
-  motivates preserving calibrated trajectories and semi-dense observed
-  support as actor-visible evidence, rather than using GT mesh geometry as an
-  input to candidate selection.
+  documents calibrated trajectories and semi-dense observed support. We infer
+  that these actor-visible signals are suitable inputs for a future empirical
+  motion prior; the documentation does not itself validate any ARIA-NBV
+  candidate family.
 - [PyTorch `SobolEngine`](https://docs.pytorch.org/docs/stable/generated/torch.quasirandom.SobolEngine.html)
   is a ready-made low-discrepancy stream primitive for a deterministic,
   state-keyed proposal experiment. It does not by itself enforce feasibility
@@ -192,6 +235,16 @@ sampling. The relevant diagnosis and scale gates remain open in [#79](https://gi
 [#82](https://github.com/JanDuchscherer104/ARIA-NBV/issues/82), and
 [#120](https://github.com/JanDuchscherer104/ARIA-NBV/issues/120).
 
+The broader implementation program is tracked by the candidate-quality epic
+[#67](https://github.com/JanDuchscherer104/ARIA-NBV/issues/67), reusable audit
+projection work [#57](https://github.com/JanDuchscherer104/ARIA-NBV/issues/57)
+and [#94](https://github.com/JanDuchscherer104/ARIA-NBV/issues/94), the cached
+online environment [#74](https://github.com/JanDuchscherer104/ARIA-NBV/issues/74),
+fixed-table and hierarchical proposal learning [#75](https://github.com/JanDuchscherer104/ARIA-NBV/issues/75)
+and [#76](https://github.com/JanDuchscherer104/ARIA-NBV/issues/76), surrogate
+refinement [#77](https://github.com/JanDuchscherer104/ARIA-NBV/issues/77), and
+path-length/discount semantics [#106](https://github.com/JanDuchscherer104/ARIA-NBV/issues/106).
+
 ## Simplest testable additions
 
 The following order keeps each change independently measurable on the same
@@ -202,7 +255,7 @@ two-scene frozen pilot:
    configured minimum support or an explicit exhaustion reason. Persist
    attempted, accepted, exhausted, and selected counts. This directly tests
    [#71](https://github.com/JanDuchscherer104/ARIA-NBV/issues/71) and the
-   family gate in [#54](https://github.com/JanDuchscherer104/ARIA-NBV/issues/54).
+   family-support criterion in [#54](https://github.com/JanDuchscherer104/ARIA-NBV/issues/54).
 2. **State-keyed Sobol streams.** Replace independent IID angular draws within
    one family with a deterministic Sobol stream keyed by source/state/family,
    while retaining the same jitter caps and feasibility mask. Compare family
@@ -238,5 +291,6 @@ plausibility, but they cannot repair missing family support on their own.
 - The primary gain is a V0/GT oracle signal. It is useful for candidate-support
   screening, but it is not a downstream Q-training or deployment result.
 - The negative challenger artifacts remain part of the evidence record. Their
-  rejection is specifically due to the family-collapse gate, not evidence that
-  target glances or radius strata can never be useful after support repair.
+  rejection is specifically due to the secondary family-support non-regression
+  criterion, not evidence that target glances or radius strata can never be
+  useful after support repair.
