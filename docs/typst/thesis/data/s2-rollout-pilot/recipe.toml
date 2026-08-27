@@ -1,0 +1,40 @@
+schema_version = "aria-nbv-report-config-v1"
+evidence_status = "pilot"
+
+[sources.rollout]
+store_paths = [
+    ".data/offline_cache/rollout_supervision/campaigns/qh-s1-cfplus-heldout-iter10/shards/2d4e0eb92f102361",
+]
+sidecar_paths = []
+
+[[sections]]
+kind = "rollout_s2"
+id = "s2"
+azimuth_bins = 36
+elevation_bins = 18
+projection_limit = 2000
+channels = [
+    "movement",
+    "view_direction",
+    "frustum",
+]
+
+[theme]
+template = "plotly_white"
+font_family = "Arial"
+colorway = [
+    "#3B6FB6",
+    "#B85450",
+    "#6F4A8E",
+    "#2E7D6E",
+    "#A66A2C",
+]
+s2_surface_colorscale = "Cividis"
+s2_rollout_colorscale = "Turbo"
+
+[export]
+width = 1400
+height = 900
+scale = 2.0
+two_dimensional_format = "svg"
+webgl_format = "png"

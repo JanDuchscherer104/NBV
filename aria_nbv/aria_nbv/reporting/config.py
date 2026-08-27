@@ -92,6 +92,49 @@ class RolloutReportSectionConfig(TargetConfig[object]):
     """Fact keys shown by the section's deterministic Plotly bar figure."""
 
 
+class S2RolloutReportSectionConfig(TargetConfig[object]):
+    """Materialize target-frame spherical evidence from immutable rollouts.
+
+    The section invokes the rollout-owned complete-population reducer once per
+    selected store. It emits movement, optical-axis, and calibrated proxy-
+    surface figures from the same canonical Plotly builder used by Streamlit.
+    The bounded projection limit affects incidence overlays only; complete
+    equal-solid-angle counts are never subsampled.
+    """
+
+    kind: Literal["rollout_s2"] = "rollout_s2"
+    """Closed discriminator for target-frame spherical rollout evidence."""
+
+    id: str = "s2"
+    """Stable section identifier used as the result-ID prefix."""
+
+    azimuth_bins: int = Field(default=36, ge=8, le=144)
+    """Number of uniform target-frame azimuth cells."""
+
+    elevation_bins: int = Field(default=18, ge=4, le=72)
+    """Number of uniform target-frame ``z`` cells, yielding equal solid angle."""
+
+    projection_limit: int = Field(default=2_000, ge=1)
+    """Maximum deterministic incidence points per channel and store."""
+
+    channels: tuple[Literal["movement", "view_direction", "frustum"], ...] = (
+        "movement",
+        "view_direction",
+        "frustum",
+    )
+    """Ordered figure channels to freeze into the report snapshot."""
+
+    @field_validator("channels")
+    @classmethod
+    def _unique_channels(
+        cls,
+        channels: tuple[Literal["movement", "view_direction", "frustum"], ...],
+    ) -> tuple[Literal["movement", "view_direction", "frustum"], ...]:
+        if not channels or len(channels) != len(set(channels)):
+            raise ValueError("S2 report channels must be non-empty and unique.")
+        return channels
+
+
 class WandbReportSectionConfig(TargetConfig[object]):
     """Materialize one exact W&B metric curve and dynamics summary."""
 
@@ -118,7 +161,7 @@ class WandbReportSectionConfig(TargetConfig[object]):
 
 
 ReportSectionConfig = Annotated[
-    RolloutReportSectionConfig | WandbReportSectionConfig,
+    RolloutReportSectionConfig | S2RolloutReportSectionConfig | WandbReportSectionConfig,
     Field(discriminator="kind"),
 ]
 
@@ -143,6 +186,19 @@ class ReportThemeConfig(TargetConfig[object]):
         min_length=1,
     )
     """Ordered, high-contrast categorical palette shared by report figures."""
+
+    s2_surface_colorscale: str = "Cividis"
+    """Sequential Plotly scale for complete target-frame S2 cell counts."""
+
+    s2_rollout_colorscale: str = "Turbo"
+    """Continuous Plotly scale for rollout-chain incidence heritage."""
+
+    @field_validator("template", "font_family", "s2_surface_colorscale", "s2_rollout_colorscale")
+    @classmethod
+    def _nonempty_theme_name(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("Report theme names must be non-empty.")
+        return value
 
 
 class ReportExportConfig(TargetConfig[object]):
@@ -201,7 +257,7 @@ class ScientificReportConfig(TargetConfig["ScientificReportBuilder"]):
     @model_validator(mode="after")
     def _validate_source_requirements(self) -> "ScientificReportConfig":
         kinds = {section.kind for section in self.sections}
-        if "rollout" in kinds and self.sources.rollout is None:
+        if kinds.intersection({"rollout", "rollout_s2"}) and self.sources.rollout is None:
             raise ValueError("Rollout report sections require sources.rollout.")
         if "wandb" in kinds and self.sources.wandb is None:
             raise ValueError("W&B report sections require sources.wandb.")
@@ -231,7 +287,7 @@ class ScientificReportConfig(TargetConfig["ScientificReportBuilder"]):
         selected = frozenset(section_ids)
         kinds = {section.kind for section in self.sections if not selected or section.id in selected}
         rollout = self.sources.rollout
-        if "rollout" in kinds and (rollout is None or not rollout.store_paths):
+        if kinds.intersection({"rollout", "rollout_s2"}) and (rollout is None or not rollout.store_paths):
             raise ScientificReportError("config_invalid", "Rollout report sections require at least one store path.")
         wandb = self.sources.wandb
         if "wandb" in kinds and (
@@ -250,6 +306,7 @@ __all__ = [
     "ReportThemeConfig",
     "RolloutReportSectionConfig",
     "RolloutSourceConfig",
+    "S2RolloutReportSectionConfig",
     "ScientificReportConfig",
     "WandbReportSectionConfig",
     "WandbSourceConfig",

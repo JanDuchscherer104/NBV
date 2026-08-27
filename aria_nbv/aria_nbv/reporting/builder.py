@@ -82,11 +82,16 @@ class ScientificReportBuilder:
                 ),
             }
         )
+        s2_specs = frozenset(
+            (section.azimuth_bins, section.elevation_bins, section.projection_limit)
+            for section in self.config.sections
+            if section.kind == "rollout_s2" and (requested_sections is None or section.id in requested_sections)
+        )
         try:
             for section in self.config.sections:
                 if requested_sections is not None and section.id not in requested_sections:
                     continue
-                if section.kind == "rollout":
+                if section.kind in {"rollout", "rollout_s2"}:
                     rollout_source = self.config.sources.rollout
                     assert rollout_source is not None
                     if rollout_evidence is None:
@@ -94,6 +99,7 @@ class ScientificReportBuilder:
                             rollout_source,
                             evidence_status=self.config.evidence_status,
                             required_tables=rollout_tables,
+                            s2_specs=s2_specs,
                         )
                         sources.append(rollout_evidence.identity)
                     rollout_results = _build_rollout_section(
@@ -105,7 +111,7 @@ class ScientificReportBuilder:
                     quantities.extend(rollout_results.quantities)
                     tables.extend(rollout_results.tables)
                     figures.extend(rollout_results.figures)
-                else:
+                elif section.kind == "wandb":
                     wandb_source = self.config.sources.wandb
                     assert wandb_source is not None
                     if self._wandb_api is None:
@@ -126,6 +132,8 @@ class ScientificReportBuilder:
                     quantities.extend(wandb_results.quantities)
                     tables.extend(wandb_results.tables)
                     figures.extend(wandb_results.figures)
+                else:
+                    raise ScientificReportError("config_invalid", f"Unsupported report section kind: {section.kind}")
         except ScientificReportError:
             raise
         except Exception as exc:
