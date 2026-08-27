@@ -21,6 +21,12 @@ if TYPE_CHECKING:
 DEVICE_FWD = [0.0, 0.0, 1.0]
 
 
+def _tensor_version(tensor: torch.Tensor) -> int:
+    """Return PyTorch's in-place mutation counter for cache invalidation."""
+
+    return int(getattr(tensor, "_version", 0))
+
+
 class PreparedMeshQuery:
     """Prepared point-distance and CPU query state for one immutable mesh.
 
@@ -49,6 +55,8 @@ class PreparedMeshQuery:
         target_device = device
         self._source_verts = verts
         self._source_faces = faces
+        self._source_verts_version = _tensor_version(verts)
+        self._source_faces_version = _tensor_version(faces)
         self._source_mesh = mesh
         self.verts = verts.to(device=target_device, dtype=dtype)
         self.faces = faces.to(device=target_device, dtype=torch.int64)
@@ -73,6 +81,8 @@ class PreparedMeshQuery:
         return (
             verts is self._source_verts
             and faces is self._source_faces
+            and _tensor_version(verts) == self._source_verts_version
+            and _tensor_version(faces) == self._source_faces_version
             and mesh is self._source_mesh
             and self.verts.device == torch.device(device)
             and self.verts.dtype == dtype

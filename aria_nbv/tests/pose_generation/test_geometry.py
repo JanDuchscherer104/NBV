@@ -98,3 +98,17 @@ def test_prepared_mesh_query_reuses_materialized_triangles(monkeypatch: pytest.M
     assert torch.equal(first, second)
     assert len(observed_triangles) == 2
     assert all(triangles is query.triangles for triangles in observed_triangles)
+
+
+def test_prepared_mesh_query_rejects_mutated_source_tensors() -> None:
+    verts = torch.tensor(
+        [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]],
+        dtype=torch.float32,
+    )
+    faces = torch.tensor([[0, 1, 2]], dtype=torch.int64)
+    query = geometry.PreparedMeshQuery(verts, faces, device="cpu", dtype=torch.float32)
+
+    assert query.matches(verts, faces, device="cpu", dtype=torch.float32, mesh=None)
+
+    verts.add_(1.0)
+    assert not query.matches(verts, faces, device="cpu", dtype=torch.float32, mesh=None)
