@@ -3756,7 +3756,9 @@ def test_root_relative_candidate_rows_preserve_shell_order_without_materializing
     assert root_relative_candidate_rows(reader, step_row_id=int(expected_all[-1]["step_row_id"])) == expected_step
 
 
-def test_root_relative_candidate_rows_select_candidate_payload_rows(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_root_relative_candidate_rows_select_candidate_payload_rows(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     result = write_rollout_zarr_store(
         tmp_path / "rollouts.zarr",
         build_rollout_records(horizon=2, num_samples=6, seed=161)[:2],
