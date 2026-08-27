@@ -230,7 +230,7 @@ def test_target_s2_histogram_uses_object_coordinates_and_geometric_obb_scale(
     rollout = inspection_module.rollout_at(reader, 0)
     first_selected = inspection_module._selected_pose(inspection_module._bounded_geometry_steps(reader, rollout)[0])
     root = inspection_module._geometry_pose(rollout.root_pose_world, role="test root")
-    scale = inspection_module._target_obb_geometric_mean_radius(target.extents)
+    scale = inspection_module._target_obb_geometric_mean_scale(target.extents)
     expected_movement = target_rotation.T @ (first_selected[9:12] - root[9:12]) / scale
     expected_movement /= np.linalg.norm(expected_movement)
     expected_view = target_rotation.T @ first_selected[:9].reshape(3, 3)[:, 2]
@@ -264,7 +264,7 @@ def test_target_s2_histogram_rejects_nonpositive_obb_axes() -> None:
     """A target OBB must provide one finite positive scale per object axis."""
 
     with pytest.raises(ValueError, match="strictly positive"):
-        inspection_module._target_obb_geometric_mean_radius(np.asarray([1.0, 0.0, 2.0]))
+        inspection_module._target_obb_geometric_mean_scale(np.asarray([1.0, 0.0, 2.0]))
 
 
 def test_target_surface_frustum_uses_camera_translation_and_front_facing_support() -> None:
@@ -280,14 +280,48 @@ def test_target_surface_frustum_uses_camera_translation_and_front_facing_support
 
     footprint = inspection_module._target_surface_frustum_mask(
         directions,
-        target_radius_m=1.0,
+        target_scale_m=1.0,
         camera_center_target=np.asarray([0.0, 0.0, -3.0]),
         camera_to_target=np.eye(3),
         calibration=calibration,
     )
 
     assert footprint.tolist() == [True, False]
-    assert inspection_module._pinhole_frustum_solid_angle_sr(calibration) == pytest.approx(2.0 * np.pi / 3.0)
+    assert inspection_module._pinhole_frustum_solid_angle_sr(calibration) == pytest.approx(1.7285900744)
+
+
+def test_image_edge_coordinates_use_half_pixel_boundaries() -> None:
+    """Frustum masks and corner rays share the continuous pixel-edge convention."""
+
+    assert inspection_module._image_edge_coordinates(2) == (-0.5, 1.5)
+    with pytest.raises(ValueError, match="positive integers"):
+        inspection_module._image_edge_coordinates(0)
+
+
+def test_selected_frustum_calibrations_keep_valid_rows_and_address_bad_rows() -> None:
+    """One malformed calibration row excludes itself without discarding valid rows."""
+
+    group = {
+        "step_row_id": np.asarray([10, 11]),
+        "candidate_row_id": np.asarray([100, 101]),
+        "focal_px": np.asarray([[1.0, 1.0], [np.nan, 1.0]]),
+        "principal_point_px": np.asarray([[0.5, 0.5], [0.5, 0.5]]),
+        "image_size_hw": np.asarray([[2, 2], [2, 2]]),
+    }
+
+    class Root:
+        attrs = {"selected_depth_enabled": True}
+
+        def __getitem__(self, key: str) -> Any:
+            assert key == "selected_depth"
+            return group
+
+    issues: list[inspection_module.GeometryIssue] = []
+
+    calibrations = inspection_module._selected_frustum_calibrations(SimpleNamespace(root=Root()), issues=issues)
+
+    assert sorted(calibrations) == [10]
+    assert [(issue.code, issue.step_row_id) for issue in issues] == [("invalid_selected_frustum_calibration_row", 11)]
 
 
 def test_target_surface_frustum_equal_area_fraction_converges_to_visible_spherical_cap() -> None:
@@ -303,7 +337,7 @@ def test_target_surface_frustum_equal_area_fraction_converges_to_visible_spheric
 
     footprint = inspection_module._target_surface_frustum_mask(
         directions,
-        target_radius_m=1.0,
+        target_scale_m=1.0,
         camera_center_target=np.asarray([0.0, 0.0, -3.0]),
         camera_to_target=np.eye(3),
         calibration=calibration,

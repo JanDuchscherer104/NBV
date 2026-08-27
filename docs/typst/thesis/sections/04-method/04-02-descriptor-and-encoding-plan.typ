@@ -169,15 +169,15 @@ The signed first moment distinguishes opposite approach directions, whereas the 
 
 The three spherical views answer different geometric questions and must not be conflated. The selected displacement direction $#symb.spatial.target_frame_motion_direction$ describes *how the camera moved*. The optical-axis direction $#symb.spatial.target_frame_view_direction$ describes *where the camera pointed*. Neither point says which target-centred surface directions fell inside the camera image. For rollout chain $#symb.rl.rollout_index$ and persisted decision step $t$, both directions are expressed in the target object's orientation:
 
-#eqs.spatial.target_frame_obb_radius
+#eqs.spatial.target_frame_obb_scale
 
 #eqs.spatial.target_frame_motion_direction
 
 #eqs.spatial.target_frame_view_direction
 
-The persisted OBB extents are full axis lengths. Hence $a_x,a_y,a_z$ in this definition are their half-lengths, and $#symb.spatial.target_obb_scale=(a_x a_y a_z)^(1/3)$ is the radius of a sphere with the same volume as the OBB. The geometric mean is preferable to the arithmetic mean because it preserves that volume-equivalent interpretation and scales linearly under uniform object scaling. Dividing a displacement by $r_e$ does not alter its eventual unit direction, but it retains the dimensionless movement magnitude used by a future target-relative S2 descriptor.
+The persisted OBB extents are full axis lengths, so $a_x,a_y,a_z$ are their half-lengths. The scalar $#symb.spatial.target_obb_scale=(a_x a_y a_z)^(1/3)$ is their geometric mean: it scales linearly under uniform object scaling and supplies one permutation-invariant characteristic length. It is not the radius of a sphere with the same volume as the OBB; that radius would include the factor $(6/pi)^(1/3)$. Dividing a displacement by $r_e$ does not alter its eventual unit direction, but it retains a dimensionless movement magnitude for a future target-relative S2 descriptor.
 
-The calibrated frustum diagnostic instead treats $bold(d)^e in cal(S)^2$ as an outward surface direction and places the proxy point $bold(x)^e=r_e bold(d)^e$ on the target-centred sphere. The selected camera centre is subtracted *before* the target-to-camera rotation; omitting this translation would project only the frustum's orientation and would not describe target-centred surface support. A cell belongs to $#symb.spatial.target_frame_frustum$ only if its proxy-surface normal faces the camera, its camera-frame depth is positive, and the ARIA left--up--forward pinhole projection lies within the continuous image rectangle:
+The calibrated frustum diagnostic instead treats $bold(d)^e in cal(S)^2$ as an outward surface direction and places the proxy point $bold(x)^e=r_e bold(d)^e$ on the target-centred sphere. The selected camera centre is subtracted *before* the target-to-camera rotation; omitting this translation would project only the frustum's orientation and would not describe target-centred surface support. A cell belongs to $#symb.spatial.target_frame_frustum$ only if its proxy-surface normal faces the camera, its camera-frame depth is positive, and the ARIA left--up--forward pinhole projection lies within the half-pixel image rectangle $[-1/2, W-1/2] times [-1/2, H-1/2]$:
 
 #eqs.spatial.target_frame_frustum_geometry
 

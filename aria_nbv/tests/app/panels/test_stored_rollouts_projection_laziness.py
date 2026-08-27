@@ -350,6 +350,19 @@ def test_q_h_render_wires_progress_and_chunk_boundary_cancellation(monkeypatch: 
     assert status.captions[-1] == "Q_H count stopped at a chunk boundary."
 
 
+def test_q_h_s2_widget_prefix_is_content_scoped() -> None:
+    """S² controls cannot reuse Streamlit state across store generations."""
+
+    first = type("Handle", (), {"store_identity": "store:content-a"})()
+    second = type("Handle", (), {"store_identity": "store:content-b"})()
+
+    first_prefix = qh_admission._s2_widget_prefix(first)
+    second_prefix = qh_admission._s2_widget_prefix(second)
+
+    assert first_prefix.startswith("stored_rollouts_qh_")
+    assert first_prefix != second_prefix
+
+
 def test_all_store_backed_caches_follow_atomic_same_path_replacement(tmp_path: Path) -> None:
     """Readers, projections, and requested report bundles must not retain replaced-store evidence."""
 

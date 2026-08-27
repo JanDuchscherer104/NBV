@@ -36,7 +36,7 @@
       bold(d)_(t,i) (bold(v))
     )
   $,
-  target_frame_obb_radius: $
+  target_frame_obb_scale: $
     #symb.spatial.target_obb_scale
     = (a_x a_y a_z)^(1/3)
   $,
@@ -74,8 +74,8 @@
       cases(
         bold(d)^top (bold(c)_(j,t)^e - bold(x)^e (bold(d))) > 0 & "front-facing",
         x_z^c > 0 & "in front",
-        0 <= u (bold(d)) <= W & "horizontal image support",
-        0 <= v (bold(d)) <= H & "vertical image support"
+        -1/2 <= u (bold(d)) <= W - 1/2 & "horizontal image support",
+        -1/2 <= v (bold(d)) <= H - 1/2 & "vertical image support"
       )}
   $,
   target_frame_frustum_coverage: $
