@@ -10,9 +10,10 @@ touched_owner_paths:
   - docs/contents/evidence/candidate_generation_scaleup_pilot.qmd
   - docs/contents/evidence/candidate_generation_scaleup_pilot/
   - scripts/render_candidate_generation_scaleup_pilot.py
+  - scripts/tests/test_ownership_consolidation_contract.py
 codex_thread: codex://threads/01a033a6-100a-73d2-83bb-4a4153903cc4
 repo_object_format: sha1
-repo_head: 5fcb4b7aee63563fd37c5b30c25af802385475c7
+repo_head: 2d20efb033cf609691124c7921947766c3a8b13b
 repo_branch: "codex/candidate-family-experiments"
 worktree_kind: linked
 ---
@@ -46,6 +47,7 @@ hashed public artifact manifest; those were added before publication.
 ## Commits
 - [b79c865ae86901443e8a846b992b5c018f1f75c1](https://github.com/JanDuchscherer104/ARIA-NBV/commit/b79c865ae86901443e8a846b992b5c018f1f75c1)
 - [5fcb4b7aee63563fd37c5b30c25af802385475c7](https://github.com/JanDuchscherer104/ARIA-NBV/commit/5fcb4b7aee63563fd37c5b30c25af802385475c7)
+- [2d20efb033cf609691124c7921947766c3a8b13b](https://github.com/JanDuchscherer104/ARIA-NBV/commit/2d20efb033cf609691124c7921947766c3a8b13b)
 
 ## Verification
 - Deterministic regeneration: two independent renders matched each other and
@@ -58,6 +60,8 @@ hashed public artifact manifest; those were added before publication.
 - `quarto render docs/contents/evidence/candidate_generation_scaleup_pilot.qmd --no-execute`:
   passed.
 - Frozen critic suite: 48 passed, 1 real-data skip.
+- Ownership-consolidation contract: 21 passed after registering the new QMD in
+  the exact public-page manifest.
 - Large-scale rollout generation remains blocked by family support collapse;
   this is a measured NO-GO, not a completion claim for the scale gate.
 
