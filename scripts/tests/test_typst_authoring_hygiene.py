@@ -26,7 +26,7 @@ LABEL_SCOPE = {
     Path("docs/typst/thesis/development/m1-contract-report.typ"): "development",
 }
 EXPECTED_LABEL_COUNTS = {
-    Path("docs/typst/thesis/sections/01-introduction.typ"): 2,
+    Path("docs/typst/thesis/sections/01-introduction.typ"): 3,
     Path("docs/typst/thesis/sections/01-research-questions.typ"): 10,
     Path("docs/typst/thesis/development/roadmap.typ"): 10,
     Path("docs/typst/thesis/development/m1-contract-report.typ"): 4,
@@ -544,7 +544,7 @@ class HygieneTests(unittest.TestCase):
             ]
             self.assertEqual(len(labels), expected, relative)
             totals[LABEL_SCOPE[relative]] += len(labels)
-        self.assertEqual(totals, {"submission": 12, "development": 14})
+        self.assertEqual(totals, {"submission": 13, "development": 14})
 
     def test_active_table_inventory_is_derived_and_scoped(self) -> None:
         """All authored scientific tables are covered; layout tables are not."""
