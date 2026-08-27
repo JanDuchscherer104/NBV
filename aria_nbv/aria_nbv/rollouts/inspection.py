@@ -5047,7 +5047,7 @@ def root_relative_candidate_rows(
     positions = np.concatenate(candidate_positions)
     step_positions = np.concatenate(candidate_step_positions)
     rollout_positions = np.concatenate(candidate_rollout_positions)
-    actor_actions = reader.array("candidates/actor_action_mask").astype(np.bool_, copy=False).reshape(-1)[positions]
+    actor_actions = reader.array_rows("candidates/actor_action_mask", positions).astype(np.bool_, copy=False).reshape(-1)
     if actor_valid_only:
         positions = positions[actor_actions]
         step_positions = step_positions[actor_actions]
@@ -5057,12 +5057,12 @@ def root_relative_candidate_rows(
         return []
 
     candidate_ids = shell_index.candidate_ids[positions]
-    selected = reader.array("candidates/selected_mask").astype(np.bool_, copy=False).reshape(-1)[positions]
+    selected = reader.array_rows("candidates/selected_mask", positions).astype(np.bool_, copy=False).reshape(-1)
     pose_centers = (
-        reader.array("candidates/pose_world_cam").astype(np.float64, copy=False).reshape(-1, 12)[positions, 9:12]
+        reader.array_rows("candidates/pose_world_cam", positions).astype(np.float64, copy=False).reshape(-1, 12)[:, 9:12]
     )
-    position_ids = reader.array("candidate_diagnostics/position_id").astype(np.int32, copy=False).reshape(-1)[positions]
-    mixture_ids = reader.array("candidates/mixture_id").astype(np.int32, copy=False).reshape(-1)[positions]
+    position_ids = reader.array_rows("candidate_diagnostics/position_id", positions).astype(np.int32, copy=False).reshape(-1)
+    mixture_ids = reader.array_rows("candidates/mixture_id", positions).astype(np.int32, copy=False).reshape(-1)
     relative = pose_centers - root_poses[rollout_positions, 9:12]
     distances = np.linalg.norm(relative, axis=1)
     mixture_names = _candidate_mixture_names(reader, mixture_ids)

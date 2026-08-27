@@ -621,6 +621,12 @@ class RolloutZarrStoreReader:
                 return np.full((count,), -1, dtype=dtype)
         return np.asarray(self.root[path])
 
+    def array_rows(self, path: str, positions: np.ndarray) -> np.ndarray:
+        """Read only selected first-axis rows from one canonical Zarr array."""
+
+        rows = np.asarray(positions, dtype=np.int64).reshape(-1)
+        return np.asarray(self.root[path].oindex[rows])
+
     def validate(self, *, validate_selected_depth_payload: bool = True) -> RolloutZarrValidationResult:
         """Validate persisted contracts, optionally skipping unconsumed depth payloads."""
 

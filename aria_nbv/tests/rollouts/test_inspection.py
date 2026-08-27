@@ -3756,6 +3756,29 @@ def test_root_relative_candidate_rows_preserve_shell_order_without_materializing
     assert root_relative_candidate_rows(reader, step_row_id=int(expected_all[-1]["step_row_id"])) == expected_step
 
 
+def test_root_relative_candidate_rows_select_candidate_payload_rows(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    result = write_rollout_zarr_store(
+        tmp_path / "rollouts.zarr",
+        build_rollout_records(horizon=2, num_samples=6, seed=161)[:2],
+    )
+    reader = RolloutZarrStoreReader(result.store_dir)
+    shell_index = reader.candidate_shell_index()
+    selected_step = int(reader.array("steps/step_row_id")[-1])
+    expected_rows = shell_index.positions_by_step[selected_step].size
+    original_array = reader.array
+
+    def reject_full_candidate_array(path: str) -> np.ndarray:
+        if path.startswith(("candidates/", "candidate_diagnostics/")):
+            raise AssertionError(f"candidate payload {path} must use row selection")
+        return original_array(path)
+
+    monkeypatch.setattr(reader, "array", reject_full_candidate_array)
+
+    rows = root_relative_candidate_rows(reader, step_row_id=selected_step)
+
+    assert len(rows) == expected_rows
+
+
 def test_failure_triage_emits_exact_mask_violation_rows(tmp_path: Path) -> None:
     """Hard mask violations should carry exact rollout, step, and candidate identifiers."""
 
