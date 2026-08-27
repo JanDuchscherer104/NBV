@@ -158,4 +158,43 @@ $
 
 The signed first moment distinguishes opposite approach directions, whereas the second moment records concentration along viewing axes. Their query-relative projections form directional features without committing to a full spherical-harmonic field. Low-order spherical harmonics are promoted only if these moments improve over ordered pose history and still leave systematic directional errors.
 
+=== Target-frame spherical diagnostics and calibrated frustum support
+
+#thesis_status(
+  implementation: "partial",
+  evidence: "pending",
+  source: "aria_nbv/aria_nbv/rollouts/inspection.py; aria_nbv/aria_nbv/app/panels/_stored_rollouts/s2_directions.py",
+  gate: [held-out coverage calibration, resolution-convergence study, and depth- or mesh-based occlusion validation before promotion into S2 memory],
+)[The stored-rollout inspector implements target-frame movement, camera-forward, and calibrated proxy-surface frustum histograms. They diagnose factual selected paths; they are not yet scorer inputs and do not establish an S2 policy improvement.]
+
+The three spherical views answer different geometric questions and must not be conflated. The selected displacement direction $#symb.spatial.target_frame_motion_direction$ describes *how the camera moved*. The optical-axis direction $#symb.spatial.target_frame_view_direction$ describes *where the camera pointed*. Neither point says which target-centred surface directions fell inside the camera image. For rollout chain $#symb.rl.rollout_index$ and persisted decision step $t$, both directions are expressed in the target object's orientation:
+
+#eqs.spatial.target_frame_obb_scale
+
+#eqs.spatial.target_frame_motion_direction
+
+#eqs.spatial.target_frame_view_direction
+
+The persisted OBB extents are full axis lengths, so $a_x,a_y,a_z$ are their half-lengths. The scalar $#symb.spatial.target_obb_scale=(a_x a_y a_z)^(1/3)$ is their geometric mean: it scales linearly under uniform object scaling and supplies one permutation-invariant characteristic length. It is not the radius of a sphere with the same volume as the OBB; that radius would include the factor $(6/pi)^(1/3)$. Dividing a displacement by $r_e$ does not alter its eventual unit direction, but it retains a dimensionless movement magnitude for a future target-relative S2 descriptor.
+
+The calibrated frustum diagnostic instead treats $bold(d)^e in cal(S)^2$ as an outward surface direction and places the proxy point $bold(x)^e=r_e bold(d)^e$ on the target-centred sphere. The selected camera centre is subtracted *before* the target-to-camera rotation; omitting this translation would project only the frustum's orientation and would not describe target-centred surface support. A cell belongs to $#symb.spatial.target_frame_frustum$ only if its proxy-surface normal faces the camera, its camera-frame depth is positive, and the ARIA left--up--forward pinhole projection lies within the half-pixel image rectangle $[-1/2, W-1/2] times [-1/2, H-1/2]$:
+
+#eqs.spatial.target_frame_frustum_geometry
+
+#eqs.spatial.target_frame_frustum_projection
+
+#eqs.spatial.target_frame_frustum_membership
+
+#eqs.spatial.target_frame_frustum_coverage
+
+The implementation partitions $cal(S)^2$ uniformly in azimuth $phi$ and target-frame height $z$. Because the sphere's area element is $dif Omega = dif phi dif z$, all cells have equal solid angle. Complete per-cell counts therefore estimate the per-view fraction $#symb.spatial.target_frame_frustum_fraction$ and the union across factual selected views without the polar bias of uniform-elevation bins. The plotted incidence overlay is only a deterministic bounded reservoir; rollout colour preserves common chain heritage and marker shape preserves common step index. It never replaces the complete count grid.
+
+Camera intrinsics also define an orientation-only field-of-view solid angle. If $bold(q)_0,dots,bold(q)_3$ are the normalized corner rays obtained from focal length, principal point, and image size, the spherical quadrilateral is split into two spherical triangles:
+
+#eqs.spatial.spherical_triangle_solid_angle
+
+#eqs.spatial.pinhole_frustum_solid_angle
+
+This exact intrinsic $#symb.spatial.frustum_solid_angle$ and the numerically integrated target-proxy fraction answer different questions: the former depends only on calibration, whereas the latter additionally depends on target scale and camera pose. Neither is the fraction of the *true target mesh* observed. The sphere replaces the OBB shape, the front-facing test models only proxy self-occlusion, and scene occluders are ignored. A visibility claim requires intersecting calibrated rays with selected depth or the target and scene meshes, resolving the nearest surface along each ray, and reporting the corresponding target-surface measure. Until that evidence exists, the dashboard labels this quantity geometric potential visibility and the thesis treats it as an admission diagnostic for designing S2 memory rather than as a model result.
+
 Optional appearance, ray, and directional blocks require three independent indicators where applicable: modality presence, batch padding, and evidence source. Removing one optional source must alter only its masked branch, and counterfactual-only geometry must not receive fabricated RGB, DINO, detector, or EVL descriptors.

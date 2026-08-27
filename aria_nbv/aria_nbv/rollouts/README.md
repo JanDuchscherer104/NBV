@@ -90,7 +90,17 @@ mask.
 | `qh_geometry` | Stored relative-pose composition into actor tensors. |
 | `read_model` | Presentation-free typed projections. |
 | `inspection` / `reporting` | Rollout-owned read-only summaries, evidence tables, validation, and compatibility strata. |
+| `s2_reporting` | Canonical target-frame S² Plotly encoding shared by Streamlit and immutable report export. |
 | `audits` | Provenance, validity, path, entropy, and order diagnostics. |
+
+Target-frame S² inspection separates three observables: selected camera
+displacement, selected optical-axis direction, and calibrated proxy-surface
+frustum support. `inspection.py` owns the complete equal-solid-angle reducer;
+`s2_reporting.py` owns only the deterministic Plotly encoding. The target OBB
+normalizer is the geometric mean of its semi-axis lengths, not an
+OBB-volume-equivalent sphere radius. Calibrated support uses the half-pixel
+continuous image rectangle and remains geometric potential visibility until
+depth or mesh intersection establishes true visible target surface.
 
 Detailed table schemas, shapes, and validation failures live in source
 docstrings and the [generated API reference](../../../docs/reference/index.qmd).

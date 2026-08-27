@@ -10,9 +10,9 @@ import shutil
 import subprocess
 import sys
 from collections.abc import Callable
-from dataclasses import asdict
+from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import pandas as pd
 import plotly.express as px
@@ -23,6 +23,8 @@ from aria_nbv.oracle.pipelines.campaign import CudaRolloutCampaign, CudaRolloutC
 from aria_nbv.utils.config_paths import resolve_config_toml_path
 
 from ..scientific_labels import TheoryReferences
+from ._stored_rollouts.s2_directions import render_s2_direction_histograms
+from ._stored_rollouts.session import open_stored_rollout_session
 from ._stored_rollouts.shared import ExplanationSection, ScientificExplanation
 from ._stored_rollouts.shared import plot_control_key as _plot_control_key
 from ._stored_rollouts.shared import render_plot as _render_plot
@@ -37,6 +39,24 @@ _MAX_NEW_UNITS = 100
 _MAX_TIME_BUDGET_MINUTES = 24 * 60
 _MAX_FREE_DISK_FLOOR_GB = 1024
 _ADMISSION_STATE_KEY = "campaign_generation_admission_evidence"
+
+
+@dataclass(frozen=True, slots=True)
+class _CampaignS2Handle:
+    """Lazy completed-shard adapter preserving explicit full-store dispatch."""
+
+    store_path: Path
+
+    def s2_direction_histogram(self, *, azimuth_bins: int, elevation_bins: int) -> dict[str, Any]:
+        """Open and validate the selected immutable shard only after dispatch."""
+
+        return cast(
+            dict[str, Any],
+            open_stored_rollout_session(self.store_path).s2_direction_histogram(
+                azimuth_bins=azimuth_bins,
+                elevation_bins=elevation_bins,
+            ),
+        )
 
 
 def _admission_audit_identity(path: Path) -> tuple[str, int, int, int, int] | None:
@@ -151,17 +171,21 @@ def _render_admission_audit(payload: dict[str, Any], *, threshold: float) -> Non
     counts = payload["counts"]
     metric_groups = (
         (
+            ("Source samples", "source_samples"),
+            ("Source scenes", "source_scenes"),
             ("Observed targets", "observed"),
             ("Admitted", "admitted"),
+        ),
+        (
             ("Rejected", "rejected"),
             ("Same-class overlap scored", "same_class_scored"),
+            ("Ambiguous", "ambiguous"),
+            ("Duplicate GT groups", "duplicate_gt_groups"),
         ),
         (
             ("Zero-target samples", "zero_observation_samples"),
             ("Scenes containing zero-target samples", "scenes_with_zero_observation_samples"),
             ("Zero-only scenes", "zero_only_scenes"),
-            ("Ambiguous", "ambiguous"),
-            ("Duplicate GT groups", "duplicate_gt_groups"),
         ),
     )
     for group in metric_groups:
@@ -237,7 +261,8 @@ def _render_admission_section(campaign: Any, plan_path: Path) -> None:
                 source_manifest_hash=plan.source_manifest_hash,
                 admission_audit_hash=plan.admission_audit_hash,
             )
-            st.session_state[_ADMISSION_STATE_KEY] = (identity, payload)
+            stores = _validated_campaign_store_paths(campaign.progress_summary(plan=plan))
+            st.session_state[_ADMISSION_STATE_KEY] = (identity, payload, stores)
         except (OSError, TypeError, ValueError, json.JSONDecodeError) as exc:
             st.session_state.pop(_ADMISSION_STATE_KEY, None)
             st.error(f"Admission evidence unavailable: {exc}")
@@ -249,6 +274,43 @@ def _render_admission_section(campaign: Any, plan_path: Path) -> None:
         st.info("Render a deterministic plan, then load the provenance-bound admission audit.")
         return
     _render_admission_audit(state[1], threshold=cfg.observed_target_iou_threshold)
+    _render_campaign_rollout_s2_evidence(state[2] if len(state) > 2 else ())
+
+
+def _validated_campaign_store_paths(summary: dict[str, Any]) -> tuple[Path, ...]:
+    """Return only current-plan stores admitted by the campaign validator."""
+
+    artifacts = summary.get("validated_artifacts", ())
+    if not isinstance(artifacts, list | tuple):
+        return ()
+    paths = {
+        Path(store_path)
+        for artifact in artifacts
+        if isinstance(artifact, dict) and isinstance((store_path := artifact.get("store_path")), str) and store_path
+    }
+    return tuple(sorted(paths, key=Path.as_posix))
+
+
+def _render_campaign_rollout_s2_evidence(validated_store_paths: tuple[Path, ...]) -> None:
+    """Render one current-plan validated shard through the shared S² view."""
+
+    stores = validated_store_paths
+    st.subheader("Completed-rollout directional evidence")
+    if not stores:
+        st.caption("No current-plan validated rollout shards are available for target-frame S² inspection yet.")
+        return
+    selected = st.selectbox(
+        "Completed rollout shard",
+        stores,
+        format_func=lambda path: path.name,
+        key="campaign_admission_s2_store",
+        help="Each selection is a current-plan validated immutable shard; stores are not pooled across incompatible campaign identities.",
+    )
+    st.caption(f"Selected current-plan validated shard: {selected}")
+    render_s2_direction_histograms(
+        _CampaignS2Handle(Path(selected)),
+        key_prefix=f"campaign_admission_{Path(selected).name}",
+    )
 
 
 def build_campaign_argv(

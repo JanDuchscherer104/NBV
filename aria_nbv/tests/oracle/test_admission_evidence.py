@@ -121,6 +121,8 @@ def test_legacy_v1_audit_remains_readable_and_exportable() -> None:
 
     exported = evidence.to_jsonable()
     assert exported["counts"] == {
+        "source_samples": 1,
+        "source_scenes": 1,
         "observed": 1,
         "admitted": 1,
         "rejected": 0,

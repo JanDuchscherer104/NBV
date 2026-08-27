@@ -11,6 +11,7 @@ from aria_nbv.rollouts import RolloutZarrStoreReader
 from aria_nbv.rollouts.read_model import (
     rollout_at,
     rollout_by_id,
+    rollout_rows,
     rollout_steps,
     selected_depth_for_step,
     target_by_id,
@@ -49,6 +50,18 @@ def test_rollout_at_decodes_context_and_orders_steps(tmp_path) -> None:
     assert [step.step_row_id for step in rollout_steps(reader, rollout)] == [0, 1]
 
 
+def test_rollout_rows_matches_single_row_projection(tmp_path) -> None:
+    """The batch projection preserves physical rollout order and factual step order."""
+
+    reader = _reader(tmp_path)
+    rows = rollout_rows(reader)
+    single = rollout_at(reader, 0)
+
+    assert len(rows) == 1
+    assert rows[0].rollout_row_id == single.rollout_row_id
+    assert np.array_equal(rows[0].step_row_positions, single.step_row_positions)
+
+
 def test_rollout_lookup_rejects_missing_rows_and_rollouts_without_steps(tmp_path) -> None:
     reader = _reader(tmp_path)
     with np.testing.assert_raises(IndexError):
@@ -60,6 +73,8 @@ def test_rollout_lookup_rejects_missing_rows_and_rollouts_without_steps(tmp_path
     writable["steps/rollout_row_id"][:] = 999
     with np.testing.assert_raises(ValueError):
         rollout_at(RolloutZarrStoreReader(reader.store_dir), 0)
+    with np.testing.assert_raises(ValueError):
+        rollout_rows(RolloutZarrStoreReader(reader.store_dir))
 
 
 def test_rollout_steps_preserve_shell_ordered_candidate_columns(tmp_path) -> None:

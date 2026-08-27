@@ -17,7 +17,7 @@ import streamlit as st
 
 pytest.importorskip("efm3d")
 
-from aria_nbv.app.panels._stored_rollouts import candidate_generation, validity_support
+from aria_nbv.app.panels._stored_rollouts import candidate_generation, s2_directions, validity_support
 from aria_nbv.rollouts.inspection import GeometryFrame
 
 
@@ -102,6 +102,156 @@ def test_normalized_radius_figure_exposes_unit_target_range_threshold() -> None:
 
     assert sorted(float(value) for trace in figure.data for value in trace.y) == [0.2, 0.4, 0.8, 1.2]
     assert any(shape.y0 == 1.0 and shape.y1 == 1.0 for shape in figure.layout.shapes)
+
+
+def test_target_s2_figures_render_complete_heatmaps_and_projection_overlays() -> None:
+    """Both S² channels retain a 3D heatmap with target-frame unit-vector points."""
+
+    payload = {
+        "movement_counts": np.asarray([[0, 2], [1, 0]], dtype=np.int64),
+        "view_direction_counts": np.asarray([[3, 0], [0, 1]], dtype=np.int64),
+        "frustum_counts": np.asarray([[1, 1], [0, 0]], dtype=np.int64),
+        "movement_projection": np.asarray([[1.0, 0.0, 0.0]], dtype=np.float32),
+        "movement_projection_normalized_lengths": np.asarray([0.75], dtype=np.float32),
+        "movement_projection_rollout_row_ids": np.asarray([7], dtype=np.int64),
+        "movement_projection_step_indices": np.asarray([0], dtype=np.int64),
+        "view_direction_projection": np.asarray([[0.0, 1.0, 0.0]], dtype=np.float32),
+        "view_direction_projection_rollout_row_ids": np.asarray([7], dtype=np.int64),
+        "view_direction_projection_step_indices": np.asarray([1], dtype=np.int64),
+        "frustum_projection": np.asarray([[0.0, 0.0, 1.0]], dtype=np.float32),
+        "frustum_projection_rollout_row_ids": np.asarray([7], dtype=np.int64),
+        "frustum_projection_step_indices": np.asarray([1], dtype=np.int64),
+    }
+
+    movement = s2_directions.s2_direction_figure(payload, channel="movement")
+    view = s2_directions.s2_direction_figure(payload, channel="view_direction")
+    frustum = s2_directions.s2_direction_figure(payload, channel="frustum")
+
+    for figure, expected_count, expected_name in (
+        (movement, 3, "acquisition 1 (t=0)"),
+        (view, 4, "acquisition 2 (t=1)"),
+        (frustum, 2, "acquisition 2 (t=1)"),
+    ):
+        assert isinstance(figure.data[0], go.Surface)
+        assert int(np.asarray(figure.data[0].surfacecolor).sum()) == expected_count
+        assert isinstance(figure.data[1], go.Scatter3d)
+        assert figure.data[1].name == expected_name
+        assert figure.layout.scene.xaxis.title.text == "target xᵉ"
+        assert figure.layout.scene.yaxis.title.text == "target yᵉ"
+        assert figure.layout.scene.zaxis.title.text == "target zᵉ"
+        assert np.asarray(figure.data[1].marker.color).tolist() == [7]
+
+
+def test_target_s2_panel_dispatches_the_complete_store_reducer_only_after_toggle(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The panel owns controls and rendering, while the session owns the full-store read."""
+
+    class Column:
+        def __enter__(self) -> "Column":
+            return self
+
+        def __exit__(self, *_args: Any) -> None:
+            return None
+
+        def number_input(self, _label: str, *, value: int, **_kwargs: Any) -> int:
+            return value
+
+    payload = {
+        "movement_counts": np.asarray([[1]], dtype=np.int64),
+        "view_direction_counts": np.asarray([[1]], dtype=np.int64),
+        "frustum_counts": np.asarray([[1]], dtype=np.int64),
+        "movement_projection": np.asarray([[1.0, 0.0, 0.0]], dtype=np.float32),
+        "movement_projection_normalized_lengths": np.asarray([0.5], dtype=np.float32),
+        "movement_projection_rollout_row_ids": np.asarray([11], dtype=np.int64),
+        "movement_projection_step_indices": np.asarray([0], dtype=np.int64),
+        "view_direction_projection": np.asarray([[0.0, 0.0, 1.0]], dtype=np.float32),
+        "view_direction_projection_rollout_row_ids": np.asarray([11], dtype=np.int64),
+        "view_direction_projection_step_indices": np.asarray([0], dtype=np.int64),
+        "frustum_projection": np.asarray([[0.0, 0.0, 1.0]], dtype=np.float32),
+        "frustum_projection_rollout_row_ids": np.asarray([11], dtype=np.int64),
+        "frustum_projection_step_indices": np.asarray([0], dtype=np.int64),
+        "movement_count": 1,
+        "view_direction_count": 1,
+        "frustum_count": 1,
+        "frustum_missing_calibration_count": 0,
+        "frustum_mean_fov_solid_angle_sr": 1.0,
+        "frustum_mean_target_surface_fraction_approx": 0.1,
+        "frustum_union_target_surface_fraction_approx": 0.1,
+        "movement_skipped_zero_count": 0,
+        "rollout_count": 1,
+        "store_rollout_count": 1,
+        "source_sample_count": 1,
+        "source_snippet_count": 1,
+        "source_scene_count": 1,
+        "target_count": 1,
+        "selected_step_count": 1,
+        "issues": (),
+    }
+    calls: list[tuple[int, int]] = []
+    rendered: list[go.Figure] = []
+
+    class Handle:
+        def s2_direction_histogram(self, *, azimuth_bins: int, elevation_bins: int) -> dict[str, Any]:
+            calls.append((azimuth_bins, elevation_bins))
+            return payload
+
+    monkeypatch.setattr(st, "markdown", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(st, "caption", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(st, "columns", lambda _count: [Column(), Column()])
+    monkeypatch.setattr(st, "toggle", lambda *_args, **_kwargs: True)
+    monkeypatch.setattr(st, "warning", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(st, "dataframe", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(s2_directions, "_render_plot", lambda figure, *_args, **_kwargs: rendered.append(figure))
+
+    s2_directions.render_s2_direction_histograms(Handle(), key_prefix="test")
+
+    assert calls == [(36, 18)]
+    assert [figure.layout.title.text for figure in rendered] == [
+        "δ̂ᵉ[j,t] — target-frame movement direction",
+        "v̂ᵉ[j,t] — target-frame camera +Z direction",
+        "ℱᵉ[j,t] — calibrated target-proxy surface support",
+    ]
+
+
+def test_target_s2_panel_shows_exclusion_issues_when_no_direction_survives(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An empty histogram must retain the diagnostic explaining its empty support."""
+
+    class Column:
+        def number_input(self, _label: str, *, value: int, **_kwargs: Any) -> int:
+            return value
+
+    class Handle:
+        def s2_direction_histogram(self, *, azimuth_bins: int, elevation_bins: int) -> dict[str, Any]:
+            assert (azimuth_bins, elevation_bins) == (36, 18)
+            return {
+                "movement_count": 0,
+                "view_direction_count": 0,
+                "issues": ({"code": "missing_target", "rollout_row_id": 7},),
+            }
+
+    warnings: list[str] = []
+    messages: list[str] = []
+    tables: list[pd.DataFrame] = []
+    monkeypatch.setattr(st, "markdown", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(st, "columns", lambda _count: [Column(), Column()])
+    monkeypatch.setattr(st, "toggle", lambda *_args, **_kwargs: True)
+    monkeypatch.setattr(st, "warning", lambda message, **_kwargs: warnings.append(message))
+    monkeypatch.setattr(st, "info", lambda message, **_kwargs: messages.append(message))
+    monkeypatch.setattr(st, "dataframe", lambda frame, **_kwargs: tables.append(frame))
+    monkeypatch.setattr(
+        s2_directions,
+        "_render_plot",
+        lambda *_args, **_kwargs: pytest.fail("empty evidence must not render a plot"),
+    )
+
+    s2_directions.render_s2_direction_histograms(Handle(), key_prefix="empty")
+
+    assert warnings == ["All rollout paths were excluded because their target frame or factual path was invalid."]
+    assert messages == ["No finite factual selected-action directions were available in the selected store."]
+    assert tables[0].to_dict("records") == [{"code": "missing_target", "rollout_row_id": 7}]
 
 
 def test_bounded_geometry_is_default_visible_in_admission_surface() -> None:

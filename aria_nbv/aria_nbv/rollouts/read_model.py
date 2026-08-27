@@ -170,10 +170,84 @@ def rollout_at(reader: RolloutZarrStoreReader, row_position: int) -> StoredRollo
         raise ValueError(f"Rollout row {rollout_row_id} has no step rows.")
     step_positions = step_positions[np.argsort(step_indices[step_positions], kind="stable")]
 
-    scene_names = _string_dictionary(reader, "scene")
-    snippet_names = _string_dictionary(reader, "snippet")
-    split_names = _string_dictionary(reader, "split")
-    policy_names = _string_dictionary(reader, "policy")
+    return _stored_rollout(
+        reader,
+        row_position=position,
+        rollout_row_id=rollout_row_id,
+        step_positions=step_positions,
+        dictionaries=_rollout_dictionaries(reader),
+    )
+
+
+def rollout_rows(reader: RolloutZarrStoreReader) -> tuple[StoredRollout, ...]:
+    """Read every rollout while indexing the shared step table once.
+
+    This is the full-table counterpart to :func:`rollout_at`. It materializes
+    rollout and step identifiers once, groups step positions by stable rollout
+    row id, and preserves factual step order. Full-store reducers should use
+    this projection so their join cost grows linearly with the number of
+    rollout and step rows rather than rescanning both tables per rollout.
+
+    Returns:
+        Persisted rollout rows in physical rollout-table order.
+
+    Raises:
+        ValueError: If any persisted rollout has no associated step row.
+    """
+
+    rollouts = reader.root["rollouts"]
+    steps = reader.root["steps"]
+    rollout_ids = np.asarray(rollouts["rollout_row_id"], dtype=np.int64).reshape(-1)
+    step_rollout_ids = np.asarray(steps["rollout_row_id"], dtype=np.int64).reshape(-1)
+    step_indices = np.asarray(steps["step_index"], dtype=np.int64).reshape(-1)
+    step_positions_by_rollout: dict[int, list[int]] = {}
+    for step_position, rollout_row_id in enumerate(step_rollout_ids.tolist()):
+        step_positions_by_rollout.setdefault(int(rollout_row_id), []).append(step_position)
+
+    dictionaries = _rollout_dictionaries(reader)
+    rows: list[StoredRollout] = []
+    for row_position, rollout_row_id in enumerate(rollout_ids.tolist()):
+        positions = step_positions_by_rollout.get(int(rollout_row_id), [])
+        if not positions:
+            raise ValueError(f"Rollout row {int(rollout_row_id)} has no step rows.")
+        step_positions = np.asarray(positions, dtype=np.int64)
+        step_positions = step_positions[np.argsort(step_indices[step_positions], kind="stable")]
+        rows.append(
+            _stored_rollout(
+                reader,
+                row_position=row_position,
+                rollout_row_id=int(rollout_row_id),
+                step_positions=step_positions,
+                dictionaries=dictionaries,
+            )
+        )
+    return tuple(rows)
+
+
+def _rollout_dictionaries(reader: RolloutZarrStoreReader) -> tuple[list[str], list[str], list[str], list[str]]:
+    """Decode the four rollout dictionaries once for a read transaction."""
+
+    return (
+        _string_dictionary(reader, "scene"),
+        _string_dictionary(reader, "snippet"),
+        _string_dictionary(reader, "split"),
+        _string_dictionary(reader, "policy"),
+    )
+
+
+def _stored_rollout(
+    reader: RolloutZarrStoreReader,
+    *,
+    row_position: int,
+    rollout_row_id: int,
+    step_positions: NDArray[np.int64],
+    dictionaries: tuple[list[str], list[str], list[str], list[str]],
+) -> StoredRollout:
+    """Decode one rollout from already-indexed row and dictionary context."""
+
+    rollouts = reader.root["rollouts"]
+    position = int(row_position)
+    scene_names, snippet_names, split_names, policy_names = dictionaries
 
     def decoded(values: list[str], index: object) -> str:
         value = int(index)
@@ -457,5 +531,5 @@ def _string_dictionary(reader: RolloutZarrStoreReader, name: str) -> list[str]:
 
 __all__ = (
     "StoredRollout StoredSelectedDepth StoredStep StoredTarget decode_invalid_reason decode_position_id "
-    "rollout_at rollout_by_id rollout_steps selected_depth_for_step target_by_id target_rows"
+    "rollout_at rollout_by_id rollout_rows rollout_steps selected_depth_for_step target_by_id target_rows"
 ).split()

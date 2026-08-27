@@ -304,7 +304,8 @@ def test_q_h_render_wires_progress_and_chunk_boundary_cancellation(monkeypatch: 
     session_state: dict[str, Any] = {}
     monkeypatch.setattr(st, "session_state", session_state)
     monkeypatch.setattr(st, "markdown", lambda *_args, **_kwargs: None)
-    monkeypatch.setattr(st, "toggle", lambda *_args, **_kwargs: True)
+    toggles = iter((True, False))
+    monkeypatch.setattr(st, "toggle", lambda *_args, **_kwargs: next(toggles))
     monkeypatch.setattr(
         st,
         "number_input",
@@ -347,6 +348,19 @@ def test_q_h_render_wires_progress_and_chunk_boundary_cancellation(monkeypatch: 
     assert callback_results == [False]
     assert progress.calls == [(0.5, "Q_H count: 2/4 state rows")]
     assert status.captions[-1] == "Q_H count stopped at a chunk boundary."
+
+
+def test_q_h_s2_widget_prefix_is_content_scoped() -> None:
+    """S² controls cannot reuse Streamlit state across store generations."""
+
+    first = type("Handle", (), {"store_identity": "store:content-a"})()
+    second = type("Handle", (), {"store_identity": "store:content-b"})()
+
+    first_prefix = qh_admission._s2_widget_prefix(first)
+    second_prefix = qh_admission._s2_widget_prefix(second)
+
+    assert first_prefix.startswith("stored_rollouts_qh_")
+    assert first_prefix != second_prefix
 
 
 def test_all_store_backed_caches_follow_atomic_same_path_replacement(tmp_path: Path) -> None:
@@ -773,6 +787,7 @@ def test_stored_rollout_session_clear_invalidates_every_matrix_owner_once(monkey
         "_cached_depth_summary",
         "_cached_proposal_geometry",
         "_cached_trajectory_geometry",
+        "_cached_s2_direction_histogram",
         "_cached_topology_cached",
         "_cached_failures_cached",
         "_cached_evidence_bundle_cached",

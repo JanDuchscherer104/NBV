@@ -71,6 +71,18 @@ class AdmissionEvidenceSummary:
     admission_audit_hash: str
 
     @property
+    def sample_count(self) -> int:
+        """Return unique audited source samples, including zero-observation sentinels."""
+
+        return len({row.sample_key for row in self.rows})
+
+    @property
+    def scene_count(self) -> int:
+        """Return unique audited source scenes."""
+
+        return len({row.scene_id for row in self.rows})
+
+    @property
     def observed_count(self) -> int:
         return sum(row.observed_target_count for row in self.rows if row.row_kind == "observed_target")
 
@@ -118,6 +130,8 @@ class AdmissionEvidenceSummary:
             "source_manifest_hash": self.source_manifest_hash,
             "admission_audit_hash": self.admission_audit_hash,
             "counts": {
+                "source_samples": self.sample_count,
+                "source_scenes": self.scene_count,
                 "observed": self.observed_count,
                 "admitted": self.admitted_count,
                 "rejected": self.rejected_count,

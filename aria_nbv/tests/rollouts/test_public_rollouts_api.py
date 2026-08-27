@@ -61,6 +61,7 @@ def test_read_model_symbols_are_leaf_only() -> None:
         "StoredTarget",
         "rollout_at",
         "rollout_by_id",
+        "rollout_rows",
         "rollout_steps",
         "selected_depth_for_step",
         "target_by_id",
