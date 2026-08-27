@@ -27,7 +27,8 @@ Moved the shared point-to-mesh query into the geometry owner, added mutation-awa
 `aria_nbv/aria_nbv/rri_metrics/prepared.py` now owns device- and dtype-aware prepared target state while candidate-dependent geometry remains evaluated on each call.
 
 ## Commits
-- https://github.com/JanDuchscherer104/ARIA-NBV/commit/7c40885a176e4f71af41afe5b3ecf1675c73ba51
+- https://github.com/JanDuchscherer104/ARIA-NBV/commit/6428097e623d5d7b151206fba0dd5e77d3030e05
+- https://github.com/JanDuchscherer104/ARIA-NBV/commit/bafd53d1957b387d4f7ae3ad598c7d78d755f547
 
 ## Verification
 - Ruff over pose-generation, geometry, RRI, oracle, and rollout owners: passed.
