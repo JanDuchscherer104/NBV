@@ -406,9 +406,20 @@ class VinModelV3(nn.Module):
 
     @staticmethod
     def _tensor_cache_stamp(value: object) -> tuple[object, ...] | None:
+        tensor_method = getattr(value, "tensor", None)
+        if not isinstance(value, Tensor) and callable(tensor_method):
+            value = tensor_method()
         if not isinstance(value, Tensor):
             return None
-        return (id(value), getattr(value, "_version", None), value.device, value.dtype, tuple(value.shape))
+        return (
+            id(value),
+            getattr(value, "_version", None),
+            value.device,
+            value.dtype,
+            tuple(value.shape),
+            tuple(value.stride()),
+            value.storage_offset(),
+        )
 
     def _scene_cache_key(
         self,
