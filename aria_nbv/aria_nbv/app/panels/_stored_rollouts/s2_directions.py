@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Protocol, TypedDict
 
+import numpy as np
 import pandas as pd
 import streamlit as st
+from numpy.typing import NDArray
 
 from ....rollouts.s2_reporting import s2_direction_figure
 from ...scientific_labels import TheoryReferences
@@ -13,7 +15,38 @@ from .shared import ExplanationSection, ScientificExplanation
 from .shared import render_plot as _render_plot
 
 
-def render_s2_direction_histograms(session_handle: Any, *, key_prefix: str) -> None:
+class _S2PanelPayload(TypedDict):
+    """Serialized reducer fields consumed by the interactive panel."""
+
+    movement_count: int
+    view_direction_count: int
+    frustum_count: int
+    source_sample_count: int
+    source_snippet_count: int
+    source_scene_count: int
+    target_count: int
+    rollout_count: int
+    store_rollout_count: int
+    selected_step_count: int
+    movement_skipped_zero_count: int
+    frustum_missing_calibration_count: int
+    movement_projection: NDArray[np.float32]
+    view_direction_projection: NDArray[np.float32]
+    frustum_projection: NDArray[np.float32]
+    frustum_mean_fov_solid_angle_sr: float
+    frustum_mean_target_surface_fraction_approx: float
+    frustum_union_target_surface_fraction_approx: float
+    issues: tuple[dict[str, object], ...]
+
+
+class _S2DirectionSession(Protocol):
+    """Minimal read-only session required by the shared S² panel."""
+
+    def s2_direction_histogram(self, *, azimuth_bins: int, elevation_bins: int) -> _S2PanelPayload:
+        """Return one presentation-ready complete spherical projection."""
+
+
+def render_s2_direction_histograms(session_handle: _S2DirectionSession, *, key_prefix: str) -> None:
     r"""Render full-store directional evidence after explicit user dispatch.
 
     The scientific population is every factual selected transition in the
