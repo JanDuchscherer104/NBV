@@ -804,10 +804,13 @@ class TargetFiniteHorizonScorer(nn.Module):
             except RuntimeError:
                 return None
 
-        versions = tuple((id(tensor), version(tensor)) for tensor in tensors)
-        if any(version_value is None for _, version_value in versions):
-            return None
-        return tuple((tensor_id, int(version_value)) for tensor_id, version_value in versions)
+        versions: list[tuple[int, int]] = []
+        for tensor in tensors:
+            version_value = version(tensor)
+            if version_value is None:
+                return None
+            versions.append((id(tensor), version_value))
+        return tuple(versions)
 
 
 __all__ = [
