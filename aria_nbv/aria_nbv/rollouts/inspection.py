@@ -6384,23 +6384,38 @@ def _selected_path_lengths(reader: RolloutZarrStoreReader) -> np.ndarray:
     candidate_steps = np.asarray(reader.array("candidates/step_index"), dtype=np.int64).reshape(-1)
     selected = np.asarray(reader.array("candidates/selected_mask"), dtype=np.bool_).reshape(-1)
     candidate_poses = np.asarray(reader.array("candidates/pose_world_cam"), dtype=np.float32).reshape(-1, 12)
-    lengths: list[float] = []
-    for rollout_row, rollout_id in enumerate(rollout_ids):
-        indices = np.flatnonzero(selected & (candidate_rollout_ids == int(rollout_id)))
-        if indices.size == 0:
-            lengths.append(0.0)
-            continue
-        ordered = indices[np.argsort(candidate_steps[indices], kind="stable")]
-        points = [root_pose[rollout_row, 9:12], *[candidate_poses[index, 9:12] for index in ordered]]
-        lengths.append(
-            float(
-                sum(
-                    np.linalg.norm(np.asarray(points[index + 1]) - np.asarray(points[index]))
-                    for index in range(len(points) - 1)
-                )
-            )
-        )
-    return np.asarray(lengths, dtype=np.float64)
+    lengths = np.zeros(rollout_ids.size, dtype=np.float64)
+    if rollout_ids.size == 0:
+        return lengths
+    selected_positions = np.flatnonzero(selected)
+    if selected_positions.size == 0:
+        return lengths
+
+    rollout_order = np.argsort(rollout_ids, kind="stable")
+    sorted_rollout_ids = rollout_ids[rollout_order]
+    selected_rollout_ids = candidate_rollout_ids[selected_positions]
+    sorted_positions = np.searchsorted(sorted_rollout_ids, selected_rollout_ids)
+    known_rollout = (sorted_positions < rollout_ids.size) & (
+        sorted_rollout_ids[np.minimum(sorted_positions, rollout_ids.size - 1)] == selected_rollout_ids
+    )
+    selected_positions = selected_positions[known_rollout]
+    if selected_positions.size == 0:
+        return lengths
+
+    rollout_positions = rollout_order[sorted_positions[known_rollout]]
+    path_order = np.lexsort((selected_positions, candidate_steps[selected_positions], rollout_positions))
+    selected_positions = selected_positions[path_order]
+    rollout_positions = rollout_positions[path_order]
+    centers = candidate_poses[selected_positions, 9:12]
+    previous_centers = np.empty_like(centers)
+    starts = np.empty(rollout_positions.size, dtype=np.bool_)
+    starts[0] = True
+    starts[1:] = rollout_positions[1:] != rollout_positions[:-1]
+    previous_centers[starts] = root_pose[rollout_positions[starts], 9:12]
+    previous_centers[~starts] = centers[:-1][~starts[1:]]
+    segment_lengths = np.linalg.norm(centers - previous_centers, axis=1)
+    np.add.at(lengths, rollout_positions, segment_lengths)
+    return lengths
 
 
 def _reason_counts(reason_codes: np.ndarray) -> dict[str, int]:
