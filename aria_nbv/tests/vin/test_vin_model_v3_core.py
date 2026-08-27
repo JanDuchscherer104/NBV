@@ -373,6 +373,29 @@ def test_vin_model_v3_prepared_scene_context_bypasses_untrackable_snippets(
     assert prepare_calls == 2
 
 
+def test_vin_model_v3_inference_tensors_bypass_prepared_scene_cache(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    model = VinModelV3(VinModelV3Config(backbone=None)).eval()
+    field_calls = 0
+    original_field = model._build_field_bundle
+
+    def count_field(*args, **kwargs):
+        nonlocal field_calls
+        field_calls += 1
+        return original_field(*args, **kwargs)
+
+    monkeypatch.setattr(model, "_build_field_bundle", count_field)
+    with torch.inference_mode():
+        inputs = _make_v3_scene_cache_inputs()
+        first = _forward_v3_for_scene_cache(model, inputs)
+        second = _forward_v3_for_scene_cache(model, inputs)
+
+    assert field_calls == 2
+    assert first.logits.shape == second.logits.shape
+    torch.testing.assert_close(first.logits, second.logits)
+
+
 def test_vin_model_v3_prepared_scene_context_invalidates_after_weight_update(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

@@ -411,9 +411,13 @@ class VinModelV3(nn.Module):
             value = tensor_method()
         if not isinstance(value, Tensor):
             return None
+        try:
+            version = value._version
+        except RuntimeError:
+            return None
         return (
             id(value),
-            getattr(value, "_version", None),
+            version,
             value.device,
             value.dtype,
             tuple(value.shape),
@@ -427,7 +431,7 @@ class VinModelV3(nn.Module):
         backbone_out: EvlBackboneOutput,
         *,
         device: torch.device,
-    ) -> tuple[object, ...]:
+    ) -> tuple[object, ...] | None:
         """Build an identity/version key for safe frozen-weight reuse."""
         backbone_values = (
             backbone_out.occ_pr,
@@ -444,12 +448,16 @@ class VinModelV3(nn.Module):
             getattr(efm, "lengths", None),
             getattr(efm, "t_world_rig", None),
         )
+        snippet_stamps = tuple(self._tensor_cache_stamp(value) for value in snippet_values)
+        backbone_stamps = tuple(self._tensor_cache_stamp(value) for value in backbone_values)
+        if any(stamp is None for stamp in (*snippet_stamps, *backbone_stamps)):
+            return None
         return (
             id(efm),
             id(backbone_out),
             device,
-            tuple(self._tensor_cache_stamp(value) for value in snippet_values),
-            tuple(self._tensor_cache_stamp(value) for value in backbone_values),
+            snippet_stamps,
+            backbone_stamps,
             tuple((id(param), getattr(param, "_version", None)) for param in self.parameters()),
         )
 
@@ -499,10 +507,10 @@ class VinModelV3(nn.Module):
         """Return reusable scene state only for frozen, gradient-free inference."""
         cache_allowed = not self.training and not torch.is_grad_enabled() and is_vin_snippet_view_instance(efm)
         key = self._scene_cache_key(efm, backbone_out, device=device) if cache_allowed else None
-        if cache_allowed and key == self._prepared_scene_cache_key and self._prepared_scene_context is not None:
+        if key is not None and key == self._prepared_scene_cache_key and self._prepared_scene_context is not None:
             return self._prepared_scene_context
         context = self._prepare_scene_context(efm, backbone_out, device=device)
-        if cache_allowed:
+        if key is not None:
             self._prepared_scene_cache_key = key
             self._prepared_scene_context = context
         return context
