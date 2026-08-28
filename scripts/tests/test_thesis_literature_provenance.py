@@ -28,9 +28,10 @@ FOUNDATIONS_LITERATURE = tuple(
     for name in (
         "02-01-active-perception-and-view-utility.typ",
         "02-02-targets-actions-and-support.typ",
-        "02-03-finite-horizon-value-learning.typ",
-        "02-04-egocentric-and-geometric-representations.typ",
-        "02-05-literature-positioning.typ",
+        "02-03-candidate-support-and-motion-feasibility.typ",
+        "02-04-finite-horizon-value-learning.typ",
+        "02-05-egocentric-and-geometric-representations.typ",
+        "02-06-literature-positioning.typ",
     )
 )
 LITERATURE_ROOT = ROOT / "docs/literature"

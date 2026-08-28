@@ -41,8 +41,9 @@ and selection remain unchanged.
 The NBV mechanism therefore answers only *how* a sensing choice is made. To
 interpret the choice, the utility must state *which reconstruction consequence*
 is valued and *for which spatial support*. This distinction leads from the
-general active-perception loop to the objective families compared next
-@PB-NBV-jia2025 @GenNBV-chen2024.
+general active-perception loop to the objective families compared next; only
+after fixing that objective can candidate support and feasibility be separated
+from view value @PB-NBV-jia2025 @GenNBV-chen2024.
 
 // evidence:
 // - @PB-NBV-jia2025 -> docs/literature/tex-src/arXiv-PB-NBV/sections/related.tex:5-24 (finite-candidate NBV stages)

@@ -53,10 +53,12 @@ maintaining its identity from observations.
 The thesis therefore treats coverage and uncertainty as non-equivalent
 diagnostics and takes target-specific reconstruction quality as the endpoint of
 interest @VIN-NBV-frahm2025 @ObjectCentricNBV-jeong2026. This choice fixes what
-the decision should improve, but not when that improvement should be assessed.
-Once an action can expose or obstruct later opportunities, view utility must be
-embedded in a sequential decision problem.
+the decision should improve, but it does not determine which viewpoints can be
+proposed or reached. Candidate support and motion feasibility must be separated
+from utility before delayed consequences are embedded in a sequential decision
+problem @PB-NBV-jia2025.
 
 // evidence:
 // - @VIN-NBV-frahm2025 -> docs/literature/tex-src/arXiv-VIN-NBV/sec/3_methods.tex:36-44, docs/literature/tex-src/arXiv-VIN-NBV/sec/3_methods.tex:78-92 (direct reconstruction-improvement target and evaluation)
 // - @ObjectCentricNBV-jeong2026 -> docs/literature/tex-src/arXiv-Instance-NBV/ver3_rpm/3_method_ver3_rpm.tex:123-139, docs/literature/tex-src/arXiv-Instance-NBV/ver3_rpm/3_method_ver3_rpm.tex:249-258 (object-conditioned view utility)
+// - @PB-NBV-jia2025 -> docs/literature/tex-src/arXiv-PB-NBV/sections/method.tex:21-45 (candidate support set independently of its later score)
