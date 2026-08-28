@@ -6,7 +6,8 @@ EFM3D tensor wrappers without mutating or moving their underlying tensors;
 callers retain device and lifetime ownership.
 """
 
-from typing import Any
+from dataclasses import fields, is_dataclass
+from typing import Any, cast
 
 import torch
 from efm3d.aria.camera import CameraTW
@@ -40,11 +41,9 @@ def _extract_tensor(val: Any) -> Tensor | None:
     """Return the storage tensor exposed by a supported EFM3D wrapper."""
     if isinstance(val, Tensor):
         return val
-    if isinstance(val, PoseTW):
-        return val.matrix
-    if isinstance(val, (TensorWrapper, CameraTW, ObbTW)):
-        data = val.tensor() if callable(getattr(val, "tensor", None)) else val.tensor  # type: ignore[operator]
-        return data
+    if isinstance(val, (TensorWrapper, PoseTW, CameraTW, ObbTW)):
+        tensor = val.tensor() if callable(getattr(val, "tensor", None)) else val.tensor
+        return cast(Tensor, tensor)
     return None
 
 
@@ -83,18 +82,6 @@ def summarize_shape(value: Any) -> str:
     return type(summary).__name__
 
 
-def _tensor_desc(tensor: Tensor) -> str:
-    return f"{{shape: {tuple(tensor.shape)}, dtype: {tensor.dtype}}}"
-
-
-def _tensor_stats(tensor: Tensor) -> str:
-    if tensor.numel() == 1:
-        return f"{{value: {float(tensor.item()):.4g}}}"
-    if tensor.numel() == 0 or not tensor.dtype.is_floating_point:
-        return ""
-    return f"{{min: {float(tensor.min()):.4g}, max: {float(tensor.max()):.4g}, mean: {float(tensor.mean()):.4g}}}"
-
-
 def _list_desc(items: list[Any]) -> str:
     elem_type = type(items[0]).__name__ if items else "unknown"
     parts = [f"len: {len(items)}", f"elem_type: {elem_type}"]
@@ -112,19 +99,21 @@ def _render_rich_summary(
     *,
     path_map: dict[tuple[str, ...], str],
     show_only_sample: set[str],
-    with_shape: bool,
+    include_stats: bool,
 ) -> None:
     lookup_path = path[1:] if path and path[0] == "data" else path
     flat_note = f" [flat: {path_map.get(lookup_path)}]" if lookup_path in path_map else ""
     label = f"{key} <{type(value).__name__}>{flat_note}" if key is not None else None
     current = node if label is None else node.add(Text(label, style="config.field"))
 
-    if isinstance(value, torch.Tensor):
-        current.add(Text(_tensor_desc(value), style="config.value"))
-        if with_shape:
-            stats = _tensor_stats(value)
-            if stats:
-                current.add(Text(stats, style="config.value"))
+    tensor = _extract_tensor(value)
+    if tensor is not None:
+        current.add(
+            Text(
+                _format_tensor_summary(_tensor_summary(tensor, include_stats=include_stats)),
+                style="config.value",
+            )
+        )
         return
 
     if isinstance(value, dict) and _is_tensor_summary(value):
@@ -146,7 +135,20 @@ def _render_rich_summary(
                 path + (k,),
                 path_map=path_map,
                 show_only_sample=show_only_sample,
-                with_shape=with_shape,
+                include_stats=include_stats,
+            )
+        return
+
+    if is_dataclass(value) and not isinstance(value, type):
+        for field in fields(value):
+            _render_rich_summary(
+                current,
+                field.name,
+                getattr(value, field.name),
+                path + (field.name,),
+                path_map=path_map,
+                show_only_sample=show_only_sample,
+                include_stats=include_stats,
             )
         return
 
@@ -184,15 +186,17 @@ def rich_summary(
     tree_dict: dict[str, Any],
     *,
     path_map: dict[tuple[str, ...], str] | None = None,
-    with_shape: bool = True,
+    include_stats: bool = False,
     show_only_sample: list[str] | None = None,
     root_label: str = "",
     is_print: bool = True,
 ) -> Tree:
     """Build and return a rich Tree from a flattened sample dict.
 
-    - One line per entry; tensors show shape/dtype, optional stats line when
-      ``with_shape`` is True (single-element tensors show value).
+    - Dataclasses and dictionaries are traversed recursively, preserving the
+      composition of typed dataset items and batches.
+    - Tensors and EFM tensor wrappers show shape, dtype, and device; finite
+      floating-point statistics are included when ``include_stats`` is true.
     - Lists show length/element type (+ first/last for primitive elements).
     - Dicts are traversed recursively; keys listed in ``show_only_sample`` are
       truncated to first/last items.
@@ -212,13 +216,13 @@ def rich_summary(
             (k,),
             path_map=resolved_path_map,
             show_only_sample=sample_only,
-            with_shape=with_shape,
+            include_stats=include_stats,
         )
 
     if is_print:
         from .console import Console
 
-        Console().print(root, soft_wrap=False, highlight=True, markup=True, emoji=False)
+        Console().print(root, soft_wrap=False, highlight=True, markup=True, emoji=False)  # type: ignore[no-untyped-call]
     return root
 
 
@@ -226,7 +230,7 @@ def capture_tree(tree: Tree) -> str:
     """Render a Rich tree as ANSI-free plain text for logs and web UIs."""
     from .console import Console
 
-    console = Console(force_terminal=False, color_system=None)
+    console = Console(force_terminal=False, color_system=None, width=240)  # type: ignore[no-untyped-call]
     with console.capture() as capture:
         console.print(
             tree,

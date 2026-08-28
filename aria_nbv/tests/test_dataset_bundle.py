@@ -11,7 +11,7 @@ import pytest
 import torch
 from efm3d.aria.pose import PoseTW
 
-from aria_nbv.data_handling.qh_data import QhActorTensors, QhChain, QhDatasetConfig
+from aria_nbv.data_handling.qh_data import QhActorTensors, QhBatch, QhChain, QhDatasetConfig
 from aria_nbv.data_handling.qh_data.views import QhActorStateContract, QhChainKey, QhSupervision
 from aria_nbv.data_handling.vin_store.format import (
     VinOfflineBlockSpec,
@@ -28,7 +28,7 @@ from aria_nbv.dataset_bundle import (
     build_dataset_bundle_summary,
     build_qh_corpus_readiness,
     compute_dataset_bundle_deep_statistics,
-    preview_qh_batch,
+    load_qh_item_and_batch,
     scan_root_gt_obb_target_opportunities,
 )
 from aria_nbv.rollouts.qh_geometry import QhGeometryContract
@@ -226,7 +226,9 @@ def test_qh_readiness_json_export_plainifies_cfplus_geometry(monkeypatch: pytest
     assert payload["contract"]["selected_depth_geometry"]["image_size_hw"] == [240, 240]
 
 
-def test_qh_batch_preview_is_seeded_and_reports_real_padding(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+def test_load_qh_item_and_batch_uses_typed_dataset_and_loader(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     root, source_hash = _write_root_store(tmp_path)
     rollout = _write_rollout_store(tmp_path, name="qh.zarr", source_hash=source_hash)
     stages = {
@@ -242,16 +244,19 @@ def test_qh_batch_preview_is_seeded_and_reports_real_padding(monkeypatch: pytest
     }
     _patch_qh_stages(monkeypatch, stages)
     selection = DatasetBundleSelection(root, (rollout,))
-    first = preview_qh_batch(
+    item, batch = load_qh_item_and_batch(
         selection, contract=_QH_READINESS_CONTRACT, stage=Stage.TRAIN, chain_index=1, batch_size=2, seed=11
     )
-    second = preview_qh_batch(
+    second_item, second_batch = load_qh_item_and_batch(
         selection, contract=_QH_READINESS_CONTRACT, stage="train", chain_index=1, batch_size=2, seed=11
     )
-    assert first == second
-    assert first.selected_chain_steps == 2
-    assert first.step_padding_count == 1
-    assert first.candidate_padding_count == 4
+    assert isinstance(item, QhChain)
+    assert isinstance(batch, QhBatch)
+    assert item.key == second_item.key
+    assert batch.keys == second_batch.keys
+    assert item.num_steps == 2
+    assert int((~batch.actor.step_mask).sum().item()) == 1
+    assert int((~batch.actor.candidate_mask).sum().item()) == 4
 
 
 def test_qh_readiness_fails_closed_for_empty_train_overlap_and_contract_mismatch(
@@ -285,7 +290,7 @@ def test_qh_readiness_fails_closed_for_empty_train_overlap_and_contract_mismatch
     }
     _patch_qh_stages(monkeypatch, mismatch)
     assert (
-        "incompatible learning contracts"
+        "incompatible learning semantics"
         in build_qh_corpus_readiness(selection, contract=_QH_READINESS_CONTRACT).blockers[0]
     )
 
@@ -332,7 +337,7 @@ def test_qh_readiness_rejects_incomplete_promotion_evidence_before_dataset_const
     assert any("trust" in blocker or "promotion" in blocker for blocker in readiness.blockers)
 
 
-def test_qh_preview_rejects_incomplete_promotion_evidence_before_dataset_construction(
+def test_qh_item_and_batch_reject_incomplete_promotion_evidence_before_dataset_construction(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     """The direct preview API shares readiness's fail-closed promotion gate."""
@@ -349,12 +354,12 @@ def test_qh_preview_rejects_incomplete_promotion_evidence_before_dataset_constru
 
     monkeypatch.setattr(QhDatasetConfig, "setup_target", unexpected)
     with pytest.raises(ValueError, match="trust|promotion"):
-        preview_qh_batch(DatasetBundleSelection(root, (rollout,)), contract=_QH_READINESS_CONTRACT)
+        load_qh_item_and_batch(DatasetBundleSelection(root, (rollout,)), contract=_QH_READINESS_CONTRACT)
 
     assert not called
 
 
-def test_qh_readiness_and_preview_reject_broken_promotion_marker(tmp_path: Path) -> None:
+def test_qh_readiness_and_item_load_reject_broken_promotion_marker(tmp_path: Path) -> None:
     """A broken promotion marker cannot masquerade as an unpromoted V0 store."""
 
     root, source_hash = _write_root_store(tmp_path)
@@ -366,7 +371,7 @@ def test_qh_readiness_and_preview_reject_broken_promotion_marker(tmp_path: Path)
     assert any("trust" in blocker or "promotion" in blocker for blocker in readiness.blockers)
 
     with pytest.raises(ValueError, match="trust|promotion"):
-        preview_qh_batch(DatasetBundleSelection(root, (rollout,)), contract=_QH_READINESS_CONTRACT)
+        load_qh_item_and_batch(DatasetBundleSelection(root, (rollout,)), contract=_QH_READINESS_CONTRACT)
 
 
 def _write_root_store(root: Path) -> tuple[Path, str]:

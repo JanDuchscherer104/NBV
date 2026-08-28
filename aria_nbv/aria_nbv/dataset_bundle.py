@@ -20,6 +20,7 @@ import msgspec
 import numpy as np
 
 from .data_handling.identifiers import compact_ase_atek_sample_id
+from .data_handling.qh_data import QhBatch, QhChain, QhDataset, QhDatasetConfig
 from .data_handling.qh_data.views import (
     QhExperimentProfile,
     QhRootEvlProfile,
@@ -29,6 +30,7 @@ from .data_handling.qh_data.views import (
 from .data_handling.vin_store.format import VinOfflineIndexRecord, VinOfflineManifest
 from .data_handling.vin_store.store import OFFLINE_DATASET_VERSION, VinOfflineStoreConfig, VinOfflineStoreReader
 from .data_handling.vin_store.target_inventory import inspect_target_inventory
+from .lightning.qh_datamodule import QhDataModule
 from .rollouts.inspection import (
     build_effective_streamlit_trust,
     build_manifest_facts,
@@ -282,65 +284,6 @@ class QhReadinessContract:
     """Selected-observation source bound to the actor contract."""
 
 
-@dataclass(frozen=True, slots=True)
-class QhBatchPreview:
-    """Bounded evidence from one selected chain and one actual DataLoader batch."""
-
-    stage: Stage
-    """Stage whose dataset and loader were sampled."""
-
-    selected_chain_index: int
-    """Requested zero-based dataset index."""
-
-    selected_chain_key: dict[str, Any]
-    """CPU-only source identity for the directly read chain."""
-
-    selected_chain_steps: int
-    """Realized state count in the directly read chain."""
-
-    batch_chain_keys: tuple[dict[str, Any], ...]
-    """CPU-only identities collated by the actual DataLoader."""
-
-    batch_step_counts: tuple[int, ...]
-    """Realized chain lengths before time-axis padding."""
-
-    shapes: dict[str, tuple[int, ...]]
-    """Principal actor and supervision tensor shapes."""
-
-    dtypes: dict[str, str]
-    """Principal actor and supervision tensor dtypes."""
-
-    step_padding_count: int
-    """False entries in the batch step mask."""
-
-    candidate_padding_count: int
-    """False entries in the materialized-candidate mask."""
-
-    action_count: int
-    """Actor-valid candidate entries in the batch."""
-
-    trainable_candidate_count: int
-    """Persisted label-supported candidate entries in the batch."""
-
-    def to_jsonable(self) -> dict[str, Any]:
-        """Return JSON-compatible chain and collation evidence."""
-
-        return {
-            "stage": self.stage.value,
-            "selected_chain_index": self.selected_chain_index,
-            "selected_chain_key": self.selected_chain_key,
-            "selected_chain_steps": self.selected_chain_steps,
-            "batch_chain_keys": list(self.batch_chain_keys),
-            "batch_step_counts": list(self.batch_step_counts),
-            "shapes": {name: list(shape) for name, shape in self.shapes.items()},
-            "dtypes": self.dtypes,
-            "step_padding_count": self.step_padding_count,
-            "candidate_padding_count": self.candidate_padding_count,
-            "action_count": self.action_count,
-            "trainable_candidate_count": self.trainable_candidate_count,
-        }
-
-
 def build_qh_corpus_readiness(
     selection: DatasetBundleSelection,
     *,
@@ -378,8 +321,36 @@ def build_qh_corpus_readiness(
         return _blocked_qh_readiness(selection, loader_settings, *promotion_blockers)
 
     try:
-        datasets, data_module = _build_qh_data_module(selection, contract=contract, batch_size=batch_size, seed=seed)
-        stage_rows = tuple(_qh_stage_readiness(stage, datasets.get(stage)) for stage in _QH_STAGES)
+        data_module = _build_qh_data_module(selection, contract=contract, batch_size=batch_size, seed=seed)
+        stage_rows: list[QhStageReadiness] = []
+        for stage, dataset in (
+            (Stage.TRAIN, data_module.train_dataset),
+            (Stage.VAL, data_module.val_dataset),
+            (Stage.TEST, data_module.test_dataset),
+        ):
+            if dataset is None:
+                stage_rows.append(QhStageReadiness(stage, False, 0, 0, 0, (), 0, {}))
+                continue
+            state_count = 0
+            trainable_candidate_count = 0
+            realized_max_horizon = 0
+            for index in range(len(dataset)):
+                chain = dataset[index]
+                state_count += chain.num_steps
+                trainable_candidate_count += int(chain.supervision.label_mask.sum().item())
+                realized_max_horizon = max(realized_max_horizon, chain.num_steps)
+            stage_rows.append(
+                QhStageReadiness(
+                    stage=stage,
+                    included=True,
+                    chain_count=len(dataset),
+                    state_count=state_count,
+                    trainable_candidate_count=trainable_candidate_count,
+                    scene_ids=tuple(sorted(dataset.scenes)),
+                    max_horizon=realized_max_horizon,
+                    provenance=_plain_value(dataset.provenance),
+                )
+            )
     except Exception as exc:
         return _blocked_qh_readiness(selection, loader_settings, f"{type(exc).__name__}: {exc}")
 
@@ -387,12 +358,13 @@ def build_qh_corpus_readiness(
         field.name: getattr(data_module.train_dataset.contract, field.name)
         for field in fields(data_module.train_dataset.contract)
     }
-    storage = _normalized_qh_storage(light, stage_rows)
+    resolved_stage_rows = tuple(stage_rows)
+    storage = _normalized_qh_storage(light, resolved_stage_rows)
     return QhCorpusReadiness(
         selection=selection,
         verdict="Ready",
         blockers=(),
-        stages=stage_rows,
+        stages=resolved_stage_rows,
         contract=data_contract,
         actor_contract={
             "experiment_profile": data_module.train_dataset.actor_state_contract.experiment_profile,
@@ -460,7 +432,7 @@ def _lstat_exists(path: Path) -> bool:
     return True
 
 
-def preview_qh_batch(
+def load_qh_item_and_batch(
     selection: DatasetBundleSelection,
     *,
     contract: QhReadinessContract,
@@ -468,49 +440,26 @@ def preview_qh_batch(
     chain_index: int = 0,
     batch_size: int = 1,
     seed: int = 0,
-) -> QhBatchPreview:
-    """Read one selected chain and collate one batch through the real loader."""
+) -> tuple[QhChain, QhBatch]:
+    """Read one typed dataset item and one typed batch from the production loader."""
 
     normalized_stage = Stage.from_str(stage) if isinstance(stage, str) else stage
     promotion_blockers = _qh_promotion_blockers(selection)
     if promotion_blockers:
         raise ValueError("; ".join(promotion_blockers))
-    datasets, data_module = _build_qh_data_module(selection, contract=contract, batch_size=batch_size, seed=seed)
-    dataset = datasets.get(normalized_stage)
-    if dataset is None:
-        raise ValueError(f"Q_H stage {normalized_stage.value!r} contains no chains.")
-    chain = dataset[chain_index]
-    loader = {
-        Stage.TRAIN: data_module.train_dataloader,
-        Stage.VAL: data_module.val_dataloader,
-        Stage.TEST: data_module.test_dataloader,
-    }[normalized_stage]()
-    if isinstance(loader, list):
+    data_module = _build_qh_data_module(selection, contract=contract, batch_size=batch_size, seed=seed)
+    if normalized_stage is Stage.TRAIN:
+        dataset = data_module.train_dataset
+        loader = data_module.train_dataloader()
+    elif normalized_stage is Stage.VAL:
+        dataset = data_module.val_dataset
+        loader = data_module.val_dataloader()
+    else:
+        dataset = data_module.test_dataset
+        loader = data_module.test_dataloader()
+    if dataset is None or isinstance(loader, list):
         raise ValueError(f"Q_H stage {normalized_stage.value!r} is not configured.")
-    batch = next(iter(loader))
-    tensors = {
-        "candidate_pose_relative_root": batch.actor.candidate_pose_relative_root,
-        "candidate_mask": batch.actor.candidate_mask,
-        "action_mask": batch.actor.action_mask,
-        "horizon_remaining": batch.actor.horizon_remaining,
-        "step_mask": batch.actor.step_mask,
-        "label_mask": batch.supervision.label_mask,
-        "candidate_reward": batch.supervision.candidate_reward,
-    }
-    return QhBatchPreview(
-        stage=normalized_stage,
-        selected_chain_index=chain_index,
-        selected_chain_key=_qh_key_row(chain.key),
-        selected_chain_steps=chain.num_steps,
-        batch_chain_keys=tuple(_qh_key_row(key) for key in batch.keys),
-        batch_step_counts=tuple(int(value) for value in batch.num_steps.tolist()),
-        shapes={name: tuple(int(axis) for axis in tensor.shape) for name, tensor in tensors.items()},
-        dtypes={name: str(tensor.dtype) for name, tensor in tensors.items()},
-        step_padding_count=int((~batch.actor.step_mask).sum().item()),
-        candidate_padding_count=int((~batch.actor.candidate_mask).sum().item()),
-        action_count=int(batch.actor.action_mask.sum().item()),
-        trainable_candidate_count=int(batch.supervision.label_mask.sum().item()),
-    )
+    return dataset[chain_index], next(iter(loader))
 
 
 _QH_STAGES = (Stage.TRAIN, Stage.VAL, Stage.TEST)
@@ -522,11 +471,8 @@ def _build_qh_data_module(
     contract: QhReadinessContract,
     batch_size: int,
     seed: int,
-) -> tuple[dict[Stage, Any], Any]:
+) -> QhDataModule:
     """Construct non-empty stage datasets and the production DataModule."""
-
-    from .data_handling.qh_data import QhDatasetConfig
-    from .lightning.qh_datamodule import QhDataModule
 
     validate_experiment_profile(
         contract.experiment_profile,
@@ -534,10 +480,9 @@ def _build_qh_data_module(
         selected_observation_protocol=contract.selected_observation_protocol,
         privileged=contract.experiment_profile == "qh_cfplus_gt_depth_v1",
     )
-    datasets: dict[Stage, Any] = {}
     actor = VinOfflineStoreConfig(store_dir=selection.root_store)
-    for stage in _QH_STAGES:
-        dataset = QhDatasetConfig(
+    datasets: dict[Stage, QhDataset] = {
+        stage: QhDatasetConfig(
             rollout_store_dirs=selection.rollout_stores,
             actor=actor,
             split=stage,
@@ -545,15 +490,15 @@ def _build_qh_data_module(
             selected_observation_protocol=contract.selected_observation_protocol,
             experiment_profile=contract.experiment_profile,
         ).setup_target()
-        if len(dataset):
-            datasets[stage] = dataset
-    train = datasets.get(Stage.TRAIN)
-    if train is None:
+        for stage in _QH_STAGES
+    }
+    train = datasets[Stage.TRAIN]
+    if not len(train):
         raise ValueError("Q_H training stage must contain at least one chain.")
     data_module = QhDataModule(
         train=train,
-        val=datasets.get(Stage.VAL),
-        test=datasets.get(Stage.TEST),
+        val=datasets[Stage.VAL] if len(datasets[Stage.VAL]) else None,
+        test=datasets[Stage.TEST] if len(datasets[Stage.TEST]) else None,
         batch_size=batch_size,
         num_workers=0,
         pin_memory=False,
@@ -568,32 +513,7 @@ def _build_qh_data_module(
         or actor_contract.selected_observation_protocol != contract.selected_observation_protocol
     ):
         raise ValueError("Q_H actor-state contract does not match the requested named readiness contract.")
-    return datasets, data_module
-
-
-def _qh_stage_readiness(stage: Stage, dataset: Any | None) -> QhStageReadiness:
-    """Inspect one configured dataset through its public chain interface."""
-
-    if dataset is None:
-        return QhStageReadiness(stage, False, 0, 0, 0, (), 0, {})
-    state_count = 0
-    trainable_candidate_count = 0
-    realized_max_horizon = 0
-    for index in range(len(dataset)):
-        chain = dataset[index]
-        state_count += chain.num_steps
-        trainable_candidate_count += int(chain.supervision.label_mask.sum().item())
-        realized_max_horizon = max(realized_max_horizon, chain.num_steps)
-    return QhStageReadiness(
-        stage=stage,
-        included=True,
-        chain_count=len(dataset),
-        state_count=state_count,
-        trainable_candidate_count=trainable_candidate_count,
-        scene_ids=tuple(sorted(dataset.scenes)),
-        max_horizon=realized_max_horizon,
-        provenance=_plain_value(dataset.provenance),
-    )
+    return data_module
 
 
 def _normalized_qh_storage(
@@ -1516,13 +1436,12 @@ __all__ = [
     "DatasetBundleSelection",
     "DatasetBundleVerdict",
     "NormalizedStorageMetric",
-    "QhBatchPreview",
     "QhCorpusReadiness",
     "QhReadinessContract",
     "QhStageReadiness",
     "build_dataset_bundle_summary",
     "build_qh_corpus_readiness",
     "compute_dataset_bundle_deep_statistics",
-    "preview_qh_batch",
+    "load_qh_item_and_batch",
     "scan_root_gt_obb_target_opportunities",
 ]

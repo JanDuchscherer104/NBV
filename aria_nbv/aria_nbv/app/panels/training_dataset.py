@@ -22,16 +22,16 @@ from ...configs import PathConfig
 from ...dataset_bundle import (
     DatasetBundleEvidence,
     DatasetBundleSelection,
-    QhBatchPreview,
     QhCorpusReadiness,
     QhReadinessContract,
     build_dataset_bundle_summary,
     build_qh_corpus_readiness,
     compute_dataset_bundle_deep_statistics,
-    preview_qh_batch,
+    load_qh_item_and_batch,
 )
 from ...dataset_topology import discover_vin_store_dirs
 from ...rollouts.inspection import discover_rollout_store_paths
+from ...utils.rich_summary import capture_tree, rich_summary
 from ._stored_rollouts.shared import ExplanationSection, ScientificExplanation
 from ._stored_rollouts.shared import plot_control_key as _plot_control_key
 from ._stored_rollouts.shared import render_plot as _render_plot
@@ -47,7 +47,8 @@ _QH_READINESS_CONTRACT = QhReadinessContract("qh_cf0_v1", "evl_v1", "none")
 
 ArtifactEntryIdentity = tuple[str, int, int, int, int]
 QhReadinessIdentity = tuple[tuple[Any, ...], int, int]
-QhPreviewIdentity = tuple[tuple[Any, ...], str, int, int, int]
+QhPreview = tuple[str, str]
+QhPreviewIdentity = tuple[tuple[Any, ...], str, int, int, int, bool]
 
 
 def _artifact_identity(path: Path) -> tuple[ArtifactEntryIdentity, ...]:
@@ -79,9 +80,17 @@ def _artifact_identity(path: Path) -> tuple[ArtifactEntryIdentity, ...]:
         )
         direct = [resolved / name for name in metadata_names]
         marker_names = {"_SUCCESS.json", "_owner.json"}
-        direct = [child for child in direct if _metadata_entry_present(child, marker=child.name in marker_names)]
+        direct = [
+            child
+            for child in direct
+            if _metadata_entry_present(child, marker=child.name in marker_names)
+        ]
         split_metadata = list((resolved / "splits").glob("*.npy"))
-        candidates = (resolved, *direct, *[child for child in split_metadata if child.is_file()])
+        candidates = (
+            resolved,
+            *direct,
+            *[child for child in split_metadata if child.is_file()],
+        )
     else:
         candidates = ()
     rows: list[ArtifactEntryIdentity] = []
@@ -90,7 +99,13 @@ def _artifact_identity(path: Path) -> tuple[ArtifactEntryIdentity, ...]:
             stat = child.lstat()
         except OSError:
             continue
-        rows.append((child.as_posix(), stat.st_mtime_ns, stat.st_size, stat.st_ctime_ns, stat.st_ino))
+        rows.append((
+            child.as_posix(),
+            stat.st_mtime_ns,
+            stat.st_size,
+            stat.st_ctime_ns,
+            stat.st_ino,
+        ))
     return tuple(rows)
 
 
@@ -122,10 +137,11 @@ def _qh_preview_identity(
     chain_index: int,
     batch_size: int,
     seed: int,
+    include_stats: bool,
 ) -> QhPreviewIdentity:
     """Return the exact selection and controls that produced one preview."""
 
-    return (selection_identity, stage, chain_index, batch_size, seed)
+    return (selection_identity, stage, chain_index, batch_size, seed, include_stats)
 
 
 def _qh_readiness_identity(
@@ -145,16 +161,24 @@ def _qh_readiness_for_identity(
 ) -> QhCorpusReadiness | None:
     """Return readiness evidence only when its selection and loader controls match."""
 
-    return readiness_state[1] if readiness_state is not None and readiness_state[0] == identity else None
+    return (
+        readiness_state[1]
+        if readiness_state is not None and readiness_state[0] == identity
+        else None
+    )
 
 
 def _qh_preview_for_identity(
-    preview_state: tuple[QhPreviewIdentity, QhBatchPreview] | None,
+    preview_state: tuple[QhPreviewIdentity, QhPreview] | None,
     identity: QhPreviewIdentity,
-) -> QhBatchPreview | None:
+) -> QhPreview | None:
     """Return preview evidence only when its selection and controls still match."""
 
-    return preview_state[1] if preview_state is not None and preview_state[0] == identity else None
+    return (
+        preview_state[1]
+        if preview_state is not None and preview_state[0] == identity
+        else None
+    )
 
 
 @st.cache_data(show_spinner="Inspecting manifests and indexes…", max_entries=32)
@@ -178,7 +202,9 @@ def _cached_bundle_summary(
     )
 
 
-@st.cache_data(show_spinner="Scanning rollout arrays and target identities…", max_entries=16)
+@st.cache_data(
+    show_spinner="Scanning rollout arrays and target identities…", max_entries=16
+)
 def _cached_deep_statistics(
     root_store: str,
     rollout_stores: tuple[str, ...],
@@ -207,14 +233,18 @@ def _cached_qh_readiness(
 
     del artifact_identity
     return build_qh_corpus_readiness(
-        DatasetBundleSelection(Path(root_store), tuple(Path(path) for path in rollout_stores)),
+        DatasetBundleSelection(
+            Path(root_store), tuple(Path(path) for path in rollout_stores)
+        ),
         contract=contract,
         batch_size=batch_size,
         seed=seed,
     )
 
 
-@st.cache_data(show_spinner="Reading one Q_H chain and collating one batch…", max_entries=8)
+@st.cache_data(
+    show_spinner="Reading one Q_H chain and collating one batch…", max_entries=8
+)
 def _cached_qh_preview(
     root_store: str,
     rollout_stores: tuple[str, ...],
@@ -224,17 +254,28 @@ def _cached_qh_preview(
     batch_size: int,
     seed: int,
     contract: QhReadinessContract,
-) -> QhBatchPreview:
-    """Materialize one bounded chain and DataLoader batch after explicit request."""
+    include_stats: bool,
+) -> QhPreview:
+    """Summarize one typed item and one typed production-loader batch."""
 
     del artifact_identity
-    return preview_qh_batch(
-        DatasetBundleSelection(Path(root_store), tuple(Path(path) for path in rollout_stores)),
+    item, batch = load_qh_item_and_batch(
+        DatasetBundleSelection(
+            Path(root_store), tuple(Path(path) for path in rollout_stores)
+        ),
         contract=contract,
         stage=stage,
         chain_index=chain_index,
         batch_size=batch_size,
         seed=seed,
+    )
+    return (
+        capture_tree(
+            rich_summary({"item": item}, include_stats=include_stats, is_print=False)
+        ),
+        capture_tree(
+            rich_summary({"batch": batch}, include_stats=include_stats, is_print=False)
+        ),
     )
 
 
@@ -264,10 +305,14 @@ def _clear_qh_results_for_control_change() -> None:
 def _manual_paths(value: str) -> tuple[Path, ...]:
     """Parse newline-separated manual paths without fabricating artifacts."""
 
-    return tuple(Path(line.strip()).expanduser() for line in value.splitlines() if line.strip())
+    return tuple(
+        Path(line.strip()).expanduser() for line in value.splitlines() if line.strip()
+    )
 
 
-def _target_inventory_frames(inventory: dict[str, Any]) -> tuple[pd.DataFrame, pd.DataFrame]:
+def _target_inventory_frames(
+    inventory: dict[str, Any],
+) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Normalize typed detected/GT inventory rows for presentation plots."""
 
     sample_rows: list[dict[str, Any]] = []
@@ -276,8 +321,12 @@ def _target_inventory_frames(inventory: dict[str, Any]) -> tuple[pd.DataFrame, p
         evidence = inventory.get(population, {})
         if not bool(evidence.get("available")):
             continue
-        sample_rows.extend({**row, "population": population} for row in evidence.get("sample_rows", ()))
-        target_rows.extend({**row, "population": population} for row in evidence.get("rows", ()))
+        sample_rows.extend(
+            {**row, "population": population} for row in evidence.get("sample_rows", ())
+        )
+        target_rows.extend(
+            {**row, "population": population} for row in evidence.get("rows", ())
+        )
     samples = pd.DataFrame(sample_rows)
     targets = pd.DataFrame(target_rows)
     return samples, targets
@@ -292,9 +341,19 @@ def _render_target_inventory(inventory: dict[str, Any]) -> None:
     cols = st.columns(4)
     cols[0].metric("Detected targets", _metric_value(detected.get("row_count")))
     cols[1].metric("GT targets", _metric_value(gt.get("row_count")))
-    for index, (label, population) in enumerate((("Zero-detection samples", "detected"), ("Zero-GT samples", "gt")), 2):
-        rows = samples.loc[samples["population"] == population] if not samples.empty else samples
-        value = "Unavailable" if rows.empty else f"{int((rows['count'] == 0).sum()):,} / {len(rows):,}"
+    for index, (label, population) in enumerate(
+        (("Zero-detection samples", "detected"), ("Zero-GT samples", "gt")), 2
+    ):
+        rows = (
+            samples.loc[samples["population"] == population]
+            if not samples.empty
+            else samples
+        )
+        value = (
+            "Unavailable"
+            if rows.empty
+            else f"{int((rows['count'] == 0).sum()):,} / {len(rows):,}"
+        )
         cols[index].metric(label, value)
 
     st.info(
@@ -304,7 +363,11 @@ def _render_target_inventory(inventory: dict[str, Any]) -> None:
     )
 
     exclusion_rows = [
-        {"population": population, "reason": reason, "count": int(evidence.get(field, 0))}
+        {
+            "population": population,
+            "reason": reason,
+            "count": int(evidence.get(field, 0)),
+        }
         for population, evidence in (("detected", detected), ("gt", gt))
         for reason, field in (
             ("padding", "excluded_padding_count"),
@@ -343,7 +406,8 @@ def _render_target_inventory(inventory: dict[str, Any]) -> None:
     if targets.empty:
         return
     class_rows = (
-        targets.groupby(["population", "class_name"], dropna=False)
+        targets
+        .groupby(["population", "class_name"], dropna=False)
         .agg(target_count=("source_row", "size"), scene_count=("scene_id", "nunique"))
         .reset_index()
     )
@@ -390,10 +454,17 @@ def _render_target_inventory(inventory: dict[str, Any]) -> None:
             "obb-aspect-ratio",
             _target_inventory_explanation("OBB aspect ratio"),
         )
-    confidence = targets.loc[(targets["population"] == "detected") & targets["confidence"].notna()]
+    confidence = targets.loc[
+        (targets["population"] == "detected") & targets["confidence"].notna()
+    ]
     if not confidence.empty:
         _render_target_inventory_plot(
-            px.histogram(confidence, x="confidence", color="class_name", title="Actor-visible detection confidence"),
+            px.histogram(
+                confidence,
+                x="confidence",
+                color="class_name",
+                title="Actor-visible detection confidence",
+            ),
             "detection-confidence",
             _target_inventory_explanation("detection confidence"),
         )
@@ -408,10 +479,14 @@ def _render_target_inventory(inventory: dict[str, Any]) -> None:
         )
 
 
-def _render_target_inventory_plot(figure: Any, key: str, explanation: ScientificExplanation) -> None:
+def _render_target_inventory_plot(
+    figure: Any, key: str, explanation: ScientificExplanation
+) -> None:
     """Render one target-inventory figure through the shared scientific seam."""
 
-    _render_plot(figure, explanation, log_y_key=_plot_control_key("target-inventory", key))
+    _render_plot(
+        figure, explanation, log_y_key=_plot_control_key("target-inventory", key)
+    )
 
 
 def _target_inventory_explanation(kind: str) -> ScientificExplanation:
@@ -515,7 +590,9 @@ def _metric_value(value: Any, *, pending: str = "Unavailable") -> str:
     return pending if value is None else f"{int(value):,}"
 
 
-def _deep_metric_value(aggregate: dict[str, Any], key: str, *, deep_available: bool) -> str:
+def _deep_metric_value(
+    aggregate: dict[str, Any], key: str, *, deep_available: bool
+) -> str:
     """Format one deep denominator together with its completeness status."""
 
     if not deep_available:
@@ -567,11 +644,17 @@ def _render_store_attribution(evidence: DatasetBundleEvidence) -> None:
     root_path = evidence.selection.root_store.as_posix()
     for finding in evidence.findings:
         if finding.store_path is not None and finding.store_path != root_path:
-            findings_by_store.setdefault(finding.store_path, []).append(
-                {"code": finding.code, "message": finding.message, "severity": finding.severity}
-            )
+            findings_by_store.setdefault(finding.store_path, []).append({
+                "code": finding.code,
+                "message": finding.message,
+                "severity": finding.severity,
+            })
         else:
-            root_findings.append({"code": finding.code, "message": finding.message, "severity": finding.severity})
+            root_findings.append({
+                "code": finding.code,
+                "message": finding.message,
+                "severity": finding.severity,
+            })
     binding_rows: list[dict[str, Any]] = []
     status_rows: list[dict[str, str]] = []
     for row in evidence.rollouts:
@@ -579,32 +662,33 @@ def _render_store_attribution(evidence: DatasetBundleEvidence) -> None:
         included = bool(row.get("included_in_training_totals"))
         status = "Compatible" if included else "Excluded"
         store_findings = findings_by_store.get(path, [])
-        blocking = [finding for finding in store_findings if finding["severity"] == "blocking"]
+        blocking = [
+            finding for finding in store_findings if finding["severity"] == "blocking"
+        ]
         reasons = blocking or store_findings
-        reason = "; ".join(f"{finding['code']}: {finding['message']}" for finding in reasons)
+        reason = "; ".join(
+            f"{finding['code']}: {finding['message']}" for finding in reasons
+        )
         validation = row.get("validation_status") or "unavailable"
-        status_rows.append(
-            {
-                "store": Path(path).name,
-                "status": status,
-                "validation": validation,
-                "reason": reason or ("included in totals" if included else "compatibility check failed"),
-            }
-        )
-        binding_rows.append(
-            {
-                "store": Path(path).name,
-                "status": status,
-                "path": path,
-                "validation": validation,
-                "reason": reason or ("included in totals" if included else "unavailable"),
-                "vin_root_manifest_hash": root_manifest,
-                "source_manifest_hash": row.get("source_manifest_hash"),
-                "split_manifest_hashes": row.get("split_manifest_hashes") or [],
-                "source_splits": row.get("source_splits", {}),
-                "findings": store_findings,
-            }
-        )
+        status_rows.append({
+            "store": Path(path).name,
+            "status": status,
+            "validation": validation,
+            "reason": reason
+            or ("included in totals" if included else "compatibility check failed"),
+        })
+        binding_rows.append({
+            "store": Path(path).name,
+            "status": status,
+            "path": path,
+            "validation": validation,
+            "reason": reason or ("included in totals" if included else "unavailable"),
+            "vin_root_manifest_hash": root_manifest,
+            "source_manifest_hash": row.get("source_manifest_hash"),
+            "split_manifest_hashes": row.get("split_manifest_hashes") or [],
+            "source_splits": row.get("source_splits", {}),
+            "findings": store_findings,
+        })
     st.dataframe(pd.DataFrame(status_rows), hide_index=True, width="stretch")
     excluded = [row for row in status_rows if row["status"] == "Excluded"]
     st.caption(
@@ -619,24 +703,33 @@ def _render_store_attribution(evidence: DatasetBundleEvidence) -> None:
     if root_findings:
         st.error(
             "Selected VIN root blocker(s) (not attributable to one rollout store):\n"
-            + "\n".join(f"- {finding['code']} — {finding['message']}" for finding in root_findings)
+            + "\n".join(
+                f"- {finding['code']} — {finding['message']}"
+                for finding in root_findings
+            )
         )
-    with st.expander("Root/source binding hashes, paths, and raw findings", expanded=False):
-        st.caption("VIN root manifest, source manifest, split manifest, source splits, and raw finding details.")
+    with st.expander(
+        "Root/source binding hashes, paths, and raw findings", expanded=False
+    ):
+        st.caption(
+            "VIN root manifest, source manifest, split manifest, source splits, and raw finding details."
+        )
         st.dataframe(
-            pd.DataFrame(
-                [
-                    {
-                        key: json.dumps(value, sort_keys=True) if isinstance(value, (dict, list)) else value
-                        for key, value in row.items()
-                    }
-                    for row in binding_rows
-                ]
-            ),
+            pd.DataFrame([
+                {
+                    key: json.dumps(value, sort_keys=True)
+                    if isinstance(value, (dict, list))
+                    else value
+                    for key, value in row.items()
+                }
+                for row in binding_rows
+            ]),
             hide_index=True,
             width="stretch",
         )
-    st.caption("Root/source binding identifiers are available in the collapsed disclosure above.")
+    st.caption(
+        "Root/source binding identifiers are available in the collapsed disclosure above."
+    )
 
 
 def _render_summary_metrics(
@@ -652,22 +745,34 @@ def _render_summary_metrics(
     storage_per_trainable: str = pending
     storage_reason: str | None = None
     if readiness is not None and readiness.verdict == "Ready":
-        train = next((row for row in readiness.stages if row.stage.value == "train"), None)
+        train = next(
+            (row for row in readiness.stages if row.stage.value == "train"), None
+        )
         train_scenes = _metric_value(None if train is None else len(train.scene_ids))
         chain_count = _metric_value(sum(row.chain_count for row in readiness.stages))
         state_count = _metric_value(sum(row.state_count for row in readiness.stages))
-        trainable_count = _metric_value(sum(row.trainable_candidate_count for row in readiness.stages))
+        trainable_count = _metric_value(
+            sum(row.trainable_candidate_count for row in readiness.stages)
+        )
         storage = next(
-            (metric for metric in readiness.storage if metric.name == "rollout_bytes_per_trainable_candidate"),
+            (
+                metric
+                for metric in readiness.storage
+                if metric.name == "rollout_bytes_per_trainable_candidate"
+            ),
             None,
         )
         if storage is None or storage.value is None:
             storage_per_trainable = "Unavailable"
-            storage_reason = storage.reason if storage is not None else "storage_metric_missing"
+            storage_reason = (
+                storage.reason if storage is not None else "storage_metric_missing"
+            )
         else:
             storage_per_trainable = _format_bytes(storage.value)
     elif readiness is not None:
-        train_scenes = chain_count = state_count = trainable_count = storage_per_trainable = "Blocked"
+        train_scenes = chain_count = state_count = trainable_count = (
+            storage_per_trainable
+        ) = "Blocked"
 
     columns = st.columns(5)
     columns[0].metric("Train scenes", train_scenes)
@@ -690,24 +795,22 @@ def _rollout_rows(evidence: DatasetBundleEvidence) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     for row in evidence.rollouts:
         counts = row.get("counts", {})
-        rows.append(
-            {
-                "store": Path(str(row["path"])).name,
-                "path": row["path"],
-                "included": bool(row.get("included_in_training_totals")),
-                "validation": row.get("validation_status"),
-                "profile": row.get("profile"),
-                "schema": row.get("schema_version"),
-                "horizon": row.get("horizon"),
-                "source_splits": json.dumps(row.get("source_splits", {}), sort_keys=True),
-                "rollouts": counts.get("rollouts"),
-                "steps": counts.get("steps"),
-                "candidates": counts.get("candidates"),
-                "target_rows": counts.get("targets"),
-                "storage": _format_bytes(row.get("storage_bytes")),
-                "storage_status": row.get("storage_status"),
-            }
-        )
+        rows.append({
+            "store": Path(str(row["path"])).name,
+            "path": row["path"],
+            "included": bool(row.get("included_in_training_totals")),
+            "validation": row.get("validation_status"),
+            "profile": row.get("profile"),
+            "schema": row.get("schema_version"),
+            "horizon": row.get("horizon"),
+            "source_splits": json.dumps(row.get("source_splits", {}), sort_keys=True),
+            "rollouts": counts.get("rollouts"),
+            "steps": counts.get("steps"),
+            "candidates": counts.get("candidates"),
+            "target_rows": counts.get("targets"),
+            "storage": _format_bytes(row.get("storage_bytes")),
+            "storage_status": row.get("storage_status"),
+        })
     return rows
 
 
@@ -715,14 +818,20 @@ def _download_payload(
     evidence: DatasetBundleEvidence,
     deep: dict[str, Any] | None,
     qh_readiness: QhCorpusReadiness | None = None,
-    qh_preview: QhBatchPreview | None = None,
+    qh_preview: QhPreview | None = None,
 ) -> bytes:
     """Serialize deterministic, complete bundle evidence for download."""
 
     payload = evidence.to_jsonable()
     payload["deep_statistics"] = deep
-    payload["q_h_readiness"] = None if qh_readiness is None else qh_readiness.to_jsonable()
-    payload["q_h_batch_preview"] = None if qh_preview is None else qh_preview.to_jsonable()
+    payload["q_h_readiness"] = (
+        None if qh_readiness is None else qh_readiness.to_jsonable()
+    )
+    payload["q_h_structure"] = (
+        None
+        if qh_preview is None
+        else {"dataset_item": qh_preview[0], "collated_batch": qh_preview[1]}
+    )
     return (json.dumps(payload, indent=2, sort_keys=True) + "\n").encode("utf-8")
 
 
@@ -755,7 +864,9 @@ def render_training_dataset_page() -> None:  # pragma: no cover - Streamlit UI
         )
 
     if root_store is None:
-        st.info("Select or enter exactly one VIN root observation store to inspect a training bundle.")
+        st.info(
+            "Select or enter exactly one VIN root observation store to inspect a training bundle."
+        )
         st.markdown(
             "Use **Training Data → Root Observation Store** for shard-level VIN diagnostics and "
             "**Training Data → Rollout Supervision** for rollout-step and candidate-level inspection."
@@ -789,11 +900,15 @@ def render_training_dataset_page() -> None:  # pragma: no cover - Streamlit UI
             ),
         )
     validated_state = st.session_state.get(_VALIDATED_STATE_KEY)
-    evidence = validated_state[1] if validated_state and validated_state[0] == identity else light
+    evidence = (
+        validated_state[1]
+        if validated_state and validated_state[0] == identity
+        else light
+    )
     deep_state = st.session_state.get(_DEEP_STATE_KEY)
     deep = deep_state[1] if deep_state and deep_state[0] == identity else None
     qh_readiness: QhCorpusReadiness | None = None
-    qh_preview: QhBatchPreview | None = None
+    qh_preview: QhPreview | None = None
 
     _render_verdict(evidence)
     _render_store_attribution(evidence)
@@ -801,42 +916,66 @@ def render_training_dataset_page() -> None:  # pragma: no cover - Streamlit UI
     readiness_tab, qh_tab, details_tab = st.tabs(["Readiness", "Q_H corpus", "Details"])
     with readiness_tab:
         st.subheader("Bundle readiness")
-        root_samples = sum(int(value) for value in evidence.root.get("split_counts", {}).values())
-        included_rollouts = [row for row in evidence.rollouts if bool(row.get("included_in_training_totals"))]
+        root_samples = sum(
+            int(value) for value in evidence.root.get("split_counts", {}).values()
+        )
+        included_rollouts = [
+            row
+            for row in evidence.rollouts
+            if bool(row.get("included_in_training_totals"))
+        ]
         rollout_counts = [row.get("counts", {}) for row in included_rollouts]
         summary_columns = st.columns(5)
         summary_columns[0].metric("Root samples", f"{root_samples:,}")
-        summary_columns[1].metric("Compatible rollout stores", f"{len(included_rollouts)} / {len(evidence.rollouts)}")
+        summary_columns[1].metric(
+            "Compatible rollout stores",
+            f"{len(included_rollouts)} / {len(evidence.rollouts)}",
+        )
         summary_columns[2].metric(
-            "Rollouts", _metric_value(sum(int(count.get("rollouts", 0)) for count in rollout_counts))
+            "Rollouts",
+            _metric_value(
+                sum(int(count.get("rollouts", 0)) for count in rollout_counts)
+            ),
         )
         summary_columns[3].metric(
-            "Rollout steps", _metric_value(sum(int(count.get("steps", 0)) for count in rollout_counts))
+            "Rollout steps",
+            _metric_value(sum(int(count.get("steps", 0)) for count in rollout_counts)),
         )
         summary_columns[4].metric(
-            "Candidates", _metric_value(sum(int(count.get("candidates", 0)) for count in rollout_counts))
+            "Candidates",
+            _metric_value(
+                sum(int(count.get("candidates", 0)) for count in rollout_counts)
+            ),
         )
         with st.expander("Root splits and selected-store details", expanded=False):
             st.subheader("Root splits")
             split_rows = [
                 {"split": split, "samples": count}
-                for split, count in sorted(evidence.root.get("split_counts", {}).items())
+                for split, count in sorted(
+                    evidence.root.get("split_counts", {}).items()
+                )
             ]
             st.dataframe(pd.DataFrame(split_rows), hide_index=True, width="stretch")
             st.subheader("Selected rollout stores")
             rollout_rows = _rollout_rows(evidence)
             if rollout_rows:
-                st.dataframe(pd.DataFrame(rollout_rows), hide_index=True, width="stretch")
+                st.dataframe(
+                    pd.DataFrame(rollout_rows), hide_index=True, width="stretch"
+                )
             else:
                 st.info("No rollout supervision store is selected.")
         finding_rows = [finding.to_jsonable() for finding in evidence.findings]
         with st.expander("Blockers and pending evidence", expanded=bool(finding_rows)):
             if finding_rows:
-                st.dataframe(pd.DataFrame(finding_rows), hide_index=True, width="stretch")
+                st.dataframe(
+                    pd.DataFrame(finding_rows), hide_index=True, width="stretch"
+                )
             else:
                 st.success("No readiness findings.")
     with qh_tab:
-        st.subheader(f"{current_scientific_label('q_h')} dataset and collation readiness")
+        st.subheader(
+            f"{current_scientific_label('q_h')} dataset and collation readiness"
+        )
         st.caption(
             "This action constructs the selected stage datasets and the production "
             f"{current_scientific_label('q_h')} DataModule. "
@@ -863,7 +1002,9 @@ def render_training_dataset_page() -> None:  # pragma: no cover - Streamlit UI
                 on_change=_clear_qh_results_for_control_change,
             )
         )
-        readiness_identity = _qh_readiness_identity(identity, batch_size=batch_size, seed=seed)
+        readiness_identity = _qh_readiness_identity(
+            identity, batch_size=batch_size, seed=seed
+        )
         qh_state = st.session_state.get(_QH_READINESS_STATE_KEY)
         qh_readiness = _qh_readiness_for_identity(qh_state, readiness_identity)
         if controls[2].button("Preflight Q_H corpus", type="primary", width="stretch"):
@@ -875,17 +1016,26 @@ def render_training_dataset_page() -> None:  # pragma: no cover - Streamlit UI
                 seed,
                 _QH_READINESS_CONTRACT,
             )
-            st.session_state[_QH_READINESS_STATE_KEY] = (readiness_identity, qh_readiness)
+            st.session_state[_QH_READINESS_STATE_KEY] = (
+                readiness_identity,
+                qh_readiness,
+            )
             st.session_state.pop(_QH_PREVIEW_STATE_KEY, None)
             qh_preview = None
         if qh_readiness is None:
-            st.info("Run the preflight to prove stage admission, joins, DataModule construction, and factual counts.")
+            st.info(
+                "Run the preflight to prove stage admission, joins, DataModule construction, and factual counts."
+            )
         else:
             renderer = st.success if qh_readiness.verdict == "Ready" else st.error
             renderer(f"Q_H corpus: {qh_readiness.verdict}")
             _render_summary_metrics(qh_readiness)
             if qh_readiness.blockers:
-                st.dataframe(pd.DataFrame({"blocking_reason": qh_readiness.blockers}), hide_index=True, width="stretch")
+                st.dataframe(
+                    pd.DataFrame({"blocking_reason": qh_readiness.blockers}),
+                    hide_index=True,
+                    width="stretch",
+                )
             if qh_readiness.stages:
                 stage_rows = [
                     {
@@ -900,7 +1050,9 @@ def render_training_dataset_page() -> None:  # pragma: no cover - Streamlit UI
                     for row in qh_readiness.stages
                 ]
                 with st.expander("Stage inclusion and factual counts", expanded=False):
-                    st.dataframe(pd.DataFrame(stage_rows), hide_index=True, width="stretch")
+                    st.dataframe(
+                        pd.DataFrame(stage_rows), hide_index=True, width="stretch"
+                    )
                 storage_rows = [
                     {
                         "metric": current_scientific_label(metric.name),
@@ -913,13 +1065,24 @@ def render_training_dataset_page() -> None:  # pragma: no cover - Streamlit UI
                     for metric in qh_readiness.storage
                 ]
                 with st.expander("Normalized storage metrics", expanded=False):
-                    st.dataframe(pd.DataFrame(storage_rows), hide_index=True, width="stretch")
+                    st.dataframe(
+                        pd.DataFrame(storage_rows), hide_index=True, width="stretch"
+                    )
             if qh_readiness.verdict == "Ready":
-                included_stages = [row.stage.value for row in qh_readiness.stages if row.included]
-                preview_controls = st.columns(3)
-                preview_stage = preview_controls[0].selectbox("Preview stage", included_stages)
+                included_stages = [
+                    row.stage.value for row in qh_readiness.stages if row.included
+                ]
+                preview_controls = st.columns(4)
+                preview_stage = preview_controls[0].selectbox(
+                    "Preview stage", included_stages
+                )
                 preview_index = int(
-                    preview_controls[1].number_input("Preview chain index", min_value=0, value=0, step=1)
+                    preview_controls[1].number_input(
+                        "Preview chain index", min_value=0, value=0, step=1
+                    )
+                )
+                include_stats = preview_controls[2].checkbox(
+                    "Finite tensor statistics", value=False
                 )
                 preview_identity = _qh_preview_identity(
                     identity,
@@ -927,10 +1090,13 @@ def render_training_dataset_page() -> None:  # pragma: no cover - Streamlit UI
                     chain_index=preview_index,
                     batch_size=batch_size,
                     seed=seed,
+                    include_stats=include_stats,
                 )
                 preview_state = st.session_state.get(_QH_PREVIEW_STATE_KEY)
                 qh_preview = _qh_preview_for_identity(preview_state, preview_identity)
-                if preview_controls[2].button("Preview one chain and batch", width="stretch"):
+                if preview_controls[3].button(
+                    "Inspect item and batch", width="stretch"
+                ):
                     try:
                         qh_preview = _cached_qh_preview(
                             root_text,
@@ -941,34 +1107,31 @@ def render_training_dataset_page() -> None:  # pragma: no cover - Streamlit UI
                             batch_size,
                             seed,
                             _QH_READINESS_CONTRACT,
+                            include_stats,
                         )
                     except Exception as exc:
                         st.error(f"Q_H preview failed: {type(exc).__name__}: {exc}")
                     else:
-                        st.session_state[_QH_PREVIEW_STATE_KEY] = (preview_identity, qh_preview)
+                        st.session_state[_QH_PREVIEW_STATE_KEY] = (
+                            preview_identity,
+                            qh_preview,
+                        )
             if qh_preview is not None:
-                preview_cols = st.columns(4)
-                preview_cols[0].metric("Selected chain steps", qh_preview.selected_chain_steps)
-                preview_cols[1].metric("Batch trainable", qh_preview.trainable_candidate_count)
-                preview_cols[2].metric("Step padding", qh_preview.step_padding_count)
-                preview_cols[3].metric("Candidate padding", qh_preview.candidate_padding_count)
-                st.dataframe(
-                    pd.DataFrame(
-                        [
-                            {"tensor": name, "shape": list(shape), "dtype": qh_preview.dtypes[name]}
-                            for name, shape in qh_preview.shapes.items()
-                        ]
-                    ),
-                    hide_index=True,
-                    width="stretch",
-                )
+                st.markdown("#### Dataset item (`QhChain`)")
+                st.code(qh_preview[0], language=None)
+                st.markdown("#### Collated batch (`QhBatch`)")
+                st.code(qh_preview[1], language=None)
     with details_tab:
         if st.button("Deep statistics / target scan", width="stretch"):
             deep = _cached_deep_statistics(root_text, rollout_texts, identity)
             st.session_state[_DEEP_STATE_KEY] = (identity, deep)
         if deep is None:
-            st.info("Run the deep scan to materialize target and candidate denominators.")
-        root_target_scan = deep.get("root_gt_obb_target_opportunities", {}) if deep is not None else {}
+            st.info(
+                "Run the deep scan to materialize target and candidate denominators."
+            )
+        root_target_scan = (
+            deep.get("root_gt_obb_target_opportunities", {}) if deep is not None else {}
+        )
         if deep is not None:
             deep_aggregate = deep.get("aggregate", {})
             inventory = deep.get("root_target_inventory", {})
@@ -983,19 +1146,29 @@ def render_training_dataset_page() -> None:  # pragma: no cover - Streamlit UI
             )
             deep_columns[1].metric(
                 "Unique persisted target tasks",
-                _deep_metric_value(deep_aggregate, "persisted_rollout_unique_target_tasks", deep_available=True),
+                _deep_metric_value(
+                    deep_aggregate,
+                    "persisted_rollout_unique_target_tasks",
+                    deep_available=True,
+                ),
             )
             deep_columns[2].metric(
                 "Q_H trainable candidates",
-                _deep_metric_value(deep_aggregate, "q_h_trainable_candidates", deep_available=True),
+                _deep_metric_value(
+                    deep_aggregate, "q_h_trainable_candidates", deep_available=True
+                ),
             )
             deep_columns[3].metric(
                 "Detected targets",
-                _metric_value(detected.get("row_count")) if detected.get("available") else "Unavailable",
+                _metric_value(detected.get("row_count"))
+                if detected.get("available")
+                else "Unavailable",
             )
             deep_columns[4].metric(
                 "GT targets",
-                _metric_value(gt.get("row_count")) if gt.get("available") else "Unavailable",
+                _metric_value(gt.get("row_count"))
+                if gt.get("available")
+                else "Unavailable",
             )
             if detected.get("available") or gt.get("available"):
                 _render_target_inventory(inventory)

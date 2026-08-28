@@ -59,7 +59,7 @@ from aria_nbv.targets.descriptor import TargetDescriptor
 from aria_nbv.targets.selection import ObservedTargetDescriptor
 from aria_nbv.utils import Stage
 from aria_nbv.utils.fingerprints import stable_msgspec_hash
-from aria_nbv.utils.rich_summary import capture_tree, rich_summary, summarize
+from aria_nbv.utils.rich_summary import capture_tree, rich_summary
 from aria_nbv.vin.models.target_finite_horizon import QhScoreOutput
 from aria_nbv.vin.types import EvlBackboneOutput
 from tests.data_handling.test_vin_offline_store import _write_test_store
@@ -1106,7 +1106,7 @@ def test_rich_chain_prefix_is_strictly_causal_and_audit_stays_cpu_only(
 
 
 def test_rich_summary_reports_chain_and_batch_qh_axes() -> None:
-    """Keep the documented Q_H chain and padded-batch axes executable."""
+    """Render the complete typed Q_H item and batch compositions."""
 
     stored = replace(
         _stored(_source_ref()),
@@ -1132,36 +1132,26 @@ def test_rich_summary_reports_chain_and_batch_qh_axes() -> None:
     chain = _tensor_chain(stored, _snippet(), static_context=context, selected_observation_protocol="cf_gt")
     batch = collate_qh_chains([chain, chain])
 
-    def summary(actor: QhActorTensors) -> dict[str, Any]:
-        static = actor.static_context
-        prefix = actor.selected_observation_prefix
-        assert static is not None and prefix is not None
-        return {
-            "candidate_pose_relative_root": summarize(_pose_tensor(actor.candidate_pose_relative_root)),
-            "history_pose_relative_root": summarize(_pose_tensor(actor.history_pose_relative_root)),
-            "step_mask": summarize(actor.step_mask),
-            "vin_points_world": summarize(actor.vin_snippet.points_world),
-            "evl_occ_pr": summarize(static.occ_pr),
-            "evl_presence": summarize(static.evl_presence),
-            "selected_depth_m": summarize(prefix.depth_m),
-            "selected_depth_valid_mask": summarize(prefix.valid_mask),
-            "selected_depth_camera": summarize(_camera_tensor(prefix.camera)),
-            "selected_depth_camera_pose_relative_root": summarize(_pose_tensor(prefix.camera_pose_relative_root)),
-            "selected_depth_prefix_mask": summarize(prefix.prefix_mask),
-        }
-
-    rendered = capture_tree(
-        rich_summary({"chain": summary(chain.actor), "batch": summary(batch.actor)}, is_print=False)
-    )
+    rendered = capture_tree(rich_summary({"item": chain, "batch": batch}, include_stats=False, is_print=False))
+    assert "item <QhChain>" in rendered
+    assert "batch <QhBatch>" in rendered
+    assert "actor <QhActorTensors>" in rendered
+    assert "supervision <QhSupervision>" in rendered
     assert "candidate_pose_relative_root" in rendered
     assert "(2, 2, 12)" in rendered
     assert "(2, 2, 2, 12)" in rendered
-    assert "selected_depth_m" in rendered
+    assert "selected_observation_prefix <QhSelectedObservationPrefix>" in rendered
+    assert "depth_m <Tensor>" in rendered
     assert "(2, 2, 2, 3)" in rendered
     assert "(2, 2, 2, 2, 3)" in rendered
-    assert "evl_occ_pr" in rendered
+    assert "static_context <QhStaticContext>" in rendered
+    assert "occ_pr <Tensor>" in rendered
     assert "(1, 1, 1, 1)" in rendered
     assert "(2, 1, 1, 1, 1)" in rendered
+    assert "candidate_reward" in rendered
+    assert "selected_index" in rendered
+    assert "discount" in rendered
+    assert "terminal" in rendered
 
 
 def test_rich_dataset_rejects_actor_store_without_root_evl_evidence() -> None:

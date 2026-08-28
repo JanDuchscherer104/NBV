@@ -321,12 +321,17 @@ class QhChain:
 
 __all__ = [
     "QhActionMaskSemantics",
+    "QhActorStateContract",
     "QhActorTensors",
     "QhAudit",
     "QhChain",
     "QhChainKey",
+    "QhExperimentProfile",
     "QhRepresentationSemantics",
+    "QhRootEvlProfile",
     "QhSelectedObservationPrefix",
+    "QhSelectedObservationProtocol",
     "QhStaticContext",
     "QhSupervision",
+    "validate_experiment_profile",
 ]

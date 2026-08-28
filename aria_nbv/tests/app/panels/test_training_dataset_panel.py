@@ -36,7 +36,6 @@ from aria_nbv.data_handling.vin_store.format import (
 from aria_nbv.data_handling.vin_store.store import OFFLINE_DATASET_VERSION
 from aria_nbv.dataset_bundle import (
     DatasetBundleSelection,
-    QhBatchPreview,
     QhCorpusReadiness,
     build_dataset_bundle_summary,
 )
@@ -295,17 +294,31 @@ def test_qh_preview_reuses_only_exact_selection_and_controls() -> None:
         chain_index=0,
         batch_size=4,
         seed=7,
+        include_stats=False,
     )
-    evidence = cast(QhBatchPreview, SimpleNamespace())
+    evidence = ("item", "batch")
     state = (baseline, evidence)
 
     assert _qh_preview_for_identity(state, baseline) is evidence
     for changed in (
-        _qh_preview_identity(("selection-b",), stage="train", chain_index=0, batch_size=4, seed=7),
-        _qh_preview_identity(selection_a, stage="val", chain_index=0, batch_size=4, seed=7),
-        _qh_preview_identity(selection_a, stage="train", chain_index=1, batch_size=4, seed=7),
-        _qh_preview_identity(selection_a, stage="train", chain_index=0, batch_size=8, seed=7),
-        _qh_preview_identity(selection_a, stage="train", chain_index=0, batch_size=4, seed=8),
+        _qh_preview_identity(
+            ("selection-b",), stage="train", chain_index=0, batch_size=4, seed=7, include_stats=False
+        ),
+        _qh_preview_identity(
+            selection_a, stage="val", chain_index=0, batch_size=4, seed=7, include_stats=False
+        ),
+        _qh_preview_identity(
+            selection_a, stage="train", chain_index=1, batch_size=4, seed=7, include_stats=False
+        ),
+        _qh_preview_identity(
+            selection_a, stage="train", chain_index=0, batch_size=8, seed=7, include_stats=False
+        ),
+        _qh_preview_identity(
+            selection_a, stage="train", chain_index=0, batch_size=4, seed=8, include_stats=False
+        ),
+        _qh_preview_identity(
+            selection_a, stage="train", chain_index=0, batch_size=4, seed=7, include_stats=True
+        ),
     ):
         assert _qh_preview_for_identity(state, changed) is None
 
