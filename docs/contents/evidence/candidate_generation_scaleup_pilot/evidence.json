@@ -586,6 +586,7 @@
         "expected_scene_count": 2,
         "metrics_sha256": "35d89c678316efa47fd9983cc0d8d535760822215efe11d749532bcced441908",
         "rollout_manifest_sha256": "178ad0a7abae133a3e5ef6f7fbbd769cd6a2f1529e61bc6567e4d467d2f8dc66",
+        "rollout_store_content_sha256": "484a5f994ca949374b31d7376928041230e56af4a394939054a63fa86fe76f8d",
         "scene_count": 2
       },
       "key": "realistic_core",
@@ -4372,7 +4373,8 @@
           "view_jitter_yaw_deg": 20.50413703918457
         }
       ],
-      "rollout_manifest_sha256": "178ad0a7abae133a3e5ef6f7fbbd769cd6a2f1529e61bc6567e4d467d2f8dc66"
+      "rollout_manifest_sha256": "178ad0a7abae133a3e5ef6f7fbbd769cd6a2f1529e61bc6567e4d467d2f8dc66",
+      "rollout_store_content_sha256": "484a5f994ca949374b31d7376928041230e56af4a394939054a63fa86fe76f8d"
     },
     {
       "decision": "discard",
@@ -5102,6 +5104,7 @@
         "expected_scene_count": 2,
         "metrics_sha256": "287cfcf724f938dab1c57551c5a56fae79e4c9e8d0f84f2bd920e44e8e6b23ac",
         "rollout_manifest_sha256": "5b7eae188b7e1006b36660b22583093feeb8798f71199ab0914e7ae8d65bfb0f",
+        "rollout_store_content_sha256": "4b323972f88ae1425ef7c89eba644db934bb8f0adb82d12e052c01a757840536",
         "scene_count": 2
       },
       "key": "forward_target_glance",
@@ -8900,7 +8903,8 @@
           "view_jitter_yaw_deg": 20.50413703918457
         }
       ],
-      "rollout_manifest_sha256": "5b7eae188b7e1006b36660b22583093feeb8798f71199ab0914e7ae8d65bfb0f"
+      "rollout_manifest_sha256": "5b7eae188b7e1006b36660b22583093feeb8798f71199ab0914e7ae8d65bfb0f",
+      "rollout_store_content_sha256": "4b323972f88ae1425ef7c89eba644db934bb8f0adb82d12e052c01a757840536"
     },
     {
       "decision": "discard",
@@ -9628,6 +9632,7 @@
         "expected_scene_count": 2,
         "metrics_sha256": "97c73fc8c56260a3460b75481f2b00a63e4309bbddb7adf496d4fcf3ee1aff49",
         "rollout_manifest_sha256": "950637dcb557ddcac22acd6ff389b989887e965093727a0faefc851463ae8456",
+        "rollout_store_content_sha256": "f09cc2d9b6c1c976ac091ec8fcdb8703eb101f4238b1af3c996a1f4855069391",
         "scene_count": 2
       },
       "key": "radius_stratified",
@@ -13426,7 +13431,8 @@
           "view_jitter_yaw_deg": 20.50413703918457
         }
       ],
-      "rollout_manifest_sha256": "950637dcb557ddcac22acd6ff389b989887e965093727a0faefc851463ae8456"
+      "rollout_manifest_sha256": "950637dcb557ddcac22acd6ff389b989887e965093727a0faefc851463ae8456",
+      "rollout_store_content_sha256": "f09cc2d9b6c1c976ac091ec8fcdb8703eb101f4238b1af3c996a1f4855069391"
     }
   ],
   "rerender_requirement": "local frozen measurement bundle; raw rollout stores are not published in this PR",

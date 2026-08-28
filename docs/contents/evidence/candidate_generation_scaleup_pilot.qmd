@@ -146,7 +146,8 @@ The public evidence bundle contains static exports suitable for review:
 
 The machine-readable summary is
 [`evidence.json`](candidate_generation_scaleup_pilot/evidence.json). It retains
-all 120 audit rows per profile, exact input hashes, zero dropped plot rows,
+all 120 audit rows per profile, exact metrics, manifest, and full-store content
+hashes, zero dropped plot rows,
 profile and family-state diagnostics, evaluator identity, and missing-value
 denominators. The generated
 [`artifact-manifest.json`](candidate_generation_scaleup_pilot/artifact-manifest.json)

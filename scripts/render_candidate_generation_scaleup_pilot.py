@@ -15,6 +15,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from aria_nbv.rollouts import RolloutZarrStoreReader
+from aria_nbv.rollouts.candidate_benchmark import benchmark_binding_from_reader
 from aria_nbv.rollouts.inspection import candidate_audit_rows
 
 matplotlib.rcParams["svg.hashsalt"] = "aria-nbv-candidate-generation-scaleup-pilot-v1"
@@ -31,6 +32,7 @@ class Profile:
     delta_from_realistic_core: tuple[str, ...]
     metrics_sha256: str
     rollout_manifest_sha256: str
+    rollout_store_content_sha256: str
 
 
 SEED = 20260728
@@ -53,6 +55,7 @@ PROFILES = (
         (),
         "35d89c678316efa47fd9983cc0d8d535760822215efe11d749532bcced441908",
         "178ad0a7abae133a3e5ef6f7fbbd769cd6a2f1529e61bc6567e4d467d2f8dc66",
+        "484a5f994ca949374b31d7376928041230e56af4a394939054a63fa86fe76f8d",
     ),
     Profile(
         "forward_target_glance",
@@ -66,6 +69,7 @@ PROFILES = (
         ),
         "287cfcf724f938dab1c57551c5a56fae79e4c9e8d0f84f2bd920e44e8e6b23ac",
         "5b7eae188b7e1006b36660b22583093feeb8798f71199ab0914e7ae8d65bfb0f",
+        "4b323972f88ae1425ef7c89eba644db934bb8f0adb82d12e052c01a757840536",
     ),
     Profile(
         "radius_stratified",
@@ -79,6 +83,7 @@ PROFILES = (
         ),
         "97c73fc8c56260a3460b75481f2b00a63e4309bbddb7adf496d4fcf3ee1aff49",
         "950637dcb557ddcac22acd6ff389b989887e965093727a0faefc851463ae8456",
+        "f09cc2d9b6c1c976ac091ec8fcdb8703eb101f4238b1af3c996a1f4855069391",
     ),
 )
 
@@ -110,6 +115,14 @@ def _finite(value: Any) -> float | None:
 def _require_equal(actual: Any, expected: Any, label: str) -> None:
     if actual != expected:
         raise ValueError(f"{label}: expected {expected!r}, got {actual!r}")
+
+
+def _require_store_content_hash(reader: Any, expected: str, label: str) -> str:
+    """Require the frozen hash of every file in one consumed rollout store."""
+
+    actual = benchmark_binding_from_reader(reader)["store_content_sha256"]
+    _require_equal(actual, expected, f"{label} rollout store content hash")
+    return actual
 
 
 def _quantiles(
@@ -264,7 +277,11 @@ def _load_evidence(measurements: Path) -> dict[str, Any]:
             f"{profile.key} rollout manifest hash",
         )
         metrics = json.loads(metrics_path.read_text(encoding="utf-8"))["metrics"]
-        rows = candidate_audit_rows(RolloutZarrStoreReader(run / "rollouts.zarr"))
+        reader = RolloutZarrStoreReader(run / "rollouts.zarr")
+        rollout_store_content_sha256 = _require_store_content_hash(
+            reader, profile.rollout_store_content_sha256, profile.key
+        )
+        rows = candidate_audit_rows(reader)
         _require_equal(
             len(rows), EXPECTED_CANDIDATES_PER_PROFILE, f"{profile.key} audit rows"
         )
@@ -315,6 +332,7 @@ def _load_evidence(measurements: Path) -> dict[str, Any]:
                     "dropped_plot_row_count": 0,
                     "metrics_sha256": profile.metrics_sha256,
                     "rollout_manifest_sha256": profile.rollout_manifest_sha256,
+                    "rollout_store_content_sha256": rollout_store_content_sha256,
                 },
                 "diagnostics": {
                     "invalid_reason_counts": _reason_counts(rows),
@@ -355,6 +373,7 @@ def _load_evidence(measurements: Path) -> dict[str, Any]:
                 "family_state_diagnostics": _family_state_diagnostics(rows),
                 "points": points,
                 "rollout_manifest_sha256": profile.rollout_manifest_sha256,
+                "rollout_store_content_sha256": rollout_store_content_sha256,
             }
         )
     return {

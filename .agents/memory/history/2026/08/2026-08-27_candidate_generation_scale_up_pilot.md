@@ -53,7 +53,7 @@ hashed public artifact manifest; those were added before publication.
 - Deterministic regeneration: two independent renders matched each other and
   the committed evidence bundle byte-for-byte.
 - Public evidence contract: three profiles, 120 audit rows each, zero dropped
-  plot rows, exact source/config/metrics/store hashes, family-state diagnostics,
+  plot rows, exact source/config/metrics/manifest/full-store hashes, family-state diagnostics,
   and committed artifact hashes all passed.
 - `ruff check scripts/render_candidate_generation_scaleup_pilot.py`: passed.
 - `python3 scripts/validate_qmd_frontmatter.py docs/contents`: passed.
