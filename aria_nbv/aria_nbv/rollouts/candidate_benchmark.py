@@ -14,12 +14,13 @@ import os
 import re
 import tempfile
 import zipfile
-from collections.abc import Mapping
+from collections.abc import Collection, Iterable, Mapping
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from types import MappingProxyType
-from typing import Any
+from typing import Any, cast
 
+import numpy as np
 import pandas as pd
 
 SCHEMA_ID = "aria-nbv-candidate-benchmark-v1"
@@ -51,7 +52,7 @@ def _canonical(value: Any) -> Any:
     return value
 
 
-def canonical_json_bytes(value: Mapping[str, Any]) -> bytes:
+def canonical_json_bytes(value: Any) -> bytes:
     """Return stable UTF-8 JSON bytes for hashing and export."""
 
     return json.dumps(_canonical(value), ensure_ascii=True, sort_keys=True, separators=(",", ":")).encode()
@@ -135,19 +136,61 @@ class CandidateFamilyCounts:
 
 @dataclass(frozen=True, slots=True)
 class CandidatePoint:
-    """One aligned candidate row retained for bounded interactive support plots."""
+    """One persisted candidate row in the target-aligned proposal-support frame."""
 
     candidate_id: int
+    """Stable candidate-row identity in the rollout store."""
+
     xyz: tuple[float, float, float]
+    """Candidate centre in the normalized proposal-support frame."""
+
     family: str
+    """Configured proposal-family identifier."""
+
     position: str
+    """Persisted position strategy used to generate the candidate."""
+
     actor_valid: bool
+    """Whether the candidate passes the authoritative physical action mask."""
+
     selected: bool
+    """Whether the rollout policy selected this candidate at the factual state."""
+
     state_key: str
+    """Stable ``rollout:<id>/step:<id>`` factual-state identity."""
+
     candidate_config: str | None = None
+    """Persisted candidate-generation configuration lineage, when available."""
+
     rollout_config: str | None = None
+    """Persisted rollout configuration lineage, when available."""
+
     branch_schedule: str | None = None
+    """Persisted branch schedule lineage, when available."""
+
     unavailable_reason: str | None = None
+    """Explicit reason when a legacy store cannot supply a requested diagnostic."""
+
+    target_relative_xyz: tuple[float, float, float] | None = None
+    """Target-to-candidate displacement in the same normalized support frame as ``xyz``."""
+
+    view_direction_xyz: tuple[float, float, float] | None = None
+    """Unit camera-forward direction expressed in the same proposal-support axes."""
+
+    view_jitter_yaw_deg: float | None = None
+    """Persisted local yaw residual in degrees."""
+
+    view_jitter_pitch_deg: float | None = None
+    """Persisted local pitch residual in degrees."""
+
+    view_jitter_is_bounded: bool | None = None
+    """Per-candidate declaration distinguishing bounded box from uncapped spherical support."""
+
+    view_jitter_azimuth_limit_deg: float | None = None
+    """Configured non-negative yaw cap in degrees for a bounded row."""
+
+    view_jitter_elevation_limit_deg: float | None = None
+    """Configured non-negative pitch cap in degrees for a bounded row."""
 
     def __post_init__(self) -> None:
         if not self.family or not self.position or not self.state_key:
@@ -156,6 +199,32 @@ class CandidatePoint:
             raise ValueError("candidate point statuses must be bool")
         if len(self.xyz) != 3 or not all(math.isfinite(float(value)) for value in self.xyz):
             raise ValueError("candidate point xyz must be a finite 3-vector")
+        if self.target_relative_xyz is not None and (
+            len(self.target_relative_xyz) != 3
+            or not all(math.isfinite(float(value)) for value in self.target_relative_xyz)
+        ):
+            raise ValueError("target_relative_xyz must be a finite 3-vector when present")
+        if self.view_direction_xyz is not None and (
+            len(self.view_direction_xyz) != 3
+            or not all(math.isfinite(float(value)) for value in self.view_direction_xyz)
+            or not math.isclose(sum(float(value) ** 2 for value in self.view_direction_xyz), 1.0, abs_tol=1e-4)
+        ):
+            raise ValueError("view_direction_xyz must be a finite unit 3-vector when present")
+        if self.view_jitter_is_bounded is not None and not isinstance(self.view_jitter_is_bounded, bool):
+            raise ValueError("view_jitter_is_bounded must be bool or None")
+        for name in (
+            "view_jitter_yaw_deg",
+            "view_jitter_pitch_deg",
+            "view_jitter_azimuth_limit_deg",
+            "view_jitter_elevation_limit_deg",
+        ):
+            value = getattr(self, name)
+            if value is not None and not math.isfinite(float(value)):
+                raise ValueError(f"{name} must be finite when present")
+        for name in ("view_jitter_azimuth_limit_deg", "view_jitter_elevation_limit_deg"):
+            value = getattr(self, name)
+            if value is not None and float(value) < 0.0:
+                raise ValueError(f"{name} must be non-negative when present")
 
 
 @dataclass(frozen=True, slots=True)
@@ -184,8 +253,8 @@ class CandidateBenchmark:
             raise ValueError("candidate ids and coordinates must be aligned")
         if len(set(self.candidate_ids)) != len(self.candidate_ids):
             raise ValueError("candidate ids must be unique")
-        for point in self.coordinates:
-            if len(point) != 3 or not all(math.isfinite(float(value)) for value in point):
+        for coordinate_value in self.coordinates:
+            if len(coordinate_value) != 3 or not all(math.isfinite(float(value)) for value in coordinate_value):
                 raise ValueError("candidate coordinates must be finite 3-vectors")
         if len(self.points) != len(self.candidate_ids):
             raise ValueError("candidate points and ids must be aligned")
@@ -241,10 +310,25 @@ def reduce_candidate_records(records: list[Mapping[str, Any]]) -> tuple[Candidat
             resources=_mapping_field(record.get("resources", {})),
             provenance=_mapping_field(record.get("provenance", {})),
             candidate_ids=tuple(int(value) for value in record.get("candidate_ids", ())),
-            coordinates=tuple(tuple(float(value) for value in point) for point in record.get("coordinates", ())),
+            coordinates=tuple(_coordinate3(point) for point in record.get("coordinates", ())),
             lineage=_mapping_field(record.get("lineage", {})),
             points=tuple(
-                CandidatePoint(**{**point, "xyz": tuple(float(value) for value in point["xyz"])})
+                CandidatePoint(
+                    **{
+                        **point,
+                        "xyz": tuple(float(value) for value in point["xyz"]),
+                        "target_relative_xyz": (
+                            None
+                            if point.get("target_relative_xyz") is None
+                            else tuple(float(value) for value in point["target_relative_xyz"])
+                        ),
+                        "view_direction_xyz": (
+                            None
+                            if point.get("view_direction_xyz") is None
+                            else tuple(float(value) for value in point["view_direction_xyz"])
+                        ),
+                    }
+                )
                 for point in record.get("points", ())
             ),
         )
@@ -261,24 +345,42 @@ def benchmarks_from_reader(
 ) -> tuple[CandidateBenchmark, ...]:
     """Build state-keyed facts from the canonical inspection candidate rows."""
 
-    from .inspection import candidate_audit_rows
+    from .inspection import candidate_audit_rows, proposal_support_geometry
 
     grouped: dict[tuple[str, str], dict[str, list[Mapping[str, Any]]]] = {}
     if candidate_limit is not None and candidate_limit <= 0:
         raise ValueError("candidate_limit must be positive")
-    if state_key is None:
-        audit_rows = candidate_audit_rows(reader, limit=candidate_limit)
-    else:
+    requested_rollout_ids = None
+    requested_state: tuple[int, int] | None = None
+    if state_key is not None:
         match = re.fullmatch(r"rollout:(\d+)/step:(\d+)", state_key)
         if match is None:
             return ()
+        requested_state = (int(match.group(1)), int(match.group(2)))
+        requested_rollout_ids = (requested_state[0],)
+    projection = None
+    if hasattr(reader, "root"):
+        projection = proposal_support_geometry(
+            reader,
+            rollout_row_ids=requested_rollout_ids,
+            step_row_ids=None if requested_state is None else (requested_state[1],),
+            max_candidates=candidate_limit,
+        )
+    geometry_points = {point.candidate_row_id: point for point in projection.points} if projection else {}
+    geometry_frames = {frame.frame_id: frame for frame in projection.frames} if projection else {}
+    if state_key is None:
+        audit_rows = candidate_audit_rows(reader, limit=candidate_limit)
+    else:
+        assert requested_state is not None
         audit_rows = candidate_audit_rows(
             reader,
-            rollout_row_id=int(match.group(1)),
-            step_row_id=int(match.group(2)),
+            rollout_row_id=requested_state[0],
+            step_row_id=requested_state[1],
             limit=candidate_limit,
         )
     for row in audit_rows:
+        if projection is not None and int(row["candidate_row_id"]) not in geometry_points:
+            continue
         key = (str(row["scene"]), f"rollout:{row['rollout_row_id']}/step:{row['step_row_id']}")
         grouped.setdefault(key, {}).setdefault(str(row["position"]), []).append(row)
     result = []
@@ -286,6 +388,7 @@ def benchmarks_from_reader(
         families = []
         candidate_ids: list[int] = []
         coordinates: list[tuple[float, float, float]] = []
+        frame_ids: set[str] = set()
         lineage: dict[str, str] = {}
         points: list[CandidatePoint] = []
         for family, rows in sorted(family_rows.items()):
@@ -297,31 +400,78 @@ def benchmarks_from_reader(
                     family, applicable, len(rows), valid, selected, len(rows), "unavailable_in_legacy_store"
                 )
             )
-            for row in rows:
-                candidate_ids.append(int(row["candidate_row_id"]))
-                scale = sum(float(row.get(f"root_to_target_{axis}_m") or 0.0) ** 2 for axis in ("x", "y", "z")) ** 0.5
-                scale = scale if scale > 0.0 else 1.0
-                coordinates.append(tuple(float(row[f"root_relative_{axis}_m"]) / scale for axis in ("x", "y", "z")))
+            for family_row in rows:
+                candidate_id = int(family_row["candidate_row_id"])
+                projected = geometry_points.get(candidate_id)
+                if projection is not None and projected is None:
+                    continue
+                coordinate = (
+                    (float(projected.x), float(projected.y), float(projected.z))
+                    if projected is not None
+                    else _legacy_coordinate(family_row)
+                )
+                candidate_ids.append(candidate_id)
+                coordinates.append(coordinate)
+                target_relative = None
+                if projected is not None:
+                    frame_ids.add(projected.frame_id)
+                    frame = geometry_frames.get(projected.frame_id)
+                    if frame is not None:
+                        target_relative = (
+                            coordinate[0] - frame.target_x,
+                            coordinate[1] - frame.target_y,
+                            coordinate[2] - frame.target_z,
+                        )
                 points.append(
                     CandidatePoint(
-                        int(row["candidate_row_id"]),
+                        candidate_id,
                         coordinates[-1],
                         family,
-                        str(row["position"]),
-                        bool(row.get("actor_action")),
-                        bool(row.get("selected")),
+                        str(family_row["position"]),
+                        bool(family_row.get("actor_action")),
+                        bool(family_row.get("selected")),
                         state,
-                        str(row.get("candidate_config")),
-                        str(row.get("rollout_config")),
-                        str(row.get("branch_schedule")),
+                        str(family_row.get("candidate_config")),
+                        str(family_row.get("rollout_config")),
+                        str(family_row.get("branch_schedule")),
+                        target_relative_xyz=target_relative,
+                        view_direction_xyz=(
+                            None
+                            if projected is None or getattr(projected, "camera_forward_x", None) is None
+                            else (
+                                cast(float, projected.camera_forward_x),
+                                cast(float, projected.camera_forward_y),
+                                cast(float, projected.camera_forward_z),
+                            )
+                        ),
+                        view_jitter_yaw_deg=_finite_value(family_row.get("view_jitter_yaw_deg")),
+                        view_jitter_pitch_deg=_finite_value(family_row.get("view_jitter_pitch_deg")),
+                        view_jitter_is_bounded=(
+                            bool(family_row["view_jitter_is_bounded"])
+                            if family_row.get("view_jitter_is_bounded") is not None
+                            else None
+                        ),
+                        view_jitter_azimuth_limit_deg=_finite_value(family_row.get("view_jitter_azimuth_limit_deg")),
+                        view_jitter_elevation_limit_deg=_finite_value(
+                            family_row.get("view_jitter_elevation_limit_deg")
+                        ),
                     )
                 )
+        geometry = {"candidate_count": float(len(candidate_ids))}
+        if projection is not None:
+            state_frames = [geometry_frames[frame_id] for frame_id in sorted(frame_ids)]
+            if state_frames:
+                targets = {(frame.target_x, frame.target_y, frame.target_z) for frame in state_frames}
+                if len(targets) != 1:
+                    raise ValueError(f"candidate benchmark state {state!r} spans multiple proposal-support frames")
+                target_x, target_y, target_z = targets.pop()
+                geometry.update({"target_x": target_x, "target_y": target_y, "target_z": target_z})
         result.append(
             CandidateBenchmark(
                 scene_key=scene,
                 state_key=state,
                 families=tuple(families),
-                geometry={"candidate_count": float(len(candidate_ids))},
+                geometry=geometry,
                 candidate_ids=tuple(candidate_ids),
                 coordinates=tuple(coordinates),
                 lineage=lineage,
@@ -331,17 +481,247 @@ def benchmarks_from_reader(
     return tuple(result)
 
 
+def _legacy_coordinate(row: Mapping[str, Any]) -> tuple[float, float, float]:
+    """Normalize an audit-only row for backward-compatible bundles."""
+
+    scale = sum(float(row.get(f"root_to_target_{axis}_m") or 0.0) ** 2 for axis in ("x", "y", "z")) ** 0.5
+    scale = scale if scale > 0.0 else 1.0
+    return (
+        float(row["root_relative_x_m"]) / scale,
+        float(row["root_relative_y_m"]) / scale,
+        float(row["root_relative_z_m"]) / scale,
+    )
+
+
+def _coordinate3(values: Iterable[Any]) -> tuple[float, float, float]:
+    """Normalize one serialized coordinate while enforcing its length."""
+
+    coordinate = tuple(float(value) for value in values)
+    if len(coordinate) != 3:
+        raise ValueError("candidate coordinates must be finite 3-vectors")
+    return coordinate
+
+
+def _finite_value(value: Any) -> float | None:
+    """Return a finite scalar, preserving unavailable legacy values as ``None``."""
+
+    try:
+        result = float(value)
+    except (TypeError, ValueError):
+        return None
+    return result if math.isfinite(result) else None
+
+
+def circular_minimum_covering_span_deg(angles_deg: Iterable[float]) -> float | None:
+    """Return the shortest circular arc covering angles in degrees.
+
+    The branch cut is handled on the circle, so ``-179`` and ``179`` span
+    two degrees rather than 358 degrees.
+    """
+
+    values = np.asarray(list(angles_deg), dtype=float).reshape(-1)
+    values = values[np.isfinite(values)]
+    if values.size == 0:
+        return None
+    wrapped = np.sort(np.mod(values, 360.0))
+    gaps = np.diff(np.concatenate((wrapped, wrapped[:1] + 360.0)))
+    return float(360.0 - np.max(gaps))
+
+
+def target_side_count_balance(
+    points: Iterable[CandidatePoint],
+    *,
+    target_conditioned_positions: Collection[str] = ("target_bearing_local", "target_orbit"),
+) -> float | None:
+    """Return attempted target-family side-count balance for one factual state.
+
+    The lateral coordinate is read from ``target_relative_xyz``. Rows without a
+    common-frame target displacement are excluded rather than reconstructed
+    from incompatible audit coordinates.
+    """
+
+    positive, negative, _ = _target_side_counts(
+        points,
+        target_conditioned_positions=target_conditioned_positions,
+    )
+    if positive + negative == 0:
+        return None
+    return 1.0 - abs(positive - negative) / float(positive + negative)
+
+
+def _target_side_counts(
+    points: Iterable[CandidatePoint],
+    *,
+    target_conditioned_positions: Collection[str],
+) -> tuple[int, int, int]:
+    """Count positive, negative, and neutral target-relative lateral rows."""
+
+    positive = 0
+    negative = 0
+    neutral = 0
+    for point in points:
+        if str(getattr(point, "position", "")) not in target_conditioned_positions:
+            continue
+        values = getattr(point, "target_relative_xyz", None)
+        if values is None:
+            continue
+        value = float(values[1])
+        if not math.isfinite(value):
+            continue
+        if value > 1e-9:
+            positive += 1
+        elif value < -1e-9:
+            negative += 1
+        else:
+            neutral += 1
+    return positive, negative, neutral
+
+
+def target_relative_orbit_span_deg(
+    points: Iterable[CandidatePoint],
+    *,
+    target_conditioned_positions: Collection[str] = ("target_bearing_local", "target_orbit"),
+) -> float | None:
+    """Return the minimum circular azimuth span around the target, in degrees."""
+
+    angles = []
+    for point in points:
+        values = getattr(point, "target_relative_xyz", None)
+        if values is None:
+            continue
+        if str(getattr(point, "position", "")) not in target_conditioned_positions:
+            continue
+        dx = float(values[0])
+        dy = float(values[1])
+        if math.isfinite(dx) and math.isfinite(dy) and math.hypot(dx, dy) > 1e-9:
+            angles.append(math.degrees(math.atan2(dy, -dx)))
+    return circular_minimum_covering_span_deg(angles)
+
+
+def candidate_support_metrics(
+    points: Iterable[CandidatePoint],
+    *,
+    configured_families: Collection[str] | None = None,
+    projected_target_centers: int | None = None,
+    total_target_centers: int | None = None,
+) -> dict[str, float | int | None]:
+    """Compute frame-safe candidate-support facts for one factual state.
+
+    Args:
+        points: Attempted rows expressed in one target-aligned support frame.
+        configured_families: Complete configured family identifiers, including
+            families with no emitted or valid row.
+        projected_target_centers: Evaluated rows whose target centre projects
+            inside the calibrated image domain.
+        total_target_centers: Rows on which target-centre projection was
+            evaluated.
+
+    Returns:
+        State-level support counts and fractions. ``None`` denotes unavailable
+        evidence; projection is calibrated framing rather than visibility.
+
+    Notes:
+        Geometry from unrelated root and decision frames is intentionally not
+        combined. Normal callers obtain coordinates from
+        :func:`aria_nbv.rollouts.inspection.proposal_support_geometry`.
+    """
+
+    if projected_target_centers is not None and projected_target_centers < 0:
+        raise ValueError("projected_target_centers must be non-negative")
+    if total_target_centers is not None and total_target_centers < 0:
+        raise ValueError("total_target_centers must be non-negative")
+    if (
+        projected_target_centers is not None
+        and total_target_centers is not None
+        and projected_target_centers > total_target_centers
+    ):
+        raise ValueError("projected_target_centers cannot exceed total_target_centers")
+    point_list = tuple(points)
+    side_positive, side_negative, side_neutral = _target_side_counts(
+        point_list,
+        target_conditioned_positions=("target_bearing_local", "target_orbit"),
+    )
+    actor_values = [getattr(point, "actor_valid", getattr(point, "actor_action", None)) for point in point_list]
+    actor_known = [value for value in actor_values if isinstance(value, bool)]
+    actor_valid = sum(actor_known)
+    metrics: dict[str, float | int | None] = {
+        "actor_valid_fraction": (actor_valid / len(actor_known)) if actor_known else None,
+        "per_state_valid_support": actor_valid if actor_known else None,
+        "target_side_count_balance": target_side_count_balance(point_list),
+        "target_side_positive_count": side_positive,
+        "target_side_negative_count": side_negative,
+        "target_side_neutral_count": side_neutral,
+        "target_side_balance_undefined": int(side_positive + side_negative == 0),
+        "target_relative_orbit_span_deg": target_relative_orbit_span_deg(point_list),
+        "target_center_projection_fraction": (
+            projected_target_centers / total_target_centers
+            if projected_target_centers is not None and total_target_centers
+            else None
+        ),
+    }
+    if configured_families is None:
+        metrics["zero_valid_family_state_rate"] = None
+    else:
+        families = tuple(configured_families)
+        if not families:
+            metrics["zero_valid_family_state_rate"] = None
+        else:
+            zero = sum(
+                1
+                for family in families
+                if not any(
+                    getattr(point, "family", None) == family and bool(getattr(point, "actor_valid", False))
+                    for point in point_list
+                )
+            )
+            metrics["zero_valid_family_state_rate"] = zero / len(families)
+    jitter = [
+        point
+        for point in point_list
+        if getattr(point, "view_jitter_yaw_deg", None) is not None
+        and getattr(point, "view_jitter_pitch_deg", None) is not None
+    ]
+    nonzero = [
+        point
+        for point in jitter
+        if abs(float(point.view_jitter_yaw_deg or 0.0)) > 1e-9 or abs(float(point.view_jitter_pitch_deg or 0.0)) > 1e-9
+    ]
+    bounded = [point for point in jitter if getattr(point, "view_jitter_is_bounded", None) is True]
+    compliant = [
+        point
+        for point in bounded
+        if point.view_jitter_azimuth_limit_deg is not None
+        and point.view_jitter_elevation_limit_deg is not None
+        and abs(float(point.view_jitter_yaw_deg or 0.0)) <= float(point.view_jitter_azimuth_limit_deg) + 1e-6
+        and abs(float(point.view_jitter_pitch_deg or 0.0)) <= float(point.view_jitter_elevation_limit_deg) + 1e-6
+    ]
+    metrics.update(
+        {
+            "nonzero_jitter_fraction": len(nonzero) / len(jitter) if jitter else None,
+            "bounded_jitter_declaration_fraction": len(bounded) / len(jitter) if jitter else None,
+            "bounded_jitter_cap_compliance_fraction": len(compliant) / len(bounded) if bounded else None,
+            "uncapped_spherical_count": sum(
+                getattr(point, "view_jitter_is_bounded", None) is False for point in jitter
+            ),
+        }
+    )
+    return metrics
+
+
 def write_bundle(
     path: Path | str,
     records: list[Mapping[str, Any]] | tuple[CandidateBenchmark, ...],
     *,
-    provenance: Mapping[str, str] = (),
+    provenance: Mapping[str, str] | None = None,
 ) -> Path:
     """Atomically write a deterministic JSON/Parquet evidence bundle."""
 
     destination = Path(path).expanduser().resolve()
     destination.parent.mkdir(parents=True, exist_ok=True)
-    dtos = reduce_candidate_records(records) if records and isinstance(records[0], Mapping) else tuple(records)  # type: ignore[arg-type]
+    if records and isinstance(records[0], Mapping):
+        dtos = reduce_candidate_records(records)
+    else:
+        dtos = tuple(cast(tuple[CandidateBenchmark, ...], records))
     rows = [item.to_record() for item in dtos]
     frame = pd.DataFrame(
         rows,
@@ -369,7 +749,7 @@ def write_bundle(
         except (ImportError, ValueError) as exc:
             raise RuntimeError("candidate benchmark export requires a Parquet engine (pyarrow or fastparquet)") from exc
         data_hash = sha256_bytes(parquet_path.read_bytes())
-        provenance_payload = dict(provenance)
+        provenance_payload = dict(provenance or {})
         missing_binding = [key for key in BINDING_KEYS if key not in provenance_payload]
         if missing_binding:
             raise ValueError(f"missing immutable benchmark binding fields: {', '.join(missing_binding)}")
@@ -605,7 +985,7 @@ def read_bundle(path: Path | str, *, expected_binding: Mapping[str, str]) -> Can
         raise ValueError("stale candidate benchmark bundle")
     raw_records = frame.to_dict(orient="records")
     try:
-        records = reduce_candidate_records(raw_records)
+        records = reduce_candidate_records(cast(list[Mapping[str, Any]], raw_records))
     except (KeyError, TypeError, ValueError) as exc:
         raise ValueError("schema-mismatched candidate benchmark rows") from exc
     return CandidateBenchmarkBundle(_freeze(manifest), records, root)
@@ -617,13 +997,18 @@ __all__ = [
     "CandidateBenchmark",
     "CandidateBenchmarkBundle",
     "CandidateFamilyCounts",
+    "CandidatePoint",
+    "candidate_support_metrics",
     "canonical_json_bytes",
+    "circular_minimum_covering_span_deg",
     "read_bundle",
     "benchmarks_from_reader",
     "read_bundle_bytes",
     "reduce_candidate_records",
     "serialize_bundle_bytes",
     "sha256_bytes",
+    "target_relative_orbit_span_deg",
+    "target_side_count_balance",
     "write_bundle",
     "benchmark_binding_from_manifest",
 ]

@@ -1,6 +1,6 @@
 = Results <sec:thesis-results>
 
-#import "../experiment_data.typ": thesis-report-settings, load-thesis-report, report-store-fact, short-store-label, format-report-value
+#import "../experiment_data.typ": thesis-report-settings, load-thesis-report, report-store-fact, report-store-facts-match-contract, short-store-label, format-report-value
 #import "../draft_markers.typ": validation_todo
 #import "../../shared/tables.typ": publication-table, index-cell
 
@@ -29,14 +29,50 @@
 #let result-status(predicate) = if predicate [available] else [not available]
 
 #let population-facts = ("study.population.scenes", "study.population.targets", "study.population.exclusions")
-#let candidate-support-facts = ("candidate_validity.total", "candidate_validity.valid", "candidate_support.no_valid_action_failures")
+#let candidate-support-facts = (
+  "candidate-support.actor-valid-fraction",
+  "candidate-support.valid-support-p05",
+  "candidate-support.configured-family-zero-rate",
+  "candidate-support.target-side-balance",
+  "candidate-support.circular-orbit-span",
+)
+#let candidate-support-contract = (
+  (key: "candidate-support.actor-valid-fraction", aggregation: "state_then_scene_macro"),
+  (key: "candidate-support.valid-support-p05", aggregation: "state_then_scene_p05"),
+  (key: "candidate-support.configured-family-zero-rate", aggregation: "state_then_scene_macro"),
+  (key: "candidate-support.target-side-balance", aggregation: "state_then_scene_macro"),
+  (key: "candidate-support.circular-orbit-span", aggregation: "state_then_scene_macro"),
+)
 #let paired-effect-facts = ("policy.paired_scene_endpoint.effect", "policy.paired_scene_endpoint.ci_low", "policy.paired_scene_endpoint.ci_high", "policy.paired_scene_endpoint.n_scenes", "headroom_gate.passed")
+#let paired-effect-contract = (
+  (key: "policy.paired_scene_endpoint.effect", aggregation: "paired_scene_mean_difference"),
+  (key: "policy.paired_scene_endpoint.ci_low", aggregation: "paired_scene_mean_difference"),
+  (key: "policy.paired_scene_endpoint.ci_high", aggregation: "paired_scene_mean_difference"),
+  (key: "policy.paired_scene_endpoint.n_scenes", aggregation: "count"),
+  (key: "headroom_gate.passed", aggregation: "paired_scene_decision"),
+)
 #let resource-facts = ("runtime.wall_time_s", "runtime.peak_gpu_bytes", "storage.total_bytes")
 
 #let confirmatory-evidence = thesis_evidence_status == "confirmatory" and all-stores-valid
 #let population-available = confirmatory-evidence and stores-have-facts(population-facts, denominators: true)
-#let candidate-support-available = confirmatory-evidence and stores-have-facts(candidate-support-facts)
-#let paired-effect-available = confirmatory-evidence and stores-have-facts(paired-effect-facts)
+#let candidate-support-available = confirmatory-evidence and population-available and stores-have-facts(candidate-support-facts, denominators: true) and thesis_data.tables.stores.rows.all(store => {
+  let scene-count = report-store-fact(thesis_data, store.store_id, "study.population.scenes").value
+  scene-count != none and scene-count > 0 and report-store-facts-match-contract(
+    thesis_data,
+    store.store_id,
+    candidate-support-contract,
+    scene-count,
+  )
+})
+#let paired-effect-available = confirmatory-evidence and stores-have-facts(paired-effect-facts) and thesis_data.tables.stores.rows.all(store => {
+  let paired-scenes = report-store-fact(thesis_data, store.store_id, "policy.paired_scene_endpoint.n_scenes").value
+  paired-scenes != none and paired-scenes > 0 and report-store-facts-match-contract(
+    thesis_data,
+    store.store_id,
+    paired-effect-contract,
+    paired-scenes,
+  )
+})
 #let resource-available = confirmatory-evidence and stores-have-facts(resource-facts)
 
 #let result-summary-families = {
@@ -50,9 +86,11 @@
   }
   if candidate-support-available {
     families.push((label: [Candidate support], metrics: (
-      (label: [Valid candidates], key: "candidate_validity.valid"),
-      (label: [Candidate total], key: "candidate_validity.total"),
-      (label: [No-valid-action failures], key: "candidate_support.no_valid_action_failures"),
+      (label: [Actor-valid fraction], key: "candidate-support.actor-valid-fraction", digits: 3),
+      (label: [P05 valid support], key: "candidate-support.valid-support-p05", digits: 1),
+      (label: [Configured-family zero rate], key: "candidate-support.configured-family-zero-rate", digits: 3),
+      (label: [Target-side balance], key: "candidate-support.target-side-balance", digits: 3),
+      (label: [Circular orbit span], key: "candidate-support.circular-orbit-span", digits: 2),
     )))
   }
   if paired-effect-available {
@@ -128,8 +166,8 @@ The thesis report bundle is loaded through the strict schema checked in `experim
     header: ([*Result*], [*Required evidence*], [*Status*]),
     rows: (
       index-cell([Population and targets]), [population facts with denominators in every validated store], [#result-status(population-available)],
-      index-cell([Candidate support]), [valid/total candidates and zero-action failures in every validated store], [#result-status(candidate-support-available)],
-      index-cell([Paired policy effect]), [effect, interval, scene count, and headroom gate in every validated store], [#result-status(paired-effect-available)],
+      index-cell([Candidate-support QC]), [five descriptive diagnostics with the frozen state--scene macro identities and exact scene denominators], [#result-status(candidate-support-available)],
+      index-cell([Paired policy effect]), [paired per-scene effect, interval, exact paired-scene count, and headroom decision in every validated store], [#result-status(paired-effect-available)],
       index-cell([Resource feasibility]), [wall time, peak GPU memory, and storage in every validated store], [#result-status(resource-available)],
     ),
   ),
@@ -154,7 +192,7 @@ The thesis report bundle is loaded through the strict schema checked in `experim
 == Candidate and Store Feasibility
 
 #if candidate-support-available [
-  The confirmatory bundle supplies finite-candidate support for every validated store. Valid and total candidate counts and no-valid-action failures are reported per profile in @tab:thesis-confirmatory-values; the table does not pool profiles or infer support beyond the recorded study population.
+  The confirmatory bundle supplies descriptive candidate-support quality-control diagnostics for every validated store. Actor-valid fraction, lower-tail valid support, configured-family zero rate, target-side balance, and circular orbit span are reported per profile in @tab:thesis-confirmatory-values with the frozen state--scene macro identities and scene denominators. These values audit candidate support; they are not paired policy effects and carry no comparative inference unless a separately preregistered paired scene contrast and interval are present.
 ] else [
   The available artifacts show that the finite-candidate rollout path reaches mesh rendering, target-specific oracle scoring, and selected-action replay on training sources. They therefore support an implementation-readiness claim only. A CUDA out-of-memory failure in an unbatched candidate render and later memory-bounded attempts identify rendering as a scale gate; neither establishes rollout throughput, storage cost, candidate-family support, or policy quality for the intended study population.
 ]

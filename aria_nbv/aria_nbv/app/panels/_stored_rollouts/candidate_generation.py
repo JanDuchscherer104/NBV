@@ -14,6 +14,7 @@ import plotly.graph_objects as go
 import streamlit as st
 from plotly.subplots import make_subplots
 
+from ....rollouts.candidate_support_plotting import candidate_support_figures
 from ....rollouts.inspection import (
     CANDIDATE_GROUP_FIELDS,
     candidate_selection_pooled_summary_rows,
@@ -531,18 +532,21 @@ def _render_candidate_population_evidence(session_handle: Any) -> None:
         st.dataframe(sample_rows, hide_index=True, width="stretch")
 
 
-def _candidate_benchmark_figures(records: tuple[Any, ...]) -> tuple[go.Figure, ...]:
-    """Build deterministic funnel, support, and resource views from DTOs."""
+def _candidate_benchmark_figures(
+    records: tuple[Any, ...], *, show_view_directions: bool = False
+) -> tuple[go.Figure, ...]:
+    """Build deterministic funnel, support, jitter, and resource views from DTOs."""
 
     titles = (
         "Candidate family attempted → valid → selected funnel",
         "Candidate support (target-normalized ground plane)",
         "Candidate support (target-normalized 3D)",
+        "Candidate view jitter (bounded boxes and uncapped spherical support)",
         "Candidate benchmark resource and timing summary",
     )
     if not records or not any(record.points for record in records):
         figures = []
-        for title in titles[:3]:
+        for title in titles[:4]:
             figure = go.Figure()
             figure.update_layout(title=title)
             figure.add_annotation(
@@ -550,7 +554,7 @@ def _candidate_benchmark_figures(records: tuple[Any, ...]) -> tuple[go.Figure, .
             )
             figures.append(figure)
         resources = go.Figure()
-        resources.update_layout(title=titles[3])
+        resources.update_layout(title=titles[4])
         resources.add_annotation(
             text="unavailable: no persisted timing/resource facts",
             x=0.5,
@@ -561,25 +565,6 @@ def _candidate_benchmark_figures(records: tuple[Any, ...]) -> tuple[go.Figure, .
         )
         return (*figures, resources)
 
-    points = tuple(point for record in records for point in record.points)
-    point_count = len(points)
-    coordinates = np.asarray([point.xyz for point in points], dtype=float)
-    selected = np.fromiter((point.selected for point in points), dtype=bool, count=point_count)
-    actor_valid = np.fromiter((point.actor_valid for point in points), dtype=bool, count=point_count)
-    frame = pd.DataFrame(
-        {
-            "x": coordinates[:, 0],
-            "y": coordinates[:, 1],
-            "z": coordinates[:, 2],
-            "candidate_id": np.fromiter((point.candidate_id for point in points), dtype=np.int64, count=point_count),
-            "state": np.fromiter((point.state_key for point in points), dtype=object, count=point_count),
-            "family": np.fromiter((point.family for point in points), dtype=object, count=point_count),
-            "status": np.select((selected, actor_valid), ("selected", "valid"), default="invalid"),
-            "lineage": np.fromiter(
-                (point.candidate_config or "unavailable" for point in points), dtype=object, count=point_count
-            ),
-        }
-    )
     family_counts = np.asarray(
         [(family.attempted, family.valid, family.selected) for record in records for family in record.families],
         dtype=np.int64,
@@ -589,30 +574,13 @@ def _candidate_benchmark_figures(records: tuple[Any, ...]) -> tuple[go.Figure, .
     funnel = px.bar(funnel_rows, x="stage", y="count", title="Candidate family attempted → valid → selected funnel")
     for trace in funnel.data:
         trace.name = trace.name or "candidate funnel"
-    plane = px.scatter(
-        frame,
-        x="x",
-        y="y",
-        color="family",
-        symbol="status",
-        hover_data=["candidate_id", "state", "lineage"],
-        title="Candidate support (target-normalized ground plane)",
+    plane, support, _, jitter = candidate_support_figures(
+        records,
+        show_view_directions=show_view_directions,
     )
-    for trace in plane.data:
-        trace.name = trace.name or "candidate support"
-    support = go.Figure()
-    support.add_trace(
-        go.Scatter3d(
-            x=frame.get("x", []),
-            y=frame.get("y", []),
-            z=frame.get("z", []),
-            mode="markers",
-            name="candidate support",
-            customdata=frame[["candidate_id", "family", "status", "lineage"]].to_numpy() if not frame.empty else [],
-            hovertemplate="candidate=%{customdata[0]}<br>family=%{customdata[1]}<br>status=%{customdata[2]}<br>lineage=%{customdata[3]}<extra></extra>",
-        )
-    )
+    plane.update_layout(title="Candidate support (target-normalized ground plane)")
     support.update_layout(title="Candidate support (target-normalized 3D)")
+    jitter.update_layout(title="Candidate view jitter (bounded boxes and uncapped spherical support)")
     resources = go.Figure()
     timings = [record.timings_ms.get("total_ms") for record in records if record.timings_ms.get("total_ms") is not None]
     memory = [
@@ -636,7 +604,7 @@ def _candidate_benchmark_figures(records: tuple[Any, ...]) -> tuple[go.Figure, .
             showarrow=False,
         )
     resources.update_layout(title="Candidate benchmark resource and timing summary")
-    return funnel, plane, support, resources
+    return funnel, plane, support, jitter, resources
 
 
 def _candidate_evidence_roles(population: dict[str, Any]) -> dict[str, EvidenceRole]:

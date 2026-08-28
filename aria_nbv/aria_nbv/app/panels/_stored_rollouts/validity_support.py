@@ -36,7 +36,7 @@ def _render_bounded_candidate_geometry(session_handle: Any, *, limit: int) -> No
 
 
 def _render_candidate_benchmark_card(session_handle: Any) -> None:
-    """Render the explicit immutable benchmark card and its four support plots."""
+    """Render the explicit immutable benchmark card and its five support plots."""
     benchmark_enabled = st.toggle(
         "Build immutable candidate benchmark card",
         value=False,
@@ -61,6 +61,11 @@ def _render_candidate_benchmark_card(session_handle: Any) -> None:
             step=100,
         )
     )
+    show_view_directions = st.toggle(
+        "Show valid-candidate view directions",
+        value=False,
+        help="Adds short arrows for the camera optical axes projected into the target-aligned ground plane.",
+    )
     records = session_handle.candidate_benchmark_records(state_key=benchmark_state, candidate_limit=benchmark_limit)
     st.download_button(
         "Download candidate benchmark bundle",
@@ -68,7 +73,7 @@ def _render_candidate_benchmark_card(session_handle: Any) -> None:
         "candidate-benchmark.zip",
     )
     st.markdown("#### Candidate benchmark support")
-    for figure in _candidate_benchmark_figures(records):
+    for figure in _candidate_benchmark_figures(records, show_view_directions=show_view_directions):
         _render_plot(
             figure,
             ScientificExplanation(
