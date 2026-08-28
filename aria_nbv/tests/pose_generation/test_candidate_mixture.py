@@ -26,6 +26,7 @@ from aria_nbv.pose_generation import (
     candidate_strategy_id,
 )
 from aria_nbv.targets import TargetDescriptor
+from aria_nbv.utils.frames import world_up_tensor
 
 
 def _identity_pose(device: torch.device | str = "cpu") -> PoseTW:
@@ -74,16 +75,22 @@ def _base_cfg() -> CandidateViewGeneratorConfig:
     )
 
 
-def _run_generate(cfg: CandidateMixtureViewGeneratorConfig, *, seed: int | None = None):
+def _run_generate(
+    cfg: CandidateMixtureViewGeneratorConfig,
+    *,
+    seed: int | None = None,
+    descriptor: TargetDescriptor | None = None,
+    reference_pose: PoseTW | None = None,
+):
     mesh, verts, faces = _mesh_triplet(cfg.device)
     return CandidateMixtureViewGenerator(cfg).generate(
-        reference_pose=_identity_pose(device=cfg.device),
+        reference_pose=reference_pose or _identity_pose(device=cfg.device),
         gt_mesh=mesh,
         mesh_verts=verts,
         mesh_faces=faces,
         camera_calib_template=_dummy_camera(cfg.device),
         occupancy_extent=torch.tensor([-10.0, 10.0, -10.0, 10.0, -10.0, 10.0], dtype=torch.float32),
-        runtime_context=CandidateGenerationRuntimeContext(descriptor=_descriptor()),
+        runtime_context=CandidateGenerationRuntimeContext(descriptor=descriptor or _descriptor()),
         seed=seed,
     )
 
@@ -452,6 +459,153 @@ def test_upper_bound_free_shell_ablation_is_explicit() -> None:
     assert result.component_name == ("upper_bound_free_shell",) * 5
     assert result.position_id is not None
     assert result.position_id.tolist() == [candidate_position_id(CandidatePositionMode.UPPER_BOUND_FREE_SHELL)] * 5
+
+
+@pytest.mark.parametrize("align_to_gravity", [True, False])
+def test_target_orbit_attempts_both_sides_at_constant_world_horizontal_standoff(
+    align_to_gravity: bool,
+) -> None:
+    target_world = torch.tensor([0.0, 3.0, 0.0])
+    pitch_rad = torch.deg2rad(torch.tensor(25.0))
+    rotation = torch.tensor(
+        [
+            [1.0, 0.0, 0.0],
+            [0.0, torch.cos(pitch_rad), -torch.sin(pitch_rad)],
+            [0.0, torch.sin(pitch_rad), torch.cos(pitch_rad)],
+        ]
+    )
+    tilted_reference = PoseTW.from_Rt(rotation, torch.zeros(3))
+    cfg = CandidateMixtureViewGeneratorConfig(
+        base=_base_cfg().model_copy(
+            update={
+                "num_samples": 12,
+                "align_to_gravity": align_to_gravity,
+                "enforce_motion_realism": True,
+                "max_backward_step_m": 10.0,
+                "collect_debug_stats": True,
+            }
+        ),
+        components=[
+            CandidateMixtureComponentConfig(
+                name="target_orbit",
+                count=12,
+                view_mode=ViewDirectionMode.TARGET_POINT,
+                position_mode=CandidatePositionMode.TARGET_ORBIT,
+            )
+        ],
+    )
+
+    result = _run_generate(
+        cfg,
+        descriptor=_descriptor(tuple(target_world.tolist())),
+        reference_pose=tilted_reference.to(cfg.device),
+    )
+
+    target_world_device = target_world.to(result.shell_poses.t.device)
+    world_up = world_up_tensor(device=result.shell_poses.t.device, dtype=result.shell_poses.t.dtype)
+    root_to_target = target_world_device - result.reference_pose.t.reshape(3)
+    target_horizontal = root_to_target - (root_to_target @ world_up) * world_up
+    bearing = target_horizontal / target_horizontal.norm()
+    lateral = torch.cross(world_up, bearing, dim=0)
+    target_to_candidate = result.shell_poses.t - target_world_device.reshape(1, 3)
+    horizontal = target_to_candidate - (target_to_candidate @ world_up)[:, None] * world_up[None, :]
+    horizontal_standoff = torch.linalg.norm(horizontal, dim=1)
+    signed_lateral = target_to_candidate @ lateral
+
+    assert torch.allclose(
+        horizontal_standoff,
+        torch.full_like(horizontal_standoff, target_horizontal.norm()),
+        atol=1e-5,
+    )
+    assert int((signed_lateral < 0.0).sum()) == int((signed_lateral > 0.0).sum()) == 6
+    assert result.position_id.tolist() == [candidate_position_id(CandidatePositionMode.TARGET_ORBIT)] * 12
+    expected_offsets_ref = result.reference_pose.inverse().transform(result.shell_poses.t)
+    assert torch.allclose(result.shell_offsets_ref, expected_offsets_ref, atol=1e-5)
+    assert torch.allclose(
+        result.extras["motion_backward_step_m"],
+        (-expected_offsets_ref[:, 2]).clamp_min(0.0),
+        atol=1e-5,
+    )
+    assert result.extras["view_jitter_is_bounded"].all()
+    assert torch.any(result.extras["view_jitter_yaw_deg"].abs() > 1e-3)
+
+
+def test_target_orbit_interleaves_reordered_angle_bank_for_small_component() -> None:
+    cfg = CandidateMixtureViewGeneratorConfig(
+        base=_base_cfg().model_copy(update={"target_orbit_angles_deg": (-6.0, -10.0, 6.0, 10.0)}),
+        components=[
+            CandidateMixtureComponentConfig(
+                name="target_orbit",
+                count=2,
+                view_mode=ViewDirectionMode.TARGET_POINT,
+                position_mode=CandidatePositionMode.TARGET_ORBIT,
+            )
+        ],
+    )
+
+    result = _run_generate(cfg, descriptor=_descriptor((0.0, 3.0, 0.0)))
+
+    world_up = world_up_tensor(device=result.shell_poses.t.device, dtype=result.shell_poses.t.dtype)
+    target = torch.tensor([0.0, 3.0, 0.0], device=result.shell_poses.t.device)
+    bearing = target / target.norm()
+    lateral = torch.cross(world_up, bearing, dim=0)
+    signed_lateral = (result.shell_poses.t - target.reshape(1, 3)) @ lateral
+    assert int((signed_lateral < 0.0).sum()) == int((signed_lateral > 0.0).sum()) == 1
+
+
+def test_target_orbit_mixture_requires_two_attempted_proposals() -> None:
+    with pytest.raises(ValueError, match="count >= 2"):
+        CandidateMixtureViewGeneratorConfig(
+            base=_base_cfg(),
+            components=[
+                CandidateMixtureComponentConfig(
+                    name="target_orbit",
+                    count=1,
+                    view_mode=ViewDirectionMode.TARGET_POINT,
+                    position_mode=CandidatePositionMode.TARGET_ORBIT,
+                )
+            ],
+        )
+
+
+def test_target_orbit_single_family_requires_two_attempted_proposals() -> None:
+    with pytest.raises(ValueError, match="num_samples >= 2"):
+        CandidateViewGeneratorConfig(
+            num_samples=1,
+            position_mode=CandidatePositionMode.TARGET_ORBIT,
+        )
+
+    cfg = _base_cfg().model_copy(
+        update={
+            "num_samples": 1,
+            "oversample_factor": 1.0,
+            "position_mode": CandidatePositionMode.TARGET_ORBIT,
+            "position_target_point_world": torch.tensor([0.0, 3.0, 0.0]),
+        }
+    )
+    mesh, verts, faces = _mesh_triplet(cfg.device)
+    with pytest.raises(ValueError, match="at least two attempted"):
+        CandidateViewGenerator(cfg).generate(
+            reference_pose=_identity_pose(cfg.device),
+            gt_mesh=mesh,
+            mesh_verts=verts,
+            mesh_faces=faces,
+            camera_calib_template=_dummy_camera(cfg.device),
+            occupancy_extent=torch.tensor(
+                [-10.0, 10.0, -10.0, 10.0, -10.0, 10.0],
+                dtype=torch.float32,
+                device=cfg.device,
+            ),
+        )
+
+
+@pytest.mark.parametrize(
+    "angles",
+    [(), (0.0, 10.0), (5.0, 10.0), (-5.0, -10.0), (-180.0, 5.0), (float("inf"), -5.0)],
+)
+def test_target_orbit_angle_bank_rejects_degenerate_support(angles: tuple[float, ...]) -> None:
+    with pytest.raises(ValueError, match="target_orbit_angles_deg"):
+        CandidateViewGeneratorConfig(target_orbit_angles_deg=angles)
 
 
 def _descriptor(center: tuple[float, float, float] = (0.0, 0.0, 0.0)) -> TargetDescriptor:

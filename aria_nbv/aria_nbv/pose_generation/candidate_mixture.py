@@ -64,6 +64,7 @@ _POSITION_IDS = {
     CandidatePositionMode.LATERAL_TARGET_BYPASS: 3,
     CandidatePositionMode.LOCAL_REFINEMENT: 4,
     CandidatePositionMode.REVISIT_BACKTRACK: 5,
+    CandidatePositionMode.TARGET_ORBIT: 6,
 }
 
 
@@ -188,6 +189,8 @@ class CandidateMixtureViewGeneratorConfig(TargetConfig["CandidateMixtureViewGene
         if not self.components:
             raise ValueError("Candidate mixture requires at least one component.")
         for component in self.components:
+            if component.position_mode is CandidatePositionMode.TARGET_ORBIT and component.count < 2:
+                raise ValueError("TARGET_ORBIT mixture components require count >= 2 for bilateral proposals.")
             azimuth_deg = (
                 self.base.view_max_azimuth_deg
                 if component.view_max_azimuth_deg is None
@@ -673,6 +676,7 @@ class CandidateMixtureViewGenerator:
         if component.position_mode in (
             CandidatePositionMode.TARGET_BEARING_LOCAL,
             CandidatePositionMode.LATERAL_TARGET_BYPASS,
+            CandidatePositionMode.TARGET_ORBIT,
         ):
             if runtime_context is None or runtime_context.target_center_world is None:
                 raise ValueError(
