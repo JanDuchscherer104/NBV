@@ -6712,6 +6712,9 @@ class GeometryPoint:
     initial_target_distance_m: float
     normalized_radius: float = 0.0
     target_facing_error_deg: float | None = None
+    camera_forward_x: float | None = None
+    camera_forward_y: float | None = None
+    camera_forward_z: float | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -6929,6 +6932,7 @@ def proposal_support_geometry(
     *,
     alignment: ProposalAlignment = ProposalAlignment.TARGET_ALIGNED_Z_UP,
     rollout_row_ids: Collection[int] | None = None,
+    step_row_ids: Collection[int] | None = None,
     max_candidates: int | None = 50_000,
 ) -> GeometryProjection:
     r"""Project complete candidate shells around their factual expansion poses.
@@ -6936,9 +6940,14 @@ def proposal_support_geometry(
     Step zero uses the persisted rollout root; later steps use the preceding
     factual selected pose. Coordinates are divided by that expansion pose's
     current 3D target distance, then yaw-aligned while preserving world Z-up.
+
+    A step filter still walks preceding factual steps so a requested later
+    shell retains its persisted previous-selected expansion pose. Candidate
+    limits count only shells admitted by both rollout and step filters.
     """
 
     requested_ids = None if rollout_row_ids is None else {int(value) for value in rollout_row_ids}
+    requested_step_ids = None if step_row_ids is None else {int(value) for value in step_row_ids}
     if max_candidates is not None and max_candidates <= 0:
         raise ValueError("max_candidates must be positive when provided.")
     targets = {target.target_row_id: target for target in target_rows(reader)}
@@ -6980,6 +6989,9 @@ def proposal_support_geometry(
         reference_pose = root_pose
         for expected_index, step in enumerate(steps):
             selected_pose = _selected_pose(step)
+            if requested_step_ids is not None and step.step_row_id not in requested_step_ids:
+                reference_pose = selected_pose
+                continue
             shell_size = len(step.candidate_row_ids)
             if max_candidates is not None and len(points) + shell_size > max_candidates:
                 truncated = True
@@ -7045,6 +7057,7 @@ def proposal_support_geometry(
                 candidate_center = candidate_pose[9:12]
                 displacement = candidate_center - reference_center
                 normalized = basis.T @ displacement / scale
+                camera_forward = basis.T @ candidate_pose[:9].reshape(3, 3)[:, 2]
                 points.append(
                     GeometryPoint(
                         frame_id=frame_id,
@@ -7067,6 +7080,9 @@ def proposal_support_geometry(
                         initial_target_distance_m=initial_scale,
                         normalized_radius=float(np.linalg.norm(normalized)),
                         target_facing_error_deg=_target_facing_error_deg(candidate_pose, target_center),
+                        camera_forward_x=float(camera_forward[0]),
+                        camera_forward_y=float(camera_forward[1]),
+                        camera_forward_z=float(camera_forward[2]),
                     )
                 )
             reference_pose = selected_pose

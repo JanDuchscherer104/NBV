@@ -772,6 +772,54 @@ equations:
     description: ''
     thesis_list: false
     order: 9999
+  metrics.candidate_actor_valid_fraction:
+    tex: 'f_{\mathrm{actor}}(s)=|\mathcal I_s|^{-1}\sum_{i\in\mathcal I_s}m_{s,i}^{\mathrm{act}}'
+    typst: '#eqs.metrics.candidate_actor_valid_fraction'
+    description: 'Per-state fraction of attempted rows passing actor-valid geometry; unitless, with padding and missing rows excluded.'
+    thesis_list: true
+    order: 650
+  metrics.valid_support:
+    tex: 'n_{\mathrm{valid}}(s)=|\{i\in\mathcal{I}_s:m_i^{\mathrm{act}}=1\}|'
+    typst: '#eqs.metrics.valid_support'
+    description: 'Per-state count of hard-valid candidates before reward or training masks; rows, with padded rows excluded.'
+    thesis_list: true
+    order: 651
+  metrics.configured_family_zero_rate:
+    tex: 'z_{\mathrm{family}}=|\{(s,f):n_{\mathrm{valid}}(s,f)=0\}|/|\mathcal{P}_{\mathrm{configured}}|'
+    typst: '#eqs.metrics.configured_family_zero_rate'
+    description: 'Audit-level rate of configured family/state pairs with no hard-valid candidate; unitless and retaining zero-support pairs.'
+    thesis_list: true
+    order: 652
+  metrics.target_side_balance:
+    tex: 'b_{\mathrm{side}}=1-|n_+-n_-|/(n_++n_-)'
+    typst: '#eqs.metrics.target_side_balance'
+    description: 'Per-state unitless balance of attempted target-conditioned positive and negative sides; undefined when both sides are absent.'
+    thesis_list: true
+    order: 653
+  metrics.circular_orbit_span:
+    tex: '\alpha_{(1)}\leq\cdots\leq\alpha_{(n)},\;\alpha_{(n+1)}=\alpha_{(1)}+2\pi,\;s_{\mathrm{orbit}}=2\pi-\max_{1\leq j\leq n}(\alpha_{(j+1)}-\alpha_{(j)})'
+    typst: '#eqs.metrics.circular_orbit_span'
+    description: 'Per-state minimum covering angular span of attempted target-conditioned azimuths; radians or degrees, circular rather than Cartesian.'
+    thesis_list: true
+    order: 654
+  metrics.target_center_projection_fraction:
+    tex: 'f_{\mathrm{proj}}=|\mathcal{I}_{\mathrm{projected}}|/|\mathcal{I}_{\mathrm{evaluated}}|'
+    typst: '#eqs.metrics.target_center_projection_fraction'
+    description: 'Per-state unitless fraction of evaluated rows placing the target centre inside the calibrated image domain; not visibility.'
+    thesis_list: true
+    order: 655
+  metrics.oracle_opportunity:
+    tex: 'o_{\mathrm{oracle}}=|\mathcal{S}_{\mathrm{eligible}}|^{-1}\sum_{s\in\mathcal{S}_{\mathrm{eligible}}}\max_{i\in\mathcal{V}_s}g_{s,i}^{\mathrm{target-root}}'
+    typst: '#eqs.metrics.oracle_opportunity'
+    description: 'Mean per-state target-root gain maximum over finite-support rows; gain units, excluding ineligible or zero-support states, and not policy performance.'
+    thesis_list: true
+    order: 656
+  metrics.jitter_compliance:
+    tex: 'f_{\mathrm{jitter}}=\frac{\sum_i\mathbb{1}[b_i=1]\mathbb{1}[|\Delta\psi_i|\leq\bar\psi_i]\mathbb{1}[|\Delta\theta_i|\leq\bar\theta_i]}{\sum_i\mathbb{1}[b_i=1]}'
+    typst: '#eqs.metrics.jitter_compliance'
+    description: 'Candidate-level unitless compliance among bounded rows for per-row yaw and pitch caps; nonzero and uncapped fractions are reported separately.'
+    thesis_list: true
+    order: 657
   rl.mdp:
     tex: '\mathcal{M}=(\mathcal{S},\mathcal{A},P,r,\gamma)'
     typst: '#eqs.rl.mdp'
