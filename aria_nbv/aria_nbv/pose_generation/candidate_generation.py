@@ -565,35 +565,41 @@ class CandidateViewGenerator:
                 centers_world,
             )
 
-        jitter_debug: dict[str, Any] = {}
-        if view_dirs_delta is not None:
+        candidate_count = centers_world.shape[0]
+        if view_dirs_delta is None:
+            jitter_yaw_deg = torch.zeros(candidate_count, device=device, dtype=centers_world.dtype)
+            jitter_pitch_deg = torch.zeros(candidate_count, device=device, dtype=centers_world.dtype)
+        else:
             delta_rotation = view_dirs_delta.R
             delta_forward = delta_rotation[:, :, 2]
-            jitter_debug = {
-                "view_dirs_delta": view_dirs_delta,
-                "view_jitter_yaw_deg": torch.rad2deg(torch.atan2(delta_forward[:, 0], delta_forward[:, 2])),
-                "view_jitter_pitch_deg": torch.rad2deg(torch.asin(delta_forward[:, 1].clamp(-1.0, 1.0))),
-                "view_jitter_is_bounded": torch.full(
-                    (centers_world.shape[0],),
-                    bool(
-                        self.config.view_sampling_strategy is None
-                        or float(self.config.view_max_azimuth_deg) > 0.0
-                        or float(self.config.view_max_elevation_deg) > 0.0
-                    ),
-                    dtype=torch.bool,
-                    device=device,
+            jitter_yaw_deg = torch.rad2deg(torch.atan2(delta_forward[:, 0], delta_forward[:, 2]))
+            jitter_pitch_deg = torch.rad2deg(torch.asin(delta_forward[:, 1].clamp(-1.0, 1.0)))
+        jitter_debug: dict[str, Any] = {
+            "view_jitter_yaw_deg": jitter_yaw_deg,
+            "view_jitter_pitch_deg": jitter_pitch_deg,
+            "view_jitter_is_bounded": torch.full(
+                (candidate_count,),
+                bool(
+                    self.config.view_sampling_strategy is None
+                    or float(self.config.view_max_azimuth_deg) > 0.0
+                    or float(self.config.view_max_elevation_deg) > 0.0
                 ),
-                "view_jitter_azimuth_limit_deg": torch.full(
-                    (centers_world.shape[0],),
-                    float(self.config.view_max_azimuth_deg),
-                    device=device,
-                ),
-                "view_jitter_elevation_limit_deg": torch.full(
-                    (centers_world.shape[0],),
-                    float(self.config.view_max_elevation_deg),
-                    device=device,
-                ),
-            }
+                dtype=torch.bool,
+                device=device,
+            ),
+            "view_jitter_azimuth_limit_deg": torch.full(
+                (candidate_count,),
+                float(self.config.view_max_azimuth_deg),
+                device=device,
+            ),
+            "view_jitter_elevation_limit_deg": torch.full(
+                (candidate_count,),
+                float(self.config.view_max_elevation_deg),
+                device=device,
+            ),
+        }
+        if view_dirs_delta is not None:
+            jitter_debug["view_dirs_delta"] = view_dirs_delta
 
         ctx = CandidateContext(
             cfg=self.config,

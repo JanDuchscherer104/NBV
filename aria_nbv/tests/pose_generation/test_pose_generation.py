@@ -126,6 +126,34 @@ def test_zero_cap_legacy_spherical_view_sampling_retains_unbounded_residuals() -
     assert torch.any(result.extras["view_jitter_pitch_deg"].abs() > 1e-3)
 
 
+def test_disabled_view_sampling_reports_measured_zero_residuals() -> None:
+    cfg = CandidateViewGeneratorConfig(
+        num_samples=8,
+        oversample_factor=1.0,
+        min_radius=0.5,
+        max_radius=0.8,
+        ensure_collision_free=False,
+        ensure_free_space=False,
+        min_distance_to_mesh=0.0,
+        view_sampling_strategy=None,
+        view_max_azimuth_deg=0.0,
+        view_max_elevation_deg=0.0,
+        view_roll_jitter_deg=0.0,
+        verbosity=0,
+        seed=11,
+    )
+
+    result = _run_generate(cfg)
+
+    count = result.mask_valid.numel()
+    zeros = torch.zeros(count, device=result.mask_valid.device)
+    assert torch.equal(result.extras["view_jitter_yaw_deg"], zeros)
+    assert torch.equal(result.extras["view_jitter_pitch_deg"], zeros)
+    assert torch.equal(result.extras["view_jitter_azimuth_limit_deg"], zeros)
+    assert torch.equal(result.extras["view_jitter_elevation_limit_deg"], zeros)
+    assert result.extras["view_jitter_is_bounded"].all()
+
+
 def test_shell_sampling_uniform_area():
     cfg = CandidateViewGeneratorConfig(
         num_samples=2048,

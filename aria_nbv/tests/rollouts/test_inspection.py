@@ -836,9 +836,9 @@ def test_rollout_inspection_helpers_join_candidates_targets_and_groups(tmp_path:
     assert first["target_protocol"] == "v0_gt_input"
     assert first["target_evidence_role"] == "oracle/evaluation"
     assert "decision_relative_x_m" in first
-    assert first["view_jitter_is_bounded"] is None
-    assert first["view_jitter_yaw_deg"] is None
-    assert first["view_jitter_pitch_deg"] is None
+    assert first["view_jitter_is_bounded"] is True
+    assert first["view_jitter_yaw_deg"] == pytest.approx(0.0)
+    assert first["view_jitter_pitch_deg"] == pytest.approx(0.0)
     assert first["target_view_evaluated"] is False
     assert first["target_in_fov"] is None
 

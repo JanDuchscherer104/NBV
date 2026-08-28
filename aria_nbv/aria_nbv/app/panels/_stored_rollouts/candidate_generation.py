@@ -1067,7 +1067,7 @@ def _render_complete_candidate_support(population: dict[str, Any], *, evidence_r
                 ),
                 _candidate_population_explanation(
                     f"What {evidence_name.replace('_', ' ')} is realized by the candidate shell?",
-                    "Actor-visible target-centre projections from the selected factual candidate facet.",
+                    f"{target_view_role.capitalize()} target-centre projections from the selected factual candidate facet.",
                     y_label,
                     "Only explicitly evaluated candidate rows contribute; missing rows remain in the availability panel.",
                     "Target-point and glance families should improve framing without collapsing positional support.",
