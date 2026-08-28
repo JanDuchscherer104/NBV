@@ -851,21 +851,21 @@ return {
       thesis_list = true,
     },
     ["metrics.configured_family_zero_rate"] = {
-      tex = "z_{\\mathrm{family}}=|\\{(s,f):n_{\\mathrm{valid}}(s,f)=0\\}|/|\\mathcal{P}_{\\mathrm{configured}}|",
+      tex = "z_{\\mathrm{family}}(s)=|\\mathcal F_s|^{-1}\\sum_{f\\in\\mathcal F_s}\\mathbb{1}[n_{\\mathrm{valid}}(s,f)=0]",
       typst = "#eqs.metrics.configured_family_zero_rate",
-      description = "Audit-level rate of configured family/state pairs with no hard-valid candidate; unitless and retaining zero-support pairs.",
+      description = "Per-state rate of configured families with no hard-valid candidate; unitless and retaining absent or zero-support families.",
       thesis_list = true,
     },
     ["metrics.jitter_compliance"] = {
-      tex = "f_{\\mathrm{jitter}}=\\frac{\\sum_i\\mathbb{1}[b_i=1]\\mathbb{1}[|\\Delta\\psi_i|\\leq\\bar\\psi_i]\\mathbb{1}[|\\Delta\\theta_i|\\leq\\bar\\theta_i]}{\\sum_i\\mathbb{1}[b_i=1]}",
+      tex = "f_{\\mathrm{jitter}}(s)=\\frac{\\sum_{i\\in\\mathcal I_s^{\\mathrm{jitter}}}\\mathbb{1}[b_i=1]\\mathbb{1}[|\\Delta\\psi_i|\\leq\\bar\\psi_i]\\mathbb{1}[|\\Delta\\theta_i|\\leq\\bar\\theta_i]}{\\sum_{i\\in\\mathcal I_s^{\\mathrm{jitter}}}\\mathbb{1}[b_i=1]}",
       typst = "#eqs.metrics.jitter_compliance",
-      description = "Candidate-level unitless compliance among bounded rows for per-row yaw and pitch caps; nonzero and uncapped fractions are reported separately.",
+      description = "Per-state unitless compliance among bounded jitter rows for per-row yaw and pitch caps; state values are scene-macro reduced, while nonzero, uncapped, and undefined counts are reported separately.",
       thesis_list = true,
     },
     ["metrics.oracle_opportunity"] = {
-      tex = "o_{\\mathrm{oracle}}=|\\mathcal{S}_{\\mathrm{eligible}}|^{-1}\\sum_{s\\in\\mathcal{S}_{\\mathrm{eligible}}}\\max_{i\\in\\mathcal{V}_s}g_{s,i}^{\\mathrm{target-root}}",
+      tex = "o_{\\mathrm{oracle}}(s)=\\max_{i\\in\\mathcal L_s}g_{s,i}^{\\mathrm{target-root}},\\quad |\\mathcal L_s|>0",
       typst = "#eqs.metrics.oracle_opportunity",
-      description = "Mean per-state target-root gain maximum over finite-support rows; gain units, excluding ineligible or zero-support states, and not policy performance.",
+      description = "Per-state target-root gain maximum over actor-valid finite-label rows; undefined states are counted separately, and eligible values are scene-macro reduced.",
       thesis_list = true,
     },
     ["metrics.spearman"] = {
@@ -874,8 +874,14 @@ return {
       description = "",
       thesis_list = false,
     },
+    ["metrics.state_scene_macro"] = {
+      tex = "\\mathcal S_{c,q}=\\{s\\in\\mathcal S_c:q(s)\\;\\mathrm{defined}\\},\\;\\bar q_c=|\\mathcal S_{c,q}|^{-1}\\sum_{s\\in\\mathcal S_{c,q}}q(s),\\;\\mathcal C_q=\\{c:|\\mathcal S_{c,q}|>0\\},\\;\\bar q=|\\mathcal C_q|^{-1}\\sum_{c\\in\\mathcal C_q}\\bar q_c",
+      typst = "#eqs.metrics.state_scene_macro",
+      description = "Metric-specific state-to-scene-to-cohort macro reduction; undefined states and scenes are counted separately, and paired contrasts use the shared eligible-scene intersection.",
+      thesis_list = true,
+    },
     ["metrics.target_center_projection_fraction"] = {
-      tex = "f_{\\mathrm{proj}}=|\\mathcal{I}_{\\mathrm{projected}}|/|\\mathcal{I}_{\\mathrm{evaluated}}|",
+      tex = "f_{\\mathrm{proj}}(s)=|\\mathcal I_s^{\\mathrm{projected}}|/|\\mathcal I_s^{\\mathrm{evaluated}}|",
       typst = "#eqs.metrics.target_center_projection_fraction",
       description = "Per-state unitless fraction of evaluated rows placing the target centre inside the calibrated image domain; not visibility.",
       thesis_list = true,
