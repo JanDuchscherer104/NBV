@@ -117,6 +117,23 @@ def candidate_support_figures(
     ground.update_xaxes(scaleanchor="y", scaleratio=1)
     ground.update_yaxes(constrain="domain")
 
+    unavailable_reasons = sorted(
+        {
+            reason
+            for record in records
+            if (reason := record.lineage.get("proposal_support_unavailable_reason")) is not None
+        }
+    )
+    if unavailable_reasons:
+        ground.add_annotation(
+            text=f"proposal support unavailable: {', '.join(unavailable_reasons)}",
+            x=0.01,
+            y=0.99,
+            xref="paper",
+            yref="paper",
+            showarrow=False,
+        )
+
     support = go.Figure()
     if not frame.empty:
         support.add_trace(
@@ -164,6 +181,15 @@ def candidate_support_figures(
         scene_aspectmode="data",
         scene_camera={"eye": {"x": 1.5, "y": 1.5, "z": 1.2}},
     )
+    if unavailable_reasons:
+        support.add_annotation(
+            text=f"proposal support unavailable: {', '.join(unavailable_reasons)}",
+            x=0.01,
+            y=0.99,
+            xref="paper",
+            yref="paper",
+            showarrow=False,
+        )
 
     survival_rows = []
     for record in records:

@@ -456,10 +456,92 @@ def test_benchmark_reader_joins_canonical_projection_and_bounds_state_request(mo
         ],
     )
     result = benchmarks_from_reader(SimpleNamespace(root={}), state_key="rollout:4/step:7", candidate_limit=12)
-    assert calls == [{"rollout_row_ids": (4,), "step_row_ids": (7,), "max_candidates": 12}]
+    assert calls == [{"rollout_row_ids": (4,), "step_row_ids": (7,), "max_candidates": None}]
     point = result[0].points[0]
     assert point.xyz == (0.25, -0.5, 0.75)
     assert point.target_relative_xyz == (-1.75, -3.5, -3.25)
+
+
+def test_benchmark_reader_retains_counts_when_state_projection_is_unavailable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from aria_nbv.rollouts import inspection
+
+    issue = SimpleNamespace(code="missing_target", rollout_row_id=4, step_row_id=None)
+    monkeypatch.setattr(
+        inspection,
+        "proposal_support_geometry",
+        lambda *_args, **_kwargs: SimpleNamespace(points=(), frames=(), issues=(issue,)),
+    )
+    monkeypatch.setattr(
+        inspection,
+        "candidate_audit_rows",
+        lambda *_args, **_kwargs: [
+            {
+                "scene": "scene",
+                "rollout_row_id": 4,
+                "step_row_id": 7,
+                "position": "target_bearing_local",
+                "candidate_row_id": 11,
+                "actor_action": True,
+                "selected": False,
+            }
+        ],
+    )
+
+    result = benchmarks_from_reader(SimpleNamespace(root={}), state_key="rollout:4/step:7", candidate_limit=1)
+
+    assert len(result) == 1
+    assert result[0].families[0].attempted == 1
+    assert result[0].families[0].valid == 1
+    assert result[0].points == ()
+    assert result[0].lineage["proposal_support_unavailable_reason"] == "missing_target"
+    figures = candidate_support_figures(result)
+    for figure in figures[:2]:
+        assert "proposal support unavailable: missing_target" in {
+            annotation.text for annotation in figure.layout.annotations
+        }
+
+
+def test_benchmark_reader_applies_small_state_limit_after_complete_shell_projection(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from aria_nbv.rollouts import inspection
+
+    projected = tuple(
+        SimpleNamespace(candidate_row_id=candidate_id, frame_id="frame", x=float(candidate_id), y=0.0, z=0.0)
+        for candidate_id in (11, 12)
+    )
+    frame = SimpleNamespace(frame_id="frame", target_x=1.0, target_y=0.0, target_z=0.0)
+    projection_calls: list[dict[str, Any]] = []
+
+    def projection(_reader: Any, **kwargs: Any) -> Any:
+        projection_calls.append(kwargs)
+        return SimpleNamespace(points=projected, frames=(frame,), issues=())
+
+    rows = [
+        {
+            "scene": "scene",
+            "rollout_row_id": 4,
+            "step_row_id": 7,
+            "position": "target_bearing_local",
+            "candidate_row_id": candidate_id,
+            "actor_action": True,
+            "selected": False,
+        }
+        for candidate_id in (11, 12)
+    ]
+    monkeypatch.setattr(inspection, "proposal_support_geometry", projection)
+    monkeypatch.setattr(
+        inspection,
+        "candidate_audit_rows",
+        lambda *_args, **kwargs: rows[: int(kwargs["limit"])],
+    )
+
+    result = benchmarks_from_reader(SimpleNamespace(root={}), state_key="rollout:4/step:7", candidate_limit=1)
+
+    assert projection_calls == [{"rollout_row_ids": (4,), "step_row_ids": (7,), "max_candidates": None}]
+    assert result[0].candidate_ids == (11,)
 
 
 def test_benchmark_reader_does_not_hide_real_projection_failures(monkeypatch: pytest.MonkeyPatch) -> None:

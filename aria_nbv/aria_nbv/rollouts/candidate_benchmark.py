@@ -343,7 +343,14 @@ def reduce_candidate_records(records: list[Mapping[str, Any]]) -> tuple[Candidat
 def benchmarks_from_reader(
     reader: Any, *, state_key: str | None = None, candidate_limit: int | None = 500
 ) -> tuple[CandidateBenchmark, ...]:
-    """Build state-keyed facts from the canonical inspection candidate rows."""
+    """Build state-keyed facts from canonical candidate rows and geometry.
+
+    Candidate audit rows own attempted, valid, and selected counts. Proposal
+    geometry is an optional visualization join: projection failures retain the
+    affected state and counts with an explicit lineage reason. For one requested
+    state, the complete shell is projected before the display row limit is
+    applied, so a limit smaller than the shell cannot fabricate empty support.
+    """
 
     from .inspection import candidate_audit_rows, proposal_support_geometry
 
@@ -364,10 +371,11 @@ def benchmarks_from_reader(
             reader,
             rollout_row_ids=requested_rollout_ids,
             step_row_ids=None if requested_state is None else (requested_state[1],),
-            max_candidates=candidate_limit,
+            max_candidates=None if requested_state is not None else candidate_limit,
         )
     geometry_points = {point.candidate_row_id: point for point in projection.points} if projection else {}
     geometry_frames = {frame.frame_id: frame for frame in projection.frames} if projection else {}
+    geometry_issues = tuple(getattr(projection, "issues", ())) if projection else ()
     if state_key is None:
         audit_rows = candidate_audit_rows(reader, limit=candidate_limit)
     else:
@@ -379,8 +387,6 @@ def benchmarks_from_reader(
             limit=candidate_limit,
         )
     for row in audit_rows:
-        if projection is not None and int(row["candidate_row_id"]) not in geometry_points:
-            continue
         key = (str(row["scene"]), f"rollout:{row['rollout_row_id']}/step:{row['step_row_id']}")
         grouped.setdefault(key, {}).setdefault(str(row["position"]), []).append(row)
     result = []
@@ -391,6 +397,24 @@ def benchmarks_from_reader(
         frame_ids: set[str] = set()
         lineage: dict[str, str] = {}
         points: list[CandidatePoint] = []
+        state_rows = [row for rows in family_rows.values() for row in rows]
+        missing_geometry = projection is not None and any(
+            int(row["candidate_row_id"]) not in geometry_points for row in state_rows
+        )
+        if missing_geometry:
+            rollout_row_id = int(state_rows[0]["rollout_row_id"])
+            step_row_id = int(state_rows[0]["step_row_id"])
+            issue_codes = sorted(
+                {
+                    str(issue.code)
+                    for issue in geometry_issues
+                    if issue.rollout_row_id == rollout_row_id
+                    and (issue.step_row_id is None or issue.step_row_id == step_row_id)
+                }
+            )
+            lineage["proposal_support_unavailable_reason"] = ",".join(
+                issue_codes or ("candidate_geometry_unavailable",)
+            )
         for family, rows in sorted(family_rows.items()):
             applicable = None
             valid = sum(bool(row.get("actor_action")) for row in rows)
