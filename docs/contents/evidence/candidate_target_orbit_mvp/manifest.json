@@ -1,0 +1,65 @@
+{
+  "schema_id": "aria-nbv-candidate-target-orbit-mvp-v1",
+  "status": "positive_mvp_not_scaleup_admitted",
+  "issue": "https://github.com/JanDuchscherer104/ARIA-NBV/issues/180",
+  "base_revision": "4f41579217a15387b071b16961e153994fc624cc",
+  "candidate_source_patch_sha256": "d25fd24fb6d1d2871a9279408a2647cf5a7e19594756ae3e5b859ab4e90d98c7",
+  "source_manifest": ".configs/rollout_campaign100_source_manifest.json",
+  "source_manifest_sha256": "d6e771d1582394cde9005be3185dc9cfbb875cab5fc004f184922a25dc996f56",
+  "writer_config": ".configs/build_rollouts_v1_cuda_campaign_writer.toml",
+  "writer_config_sha256": "2b83170a16d62730562a1f5438d55af0bf9dd79d0f52b776543e429c2a687681",
+  "device": "cuda:0 NVIDIA GeForce RTX 3080 Ti",
+  "seed": 20260728,
+  "samples": [
+    "ASE_889_Atek_000008",
+    "ASE_8517_Atek_000000"
+  ],
+  "candidate_budget_per_state": 60,
+  "baseline": {
+    "profile": "realistic_core",
+    "actor_valid_count": 74,
+    "actor_valid_fraction": 0.6166666666666667,
+    "family_zero_valid_state_count": 1,
+    "mean_state_best_target_root_gain": 0.04699912277283147,
+    "mean_target_lateral_balance": 0.0,
+    "mean_target_orbit_angle_span_deg": 9.836085403911632,
+    "target_in_fov_fraction": 0.7583333333333333,
+    "valid_candidates_per_s": 1.311131789276466,
+    "view_jitter_bounded_fraction": 1.0,
+    "view_jitter_nonzero_fraction": 1.0,
+    "worst_state_valid_count": 21
+  },
+  "candidate": {
+    "profile": "target_orbit_mvp",
+    "actor_valid_count": 72,
+    "actor_valid_fraction": 0.6,
+    "family_zero_valid_state_count": 1,
+    "mean_state_best_target_root_gain": 0.04815240344032645,
+    "mean_target_lateral_balance": 0.20833333333333331,
+    "mean_target_orbit_angle_span_deg": 17.047242522513976,
+    "target_in_fov_fraction": 0.775,
+    "valid_candidates_per_s": 1.6563591748848805,
+    "view_jitter_bounded_fraction": 1.0,
+    "view_jitter_nonzero_fraction": 1.0,
+    "worst_state_valid_count": 26
+  },
+  "hard_gates": {
+    "cuda": true,
+    "dense_training_signal": true,
+    "family_audit_complete": true,
+    "minimum_root_support": true,
+    "seminar_jitter": true
+  },
+  "limitations": [
+    "two-scene pilot only",
+    "one family-state pair still has zero valid rows",
+    "bilateral balance is guaranteed before feasibility pruning only",
+    "throughput comparison is cold-start confounded",
+    "production mixture remains unchanged"
+  ],
+  "plot": {
+    "path": "docs/contents/evidence/candidate_target_orbit_mvp/candidate-centers.png",
+    "source_html_sha256": "224bc984c566da7eed1c1a0ce29f61221f6834179df16a1e0a8fde3d243742f0",
+    "sha256": "80dc4e3b9e5f6fae9489ea03f0cf862b97c1a9bc0727de4b3c9873da1504fe0a"
+  }
+}

@@ -19,9 +19,11 @@ Theory:
     Position modes reinterpret the capped direction before the radius is
     applied. `forward_local`, `local_refinement`, and `revisit_backtrack` blend
     toward continuity priors; `target_bearing_local` blends toward the selected
-    actor-visible target bearing; `lateral_target_bypass` combines target
-    bearing, signed lateral bypass, and bounded vertical offset. These target
-    modes may use actor-visible target centers only, never GT target geometry.
+    actor-visible target bearing; `target_orbit` makes balanced partial arcs at
+    the current horizontal target standoff; `lateral_target_bypass` combines
+    target bearing, signed lateral bypass, and bounded vertical offset. These
+    target modes may use actor-visible target centers only, never GT target
+    geometry.
 """
 
 from __future__ import annotations
@@ -32,6 +34,7 @@ from typing import TYPE_CHECKING
 import torch
 from power_spherical import HypersphericalUniform, PowerSpherical  # type: ignore[import-untyped]
 
+from ..utils.frames import world_up_tensor
 from .geometry import DEVICE_FWD
 from .types import CandidatePositionMode, SamplingStrategy
 
@@ -104,14 +107,69 @@ class PositionSampler:
     def _target_direction_ref(self, reference_pose: PoseTW) -> torch.Tensor:
         """Return normalized actor-visible target bearing in the reference frame."""
 
-        target_world = self.cfg.position_target_point_world
-        if target_world is None:
-            raise ValueError(f"{self.cfg.position_mode.value} requires position_target_point_world.")
-        target_world = torch.as_tensor(target_world, device=self.cfg.device, dtype=torch.float32).reshape(1, 3)
-        target_ref = reference_pose.inverse().transform(target_world).reshape(3)
+        target_ref = self._target_point_ref(reference_pose)
         if torch.linalg.norm(target_ref) < 1e-6:
             target_ref = torch.tensor(DEVICE_FWD, device=self.cfg.device, dtype=torch.float32)
         return target_ref / torch.linalg.norm(target_ref).clamp_min(1e-8)
+
+    def _target_point_ref(self, reference_pose: PoseTW) -> torch.Tensor:
+        """Return the actor-visible target center in the reference frame."""
+
+        target_world = self._target_point_world()
+        return reference_pose.inverse().transform(target_world.reshape(1, 3)).reshape(3)
+
+    def _target_point_world(self) -> torch.Tensor:
+        """Return the actor-visible target center in world coordinates."""
+
+        target_world = self.cfg.position_target_point_world
+        if target_world is None:
+            raise ValueError(f"{self.cfg.position_mode.value} requires position_target_point_world.")
+        return torch.as_tensor(target_world, device=self.cfg.device, dtype=torch.float32).reshape(3)
+
+    def _sample_target_orbit(self, reference_pose: PoseTW, n_draw: int) -> tuple[torch.Tensor, torch.Tensor]:
+        r"""Sample balanced partial arcs at the current horizontal target standoff.
+
+        For world-horizontal root-to-target bearing $b$, left tangent $l$,
+        current standoff $d$, and configured angle $\alpha_i$, the world-frame
+        center offset is
+
+        $$o_i = d b - d\cos(\alpha_i)b + d\sin(\alpha_i)l.$$
+
+        Thus every candidate remains $d$ metres from the target in the ground
+        plane while the existing motion rules decide which arc steps are
+        feasible from the current pose.
+        """
+
+        if n_draw < 2:
+            raise ValueError("target_orbit requires at least two attempted proposals.")
+
+        root_world = reference_pose.t.reshape(3)
+        target_delta_world = self._target_point_world() - root_world
+        world_up = world_up_tensor(device=self.cfg.device, dtype=torch.float32)
+        target_horizontal = target_delta_world - (target_delta_world @ world_up) * world_up
+        standoff = torch.linalg.norm(target_horizontal)
+        if standoff < 1e-6:
+            raise ValueError("target_orbit requires a nonzero horizontal target bearing.")
+
+        bearing = target_horizontal / standoff
+        lateral = torch.cross(world_up, bearing, dim=0)
+        angles_deg = torch.tensor(self.cfg.target_orbit_angles_deg, device=self.cfg.device, dtype=torch.float32)
+        negative = angles_deg[angles_deg < 0.0]
+        positive = angles_deg[angles_deg > 0.0]
+        pair_indices = torch.arange((n_draw + 1) // 2, device=self.cfg.device)
+        angles_interleaved = torch.stack(
+            (negative[pair_indices % negative.numel()], positive[pair_indices % positive.numel()]),
+            dim=1,
+        ).reshape(-1)[:n_draw]
+        angles_rad = torch.deg2rad(angles_interleaved)
+        target_to_candidate = (
+            -standoff * torch.cos(angles_rad)[:, None] * bearing[None, :]
+            + standoff * torch.sin(angles_rad)[:, None] * lateral[None, :]
+        )
+        offsets_world = target_horizontal[None, :] + target_to_candidate
+        centers_world = root_world[None, :] + offsets_world
+        offsets_ref = reference_pose.inverse().rotate(offsets_world)
+        return centers_world, offsets_ref
 
     def _direction_around(self, base: torch.Tensor, noise: torch.Tensor, *, spread: float) -> torch.Tensor:
         """Blend a base direction with orthogonal noise in the reference frame."""
@@ -141,6 +199,8 @@ class PositionSampler:
             case CandidatePositionMode.TARGET_BEARING_LOCAL:
                 target_dir = self._target_direction_ref(reference_pose).to(device=dirs_rig.device, dtype=dirs_rig.dtype)
                 return self._direction_around(target_dir, dirs_rig, spread=0.4)
+            case CandidatePositionMode.TARGET_ORBIT:
+                raise RuntimeError("target_orbit centers must be sampled by _sample_target_orbit.")
             case CandidatePositionMode.LATERAL_TARGET_BYPASS:
                 target_dir = self._target_direction_ref(reference_pose).to(device=dirs_rig.device, dtype=dirs_rig.dtype)
                 up = torch.tensor([0.0, 1.0, 0.0], device=dirs_rig.device, dtype=dirs_rig.dtype)
@@ -164,6 +224,9 @@ class PositionSampler:
             ``N = cfg.num_samples * cfg.oversample_factor``. Offsets are in the reference frame before rotation into world.
         """
         n_draw = ceil(self.cfg.num_samples * self.cfg.oversample_factor)
+
+        if self.cfg.position_mode is CandidatePositionMode.TARGET_ORBIT:
+            return self._sample_target_orbit(reference_pose, n_draw)
 
         match self.cfg.sampling_strategy:
             case SamplingStrategy.UNIFORM_SPHERE:
