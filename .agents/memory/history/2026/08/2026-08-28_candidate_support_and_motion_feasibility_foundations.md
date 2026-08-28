@@ -32,6 +32,7 @@ Checked the active Chapter 2 contract and local primary-source TeX for PB-NBV, H
 
 ## Commits
 - [363357746983fdb819b7a1a0103de15f0c7a8e79](https://github.com/JanDuchscherer104/ARIA-NBV/commit/363357746983fdb819b7a1a0103de15f0c7a8e79)
+- [092d1d096b92c78e994c24d878a2488b3a24e7a8](https://github.com/JanDuchscherer104/ARIA-NBV/commit/092d1d096b92c78e994c24d878a2488b3a24e7a8) corrects the Next Best Sense visual objective from object-scoped to scene-model-scoped, following the local manuscript's visual Fisher-information formulation and reported background exploration.
 
 ## Verification
 - `make thesis-literature-provenance`: pass, 31 tests.
@@ -39,6 +40,7 @@ Checked the active Chapter 2 contract and local primary-source TeX for PB-NBV, H
 - `make thesis-marker-contract thesis-pdf-ci check-agent-memory`: pass.
 - `make thesis-pdf`: pass; affected Chapter 2 pages rendered and visually inspected.
 - Independent scientific review: initial P2 notation finding repaired; exact repaired hashes re-reviewed clear.
+- PR review correction: the Next Best Sense scope label and evidence locator were repaired; provenance, Typst contracts, strict hygiene, PDF compilation, and rendered-page inspection passed locally before hosted exact-head verification.
 - `git diff --check`: pass.
 
 ## Canonical Owner Impact
