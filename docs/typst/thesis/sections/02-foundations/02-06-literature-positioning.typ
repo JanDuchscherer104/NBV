@@ -31,7 +31,7 @@ relevant view lies outside candidate support.
         [GenNBV / Hestia @GenNBV-chen2024 @Hestia-lu2026], [Coverage gain; reconstruction object], [Observation history plus geometric or directional state], [Continuous or hierarchical policy; collision handling],
         [FisherRF @FisherRF-jiang2024], [Information gain; radiance-field scene model], [Model-parameter uncertainty], [Candidate views; greedy score],
         [VIN-NBV @VIN-NBV-frahm2025], [Direct reconstruction improvement; reconstructed object], [Candidate-conditioned projections of current reconstruction], [Sampled candidates; greedy score],
-        [Next Best Sense @NextBestSense-strong2024], [Color--depth information gain; reconstructed object], [3DGS uncertainty and multimodal observations], [Feasible candidates; fallback after kinematic or planning failure],
+        [Next Best Sense @NextBestSense-strong2024], [Color--depth information gain; radiance-field scene model], [3DGS uncertainty and multimodal observations], [Feasible candidates; fallback after kinematic or planning failure],
         [Object-centric 3DGS @ObjectCentricNBV-jeong2026], [Object-conditioned information gain; requested object], [Per-Gaussian geometry, appearance, and object confidence], [Candidate views; greedy score],
       ),
     )
@@ -47,7 +47,7 @@ relevant view lies outside candidate support.
 // - @Hestia-lu2026 -> docs/literature/tex-src/arXiv-Hestia/sec/3_method.tex:30-58, docs/literature/tex-src/arXiv-Hestia/sec/3_method.tex:70-93, docs/literature/tex-src/arXiv-Hestia/sec/3_method.tex:100-118 (directional state, coverage reward, and hierarchical action)
 // - @FisherRF-jiang2024 -> docs/literature/tex-src/arXiv-FisherRF/sec/method.tex:4-19 (Fisher-information view utility)
 // - @VIN-NBV-frahm2025 -> docs/literature/tex-src/arXiv-VIN-NBV/sec/3_methods.tex:18-20, docs/literature/tex-src/arXiv-VIN-NBV/sec/3_methods.tex:36-44, docs/literature/tex-src/arXiv-VIN-NBV/sec/3_methods.tex:78-92 (sampled candidates, RRI target, and oracle reconstruction metric)
-// - @NextBestSense-strong2024 -> docs/literature/tex-src/arXiv-Next-Best-Sense/ms.tex:190-217 (color-depth information gain, feasible candidate views, and execution fallback)
+// - @NextBestSense-strong2024 -> docs/literature/tex-src/arXiv-Next-Best-Sense/ms.tex:190-217, docs/literature/tex-src/arXiv-Next-Best-Sense/ms.tex:420-429 (scene-model color-depth information gain, feasible candidate views, execution fallback, and background exploration)
 // - @ObjectCentricNBV-jeong2026 -> docs/literature/tex-src/arXiv-Instance-NBV/ver3_rpm/3_method_ver3_rpm.tex:54-86, docs/literature/tex-src/arXiv-Instance-NBV/ver3_rpm/3_method_ver3_rpm.tex:123-139, docs/literature/tex-src/arXiv-Instance-NBV/ver3_rpm/3_method_ver3_rpm.tex:249-258 (object features, target-aware information gain, and target gate)
 
 The table exposes two tensions that motivate the thesis question. First,
