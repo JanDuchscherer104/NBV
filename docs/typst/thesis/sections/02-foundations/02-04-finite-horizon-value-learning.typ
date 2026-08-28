@@ -15,17 +15,16 @@ sufficient for predicting future target improvement.
 // evidence:
 // - @POMDPRobotics-lauri2023 -> docs/literature/tex-src/arXiv-POMDP-Robotics-Survey/root.tex:505-505, docs/literature/tex-src/arXiv-POMDP-Robotics-Survey/root.tex:589-606 (history-dependent policies, belief-state sufficiency, and belief updates)
 
-The available actions can also change with the information state. A finite NBV
-method proposes candidates around the current pose and reconstruction, while a
-hierarchical controller conditions the eventual camera position on an earlier
-look-at decision @PB-NBV-jia2025 @Hestia-lu2026. It is therefore useful to write
-the admissible choices abstractly as a state-dependent set $cal(A)(s_t)$. This
-statement excludes unavailable actions from the decision problem; it does not
-require the Foundations chapter to prescribe how a later implementation stores
-or learns that exclusion.
+The preceding section defined the admissible choices as the state-dependent
+row-index set $cal(A)(s_t)$ after proposal and feasibility checks. That set can
+change as the target-conditioned reconstruction and current pose change, while
+a hierarchical controller can also condition camera position on an earlier
+look-at decision @PB-NBV-jia2025 @Hestia-lu2026. Sequential value must therefore
+be conditioned on the currently available action rather than treating every
+camera pose as permanently selectable.
 
 // evidence:
-// - @PB-NBV-jia2025 -> docs/literature/tex-src/arXiv-PB-NBV/sections/related.tex:5-24, docs/literature/tex-src/arXiv-PB-NBV/jzz_2025_ral_resub.tex:55-70 (finite candidates generated and scored at the current reconstruction state)
+// - @PB-NBV-jia2025 -> docs/literature/tex-src/arXiv-PB-NBV/sections/method.tex:21-45, docs/literature/tex-src/arXiv-PB-NBV/jzz_2025_ral_resub.tex:55-70 (state-dependent candidate support followed by scoring and selection)
 // - @Hestia-lu2026 -> docs/literature/tex-src/arXiv-Hestia/sec/3_method.tex:100-118 (look-at-conditioned camera-position decision)
 
 Sequentiality matters when the best immediate view is not the best first step
