@@ -149,6 +149,25 @@ def test_rollout_zarr_store_writes_reads_and_validates_records(tmp_path) -> None
         values = reader.array(f"candidate_diagnostics/{diagnostic_name}")
         assert values.dtype == np.dtype(np.float32)
         assert values.shape == (result.num_candidates,)
+    for diagnostic_name in (
+        "view_jitter_yaw_deg",
+        "view_jitter_pitch_deg",
+        "view_jitter_azimuth_limit_deg",
+        "view_jitter_elevation_limit_deg",
+        "target_view_angle_deg",
+        "target_pixel_margin_px",
+    ):
+        values = reader.array(f"candidate_diagnostics/{diagnostic_name}")
+        assert values.dtype == np.dtype(np.float32)
+        assert values.shape == (result.num_candidates,)
+    assert reader.array("candidate_diagnostics/view_jitter_is_bounded").dtype == np.dtype(np.bool_)
+    assert reader.array("candidate_diagnostics/view_jitter_is_bounded").all()
+    assert np.all(reader.array("candidate_diagnostics/view_jitter_yaw_deg") == 0.0)
+    assert np.all(reader.array("candidate_diagnostics/view_jitter_pitch_deg") == 0.0)
+    assert not reader.array("candidate_diagnostics/target_view_evaluated_mask").any()
+    assert not reader.array("candidate_diagnostics/target_in_fov_mask").any()
+    assert np.isnan(reader.array("candidate_diagnostics/target_view_angle_deg")).all()
+    assert np.isnan(reader.array("candidate_diagnostics/target_pixel_margin_px")).all()
     selected_depth = reader.root["selected_depth"]
     assert selected_depth.attrs["enabled"] is True
     assert selected_depth.attrs["codec"] == "blosc:zstd:clevel=5:bitshuffle"
@@ -425,6 +444,57 @@ def test_rollout_zarr_validation_rejects_missing_hot_position_id(tmp_path) -> No
     validation = validate_rollout_zarr_store(result.store_dir)
     assert not validation.ok
     assert any("position_id" in error for error in validation.errors)
+
+
+def test_rollout_zarr_accepts_legacy_store_without_optional_view_diagnostics(tmp_path) -> None:
+    """The optional view bundle does not invalidate already generated stores."""
+
+    records = build_rollout_records(horizon=1, num_samples=6, seed=33)[:1]
+    result = write_rollout_zarr_store(tmp_path / "rollouts.zarr", records)
+    writable = zarr.open_group(str(result.store_dir), mode="a")
+    group = writable["candidate_diagnostics"]
+    for name in (
+        "view_jitter_yaw_deg",
+        "view_jitter_pitch_deg",
+        "view_jitter_azimuth_limit_deg",
+        "view_jitter_elevation_limit_deg",
+        "view_jitter_is_bounded",
+        "target_view_angle_deg",
+        "target_pixel_margin_px",
+        "target_in_fov_mask",
+        "target_view_evaluated_mask",
+    ):
+        del group[name]
+
+    validation = validate_rollout_zarr_store(result.store_dir)
+
+    assert validation.ok, validation.errors
+
+
+def test_rollout_zarr_preserves_uncapped_nonzero_view_jitter_residuals(tmp_path) -> None:
+    """Zero limits never erase measured residuals or invent a bounded box."""
+
+    records = build_rollout_records(horizon=1, num_samples=6, seed=34)[:1]
+    for step in _steps(records[0]):
+        count = int(step.transition.candidates.mask_valid.numel())
+        step.transition.candidates.extras.update(
+            {
+                "view_jitter_yaw_deg": torch.linspace(-120.0, 100.0, count),
+                "view_jitter_pitch_deg": torch.linspace(-70.0, 60.0, count),
+                "view_jitter_azimuth_limit_deg": torch.zeros(count),
+                "view_jitter_elevation_limit_deg": torch.zeros(count),
+                "view_jitter_is_bounded": torch.zeros(count, dtype=torch.bool),
+            }
+        )
+
+    result = write_rollout_zarr_store(tmp_path / "rollouts.zarr", records)
+    reader = RolloutZarrStoreReader(result.store_dir)
+
+    assert np.any(np.abs(reader.array("candidate_diagnostics/view_jitter_yaw_deg")) > 1e-3)
+    assert np.any(np.abs(reader.array("candidate_diagnostics/view_jitter_pitch_deg")) > 1e-3)
+    assert np.all(reader.array("candidate_diagnostics/view_jitter_azimuth_limit_deg") == 0.0)
+    assert np.all(reader.array("candidate_diagnostics/view_jitter_elevation_limit_deg") == 0.0)
+    assert not reader.array("candidate_diagnostics/view_jitter_is_bounded").any()
 
 
 def test_rollout_zarr_validates_path_collision_diagnostics_against_invalidity(tmp_path) -> None:

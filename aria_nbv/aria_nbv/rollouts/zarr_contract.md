@@ -118,6 +118,15 @@ rollouts.zarr/
     motion_yaw_delta_deg
     target_distance_m
     target_bearing_yaw_deg
+    view_jitter_yaw_deg              # optional complete view-support bundle
+    view_jitter_pitch_deg
+    view_jitter_azimuth_limit_deg
+    view_jitter_elevation_limit_deg
+    view_jitter_is_bounded
+    target_view_angle_deg
+    target_pixel_margin_px
+    target_in_fov_mask
+    target_view_evaluated_mask
   selected_depth/
     step_row_id
     candidate_row_id

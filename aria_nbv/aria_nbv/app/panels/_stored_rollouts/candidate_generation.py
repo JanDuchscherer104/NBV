@@ -187,6 +187,55 @@ def _normalized_radius_figure(geometry: pd.DataFrame) -> go.Figure:
     return figure
 
 
+def _view_jitter_figure(rows: pd.DataFrame) -> go.Figure:
+    """Plot local-camera jitter residuals with truthful bounded support."""
+
+    figure = px.scatter(
+        rows,
+        x="view_jitter_yaw_deg",
+        y="view_jitter_pitch_deg",
+        color="position" if "position" in rows else None,
+        symbol="selected" if "selected" in rows else None,
+        hover_data=[name for name in ("scene", "step_index", "actor_action") if name in rows],
+        title="Candidate gaze jitter in the local camera frame",
+        labels={
+            "view_jitter_yaw_deg": "local yaw residual [deg]",
+            "view_jitter_pitch_deg": "local pitch residual [deg]",
+        },
+    )
+    bounded = rows.get("view_jitter_is_bounded", pd.Series(index=rows.index, dtype="boolean"))
+    bounded_rows = rows.loc[bounded.eq(True)]
+    envelopes = (
+        bounded_rows[["view_jitter_azimuth_limit_deg", "view_jitter_elevation_limit_deg"]].dropna().drop_duplicates()
+    )
+    for _, envelope in envelopes.iterrows():
+        azimuth = float(envelope["view_jitter_azimuth_limit_deg"])
+        elevation = float(envelope["view_jitter_elevation_limit_deg"])
+        figure.add_shape(
+            type="rect",
+            x0=-azimuth,
+            x1=azimuth,
+            y0=-elevation,
+            y1=elevation,
+            line={"dash": "dot", "color": "rgba(180,180,180,0.9)"},
+            fillcolor="rgba(0,0,0,0)",
+        )
+    if bounded.eq(False).any():
+        figure.update_xaxes(range=[-180.0, 180.0])
+        figure.update_yaxes(range=[-90.0, 90.0])
+        figure.add_annotation(
+            text="uncapped spherical support",
+            x=0.01,
+            y=0.99,
+            xref="paper",
+            yref="paper",
+            xanchor="left",
+            yanchor="top",
+            showarrow=False,
+        )
+    return figure
+
+
 def _orientation_diagnostic_rows(geometry: pd.DataFrame, frames: pd.DataFrame) -> pd.DataFrame:
     """Return explicit rig, selected-camera, and target-elevation diagnostics."""
 
@@ -997,6 +1046,34 @@ def _render_complete_candidate_support(population: dict[str, Any], *, evidence_r
                     "inspection.candidate_target_view_evidence",
                     target_view_role,
                     TheoryReferences(term_ids=("target-of-interest",)),
+                ),
+            )
+        for evidence_name, title, y_label in (
+            ("target_view_angle", "Target-centre angular error", "angular error [deg]"),
+            ("target_pixel_margin", "Target-centre signed pixel margin", "signed margin [px]"),
+            ("target_in_fov", "Target-centre in-FOV rate", "in-FOV fraction"),
+        ):
+            measured = target_view.loc[target_view["evidence"].eq(evidence_name)].dropna(subset=["mean"])
+            if measured.empty:
+                continue
+            _render_plot(
+                px.bar(
+                    measured,
+                    x="population" if "population" in measured else "aggregation_level",
+                    y="mean",
+                    color="aggregation_level" if "aggregation_level" in measured else None,
+                    title=title,
+                    labels={"mean": y_label},
+                ),
+                _candidate_population_explanation(
+                    f"What {evidence_name.replace('_', ' ')} is realized by the candidate shell?",
+                    f"{target_view_role.capitalize()} target-centre projections from the selected factual candidate facet.",
+                    y_label,
+                    "Only explicitly evaluated candidate rows contribute; missing rows remain in the availability panel.",
+                    "Target-point and glance families should improve framing without collapsing positional support.",
+                    "Poor framing is a proposal-quality signal; it is not evidence of scene line of sight.",
+                    "inspection.candidate_target_view_evidence",
+                    target_view_role,
                 ),
             )
         availability = target_view.loc[target_view["evidence"].ne("target_distance")].copy()
@@ -2189,6 +2266,52 @@ def _render_candidate_geometry_diagnostics(
                     ),
                 ),
             )
+
+        jitter_required = {
+            "view_jitter_yaw_deg",
+            "view_jitter_pitch_deg",
+            "view_jitter_is_bounded",
+            "view_jitter_azimuth_limit_deg",
+            "view_jitter_elevation_limit_deg",
+        }
+        if jitter_required.issubset(candidates.columns):
+            jitter = candidates.dropna(subset=["view_jitter_yaw_deg", "view_jitter_pitch_deg"])
+            if not jitter.empty:
+                _render_plot(
+                    _view_jitter_figure(jitter),
+                    ScientificExplanation(
+                        question="Does each candidate family realize the configured view-jitter support?",
+                        answer="The scatter preserves each sampled local yaw/pitch residual and distinguishes bounded box support from uncapped spherical support.",
+                        sections=(
+                            ExplanationSection(
+                                "population",
+                                "Bounded persisted candidate rows with finite local-camera jitter residuals.",
+                            ),
+                            ExplanationSection("metric", "Local yaw and pitch residuals in degrees."),
+                            ExplanationSection(
+                                "denominator masks",
+                                "All finite residual rows; actor validity and selected state remain visible strata.",
+                            ),
+                            ExplanationSection(
+                                "comparability", "Compare only matching candidate contracts and seminar-jitter limits."
+                            ),
+                            ExplanationSection(
+                                "expected pattern",
+                                "Bounded mixtures occupy their dotted configured envelope without collapsing to zero.",
+                            ),
+                            ExplanationSection(
+                                "failure interpretation",
+                                "Zero-only residuals indicate missing jitter; uncapped spherical rows use fixed full-sphere axes and no false box envelope.",
+                            ),
+                        ),
+                        evidence_role="actor-visible",
+                        source_fields=(
+                            "candidate_diagnostics/view_jitter_yaw_deg",
+                            "candidate_diagnostics/view_jitter_pitch_deg",
+                            "candidate_diagnostics/view_jitter_is_bounded",
+                        ),
+                    ),
+                )
 
         motion_required = {"motion_step_length_m", "motion_yaw_delta_deg"}
         if motion_required.issubset(candidates.columns):

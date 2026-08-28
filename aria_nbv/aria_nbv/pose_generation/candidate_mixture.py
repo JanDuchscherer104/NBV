@@ -662,6 +662,10 @@ class CandidateMixtureViewGenerator:
     ) -> CandidateViewGeneratorConfig:
         target_point = self.config.base.view_target_point_world
         position_target = self.config.base.position_target_point_world
+        if runtime_context is not None and runtime_context.target_center_world is not None:
+            # Retain the actor-visible target for diagnostics on every family.
+            # Position samplers ignore it unless their mode is target-aware.
+            position_target = torch.as_tensor(runtime_context.target_center_world, dtype=torch.float32).reshape(3)
         if component.view_mode == ViewDirectionMode.TARGET_POINT:
             if runtime_context is None or runtime_context.target_center_world is None:
                 raise ValueError("TARGET_POINT candidate components require runtime_context.target_center_world.")

@@ -565,35 +565,41 @@ class CandidateViewGenerator:
                 centers_world,
             )
 
-        jitter_debug: dict[str, Any] = {}
-        if view_dirs_delta is not None:
+        candidate_count = centers_world.shape[0]
+        if view_dirs_delta is None:
+            jitter_yaw_deg = torch.zeros(candidate_count, device=device, dtype=centers_world.dtype)
+            jitter_pitch_deg = torch.zeros(candidate_count, device=device, dtype=centers_world.dtype)
+        else:
             delta_rotation = view_dirs_delta.R
             delta_forward = delta_rotation[:, :, 2]
-            jitter_debug = {
-                "view_dirs_delta": view_dirs_delta,
-                "view_jitter_yaw_deg": torch.rad2deg(torch.atan2(delta_forward[:, 0], delta_forward[:, 2])),
-                "view_jitter_pitch_deg": torch.rad2deg(torch.asin(delta_forward[:, 1].clamp(-1.0, 1.0))),
-                "view_jitter_is_bounded": torch.full(
-                    (centers_world.shape[0],),
-                    bool(
-                        self.config.view_sampling_strategy is None
-                        or float(self.config.view_max_azimuth_deg) > 0.0
-                        or float(self.config.view_max_elevation_deg) > 0.0
-                    ),
-                    dtype=torch.bool,
-                    device=device,
+            jitter_yaw_deg = torch.rad2deg(torch.atan2(delta_forward[:, 0], delta_forward[:, 2]))
+            jitter_pitch_deg = torch.rad2deg(torch.asin(delta_forward[:, 1].clamp(-1.0, 1.0)))
+        jitter_debug: dict[str, Any] = {
+            "view_jitter_yaw_deg": jitter_yaw_deg,
+            "view_jitter_pitch_deg": jitter_pitch_deg,
+            "view_jitter_is_bounded": torch.full(
+                (candidate_count,),
+                bool(
+                    self.config.view_sampling_strategy is None
+                    or float(self.config.view_max_azimuth_deg) > 0.0
+                    or float(self.config.view_max_elevation_deg) > 0.0
                 ),
-                "view_jitter_azimuth_limit_deg": torch.full(
-                    (centers_world.shape[0],),
-                    float(self.config.view_max_azimuth_deg),
-                    device=device,
-                ),
-                "view_jitter_elevation_limit_deg": torch.full(
-                    (centers_world.shape[0],),
-                    float(self.config.view_max_elevation_deg),
-                    device=device,
-                ),
-            }
+                dtype=torch.bool,
+                device=device,
+            ),
+            "view_jitter_azimuth_limit_deg": torch.full(
+                (candidate_count,),
+                float(self.config.view_max_azimuth_deg),
+                device=device,
+            ),
+            "view_jitter_elevation_limit_deg": torch.full(
+                (candidate_count,),
+                float(self.config.view_max_elevation_deg),
+                device=device,
+            ),
+        }
+        if view_dirs_delta is not None:
+            jitter_debug["view_dirs_delta"] = view_dirs_delta
 
         ctx = CandidateContext(
             cfg=self.config,
@@ -625,6 +631,8 @@ class CandidateViewGenerator:
         if self.config.position_target_point_world is not None:
             ctx.mark_debug("target_bearing_yaw_rad", _target_bearing_yaw_rad(ctx))
             ctx.mark_debug("target_distance_m", _target_distance_m(ctx))
+            for name, value in _target_view_diagnostics(ctx).items():
+                ctx.mark_debug(name, value)
 
         self._apply_rules(ctx)
 
@@ -673,7 +681,11 @@ class CandidateViewGenerator:
         extras = (
             ctx.debug
             if ctx.cfg.collect_debug_stats
-            else {name: value for name, value in ctx.debug.items() if name.startswith("view_jitter_")}
+            else {
+                name: value
+                for name, value in ctx.debug.items()
+                if name.startswith(("view_jitter_", "target_view_", "target_pixel_", "target_in_fov_"))
+            }
         )
         return CandidateSamplingResult(
             views=poses_cam,
@@ -722,6 +734,61 @@ def _target_distance_m(ctx: CandidateContext) -> torch.Tensor:
         dtype=ctx.centers_world.dtype,
     ).reshape(1, 3)
     return torch.linalg.norm(target - ctx.centers_world, dim=1)
+
+
+def _target_view_diagnostics(ctx: CandidateContext) -> dict[str, torch.Tensor]:
+    """Project the actor-visible target centre into every candidate camera.
+
+    The returned tensors are audit-only geometry. ``target_in_fov_mask`` uses
+    the exact ``CameraTW`` projection model and valid-radius contract; it does
+    not claim scene line of sight or target-surface visibility.
+    """
+
+    shell_poses = ctx.shell_poses
+    if shell_poses is None:
+        return {}
+    target_world = torch.as_tensor(
+        ctx.cfg.position_target_point_world,
+        device=ctx.centers_world.device,
+        dtype=ctx.centers_world.dtype,
+    ).reshape(1, 3)
+    target_cam = shell_poses.inverse().transform(target_world).reshape(-1, 3)
+    distance = torch.linalg.norm(target_cam, dim=1).clamp_min(1e-8)
+    view_angle_deg = torch.rad2deg(torch.acos((target_cam[:, 2] / distance).clamp(-1.0, 1.0)))
+
+    calibration = CameraTW(
+        _clone_camera_template(
+            ctx.camera_calib_template,
+            ctx.centers_world.shape[0],
+            ctx.centers_world.device,
+        )
+    )
+    target_pixel, in_fov = calibration.project(target_cam.unsqueeze(1))
+    target_pixel = target_pixel.squeeze(1)
+    in_fov = in_fov.squeeze(1)
+    size = calibration.size.reshape(-1, 2)
+    principal = calibration.c.reshape(-1, 2)
+    valid_radius = calibration.valid_radius.reshape(target_pixel.shape[0], -1)
+    image_margin = torch.stack(
+        (
+            target_pixel[:, 0],
+            target_pixel[:, 1],
+            size[:, 0] - 1.0 - target_pixel[:, 0],
+            size[:, 1] - 1.0 - target_pixel[:, 1],
+        ),
+        dim=1,
+    ).amin(dim=1)
+    radial_fraction = torch.linalg.norm((target_pixel - principal) / valid_radius.clamp_min(1e-8), dim=1)
+    radius_margin = (1.0 - radial_fraction) * valid_radius.amin(dim=1)
+    pixel_margin = torch.minimum(image_margin, radius_margin)
+    pixel_margin = torch.where(in_fov, pixel_margin, -pixel_margin.abs())
+
+    return {
+        "target_view_angle_deg": view_angle_deg,
+        "target_pixel_margin_px": pixel_margin,
+        "target_in_fov_mask": in_fov,
+        "target_view_evaluated_mask": torch.ones_like(in_fov),
+    }
 
 
 __all__ = [

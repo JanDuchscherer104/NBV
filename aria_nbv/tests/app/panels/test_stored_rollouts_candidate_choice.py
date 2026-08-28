@@ -359,6 +359,83 @@ def test_complete_candidate_support_renders_reducer_target_view_counts(monkeypat
     assert sum(sum(float(value) for value in trace.y) for trace in availability.data) > 0
 
 
+def test_oracle_target_view_explanation_identifies_evaluation_evidence(monkeypatch: pytest.MonkeyPatch) -> None:
+    rows = candidate_target_view_evidence(
+        [
+            {
+                "generation_cohort_id": "cohort-a",
+                "scene": "scene-a",
+                "rollout_row_id": "rollout-a",
+                "step_row_id": "step-a",
+                "target_distance_m": 1.0,
+                "target_view_angle_deg": 4.0,
+                "target_view_evaluated": True,
+                "actor_action": True,
+            }
+        ]
+    )
+    explanations: list[Any] = []
+    monkeypatch.setattr(
+        candidate_generation,
+        "_render_plot",
+        lambda _figure, explanation, *_args, **_kwargs: explanations.append(explanation),
+    )
+    monkeypatch.setattr(candidate_generation, "_download_frame", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(st, "caption", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(st, "dataframe", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(st, "expander", lambda *_args, **_kwargs: nullcontext())
+    monkeypatch.setattr(st, "selectbox", lambda _label, options, **_kwargs: list(options)[0])
+
+    candidate_generation._render_complete_candidate_support(
+        {"target_view": rows},
+        evidence_roles={
+            "direction": "actor-visible",
+            "spatial": "actor-visible",
+            "motion": "actor-visible",
+            "collision": "oracle/evaluation",
+            "clearance": "oracle/evaluation",
+            "target_view": "oracle/evaluation",
+            "geometry": "actor-visible",
+            "selection": "actor-visible",
+            "sequence_return": "oracle/evaluation",
+        },
+    )
+
+    target_angle = next(explanation for explanation in explanations if "target view angle" in explanation.question)
+    assert target_angle.evidence_role == "oracle/evaluation"
+    assert "Oracle/evaluation target-centre projections" in target_angle.sections[0].body
+
+
+def test_stored_view_jitter_plot_preserves_bounded_and_uncapped_support() -> None:
+    """Stored jitter plots retain box envelopes without inventing legacy limits."""
+
+    bounded = pd.DataFrame(
+        {
+            "view_jitter_yaw_deg": [-20.0, 10.0],
+            "view_jitter_pitch_deg": [-5.0, 8.0],
+            "view_jitter_azimuth_limit_deg": [60.0, 60.0],
+            "view_jitter_elevation_limit_deg": [30.0, 30.0],
+            "view_jitter_is_bounded": [True, True],
+        }
+    )
+    bounded_figure = candidate_generation._view_jitter_figure(bounded)
+    assert len(bounded_figure.layout.shapes) == 1
+    assert bounded_figure.layout.shapes[0].line.dash == "dot"
+
+    uncapped = bounded.assign(
+        view_jitter_yaw_deg=[-130.0, 95.0],
+        view_jitter_pitch_deg=[-70.0, 45.0],
+        view_jitter_azimuth_limit_deg=0.0,
+        view_jitter_elevation_limit_deg=0.0,
+        view_jitter_is_bounded=False,
+    )
+    uncapped_figure = candidate_generation._view_jitter_figure(uncapped)
+    assert not uncapped_figure.layout.shapes
+    assert list(uncapped_figure.layout.xaxis.range) == [-180.0, 180.0]
+    assert list(uncapped_figure.layout.yaxis.range) == [-90.0, 90.0]
+    assert [annotation.text for annotation in uncapped_figure.layout.annotations] == ["uncapped spherical support"]
+
+
 def test_rollout_scientific_reference_owners_and_count_units_are_current() -> None:
     sources = {
         "candidate_generation": inspect.getsource(candidate_generation),

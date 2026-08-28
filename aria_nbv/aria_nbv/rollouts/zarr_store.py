@@ -334,6 +334,27 @@ CANDIDATE_DIAGNOSTIC_TABLE = _TableSchema(
 )
 """Typed candidate-generation diagnostics aligned one-to-one with `candidates/`."""
 
+CANDIDATE_VIEW_DIAGNOSTIC_TABLE = _TableSchema(
+    "candidate_diagnostics",
+    (
+        _TableField("view_jitter_yaw_deg", np.float32),
+        _TableField("view_jitter_pitch_deg", np.float32),
+        _TableField("view_jitter_azimuth_limit_deg", np.float32),
+        _TableField("view_jitter_elevation_limit_deg", np.float32),
+        _TableField("view_jitter_is_bounded", np.bool_),
+        _TableField("target_view_angle_deg", np.float32),
+        _TableField("target_pixel_margin_px", np.float32),
+        _TableField("target_in_fov_mask", np.bool_),
+        _TableField("target_view_evaluated_mask", np.bool_),
+    ),
+)
+"""Optional view-support bundle written by current generators.
+
+Legacy stores without this complete bundle remain readable. A partially
+present bundle is invalid because false boolean sentinels would otherwise be
+indistinguishable from measured values.
+"""
+
 SELECTED_DEPTH_TABLE = _TableSchema(
     "selected_depth",
     (
@@ -1157,6 +1178,26 @@ class _RolloutZarrValidator:
                     f"Candidate diagnostic field {table_field.name!r} dtype {array.dtype} "
                     f"must be {np.dtype(table_field.dtype)}."
                 )
+        present_view_fields = [name for name in CANDIDATE_VIEW_DIAGNOSTIC_TABLE.names if name in group]
+        if present_view_fields and len(present_view_fields) != len(CANDIDATE_VIEW_DIAGNOSTIC_TABLE.names):
+            missing_view_fields = sorted(set(CANDIDATE_VIEW_DIAGNOSTIC_TABLE.names) - set(present_view_fields))
+            self.errors.append(
+                f"candidate_diagnostics view-support bundle is incomplete; missing arrays: {missing_view_fields}."
+            )
+        for table_field in CANDIDATE_VIEW_DIAGNOSTIC_TABLE.fields:
+            if table_field.name not in group:
+                continue
+            array = np.asarray(group[table_field.name])
+            if int(array.shape[0]) != int(candidate_row_id.shape[0]):
+                self.errors.append(
+                    f"Candidate diagnostic field {table_field.name!r} has {array.shape[0]} rows, "
+                    f"expected {candidate_row_id.shape[0]}."
+                )
+            if np.dtype(array.dtype) != np.dtype(table_field.dtype):
+                self.errors.append(
+                    f"Candidate diagnostic field {table_field.name!r} dtype {array.dtype} "
+                    f"must be {np.dtype(table_field.dtype)}."
+                )
         collision_mask = np.asarray(group["path_collision_mask"], dtype=np.bool_).reshape(-1)
         collision_applicable = np.asarray(group["path_collision_applicable_mask"], dtype=np.bool_).reshape(-1)
         collision_evaluated = np.asarray(group["path_collision_evaluated_mask"], dtype=np.bool_).reshape(-1)
@@ -1800,6 +1841,8 @@ def _root_metadata_payload(
         "candidate_diagnostics_role": "audit_rerun_only",
         "candidate_diagnostics_unavailable_float": "NaN",
         "candidate_diagnostics_unavailable_bool": "false",
+        "candidate_view_diagnostics_version": 1,
+        "candidate_view_diagnostics_role": "actor_visible_audit_only",
         "num_candidate_diagnostics": int(tables.candidate_diagnostics["candidate_row_id"].shape[0]),
         "num_selected_depths": int(tables.selected_depth["step_row_id"].shape[0]),
         "target_eval_crops_enabled": bool(target_eval_crops_enabled),
@@ -2723,7 +2766,7 @@ def _flatten_records(
         lineage=_rows_to_numpy_table(lineage_rows, LINEAGE_TABLE),
         steps=_rows_to_numpy_table(step_rows, STEP_TABLE),
         candidates=_rows_to_numpy_table(candidate_rows, CANDIDATE_TABLE),
-        candidate_diagnostics=_rows_to_numpy_table(candidate_diagnostic_rows, CANDIDATE_DIAGNOSTIC_TABLE),
+        candidate_diagnostics=_rows_to_numpy_candidate_diagnostic_table(candidate_diagnostic_rows),
         selected_depth=_rows_to_numpy_selected_depth_table(
             selected_depth_rows,
             width_px=selected_depth_width_px,
@@ -2803,7 +2846,10 @@ def _empty_candidate_rows() -> dict[str, list[Any]]:
 
 
 def _empty_candidate_diagnostic_rows() -> dict[str, list[Any]]:
-    return _empty_rows(CANDIDATE_DIAGNOSTIC_TABLE)
+    return {
+        **_empty_rows(CANDIDATE_DIAGNOSTIC_TABLE),
+        **_empty_rows(CANDIDATE_VIEW_DIAGNOSTIC_TABLE),
+    }
 
 
 def _empty_selected_depth_rows() -> dict[str, list[Any]]:
@@ -3097,6 +3143,21 @@ def _append_candidate_diagnostic_row(
             _candidate_extra_value(step.candidates.extras, "target_bearing_yaw_rad", shell_index, candidate_valid)
         )
     )
+    for name in (
+        "view_jitter_yaw_deg",
+        "view_jitter_pitch_deg",
+        "view_jitter_azimuth_limit_deg",
+        "view_jitter_elevation_limit_deg",
+        "target_view_angle_deg",
+        "target_pixel_margin_px",
+    ):
+        rows[name].append(_candidate_extra_value(step.candidates.extras, name, shell_index, candidate_valid))
+    for name in (
+        "view_jitter_is_bounded",
+        "target_in_fov_mask",
+        "target_view_evaluated_mask",
+    ):
+        rows[name].append(_candidate_extra_bool(step.candidates.extras, name, shell_index, candidate_valid))
 
 
 def _append_selected_depth_row(
@@ -3375,6 +3436,18 @@ def _rows_to_numpy_table(rows: dict[str, list[Any]], schema: _TableSchema) -> di
     return {name: np.asarray(rows[name], dtype=dtype) for name, dtype in schema.dtypes.items()}
 
 
+def _rows_to_numpy_candidate_diagnostic_table(rows: dict[str, list[Any]]) -> dict[str, np.ndarray]:
+    """Materialize the required and optional candidate diagnostic bundles."""
+
+    expected = set(CANDIDATE_DIAGNOSTIC_TABLE.names) | set(CANDIDATE_VIEW_DIAGNOSTIC_TABLE.names)
+    if set(rows) != expected:
+        missing = sorted(expected - set(rows))
+        extra = sorted(set(rows) - expected)
+        raise ValueError(f"Candidate diagnostic fields do not match schema; missing={missing}, extra={extra}.")
+    dtypes = {**CANDIDATE_DIAGNOSTIC_TABLE.dtypes, **CANDIDATE_VIEW_DIAGNOSTIC_TABLE.dtypes}
+    return {name: np.asarray(rows[name], dtype=dtype) for name, dtype in dtypes.items()}
+
+
 def _rows_to_numpy_selected_depth_table(
     rows: dict[str, list[Any]],
     *,
@@ -3426,7 +3499,7 @@ def _read_tables_from_root(root: Any, *, include_selected_depth: bool = True) ->
         lineage=_read_group_table(root, LINEAGE_TABLE),
         steps=_read_group_table(root, STEP_TABLE),
         candidates=_read_group_table(root, CANDIDATE_TABLE),
-        candidate_diagnostics=_read_group_table(root, CANDIDATE_DIAGNOSTIC_TABLE),
+        candidate_diagnostics=_read_candidate_diagnostic_table(root),
         selected_depth=_read_selected_depth_table(root) if include_selected_depth else {},
         target_eval_crops=_read_target_eval_crop_table(root),
     )
@@ -3443,6 +3516,20 @@ def _read_group_table(root: Any, schema: _TableSchema) -> dict[str, np.ndarray]:
             values[table_field.name] = np.full((row_count,), -1, dtype=table_field.dtype)
         else:
             raise KeyError(f"Missing required {schema.name}/{table_field.name} array")
+    return values
+
+
+def _read_candidate_diagnostic_table(root: Any) -> dict[str, np.ndarray]:
+    """Read required diagnostics plus a complete optional view bundle."""
+
+    values = _read_group_table(root, CANDIDATE_DIAGNOSTIC_TABLE)
+    group = root["candidate_diagnostics"]
+    present = [name for name in CANDIDATE_VIEW_DIAGNOSTIC_TABLE.names if name in group]
+    if present and len(present) != len(CANDIDATE_VIEW_DIAGNOSTIC_TABLE.names):
+        missing = sorted(set(CANDIDATE_VIEW_DIAGNOSTIC_TABLE.names) - set(present))
+        raise KeyError(f"Incomplete candidate_diagnostics view-support bundle; missing={missing}")
+    if present:
+        values.update({name: np.asarray(group[name]) for name in CANDIDATE_VIEW_DIAGNOSTIC_TABLE.names})
     return values
 
 

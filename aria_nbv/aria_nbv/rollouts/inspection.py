@@ -644,6 +644,34 @@ def candidate_audit_rows(
     motion_backward_step_m = reader.array("candidate_diagnostics/motion_backward_step_m")
     motion_yaw_delta_deg = reader.array("candidate_diagnostics/motion_yaw_delta_deg")
     target_bearing_yaw_deg = reader.array("candidate_diagnostics/target_bearing_yaw_deg")
+    candidate_count = int(np.asarray(reader.array("candidates/candidate_row_id")).size)
+    view_jitter_yaw_deg = _optional_candidate_diagnostic(
+        reader, "view_jitter_yaw_deg", candidate_count=candidate_count, dtype=np.float32, fill=np.nan
+    )
+    view_jitter_pitch_deg = _optional_candidate_diagnostic(
+        reader, "view_jitter_pitch_deg", candidate_count=candidate_count, dtype=np.float32, fill=np.nan
+    )
+    view_jitter_azimuth_limit_deg = _optional_candidate_diagnostic(
+        reader, "view_jitter_azimuth_limit_deg", candidate_count=candidate_count, dtype=np.float32, fill=np.nan
+    )
+    view_jitter_elevation_limit_deg = _optional_candidate_diagnostic(
+        reader, "view_jitter_elevation_limit_deg", candidate_count=candidate_count, dtype=np.float32, fill=np.nan
+    )
+    view_jitter_is_bounded = _optional_candidate_diagnostic(
+        reader, "view_jitter_is_bounded", candidate_count=candidate_count, dtype=np.bool_, fill=False
+    )
+    target_view_angle_deg = _optional_candidate_diagnostic(
+        reader, "target_view_angle_deg", candidate_count=candidate_count, dtype=np.float32, fill=np.nan
+    )
+    target_pixel_margin_px = _optional_candidate_diagnostic(
+        reader, "target_pixel_margin_px", candidate_count=candidate_count, dtype=np.float32, fill=np.nan
+    )
+    target_in_fov_mask = _optional_candidate_diagnostic(
+        reader, "target_in_fov_mask", candidate_count=candidate_count, dtype=np.bool_, fill=False
+    )
+    target_view_evaluated_mask = _optional_candidate_diagnostic(
+        reader, "target_view_evaluated_mask", candidate_count=candidate_count, dtype=np.bool_, fill=False
+    )
     candidate_configs = _decoded_array(reader, "lineage/candidate_config_id", "config")
     rollout_configs = _decoded_array(reader, "lineage/rollout_config_id", "config")
     branch_schedules = _decoded_array(reader, "lineage/branch_schedule_id", "config")
@@ -769,6 +797,19 @@ def candidate_audit_rows(
                     "motion_yaw_delta_deg": _finite_or_none(motion_yaw_delta_deg[row]),
                     "target_distance_m": _finite_or_none(step.target_distance_m[local]),
                     "target_bearing_yaw_deg": _finite_or_none(target_bearing_yaw_deg[row]),
+                    "view_jitter_yaw_deg": _finite_or_none(view_jitter_yaw_deg[row]),
+                    "view_jitter_pitch_deg": _finite_or_none(view_jitter_pitch_deg[row]),
+                    "view_jitter_azimuth_limit_deg": _finite_or_none(view_jitter_azimuth_limit_deg[row]),
+                    "view_jitter_elevation_limit_deg": _finite_or_none(view_jitter_elevation_limit_deg[row]),
+                    "view_jitter_is_bounded": (
+                        bool(view_jitter_is_bounded[row])
+                        if np.isfinite(view_jitter_yaw_deg[row]) and np.isfinite(view_jitter_pitch_deg[row])
+                        else None
+                    ),
+                    "target_view_angle_deg": _finite_or_none(target_view_angle_deg[row]),
+                    "target_pixel_margin_px": _finite_or_none(target_pixel_margin_px[row]),
+                    "target_in_fov": (bool(target_in_fov_mask[row]) if bool(target_view_evaluated_mask[row]) else None),
+                    "target_view_evaluated": bool(target_view_evaluated_mask[row]),
                     "root_to_target_x_m": None if target_delta is None else float(target_delta[0]),
                     "root_to_target_y_m": None if target_delta is None else float(target_delta[1]),
                     "root_to_target_z_m": None if target_delta is None else float(target_delta[2]),
@@ -786,6 +827,22 @@ def candidate_audit_rows(
             else:
                 reference_available = False
     return rows
+
+
+def _optional_candidate_diagnostic(
+    reader: RolloutZarrStoreReader,
+    name: str,
+    *,
+    candidate_count: int,
+    dtype: Any,
+    fill: float | bool,
+) -> np.ndarray:
+    """Read one optional diagnostic or return an explicit unavailable vector."""
+
+    group = reader.root["candidate_diagnostics"]
+    if name in group:
+        return np.asarray(group[name], dtype=dtype).reshape(-1)
+    return np.full((candidate_count,), fill, dtype=dtype)
 
 
 def _decision_relative_vector(reference_pose: np.ndarray, candidate_pose: np.ndarray) -> np.ndarray | None:
@@ -1545,59 +1602,68 @@ def candidate_spatial_support_evidence(rows: Iterable[Mapping[str, Any]]) -> lis
 
 
 def candidate_target_view_evidence(rows: Iterable[Mapping[str, Any]]) -> list[dict[str, Any]]:
-    """Expose target distance and explicit unavailable view metrics per facet."""
+    """Summarize actor-visible target framing and explicit visibility gaps."""
     result: list[dict[str, Any]] = []
     for key, grouped in _iter_candidate_state_groups(rows):
         cohort, scene, rollout_id, step_id, population = key
-        values = [_finite_or_none(row.get("target_distance_m")) for row in grouped]
-        finite = [value for value in values if value is not None]
-        result.append(
-            {
-                "evidence": "target_distance",
-                "generation_cohort_id": cohort,
-                "scene": scene,
-                "rollout_row_id": rollout_id,
-                "step_row_id": step_id,
-                "population": population,
-                "aggregation_level": "state",
-                "available": bool(finite),
-                "count": len(grouped),
-                "total_count": len(grouped),
-                "finite_count": len(finite),
-                "missing_count": len(grouped) - len(finite),
-                "candidate_total_count": len(grouped),
-                "candidate_finite_count": len(finite),
-                "candidate_missing_count": len(grouped) - len(finite),
-                "state_count": 1,
-                "defined_state_count": int(bool(finite)),
-                "scene_count": 1,
-                "mean": None if not finite else float(np.mean(finite)),
-                "units": "m",
-            }
-        )
-        for name in ("target_fov_margin", "target_pixel_margin", "target_line_of_sight"):
+        base = {
+            "generation_cohort_id": cohort,
+            "scene": scene,
+            "rollout_row_id": rollout_id,
+            "step_row_id": step_id,
+            "population": population,
+            "aggregation_level": "state",
+            "count": len(grouped),
+            "total_count": len(grouped),
+            "candidate_total_count": len(grouped),
+            "state_count": 1,
+            "scene_count": 1,
+        }
+        for evidence_name, source_name, units in (
+            ("target_distance", "target_distance_m", "m"),
+            ("target_view_angle", "target_view_angle_deg", "degrees"),
+            ("target_pixel_margin", "target_pixel_margin_px", "px"),
+            ("target_in_fov", "target_in_fov", "fraction"),
+        ):
+            finite = [value for row in grouped if (value := _finite_or_none(row.get(source_name))) is not None]
             result.append(
                 {
+                    **base,
+                    "evidence": evidence_name,
+                    "available": bool(finite),
+                    "finite_count": len(finite),
+                    "missing_count": len(grouped) - len(finite),
+                    "candidate_finite_count": len(finite),
+                    "candidate_missing_count": len(grouped) - len(finite),
+                    "defined_state_count": int(bool(finite)),
+                    "mean": None if not finite else float(np.mean(finite)),
+                    "units": units,
+                }
+            )
+        for name, units, reason in (
+            (
+                "target_fov_margin",
+                "degrees",
+                "signed angular boundary margin is not persisted; use exact CameraTW in-FOV and pixel margin",
+            ),
+            (
+                "target_line_of_sight",
+                "boolean",
+                "scene occlusion or target-surface visibility is not persisted",
+            ),
+        ):
+            result.append(
+                {
+                    **base,
                     "evidence": name,
-                    "generation_cohort_id": cohort,
-                    "scene": scene,
-                    "rollout_row_id": rollout_id,
-                    "step_row_id": step_id,
-                    "population": population,
-                    "aggregation_level": "state",
                     "available": False,
-                    "count": len(grouped),
-                    "total_count": len(grouped),
                     "finite_count": 0,
                     "missing_count": len(grouped),
-                    "candidate_total_count": len(grouped),
                     "candidate_finite_count": 0,
                     "candidate_missing_count": len(grouped),
-                    "state_count": 1,
                     "defined_state_count": 0,
-                    "scene_count": 1,
-                    "units": "boolean" if name == "target_line_of_sight" else "px/degrees",
-                    "reason": "optical calibration or visibility is not persisted",
+                    "units": units,
+                    "reason": reason,
                 }
             )
     for level in ("scene_macro", "cohort_macro"):
