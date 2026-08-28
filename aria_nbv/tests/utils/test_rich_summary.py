@@ -5,7 +5,7 @@ from __future__ import annotations
 import torch
 
 from aria_nbv.utils import rich_summary, summarize, summarize_shape
-from aria_nbv.utils.rich_summary import capture_tree
+from aria_nbv.utils.rich_summary import capture_tree, capture_tree_html
 
 
 def test_summarize_preserves_public_tensor_contract() -> None:
@@ -40,3 +40,14 @@ def test_capture_tree_is_ansi_free_for_web_and_log_renderers() -> None:
 
     assert "sample" in rendered
     assert "\x1b[" not in rendered
+
+
+def test_capture_tree_html_preserves_rich_styles() -> None:
+    tree = rich_summary({"sample": torch.zeros(2, 3)}, is_print=False)
+
+    rendered = capture_tree_html(tree)
+
+    assert "sample" in rendered
+    assert "color:" in rendered
+    assert "Tensor(2, 3)" in rendered
+    assert "background:transparent" in rendered

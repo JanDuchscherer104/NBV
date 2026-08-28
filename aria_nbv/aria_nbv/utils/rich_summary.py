@@ -242,6 +242,27 @@ def capture_tree(tree: Tree) -> str:
     return capture.get().rstrip()
 
 
+def capture_tree_html(tree: Tree) -> str:
+    """Render a Rich tree as self-contained HTML while preserving its styles."""
+
+    from .console import Console
+
+    console = Console(
+        record=True,
+        force_terminal=True,
+        color_system="truecolor",
+        width=240,
+    )  # type: ignore[no-untyped-call]
+    console.print(tree, soft_wrap=False, highlight=True, markup=True, emoji=False)
+    return console.export_html(
+        code_format=(
+            '<pre style="margin:0; overflow-x:auto; color:inherit; background:transparent; '
+            'font-family:Menlo,\'DejaVu Sans Mono\',consolas,\'Courier New\',monospace">{code}</pre>'
+        ),
+        inline_styles=True,
+    )
+
+
 def build_nested(
     flat_sample: dict[str, Any], show_semidense: bool = True, show_gt: bool = True
 ) -> tuple[dict[str, Any], dict[tuple[str, ...], str]]:

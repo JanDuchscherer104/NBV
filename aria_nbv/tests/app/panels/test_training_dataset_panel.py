@@ -296,7 +296,12 @@ def test_qh_preview_reuses_only_exact_selection_and_controls() -> None:
         seed=7,
         include_stats=False,
     )
-    evidence = ("item", "batch")
+    evidence = {
+        "item": "item",
+        "batch": "batch",
+        "item_html": "item-html",
+        "batch_html": "batch-html",
+    }
     state = (baseline, evidence)
 
     assert _qh_preview_for_identity(state, baseline) is evidence

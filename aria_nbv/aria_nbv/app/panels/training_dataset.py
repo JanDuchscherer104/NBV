@@ -11,7 +11,7 @@ from __future__ import annotations
 import json
 import stat
 from pathlib import Path
-from typing import Any
+from typing import Any, TypedDict
 
 import numpy as np
 import pandas as pd
@@ -31,7 +31,7 @@ from ...dataset_bundle import (
 )
 from ...dataset_topology import discover_vin_store_dirs
 from ...rollouts.inspection import discover_rollout_store_paths
-from ...utils.rich_summary import capture_tree, rich_summary
+from ...utils.rich_summary import capture_tree, capture_tree_html, rich_summary
 from ._stored_rollouts.shared import ExplanationSection, ScientificExplanation
 from ._stored_rollouts.shared import plot_control_key as _plot_control_key
 from ._stored_rollouts.shared import render_plot as _render_plot
@@ -47,7 +47,17 @@ _QH_READINESS_CONTRACT = QhReadinessContract("qh_cf0_v1", "evl_v1", "none")
 
 ArtifactEntryIdentity = tuple[str, int, int, int, int]
 QhReadinessIdentity = tuple[tuple[Any, ...], int, int]
-QhPreview = tuple[str, str]
+
+
+class QhPreview(TypedDict):
+    """Cached plain and styled renderings of one Q_H item and batch."""
+
+    item: str
+    batch: str
+    item_html: str
+    batch_html: str
+
+
 QhPreviewIdentity = tuple[tuple[Any, ...], str, int, int, int, bool]
 
 
@@ -269,14 +279,14 @@ def _cached_qh_preview(
         batch_size=batch_size,
         seed=seed,
     )
-    return (
-        capture_tree(
-            rich_summary({"item": item}, include_stats=include_stats, is_print=False)
-        ),
-        capture_tree(
-            rich_summary({"batch": batch}, include_stats=include_stats, is_print=False)
-        ),
-    )
+    item_tree = rich_summary({"item": item}, include_stats=include_stats, is_print=False)
+    batch_tree = rich_summary({"batch": batch}, include_stats=include_stats, is_print=False)
+    return {
+        "item": capture_tree(item_tree),
+        "batch": capture_tree(batch_tree),
+        "item_html": capture_tree_html(item_tree),
+        "batch_html": capture_tree_html(batch_tree),
+    }
 
 
 def _clear_training_dataset_caches() -> None:
@@ -827,11 +837,10 @@ def _download_payload(
     payload["q_h_readiness"] = (
         None if qh_readiness is None else qh_readiness.to_jsonable()
     )
-    payload["q_h_structure"] = (
-        None
-        if qh_preview is None
-        else {"dataset_item": qh_preview[0], "collated_batch": qh_preview[1]}
-    )
+    payload["q_h_structure"] = None if qh_preview is None else {
+        "dataset_item": qh_preview["item"],
+        "collated_batch": qh_preview["batch"],
+    }
     return (json.dumps(payload, indent=2, sort_keys=True) + "\n").encode("utf-8")
 
 
@@ -1118,9 +1127,9 @@ def render_training_dataset_page() -> None:  # pragma: no cover - Streamlit UI
                         )
             if qh_preview is not None:
                 st.markdown("#### Dataset item (`QhChain`)")
-                st.code(qh_preview[0], language=None)
+                st.html(qh_preview["item_html"], width="stretch")
                 st.markdown("#### Collated batch (`QhBatch`)")
-                st.code(qh_preview[1], language=None)
+                st.html(qh_preview["batch_html"], width="stretch")
     with details_tab:
         if st.button("Deep statistics / target scan", width="stretch"):
             deep = _cached_deep_statistics(root_text, rollout_texts, identity)
