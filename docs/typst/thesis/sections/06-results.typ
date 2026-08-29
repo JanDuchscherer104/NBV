@@ -5,7 +5,7 @@
 #import "../../shared/tables.typ": publication-table, index-cell
 
 #validation_todo(
-  [Populate the gate-owned result fields from a confirmatory bundle: population, estimate, uncertainty, admitted conclusion, and blocking condition. Every value must resolve to its raw and derived artifact provenance.],
+  [Populate one result row per inferential stage from a confirmatory bundle: population, estimate, uncertainty, admitted conclusion, and blocking condition. Every value must resolve to its raw and derived artifact provenance.],
   source: [confirmatory report bundle, exact-Q2 receipt, and analysis manifest],
   gate: [all six evidence gates resolve without fixture or pilot substitution],
 )
@@ -59,8 +59,8 @@
 
 #let confirmatory-evidence = thesis_evidence_status == "confirmatory" and all-stores-valid
 #let population-available = confirmatory-evidence and stores-have-facts(population-facts, denominators: true)
-#let measurement-available = population-available and stores-have-facts(measurement-facts)
-#let support-available = measurement-available and stores-have-facts(candidate-support-facts, denominators: true) and thesis_data.tables.stores.rows.all(store => {
+#let measurement-available = confirmatory-evidence and stores-have-facts(measurement-facts)
+#let support-available = population-available and stores-have-facts(candidate-support-facts, denominators: true) and thesis_data.tables.stores.rows.all(store => {
   let scene-count = report-store-fact(thesis_data, store.store_id, "study.population.scenes").value
   scene-count != none and scene-count > 0 and report-store-facts-match-contract(
     thesis_data,
@@ -69,7 +69,7 @@
     scene-count,
   )
 })
-#let headroom-available = support-available and stores-have-facts(headroom-facts) and thesis_data.tables.stores.rows.all(store => {
+#let headroom-available = measurement-available and support-available and stores-have-facts(headroom-facts) and thesis_data.tables.stores.rows.all(store => {
   let paired-scenes = report-store-fact(thesis_data, store.store_id, "policy.paired_scene_endpoint.n_scenes").value
   paired-scenes != none and paired-scenes > 0 and report-store-facts-match-contract(
     thesis_data,
@@ -96,14 +96,14 @@ and its own required facts are present.
     header: ([*Gate / RQ*], [*Population*], [*Estimate*], [*Uncertainty*], [*Admitted conclusion*], [*Blocking condition*]),
     rows: (
       [measurement / RQ1], [frozen repeated oracle evaluations], [repeatability statistic: #result-status(measurement-available)], [declared numeric tolerance], [metric comparison is admissible], [mismatched identity, absent repeats, or tolerance failure],
-      [support / RQ4], [held-out scenes, targets, and full candidate tables], [coverage and failures: #result-status(support-available)], [exact denominators and scene strata], [study and action populations are described], [missing population, exclusions, or valid-action support],
+      [population/action / RQ4], [held-out scenes, targets, and full candidate tables], [coverage and failures: #result-status(support-available)], [exact denominators and scene strata], [the population relevant to oracle headroom is described], [missing population, exclusions, or valid-action support],
       [headroom / RQ2], [paired lookahead and one-step oracle scenes], [endpoint effect: #result-status(headroom-available)], [paired scene interval], [bounded setup contains meaningful non-myopic structure], [measurement/support failure or non-meaningful effect],
       [actor $Q_1$ / RQ3], [held-out actor-visible candidate states], [ranking and calibration: #result-status(q1-available)], [scene-clustered interval], [actor information recovers immediate target value], [privileged input, matching failure, or inadequate calibration],
       [exact $Q_2$ / RQ2], [eligible held-out factual successors], [error and coverage: #result-status(q2-available)], [independent-unit tolerance rule], [first recursive target is recovered], [incomplete support or failed recursion tolerance],
       [endpoint recovery / RQ2], [paired held-out learned and reference policies], [recovered fraction: #result-status(recovery-available)], [paired scene interval], [learned policy recovers prespecified headroom], [any earlier gate or recovery-rule failure],
     ),
   ),
-  caption: [Gate-owned result template. “Not available” preserves missingness and names the blocker; it is not a zero estimate.],
+  caption: [Evidence availability by inferential stage. “Not available” preserves missingness and names the blocker; it is not a zero estimate.],
 ) <tab:thesis-result-availability>
 
 #let result-summary-families = {
