@@ -66,4 +66,4 @@ moments further remove spatial correspondence. The selected method can test
 whether this compact context contains usable signal, but a failure cannot be
 attributed to value learning alone, and a success cannot establish spatial
 state sufficiency. Richer causal surface or ray memories are kept outside the
-thesis-core method until a frozen comparison isolates their added information.
+selected method until a frozen comparison isolates their added information.
