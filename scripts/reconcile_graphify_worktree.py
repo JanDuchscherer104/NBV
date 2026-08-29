@@ -6,15 +6,14 @@ from __future__ import annotations
 import argparse
 import json
 import os
-from pathlib import Path, PurePosixPath
 import re
 import shutil
 import subprocess
 import sys
 import tempfile
+from pathlib import Path, PurePosixPath
 
 import check_graphify_freshness as freshness
-
 
 PINNED_GRAPHIFY_VERSION = "0.9.48"
 GRAPH = Path("graphify-out/graph.json")

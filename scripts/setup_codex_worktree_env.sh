@@ -145,6 +145,10 @@ maintain_graphify() {
       >/dev/null 2>&1 || \
       fail "linked worktree Graphify seed is invalid; rerun Codex worktree setup"
   fi
+  if python3 -I "$repo_root/scripts/check_graphify_freshness.py" \
+    --usable --quiet >/dev/null 2>&1; then
+    return
+  fi
   if ! python3 "$repo_root/scripts/reconcile_graphify_worktree.py" \
     --root "$repo_root" >/dev/null 2>&1; then
     fail "Graphify admission maintenance failed; rerun Codex worktree setup"

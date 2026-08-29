@@ -86,17 +86,20 @@ will fall back to CPU when CUDA is unavailable, but a CPU fallback is a
 debugging convenience, not a performance target.
 
 Use the `aria-nbv` mamba environment as the CUDA build-toolchain context and
-the repo `.venv` as the `uv` runtime. If PyTorch3D reports `Not compiled with
-GPU support`, rebuild it from the activated toolchain environment:
+the repo `.venv` as the `uv` runtime. Run the admission helper after `uv sync`;
+it derives the exact Git source from `uv.lock`, rebuilds only PyTorch3D when
+needed, and proves a real CUDA rasterization before succeeding:
 
 ```sh
-cd aria_nbv
 mamba activate aria-nbv
-export CUDA_HOME="$CONDA_PREFIX"
-export FORCE_CUDA=1
-export TORCH_CUDA_ARCH_LIST="8.6"
-uv sync --all-extras --reinstall-package pytorch3d --no-build-isolation-package pytorch3d --no-cache
+cd aria_nbv
+uv sync --locked --extra dev
+cd ..
+python3 scripts/setup_pytorch3d_cuda.py --cuda-home "$CONDA_PREFIX"
 ```
+
+Run the helper again after any later `uv sync` that replaces PyTorch3D. It
+leaves all locked transitive dependencies untouched.
 
 ### Optional xFormers
 

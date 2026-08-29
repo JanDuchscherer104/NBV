@@ -243,8 +243,10 @@ PY
 # The public Codex boundary rejects malformed mode declarations before it ranks
 # a parent or can mutate the destination, and reports one actionable line.
 mode_before="$(snapshot_tree "${STALE_CHILD_ROOT}")"
-if ARIA_NBV_GRAPHIFY_MODES="deep,standard" \
-  run_codex_setup "${STALE_CHILD_ROOT}" "${SHARED_ROOT}" \
+if CODEX_WORKTREE_PATH="${STALE_CHILD_ROOT}" \
+  CODEX_SOURCE_WORKSPACE_PATH="${SHARED_ROOT}" \
+  ARIA_NBV_GRAPHIFY_MODES="deep,standard" \
+  PATH="${FAKE_BIN}:${PATH}" bash -c "${CODEX_SETUP_SCRIPT}" \
   >"${SANDBOX}/bad-mode.out" 2>"${SANDBOX}/bad-mode.err"; then
   echo "Codex setup unexpectedly accepted a reordered Graphify mode list" >&2
   exit 1
