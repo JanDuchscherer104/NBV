@@ -78,12 +78,15 @@ class CandidatePositionMode(StrEnum):
 
     `UPPER_BOUND_FREE_SHELL` is the broad ablation prior. The remaining modes
     bias the finite candidate set toward local continuity, target bearing,
-    lateral bypass, short refinement, or controlled backtracking.
+    balanced attempted target-orbit proposals, lateral bypass, short
+    refinement, or controlled backtracking. Feasibility pruning may still
+    remove either orbit side.
     """
 
     UPPER_BOUND_FREE_SHELL = "upper_bound_free_shell"
     FORWARD_LOCAL = "forward_local"
     TARGET_BEARING_LOCAL = "target_bearing_local"
+    TARGET_ORBIT = "target_orbit"
     LATERAL_TARGET_BYPASS = "lateral_target_bypass"
     LOCAL_REFINEMENT = "local_refinement"
     REVISIT_BACKTRACK = "revisit_backtrack"

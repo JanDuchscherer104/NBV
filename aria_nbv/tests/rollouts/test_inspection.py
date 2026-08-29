@@ -394,6 +394,40 @@ def test_geometry_projection_bounds_candidate_reads_to_referenced_shells(
     assert proposal_support_geometry(reader, max_candidates=10_000).points
 
 
+def test_geometry_projection_step_filter_preserves_later_expansion_frame_and_limit(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A later-step projection skips earlier rows without losing their factual pose."""
+
+    result = write_rollout_zarr_store(
+        tmp_path / "geometry-step-filter.zarr",
+        build_rollout_records(horizon=2, num_samples=6, seed=735)[:1],
+    )
+    reader = RolloutZarrStoreReader(result.store_dir)
+    target_center = np.asarray([0.5, 0.0, 0.5], dtype=np.float32)
+    target = read_target_rows(reader)[0]
+    target_pose = np.asarray(target.pose_world_object, dtype=np.float32).copy()
+    target_pose[9:12] = target_center
+    target = replace(target, center_world=target_center, pose_world_object=target_pose)
+    monkeypatch.setattr("aria_nbv.rollouts.inspection.target_rows", lambda _reader: (target,))
+
+    complete = proposal_support_geometry(reader, max_candidates=10_000)
+    later_frame = complete.frames[-1]
+    later_points = tuple(point for point in complete.points if point.step_row_id == later_frame.step_row_id)
+    filtered = proposal_support_geometry(
+        reader,
+        step_row_ids=(cast(int, later_frame.step_row_id),),
+        max_candidates=len(later_points),
+    )
+
+    assert filtered.truncated is False
+    assert [frame.step_row_id for frame in filtered.frames] == [later_frame.step_row_id]
+    assert [point.candidate_row_id for point in filtered.points] == [point.candidate_row_id for point in later_points]
+    assert [(point.x, point.y, point.z) for point in filtered.points] == pytest.approx(
+        [(point.x, point.y, point.z) for point in later_points]
+    )
+
+
 def test_geometry_projection_caps_before_the_first_shell_when_limit_is_smaller(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

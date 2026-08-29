@@ -1,0 +1,165 @@
+{
+  "schema_id": "aria-nbv-candidate-target-orbit-mvp-v3",
+  "status": "positive_mvp_not_scaleup_admitted",
+  "issue": "https://github.com/JanDuchscherer104/ARIA-NBV/issues/180",
+  "implementation_revision": "8fafa02fdb3441c9f9823f620728f413c6ecca91",
+  "implementation_url": "https://github.com/JanDuchscherer104/ARIA-NBV/commit/8fafa02fdb3441c9f9823f620728f413c6ecca91",
+  "source_manifest": ".configs/rollout_campaign100_source_manifest.json",
+  "source_manifest_sha256": "d6e771d1582394cde9005be3185dc9cfbb875cab5fc004f184922a25dc996f56",
+  "writer_config": ".configs/build_rollouts_v1_cuda_campaign_writer.toml",
+  "writer_config_sha256": "2b83170a16d62730562a1f5438d55af0bf9dd79d0f52b776543e429c2a687681",
+  "generator": {
+    "path": "docs/contents/evidence/candidate_target_orbit_mvp/generate_store.py",
+    "sha256": "abcb71744866a070860ac2c3e5ebfd433176f2f5c0eadb1f7e6847ef0e873641",
+    "baseline_command": "cd aria_nbv && python ../docs/contents/evidence/candidate_target_orbit_mvp/generate_store.py --profile realistic_core --output-store /ABSOLUTE/OUTPUT/realistic_core.zarr",
+    "candidate_command": "cd aria_nbv && python ../docs/contents/evidence/candidate_target_orbit_mvp/generate_store.py --profile target_orbit_mvp --output-store /ABSOLUTE/OUTPUT/target_orbit_mvp.zarr"
+  },
+  "reducer": {
+    "path": "docs/contents/evidence/candidate_target_orbit_mvp/build_evidence.py",
+    "sha256": "a0130674f0c568831306934ca242efd841221be1b0c9ae1faa1da266a7e3424f",
+    "command": "cd aria_nbv && python ../docs/contents/evidence/candidate_target_orbit_mvp/build_evidence.py --baseline-store /ABSOLUTE/OUTPUT/realistic_core.zarr --candidate-store /ABSOLUTE/OUTPUT/target_orbit_mvp.zarr",
+    "canonical_geometry_owner": "aria_nbv.rollouts.inspection.proposal_support_geometry",
+    "canonical_metrics_owner": "aria_nbv.rollouts.candidate_benchmark.candidate_support_metrics",
+    "canonical_metrics_revision": 1,
+    "canonical_plot_owner": "aria_nbv.rollouts.candidate_support_plotting.candidate_ground_support_figure",
+    "alignment": "target_aligned_z_up",
+    "origin": "factual_expansion_pose",
+    "scale": "current_target_distance"
+  },
+  "portable_evidence_input": {
+    "path": "docs/contents/evidence/candidate_target_orbit_mvp/candidate-rows.jsonl",
+    "sha256": "e0b348ec59ba428c62c2f5ba4d11a81c8946f70a3dc57f7662adcf73523ee0bc",
+    "row_count": 240,
+    "summary_path": "docs/contents/evidence/candidate_target_orbit_mvp/summary.json",
+    "summary_sha256": "92c838f47c311461dc9ebd962b869c280db2b139416efd6f931b95b031fd21b5"
+  },
+  "raw_artifacts": {
+    "baseline_store_manifest_sha256": "6dc2c6d4425a5b66e4c1360476fb50588626a7080b3c99b144ef99cccceee7a2",
+    "candidate_store_manifest_sha256": "432955787627a36df838ba92a3876b328b43f58de83399275e117ce56063c126",
+    "retention": "full Zarr stores are local experiment artifacts; the committed reduced rows retain every field consumed by this evidence reducer"
+  },
+  "resolved_profiles": {
+    "realistic_core": [
+      {"name": "forward_local", "count": 24},
+      {"name": "target_bearing_local", "count": 24},
+      {"name": "lateral_target_bypass", "count": 12}
+    ],
+    "target_orbit_mvp": [
+      {"name": "forward_local", "count": 24},
+      {"name": "target_bearing_local", "count": 12},
+      {"name": "target_orbit", "count": 12, "angles_deg": [-6.0, 6.0, -10.0, 10.0, -14.0, 14.0, -18.0, 18.0, -22.0, 22.0, -26.0, 26.0]},
+      {"name": "lateral_target_bypass", "count": 12}
+    ]
+  },
+  "environment": {
+    "device": "cuda:0 NVIDIA GeForce RTX 3080 Ti",
+    "python": "3.11.15",
+    "torch": "2.4.1+cu121",
+    "numpy": "2.4.4",
+    "plotly": "6.7.0"
+  },
+  "seed": 20260728,
+  "samples": ["ASE_889_Atek_000008", "ASE_8517_Atek_000000"],
+  "candidate_budget_per_state": 60,
+  "evidence_population": {
+    "scene_count": 2,
+    "state_count": 2,
+    "states": [
+      {"scene": "889", "rollout_row_id": 0, "step_row_id": 0},
+      {"scene": "8517", "rollout_row_id": 1, "step_row_id": 1}
+    ],
+    "target_protocol": "v0_gt_input",
+    "aggregation": "state_then_scene_macro"
+  },
+  "baseline": {
+    "profile": "realistic_core",
+    "actor_valid_count": 74,
+    "actor_valid_fraction": 0.6166666666666667,
+    "family_state_pair_count": 6,
+    "family_zero_valid_state_count": 1,
+    "family_zero_valid_state_rate": 0.16666666666666666,
+    "mean_state_best_target_root_gain": 0.04699912277283147,
+    "oracle_opportunity_undefined_scene_count": 0,
+    "oracle_opportunity_undefined_state_count": 0,
+    "mean_target_side_count_balance": 0.0,
+    "target_side_positive_count": 24,
+    "target_side_negative_count": 24,
+    "target_side_neutral_count": 0,
+    "target_side_balance_undefined_scene_count": 0,
+    "target_side_balance_undefined_state_count": 0,
+    "mean_circular_target_orbit_span_deg": 24.797555483911054,
+    "target_orbit_span_undefined_scene_count": 0,
+    "target_orbit_span_undefined_state_count": 0,
+    "target_center_inside_calibrated_image_count": 91,
+    "target_center_inside_calibrated_image_fraction": 0.7583333333333333,
+    "target_center_projection_undefined_scene_count": 0,
+    "target_center_projection_undefined_state_count": 0,
+    "view_jitter_bounded_cap_compliance_fraction": 1.0,
+    "view_jitter_bounded_compliance_undefined_state_count": 0,
+    "view_jitter_bounded_compliance_undefined_scene_count": 0,
+    "view_jitter_bounded_count": 120,
+    "view_jitter_bounded_declaration_fraction": 1.0,
+    "view_jitter_evaluated_count": 120,
+    "view_jitter_nonzero_fraction": 1.0,
+    "view_jitter_uncapped_spherical_count": 0,
+    "view_jitter_undefined_scene_count": 0,
+    "view_jitter_undefined_state_count": 0,
+    "worst_state_valid_count": 21
+  },
+  "candidate": {
+    "profile": "target_orbit_mvp",
+    "actor_valid_count": 72,
+    "actor_valid_fraction": 0.6000000000000001,
+    "family_state_pair_count": 8,
+    "family_zero_valid_state_count": 1,
+    "family_zero_valid_state_rate": 0.125,
+    "mean_state_best_target_root_gain": 0.04815240344032645,
+    "oracle_opportunity_undefined_scene_count": 0,
+    "oracle_opportunity_undefined_state_count": 0,
+    "mean_target_side_count_balance": 0.5,
+    "target_side_positive_count": 24,
+    "target_side_negative_count": 24,
+    "target_side_neutral_count": 0,
+    "target_side_balance_undefined_scene_count": 0,
+    "target_side_balance_undefined_state_count": 0,
+    "mean_circular_target_orbit_span_deg": 70.21970214915319,
+    "target_orbit_span_undefined_scene_count": 0,
+    "target_orbit_span_undefined_state_count": 0,
+    "target_center_inside_calibrated_image_count": 93,
+    "target_center_inside_calibrated_image_fraction": 0.775,
+    "target_center_projection_undefined_scene_count": 0,
+    "target_center_projection_undefined_state_count": 0,
+    "view_jitter_bounded_cap_compliance_fraction": 1.0,
+    "view_jitter_bounded_compliance_undefined_state_count": 0,
+    "view_jitter_bounded_compliance_undefined_scene_count": 0,
+    "view_jitter_bounded_count": 120,
+    "view_jitter_bounded_declaration_fraction": 1.0,
+    "view_jitter_evaluated_count": 120,
+    "view_jitter_nonzero_fraction": 1.0,
+    "view_jitter_uncapped_spherical_count": 0,
+    "view_jitter_undefined_scene_count": 0,
+    "view_jitter_undefined_state_count": 0,
+    "worst_state_valid_count": 26
+  },
+  "hard_gates": {
+    "cuda": true,
+    "dense_training_signal": true,
+    "family_audit_complete": true,
+    "minimum_root_support": true,
+    "seminar_jitter": true
+  },
+  "limitations": [
+    "two-scene pilot only",
+    "one family-state pair still has zero valid rows",
+    "side-balance and circular-span metrics use attempted target-conditioned rows before feasibility pruning",
+    "target-centre image support is a calibrated framing diagnostic, not occlusion-aware visibility",
+    "throughput comparison is cold-start confounded and omitted from the portable summary",
+    "production mixture remains unchanged"
+  ],
+  "plot": {
+    "path": "docs/contents/evidence/candidate_target_orbit_mvp/candidate-centers.png",
+    "interactive_path": "docs/contents/evidence/candidate_target_orbit_mvp/candidate-centers.html",
+    "source_html_sha256": "62af6004ecabc8cd7881f2ff6bb56a9da7a4396701cf91603e34768276983430",
+    "sha256": "a519525dd1c8e2287849b1caae0fa22ce8c219e30fb39dbf9c963560e6e5a9ba"
+  }
+}

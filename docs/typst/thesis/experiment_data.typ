@@ -109,6 +109,18 @@
   matches.first()
 }
 
+#let report-store-facts-match-contract(report, store-id, contracts, expected-n) = {
+  contracts.all(contract => {
+    let matches = report.tables.facts.rows.filter(
+      row => row.store_id == store-id and row.key == contract.key,
+    )
+    matches.len() == 1 and {
+      let row = matches.first()
+      row.value != none and row.n == expected-n and row.aggregation == contract.aggregation
+    }
+  })
+}
+
 #let short-store-label(report, store-id) = {
   let stores = report.tables.stores.rows
   let matches = stores.filter(store => store.store_id == store-id)

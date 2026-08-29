@@ -49,7 +49,7 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from contextlib import contextmanager
-from math import radians
+from math import isfinite, radians
 from typing import Annotated, Any, Literal
 
 import torch
@@ -141,7 +141,30 @@ class CandidateViewGeneratorConfig(TargetConfig["CandidateViewGenerator"]):
     """Position-family prior used to sample candidate centers before orientation assignment."""
 
     position_target_point_world: torch.Tensor | None = None
-    """Optional actor-visible world-space target center for target-bearing position modes."""
+    """Optional actor-visible world-space target center for target-aware position modes."""
+
+    target_orbit_angles_deg: tuple[float, ...] = (
+        -6.0,
+        6.0,
+        -10.0,
+        10.0,
+        -14.0,
+        14.0,
+        -18.0,
+        18.0,
+        -22.0,
+        22.0,
+        -26.0,
+        26.0,
+    )
+    """Partial-orbit angles around the actor-visible target.
+
+    Angles preserve the reference pose's horizontal target standoff, so each
+    center is a short lateral arc step rather than an instantaneous teleport to
+    a fixed target radius. Negative and positive subsets are interleaved at
+    sampling time, independent of configured bank order, and cycled separately
+    when more rows are requested.
+    """
 
     min_distance_to_mesh: float = 0.2
     """Minimum clearance (metres) between candidate center and mesh surface."""
@@ -235,6 +258,20 @@ class CandidateViewGeneratorConfig(TargetConfig["CandidateViewGenerator"]):
 
     _coerce_verbosity = field_validator("verbosity", mode="before")(BaseConfig._coerce_verbosity)
 
+    @field_validator("target_orbit_angles_deg")
+    @classmethod
+    def _validate_target_orbit_angles(cls, angles: tuple[float, ...]) -> tuple[float, ...]:
+        """Require a finite, nonzero, two-sided partial-orbit angle bank."""
+
+        normalized = tuple(float(angle) for angle in angles)
+        if not normalized:
+            raise ValueError("target_orbit_angles_deg must not be empty.")
+        if any(not isfinite(angle) or abs(angle) >= 180.0 or abs(angle) < 1e-6 for angle in normalized):
+            raise ValueError("target_orbit_angles_deg must contain finite nonzero angles with abs(angle) < 180.")
+        if not any(angle < 0.0 for angle in normalized) or not any(angle > 0.0 for angle in normalized):
+            raise ValueError("target_orbit_angles_deg must cover both sides of the target.")
+        return normalized
+
     @model_validator(mode="after")
     def set_debug(self) -> CandidateViewGeneratorConfig:
         """Resolve debug verbosity and inherited view-jitter defaults.
@@ -246,6 +283,8 @@ class CandidateViewGeneratorConfig(TargetConfig["CandidateViewGenerator"]):
         construction so generator code can consume concrete values without
         branch-dependent defaults.
         """
+        if self.position_mode is CandidatePositionMode.TARGET_ORBIT and self.num_samples < 2:
+            raise ValueError("TARGET_ORBIT requires num_samples >= 2 for bilateral proposals.")
         if self.is_debug:
             object.__setattr__(self, "verbosity", Verbosity.VERBOSE)
         if self.view_kappa is None:
@@ -600,6 +639,13 @@ class CandidateViewGenerator:
         }
         if view_dirs_delta is not None:
             jitter_debug["view_dirs_delta"] = view_dirs_delta
+
+        if self.config.position_mode is CandidatePositionMode.TARGET_ORBIT:
+            # Orbit centers are constructed in the world-horizontal plane. The
+            # motion contract, however, evaluates backward displacement in the
+            # physical reference frame rather than the gravity-aligned sampling
+            # frame used to construct positions.
+            offsets_ref = reference_pose.inverse().transform(centers_world)
 
         ctx = CandidateContext(
             cfg=self.config,

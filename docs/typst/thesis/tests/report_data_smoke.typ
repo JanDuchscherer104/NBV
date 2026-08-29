@@ -1,4 +1,4 @@
-#import "../experiment_data.typ": load-thesis-report, report-fact, report-store-fact, format-report-value
+#import "../experiment_data.typ": load-thesis-report, report-fact, report-store-fact, report-store-facts-match-contract, format-report-value
 
 #let data-path = sys.inputs.at(
   "aria-thesis-data",
@@ -27,4 +27,18 @@
 #assert(parameters.any(row => row.value_type == "float" and row.value_float == 1.25), message: "fixture must retain a floating-point parameter")
 #assert(parameters.any(row => row.value_type == "str" and row.value_text == "fixture-text"), message: "fixture must retain a text parameter")
 #assert(parameters.any(row => row.is_missing and row.value_text == none), message: "fixture must retain a missing parameter as JSON null")
+#let support-contract = ((key: "candidate-support.actor-valid-fraction", aggregation: "state_then_scene_macro"),)
+#assert(
+  report-store-facts-match-contract(report, "synthetic-nonscientific-fixture", support-contract, 2),
+  message: "matching aggregation and scene denominator must pass",
+)
+#assert(
+  not report-store-facts-match-contract(report, "synthetic-nonscientific-fixture", support-contract, 12),
+  message: "candidate-row denominator must not satisfy the scene-level contract",
+)
+#let wrong-aggregation = ((key: "candidate-support.actor-valid-fraction", aggregation: "candidate_row_mean"),)
+#assert(
+  not report-store-facts-match-contract(report, "synthetic-nonscientific-fixture", wrong-aggregation, 2),
+  message: "incorrect aggregation identity must not satisfy the scene-level contract",
+)
 Missing: #format-report-value(missing-value)

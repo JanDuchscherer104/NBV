@@ -148,6 +148,14 @@ and reversals. Candidate-profile utility must be judged after pruning. A store i
 which target-aware families rarely survive cannot support a target-conditioned
 planning claim.
 
+The optional `target_orbit` family is a bilateral partial-orbit endpoint proposal
+prior: it samples paired signed angular offsets around the supplied target while
+preserving the current horizontal target standoff. Feasibility pruning may remove
+either side, so bilateral attempt does not imply bilateral surviving support. This
+family is not part of the production mixture and is not a learned human-motion
+prior; it is an opt-in challenger for testing whether local orbit coverage improves
+candidate support.
+
 Pruning converts the full shell into a compact valid-action table. A row remains valid only if it lies in the snippet occupancy support, stays clear of the @ground-truth:short mesh, avoids straight-line path collision, and satisfies local egocentric motion limits:
 
 $
@@ -161,6 +169,135 @@ $
 $
 
 This threshold is a data-support guard, not a reward threshold. Preflight reporting must retain rejected-root counts and failure reasons by candidate family.
+
+=== Candidate-Support and Geometric-Coverage Diagnostics
+
+Candidate quality is audited before reward interpretation. Let $cal(I)_s$ be all
+attempted, non-padding rows in state $s$, $cal(V)_s subset cal(I)_s$ the rows
+that pass actor-valid geometry and hard-action checks, $cal(L)_s subset cal(V)_s$
+the rows with a finite oracle label. The horizon-specific mask
+$m_(s,i)^(Q,h)$ selects rows in $cal(L)_s$ for Q-training; it does not redefine
+the canonical candidate table $cal(Q)_t$. The first transition is represented by the canonical
+action mask $#symb.rl.action_mask$; finite factual value-target availability is
+represented separately by $#symb.rl.q_label_mask$. These are distinct
+populations: a row can be actor-valid without being renderable, oracle-labelled,
+or retained for training. The candidate actor-valid fraction is therefore
+
+$
+  #eqs.metrics.candidate_actor_valid_fraction
+$
+
+and hard valid support is
+
+$
+  #eqs.metrics.valid_support
+$
+
+Both quantities are computed per decision state before pooling. The configured
+family zero rate retains every configured family/state pair in its denominator,
+including pairs with zero valid rows:
+
+$
+  #eqs.metrics.configured_family_zero_rate
+$
+
+Every state statistic $q(s)$ is then averaged within its scene and finally
+macro-averaged across scenes:
+
+$
+  #eqs.metrics.state_scene_macro
+$
+
+Here $cal(S)_(c,q)$ is the metric-specific eligible-state set and $cal(C)_q$
+contains scenes with at least one eligible state. A scene with no defined state
+for $q$ is absent from the descriptive scalar and counted in the accompanying
+undefined-scene table. A paired profile contrast uses the intersection of the
+two profiles' eligible-scene sets and reports every excluded scene. Thus the
+available-case denominator is explicit rather than an implicit row-level
+complete-case analysis.
+
+The analysis manifest freezes the missing-state rule before result inspection.
+For support counts and fractions, a failed generation root contributes zero
+support; for the family-zero rate it contributes one. Target-relative balance
+and span are not numerically imputed when no target-conditioned direction is
+defined: the failed state remains in the failure table, and a paired scene is
+ineligible for a geometric profile contrast. Thus no missing state disappears
+through an implicit complete-case denominator.
+
+For geometric comparison, candidate centres and target centres use the existing
+proposal-support normalization $ #eqs.spatial.candidate_proposal_support_normalization $:
+the origin is the factual expansion/root pose, the target has unit norm, the
+vertical axis is world-up, and distances are divided by the current root-to-target
+distance $d_(t,e)^"current"$. This is a target-relative support frame, not a
+camera image frame and not a claim that the root or target is visible. Side
+balance is computed from non-neutral attempted target-conditioned rows in the
+`target_bearing_local` and `target_orbit` families, using their target-relative
+azimuth signs. The neutral bin is $|y_(s,i)^"target"| <= epsilon$ with
+$epsilon = 10^(-9)$ in normalized support coordinates; its count is reported
+but does not enter the two-sided balance denominator,
+
+$
+  #eqs.metrics.target_side_balance
+$
+
+and orbit coverage uses the circular minimum-covering span rather than a Cartesian
+maximum-minus-minimum range:
+
+$
+  #eqs.metrics.circular_orbit_span
+$
+
+The projection fraction records whether the calibrated target centre lies inside
+the calibrated image domain for evaluated rows in one state,
+
+$
+  #eqs.metrics.target_center_projection_fraction
+$
+
+and is then reduced through the same state--scene--cohort macro operator. A
+state with no evaluated projection rows is undefined and counted separately;
+it is not assigned a zero fraction or silently removed from a paired profile
+contrast. This remains an evaluation/framing diagnostic, not visibility or actor
+support. The finite-support oracle opportunity is the per-state maximum
+target-root gain,
+
+$
+  #eqs.metrics.oracle_opportunity
+$
+
+which is defined only when the actor-valid, finite-label set $cal(L)_s$ is
+nonempty. Its undefined-state count is reported, and eligible values are reduced
+through the same state--scene--cohort macro operator. The quantity measures
+available candidate headroom and is not a policy score. View jitter is likewise
+computed per state and macro-reduced. States without jitter rows, or without
+bounded rows for the cap-compliance diagnostic, are counted as undefined. The
+nonzero seminar-profile check remains separate from legacy zero-cap spherical
+support:
+
+$
+  #eqs.metrics.jitter_compliance
+$
+
+The production mixture retains the seminar model's nonzero jitter invariant.
+Legacy `uniform_sphere` and `forward_powerspherical` rows with a zero cap are
+annotated as uncapped spherical support and are not represented by a bounded box.
+
+#figure(
+  publication-table(
+    columns: (0.95fr, 1.15fr, 0.65fr, 1.55fr),
+    header: ([*Quantity*], [*Population*], [*Unit*], [*Interpretation boundary*]),
+    rows: (
+      [Actor-valid fraction], [Attempted rows per state], [fraction], [Hard feasibility; not label or training availability.],
+      [Valid support], [Actor-valid rows per state], [rows], [Report the lower tail and failed roots, not only a pooled mean.],
+      [Configured-family zero rate], [Configured families per state], [fraction], [Retains absent and zero-support families; state values are scene-macro reduced.],
+      [Side balance / circular span], [Non-neutral attempted target-conditioned rows], [fraction / angle], [Neutral rows and undefined states are reported separately; proposal coverage precedes pruning.],
+      [Target-centre projection], [Evaluated candidate views per state], [fraction], [State--scene--cohort macro; zero-evaluated states are reported as undefined. Calibrated framing, not visibility.],
+      [Oracle opportunity], [Finite actor-valid rewards per eligible state], [gain], [Undefined when no finite actor-valid label exists; available one-step headroom, not achieved policy return.],
+      [Jitter compliance], [Bounded-jitter rows per state], [fraction], [State--scene--cohort macro; report undefined, nonzero, and uncapped support separately.],
+    ),
+  ),
+  caption: [Candidate-generation diagnostics and their population contracts. Every state-level quantity is reduced before scene and cohort aggregation.],
+) <tab:candidate-support-metric-contract>
 
 === Rollout Branch Sampling and Dataset Impact
 

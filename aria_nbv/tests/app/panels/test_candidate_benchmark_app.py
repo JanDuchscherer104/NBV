@@ -111,12 +111,14 @@ def test_candidate_benchmark_card_is_lazy_and_renders_real_plots_and_download(tm
     assert not app.exception
     assert app.session_state["benchmark_records_calls"] == [{"state_key": "state-1", "candidate_limit": 123}]
     assert app.session_state["benchmark_export_calls"] == [{"state_key": "state-1"}]
-    assert len(app.get("plotly_chart")) == 4
+    assert len(app.get("plotly_chart")) == 6
     titles = [json.loads(chart.proto.spec)["layout"]["title"]["text"] for chart in app.get("plotly_chart")]
     assert titles == [
         "Candidate family attempted → valid → selected funnel",
+        "Candidate family survival",
         "Candidate support (target-normalized ground plane)",
         "Candidate support (target-normalized 3D)",
+        "Candidate view jitter (bounded boxes and uncapped spherical support)",
         "Candidate benchmark resource and timing summary",
     ]
     assert len(app.get("download_button")) == 1

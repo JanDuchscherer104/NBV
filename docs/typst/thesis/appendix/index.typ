@@ -24,6 +24,10 @@
   (key: "writer_config.oracle_target_task_sampler.policy", label: "Target sampler"),
   (key: "writer_config.candidate_mixture.base.num_samples", label: "Candidates / action"),
   (key: "writer_config.candidate_mixture.base.enforce_motion_realism", label: "Motion realism"),
+  (key: "writer_config.candidate_mixture.base.view_max_azimuth_deg", label: "View-jitter yaw cap"),
+  (key: "writer_config.candidate_mixture.base.view_max_elevation_deg", label: "View-jitter pitch cap"),
+  (key: "writer_config.candidate_mixture.base.view_roll_jitter_deg", label: "View-roll jitter"),
+  (key: "writer_config.candidate_mixture.base.target_orbit_angles_deg", label: "Target-orbit angle bank"),
   (key: "writer_config.target_scorer.depth.renderer.max_views_per_batch", label: "Render batch"),
   (key: "writer_config.target_scorer.depth.resolution_scale", label: "Depth scale"),
   (key: "writer_config.recipes[2].policy.horizon", label: "Lookahead horizon"),
@@ -79,7 +83,7 @@ The report bundle is the single numerical interface between validated rollout ar
 ) <tab:thesis-report-provenance>
 
 #if bundle-role == "evidence" and thesis_evidence_status == "confirmatory" [
-  The resolved configuration parameters below are read from the same confirmatory bundle as the reported results. The projection is an explicit ten-key contract covering source and target caps, target sampling, candidate count, motion realism, render batching, depth scale, and lookahead depth and branching. Other flattened manifest values remain available in the bundle. Missing selected values remain explicit rather than being replaced by document defaults.
+  The resolved configuration parameters below are read from the same confirmatory bundle as the reported results. The projection includes source and target caps, target sampling, candidate count, motion realism, nonzero seminar-profile view-jitter caps, optional target-orbit challenger keys, render batching, depth scale, and lookahead depth and branching. Other flattened manifest values remain available in the bundle. Missing selected values remain explicit rather than being replaced by document defaults. A target-orbit key is optional and denotes an opt-in challenger; its absence does not imply that the production mixture used an orbit prior.
 
   #figure(
     publication-table(

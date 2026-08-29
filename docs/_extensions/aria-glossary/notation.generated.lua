@@ -832,11 +832,41 @@ return {
       description = "",
       thesis_list = false,
     },
+    ["metrics.candidate_actor_valid_fraction"] = {
+      tex = "f_{\\mathrm{actor}}(s)=|\\mathcal I_s|^{-1}\\sum_{i\\in\\mathcal I_s}m_{s,i}^{\\mathrm{act}}",
+      typst = "#eqs.metrics.candidate_actor_valid_fraction",
+      description = "Per-state fraction of attempted rows passing actor-valid geometry; unitless, with padding and missing rows excluded.",
+      thesis_list = true,
+    },
     ["metrics.candidate_validity"] = {
       tex = "m_i=\\mathbb{1}[\\mathrm{finite}]\\mathbb{1}[v_i>0]\\mathbb{1}[v_i^{\\mathrm{sem}}>0]",
       typst = "#eqs.metrics.candidate_validity",
       description = "",
       thesis_list = false,
+    },
+    ["metrics.circular_orbit_span"] = {
+      tex = "\\alpha_{(1)}\\leq\\cdots\\leq\\alpha_{(n)},\\;\\alpha_{(n+1)}=\\alpha_{(1)}+2\\pi,\\;s_{\\mathrm{orbit}}=2\\pi-\\max_{1\\leq j\\leq n}(\\alpha_{(j+1)}-\\alpha_{(j)})",
+      typst = "#eqs.metrics.circular_orbit_span",
+      description = "Per-state minimum covering angular span of attempted target-conditioned azimuths; radians or degrees, circular rather than Cartesian.",
+      thesis_list = true,
+    },
+    ["metrics.configured_family_zero_rate"] = {
+      tex = "z_{\\mathrm{family}}(s)=|\\mathcal F_s|^{-1}\\sum_{f\\in\\mathcal F_s}\\mathbb{1}[n_{\\mathrm{valid}}(s,f)=0]",
+      typst = "#eqs.metrics.configured_family_zero_rate",
+      description = "Per-state rate of configured families with no hard-valid candidate; unitless and retaining absent or zero-support families.",
+      thesis_list = true,
+    },
+    ["metrics.jitter_compliance"] = {
+      tex = "f_{\\mathrm{jitter}}(s)=\\frac{\\sum_{i\\in\\mathcal I_s^{\\mathrm{jitter}}}\\mathbb{1}[b_i=1]\\mathbb{1}[|\\Delta\\psi_i|\\leq\\bar\\psi_i]\\mathbb{1}[|\\Delta\\theta_i|\\leq\\bar\\theta_i]}{\\sum_{i\\in\\mathcal I_s^{\\mathrm{jitter}}}\\mathbb{1}[b_i=1]}",
+      typst = "#eqs.metrics.jitter_compliance",
+      description = "Per-state unitless compliance among bounded jitter rows for per-row yaw and pitch caps; state values are scene-macro reduced, while nonzero, uncapped, and undefined counts are reported separately.",
+      thesis_list = true,
+    },
+    ["metrics.oracle_opportunity"] = {
+      tex = "o_{\\mathrm{oracle}}(s)=\\max_{i\\in\\mathcal L_s}g_{s,i}^{\\mathrm{target-root}},\\quad |\\mathcal L_s|>0",
+      typst = "#eqs.metrics.oracle_opportunity",
+      description = "Per-state target-root gain maximum over actor-valid finite-label rows; undefined states are counted separately, and eligible values are scene-macro reduced.",
+      thesis_list = true,
     },
     ["metrics.spearman"] = {
       tex = "\\rho=\\operatorname{corr}(\\operatorname{rank}(\\hat{r}_i),\\operatorname{rank}(r_i))",
@@ -844,11 +874,35 @@ return {
       description = "",
       thesis_list = false,
     },
+    ["metrics.state_scene_macro"] = {
+      tex = "\\mathcal S_{c,q}=\\{s\\in\\mathcal S_c:q(s)\\;\\mathrm{defined}\\},\\;\\bar q_c=|\\mathcal S_{c,q}|^{-1}\\sum_{s\\in\\mathcal S_{c,q}}q(s),\\;\\mathcal C_q=\\{c:|\\mathcal S_{c,q}|>0\\},\\;\\bar q=|\\mathcal C_q|^{-1}\\sum_{c\\in\\mathcal C_q}\\bar q_c",
+      typst = "#eqs.metrics.state_scene_macro",
+      description = "Metric-specific state-to-scene-to-cohort macro reduction; undefined states and scenes are counted separately, and paired contrasts use the shared eligible-scene intersection.",
+      thesis_list = true,
+    },
+    ["metrics.target_center_projection_fraction"] = {
+      tex = "f_{\\mathrm{proj}}(s)=|\\mathcal I_s^{\\mathrm{projected}}|/|\\mathcal I_s^{\\mathrm{evaluated}}|",
+      typst = "#eqs.metrics.target_center_projection_fraction",
+      description = "Per-state unitless fraction of evaluated rows placing the target centre inside the calibrated image domain; not visibility.",
+      thesis_list = true,
+    },
+    ["metrics.target_side_balance"] = {
+      tex = "b_{\\mathrm{side}}=1-|n_+-n_-|/(n_++n_-)",
+      typst = "#eqs.metrics.target_side_balance",
+      description = "Per-state unitless balance of attempted target-conditioned positive and negative sides; undefined when both sides are absent.",
+      thesis_list = true,
+    },
     ["metrics.topk_acc"] = {
       tex = "\\mathrm{TopKAcc}(k)=\\frac{1}{N}\\sum_i\\mathbb{1}[y_i\\in\\mathrm{TopK}(\\boldsymbol{\\pi}_i,k)]",
       typst = "#eqs.metrics.topk_acc",
       description = "",
       thesis_list = false,
+    },
+    ["metrics.valid_support"] = {
+      tex = "n_{\\mathrm{valid}}(s)=|\\{i\\in\\mathcal{I}_s:m_i^{\\mathrm{act}}=1\\}|",
+      typst = "#eqs.metrics.valid_support",
+      description = "Per-state count of hard-valid candidates before reward or training masks; rows, with padded rows excluded.",
+      thesis_list = true,
     },
     ["model.candidate_row_features"] = {
       tex = "\\boldsymbol{x}_{t,i}=\\operatorname{concat}(\\boldsymbol{h}_{t,i}^{\\mathrm{pose+rel}},\\boldsymbol{h}_{t,i}^{\\mathrm{geom}},\\boldsymbol{h}_{t,i}^{\\mathrm{valid}},\\boldsymbol{h}_{t,i}^{\\mathrm{prov}},\\boldsymbol{H}_t)",
