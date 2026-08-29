@@ -63,9 +63,9 @@ questions in a fixed order:
 
 1. *Measurement validity (RQ1):* freeze crop, render, fusion, and point--mesh
    metric identity; show repeatability within a declared tolerance.
-2. *Population and action support (RQ4):* establish scene-disjoint target,
-   candidate-family, validity, replay, horizon, and resource coverage with exact
-   denominators.
+2. *Population and action support (part of RQ4):* establish scene-disjoint
+   target-task coverage, candidate-family survival, hard validity, and acquisition
+   feasibility with exact denominators.
 3. *Oracle headroom (first half of RQ2):* compare bounded lookahead with
    one-step oracle greedy under the same acquisition budget,
 
@@ -73,10 +73,11 @@ questions in a fixed order:
      #eqs.entity.lookahead_headroom
    $
 
-4. *Actor-visible $Q_1$ (RQ3):* evaluate target-conditioned one-step ranking,
-   calibration, and oracle-rescored selections without privileged actor input.
-5. *Exact $Q_2$ (recursive validity for RQ2):* measure held-out two-step error
-   and complete-support coverage against the factual finite-support target.
+4. *Actor-visible $Q_1$ (RQ3 and RQ4):* evaluate target-conditioned one-step
+   ranking, calibration, target matching, and dense-label replay coverage without
+   privileged actor input.
+5. *Exact $Q_2$ (RQ2 and RQ4):* measure held-out two-step error, factual-successor
+   coverage, and horizon support against the finite-support target.
 6. *Endpoint recovery (second half of RQ2):* only after meaningful headroom,
    estimate the prespecified recovered fraction
 
@@ -86,8 +87,8 @@ questions in a fixed order:
 
    from matched endpoint oracle evaluation.
 
-RQ5 and RQ6 remain conditional extensions and receive no result slot until the
-offline finite-candidate chain passes. This ordering prevents an attractive
+RQ5 and RQ6 are evaluated only if the offline finite-candidate evidence justifies
+extending the action or interaction setting. This ordering prevents an attractive
 downstream policy estimate from compensating for an unstable metric, an
 unsupported action set, privileged actor input, or failed recursion.
 

@@ -4,18 +4,17 @@ This thesis formulates target-specific egocentric next-best-view planning as a
 relational finite-action problem: value depends jointly on target, causal
 information state, admissible candidate support, horizon, update rule, and
 continuation policy. It contributes a target-cropped reconstruction outcome, an
-explicit actor--oracle information boundary, hard-mask and factual-replay
-contracts, a scalar-horizon fitted-value method, and a six-stage experimental
-logic from measurement validity to endpoint recovery.
+explicit actor--oracle information boundary, a strict separation of feasibility
+from utility, causal selected-transition replay, a scalar-horizon fitted-value
+method, and a sequential evaluation from measurement validity to endpoint
+recovery.
 
-The current evidence does not yet answer the principal research question.
-RQ1 remains open because metric repeatability is not established on a frozen
-held-out population. RQ4 remains open because validated target, candidate,
-replay, horizon, and resource support are incomplete. RQ3 has an executable
-information contract but no held-out actor-visible target-conditioned result.
-Consequently, RQ2 has neither an admitted oracle-headroom estimate nor learned
-exact-$Q_2$ and endpoint-recovery evidence. RQ5 and RQ6 remain conditional
-extensions rather than missing experiments in the core claim.
+The current evidence does not yet answer RQ2. Metric repeatability, the held-out
+target and action population, and actor-visible immediate-value recovery remain
+unestablished; without those premises, neither oracle-lookahead headroom nor
+learned exact-$Q_2$ and endpoint recovery are interpretable. Online interaction
+and continuous control remain extensions of the setting rather than missing
+parts of this evaluation.
 
 Training-source rollouts establish that the pipeline reaches mesh rendering,
 target-specific oracle scoring, selected-action replay, and the fitted-value
