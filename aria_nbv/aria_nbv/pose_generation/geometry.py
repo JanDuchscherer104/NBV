@@ -11,7 +11,8 @@ fall back to CPU computation.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any, Protocol, cast
 
 import numpy as np
 import torch
@@ -23,6 +24,24 @@ if TYPE_CHECKING:
 DEVICE_FWD = [0.0, 0.0, 1.0]
 
 
+class _ProximityQuery(Protocol):
+    def signed_distance(
+        self,
+        points: NDArray[np.floating[Any]],
+    ) -> NDArray[np.floating[Any]]: ...
+
+
+class _RayIntersector(Protocol):
+    def intersects_any(
+        self,
+        ray_origins: NDArray[np.floating[Any]],
+        ray_directions: NDArray[np.floating[Any]],
+        *,
+        multiple_hits: bool,
+        max_distance: NDArray[np.floating[Any]],
+    ) -> NDArray[np.bool_]: ...
+
+
 def _tensor_version(tensor: torch.Tensor) -> int | None:
     """Return the mutation counter, or ``None`` when Torch does not expose one."""
 
@@ -30,6 +49,15 @@ def _tensor_version(tensor: torch.Tensor) -> int | None:
         return int(tensor._version)
     except (AttributeError, RuntimeError):
         return None
+
+
+def _resolved_device(device: torch.device | str) -> torch.device:
+    """Resolve an unindexed CUDA device to the accelerator Torch will use."""
+
+    resolved = torch.device(device)
+    if resolved.type == "cuda" and resolved.index is None:
+        return torch.device("cuda", torch.cuda.current_device())
+    return resolved
 
 
 class PreparedMeshQuery:
@@ -71,8 +99,8 @@ class PreparedMeshQuery:
         self.points_first_idx = torch.zeros(1, device=target_device, dtype=torch.int64)
         self.triangles_first_idx = torch.zeros(1, device=target_device, dtype=torch.int64)
         self.mesh = mesh
-        self._proximity_query: Any | None = None
-        self._ray_engines: dict[bool, Any] = {}
+        self._proximity_query: _ProximityQuery | None = None
+        self._ray_engines: dict[bool, _RayIntersector] = {}
 
     @classmethod
     def acquire(
@@ -120,7 +148,7 @@ class PreparedMeshQuery:
             and verts_version == self._source_verts_version
             and faces_version == self._source_faces_version
             and mesh is self._source_mesh
-            and self.verts.device == torch.device(device)
+            and self.verts.device == _resolved_device(device)
             and self.verts.dtype == dtype
         )
 
@@ -165,7 +193,11 @@ class PreparedMeshQuery:
         if self._proximity_query is None:
             import trimesh
 
-            self._proximity_query = trimesh.proximity.ProximityQuery(self.mesh)
+            constructor = cast(
+                "Callable[[trimesh.Trimesh], _ProximityQuery]",
+                trimesh.proximity.ProximityQuery,
+            )
+            self._proximity_query = constructor(self.mesh)
         distances = self._proximity_query.signed_distance(points.detach().cpu().numpy())
         return torch.from_numpy(distances).to(device=points.device, dtype=points.dtype).abs()
 
@@ -186,9 +218,9 @@ class PreparedMeshQuery:
             if use_pyembree:
                 from trimesh.ray.ray_pyembree import RayMeshIntersector
 
-                engine = RayMeshIntersector(self.mesh)
+                engine = cast(_RayIntersector, RayMeshIntersector(self.mesh))
             else:
-                engine = self.mesh.ray
+                engine = cast(_RayIntersector, self.mesh.ray)
             self._ray_engines[use_pyembree] = engine
         intersections = engine.intersects_any(
             origins,

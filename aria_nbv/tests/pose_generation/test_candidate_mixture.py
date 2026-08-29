@@ -245,11 +245,28 @@ def test_mixture_skips_mesh_preparation_when_collision_clearance_is_disabled(
     assert result.mask_valid.shape[0] == 4
 
 
-def test_mixture_accepts_inference_mode_meshes_without_cross_request_reuse() -> None:
+def test_mixture_reuses_inference_mesh_within_each_request_only(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from aria_nbv.pose_generation.geometry import PreparedMeshQuery
+
+    prepared: list[PreparedMeshQuery] = []
+    original_init = PreparedMeshQuery.__init__
+
+    def counting_init(self: PreparedMeshQuery, *args: object, **kwargs: object) -> None:
+        original_init(self, *args, **kwargs)
+        prepared.append(self)
+
+    monkeypatch.setattr(PreparedMeshQuery, "__init__", counting_init)
     cfg = CandidateMixtureViewGeneratorConfig(
         base=_base_cfg().model_copy(update={"min_distance_to_mesh": 0.1}),
         components=[
-            CandidateMixtureComponentConfig(name="forward", count=2, strategy=ViewDirectionMode.FORWARD_RIG),
+            CandidateMixtureComponentConfig(
+                name="forward",
+                count=2,
+                view_mode=ViewDirectionMode.RADIAL_AWAY,
+                paired_view_mode=ViewDirectionMode.FORWARD_RIG,
+            ),
             CandidateMixtureComponentConfig(name="away", count=2, strategy=ViewDirectionMode.RADIAL_AWAY),
         ],
     )
@@ -271,9 +288,11 @@ def test_mixture_accepts_inference_mode_meshes_without_cross_request_reuse() -> 
         }
         first_result = generator.generate(**kwargs)
         first_query = generator._mesh_query
+        assert len(prepared) == 1
         second_result = generator.generate(**kwargs)
 
-    assert first_result.mask_valid.shape[0] == second_result.mask_valid.shape[0] == 4
+    assert first_result.mask_valid.shape[0] == second_result.mask_valid.shape[0] == 6
+    assert len(prepared) == 2
     assert generator._mesh_query is not first_query
 
 

@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+from types import SimpleNamespace
+from typing import Any, cast
+
+import numpy as np
 import pytest
 import torch
 
@@ -112,6 +116,70 @@ def test_prepared_mesh_query_rejects_mutated_source_tensors() -> None:
 
     verts.add_(1.0)
     assert not query.matches(verts, faces, device="cpu", dtype=torch.float32, mesh=None)
+
+
+def test_prepared_mesh_query_resolves_unindexed_cuda_for_reuse(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    verts = torch.zeros((3, 3), dtype=torch.float32)
+    faces = torch.zeros((1, 3), dtype=torch.int64)
+    query = object.__new__(geometry.PreparedMeshQuery)
+    query._source_verts = verts
+    query._source_faces = faces
+    query._source_verts_version = verts._version
+    query._source_faces_version = faces._version
+    query._source_mesh = None
+    query.verts = cast(Any, SimpleNamespace(device=torch.device("cuda:2"), dtype=torch.float32))
+    monkeypatch.setattr(torch.cuda, "current_device", lambda: 2)
+
+    assert query.matches(verts, faces, device="cuda", dtype=torch.float32, mesh=None)
+
+
+def test_prepared_mesh_query_ray_adapter_forwards_bounds_and_reuses_engine() -> None:
+    class FakeRayIntersector:
+        def __init__(self) -> None:
+            self.calls: list[tuple[np.ndarray, np.ndarray, bool, np.ndarray]] = []
+
+        def intersects_any(
+            self,
+            ray_origins: np.ndarray,
+            ray_directions: np.ndarray,
+            *,
+            multiple_hits: bool,
+            max_distance: np.ndarray,
+        ) -> np.ndarray:
+            self.calls.append((ray_origins, ray_directions, multiple_hits, max_distance))
+            return np.array([0, 1], dtype=np.int64)
+
+    ray = FakeRayIntersector()
+    mesh = cast(Any, SimpleNamespace(ray=ray))
+    verts = torch.zeros((3, 3), dtype=torch.float32)
+    faces = torch.zeros((1, 3), dtype=torch.int64)
+    query = geometry.PreparedMeshQuery(verts, faces, device="cpu", dtype=torch.float32, mesh=mesh)
+    origins = np.zeros((2, 3), dtype=np.float32)
+    directions = np.ones((2, 3), dtype=np.float32)
+    max_distance = np.array([1.0, 2.0], dtype=np.float32)
+
+    first = query.intersects_any(
+        origins,
+        directions,
+        max_distance=max_distance,
+        use_pyembree=False,
+    )
+    second = query.intersects_any(
+        origins,
+        directions,
+        max_distance=max_distance,
+        use_pyembree=False,
+    )
+
+    assert len(ray.calls) == 2
+    assert ray.calls[0][0] is origins
+    assert ray.calls[0][1] is directions
+    assert ray.calls[0][2] is False
+    assert ray.calls[0][3] is max_distance
+    assert first.dtype == second.dtype == np.bool_
+    assert first.tolist() == second.tolist() == [False, True]
 
 
 def test_prepared_mesh_query_accepts_inference_tensors_without_reusing_them(

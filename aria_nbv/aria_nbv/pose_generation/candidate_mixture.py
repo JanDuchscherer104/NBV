@@ -467,7 +467,12 @@ class CandidateMixtureViewGeneratorConfig(TargetConfig["CandidateMixtureViewGene
 
 
 class CandidateMixtureViewGenerator:
-    """Generate a fixed-size candidate table from multiple sampling families."""
+    """Generate a fixed-size candidate table from multiple sampling families.
+
+    The generator retains one safely versioned prepared mesh query across
+    requests. Each request lends that query to every component as request-local
+    state, including paired-view components, without extending its lifetime.
+    """
 
     def __init__(self, config: CandidateMixtureViewGeneratorConfig) -> None:
         self.config = config

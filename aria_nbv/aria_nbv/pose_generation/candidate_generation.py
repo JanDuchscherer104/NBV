@@ -415,6 +415,11 @@ class CandidateViewGenerator:
     * orientation construction via `OrientationBuilder`, and
     * rule-based pruning via `FreeSpaceRule`, `MinDistanceToMeshRule` and `PathCollisionRule`.
 
+    A persistent generator retains its most recent safely versioned prepared
+    mesh query across generation calls. A query supplied to the constructor is
+    request-local: the first generation call consumes it directly, then later
+    calls return to normal acquisition and invalidation.
+
     """
 
     def __init__(
@@ -431,7 +436,8 @@ class CandidateViewGenerator:
         )
         self._position_sampler = PositionSampler(config)
         self._orientation_builder = OrientationBuilder(config)
-        self._mesh_query = mesh_query
+        self._mesh_query: PreparedMeshQuery | None = None
+        self._request_mesh_query = mesh_query
         self._rules: list[Rule] = self._build_default_rules(config)
 
     # ------------------------------------------------------------------ public
@@ -663,15 +669,19 @@ class CandidateViewGenerator:
             offsets_ref = reference_pose.inverse().transform(centers_world)
 
         if self.config.requires_mesh_query:
-            mesh_query = PreparedMeshQuery.acquire(
-                self._mesh_query,
-                mesh_verts,
-                mesh_faces,
-                device=device,
-                dtype=centers_world.dtype,
-                mesh=gt_mesh,
-            )
-            self._mesh_query = mesh_query
+            if self._request_mesh_query is not None:
+                mesh_query = self._request_mesh_query
+                self._request_mesh_query = None
+            else:
+                mesh_query = PreparedMeshQuery.acquire(
+                    self._mesh_query,
+                    mesh_verts,
+                    mesh_faces,
+                    device=device,
+                    dtype=centers_world.dtype,
+                    mesh=gt_mesh,
+                )
+                self._mesh_query = mesh_query
         else:
             mesh_query = None
 
