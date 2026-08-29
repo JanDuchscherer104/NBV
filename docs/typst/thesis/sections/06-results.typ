@@ -235,7 +235,7 @@ and its own required facts are present.
 == Oracle Headroom
 
 #if headroom-available [
-  The paired scene endpoint effect, interval, denominator, and meaningful-headroom decision are available in @tab:thesis-confirmatory-values. Interpretation remains conditional on the frozen support and metric contracts.
+  The paired scene endpoint effect, interval, denominator, and meaningful-headroom decision are available in @tab:thesis-confirmatory-values. Interpretation remains conditional on the frozen support definition and metric protocol.
 ] else [
   Meaningful equal-budget lookahead headroom over one-step oracle greedy is not estimable from the loaded evidence.
 ]
