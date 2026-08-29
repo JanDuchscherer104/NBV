@@ -10,7 +10,7 @@
   evidence: "pending",
   source: "aria_nbv/aria_nbv/rollouts/reporting.py; docs/typst/thesis/experiment_data.typ",
   gate: [frozen held-out manifest, completed paired endpoints, and validated confirmatory report bundle],
-)[Scene-paired aggregation and artifact-driven reporting are implemented; the confirmatory policy population is absent.]
+)[Scene-paired aggregation and reporting that preserves missingness are implemented; the confirmatory policy population is absent.]
 
 The scene is the independent experimental unit. Comparisons are paired by
 scene, target task, root state, candidate distribution, hard-validity regime,
