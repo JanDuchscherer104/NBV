@@ -82,8 +82,9 @@ coverage.
 does online interaction over the unchanged discrete candidate contract improve
 endpoint target gain or calibration over the offline policy?*
 
-RQ5 retains the target, information, candidate, validity, and endpoint contracts
-of RQ1--RQ4. It is not required for the core offline claim.
+RQ5 keeps the target, information, candidate, validity, and endpoint assumptions
+of RQ1--RQ4 unchanged. It is not required for the offline finite-candidate
+evaluation.
 
 ==== RQ6 — Continuous or simulator-backed control <ssec:rq6>
 
@@ -92,10 +93,10 @@ target-then-pose policy provide measurable headroom over the best discrete
 policy under the same target-specific objective and a comparable acquisition or
 motion budget?*
 
-RQ6 changes the action and feasibility contracts and therefore requires separate
-support, safety, simulator-realism, and comparable-cost evidence. It remains
-deferred; the current implementation implies no continuous, simulator, or
-real-device result.
+RQ6 changes the action space and feasibility assumptions and therefore requires
+separate evidence for support, safety, simulator realism, and comparable cost.
+It remains deferred; the current implementation implies no continuous,
+simulator, or real-device result.
 
 === Shared evidence constraints <ssec:protocol>
 
