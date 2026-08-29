@@ -2,7 +2,14 @@
 
 = Oracle and Data Generation <sec:thesis-oracle-data-generation>
 
-This chapter defines the non-deployable pipeline that turns logged ASE snippets into supervised target-conditioned @next-best-view:short tasks. It separates actor state from privileged data-generation state, specifies target-task and candidate construction, defines hard invalidity and target-specific @relative-reconstruction-improvement:short, and records the resulting selected counterfactual chains. The learned method in @sec:thesis-method may consume only the actor-side projection of these artifacts; @ground-truth:short geometry, counterfactual renders, labels, and oracle search remain instruction, supervision, or evaluation assets.
+Chapter 2 established that view value is relational: it depends on the target,
+causal state, admissible support, horizon, update rule, and continuation policy.
+This chapter turns that relation into a controlled experimental world. It first
+separates logged, selected-causal, and privileged information; then constructs
+target tasks and finite actions; and finally defines the intervention outcome
+and the immutable evidence needed to audit it. By the end, every value query has
+an explicit information boundary, action support, transition meaning, and
+measurement contract for the Method chapter to inherit.
 
 #include "03-01-state-and-visibility.typ"
 

@@ -4,15 +4,19 @@
 #import "../../../shared/tables.typ": publication-table
 #import "../../draft_markers.typ": validation_todo
 
-== Data Generation and Target-Specific @relative-reconstruction-improvement:short Labels
+== Task and Action Construction
 
 #validation_todo(
-  [Validate the target-cropped error, root normalization, repeatability, failure handling, and endpoint estimand before describing RRI as a reliable study objective. Cite the exact VIN-NBV source lines for inherited definitions and distinguish every ARIA-NBV modification.],
+  [Validate repeatability, failure handling, construct interpretation, root normalization, and the endpoint estimand before describing RRI as a reliable study objective.],
   source: [docs/literature/tex-src/arXiv-VIN-NBV; metric-validation artifacts],
   gate: [frozen metric protocol, repeatability table, and claim-level source locators],
 )
 
-An oracle target task fixes the entity identity and @ground-truth:short evaluation crop. A deployable target descriptor would instead be predicted from actor-visible observations. The current rollout generator has only the first contract: it projects a selected @ground-truth:short box into a compact instruction for candidate generation. Consequently, the present target descriptor denotes the requested object and its geometry; it does not establish actor-visible target discovery.
+An oracle target task fixes entity identity, evaluation support, and the target
+instruction used to construct target-bearing actions. An actor-visible task
+would instead obtain its descriptor from observations. The present descriptor
+therefore defines a controlled requested object and its geometry; it does not
+establish actor-visible target discovery.
 
 The general descriptor notation remains
 
@@ -20,23 +24,9 @@ $
   #eqs.entity.target_descriptor
 $
 
-#parbreak()
-The implemented oracle sampler populates only @ground-truth:short identity, class, confidence, pose, extent, and reference-relative geometry. Projected area, semidense support, @egocentric-voxel-lifting:short support, and proposal-match scores are not measured by this path and must not be interpreted from their schema placeholders.
-
 The finite action interface consists of a candidate table $cal(Q)_t$, hard validity mask $bold(m)_t$, and invalid-reason vector $bold(rho)_t$. The admissible set is $cal(A)_t = {i : m_(t,i)=1}$. Invalid rows remain logged for coverage and failure analysis but lie outside policy argmax, sampling, loss targets, and bootstrap maximization. Low RRI is a valid low-utility outcome; it is never an encoding for infeasibility.
 
-For target $e$, the oracle computes a target-cropped point--mesh error $Delta_t^e$. Candidate selection and #symb.rl.qh supervision use root-normalized target gain; state-relative @relative-reconstruction-improvement:short is retained as a diagnostic. Fixed-budget endpoint gain is the intended policy estimand, but the current replay store records cumulative selected-chain gains rather than an independent post-horizon endpoint reconstruction for every policy. Confirmatory policy comparisons must therefore add matched oracle endpoint re-evaluation or an explicitly persisted endpoint record.
-
-=== Oracle Label Provenance
-
-The one-step scene-level oracle from the seminar work supplies the rendering and point--mesh substrate @VIN-NBV-frahm2025 @PyTorch3D-Cameras-2025. The target-specific pipeline renders valid candidates from the @ground-truth:short mesh, backprojects their depth, fuses candidate points with the privileged current evaluation cloud, crops both points and mesh to the selected target box, and evaluates the resulting point--mesh error. In the current protocol the root evaluation cloud is reconstructed from ASE @ground-truth:short depth, so both the crop and the root metric are oracle-only.
-
-Camera geometry is therefore useful here only as part of a relation: a logged
-trajectory, a target crop, a finite candidate set, or a rendered oracle query.
-The calibrated camera boundary is not a contribution by itself. The consolidated
-candidate-support figure in @fig:candidate-generation-geometry uses camera
-glyphs only to expose those relations; native `CameraTW` unprojection and
-world-from-camera `PoseTW` remain the geometry owners behind the render path.
+For target $e$, the oracle computes the target-cropped point--mesh error #symb.entity.target_error. Candidate selection and #symb.rl.qh supervision use root-normalized target gain; state-relative @relative-reconstruction-improvement:short is retained as a diagnostic. Fixed-budget endpoint gain is the intended policy estimand, but the current replay store records cumulative selected-chain gains rather than an independent post-horizon endpoint reconstruction for every policy. Confirmatory policy comparisons must therefore add matched oracle endpoint re-evaluation or an explicitly persisted endpoint record.
 
 === Target Selection
 
@@ -52,11 +42,12 @@ The implemented sampler does not match actor proposals to @ground-truth:short ob
 
 The sampler bounds rollout cost without pre-filtering on headroom. Candidate scoring may subsequently invalidate the task when its mesh crop, current support, or rendered evidence is unusable; otherwise near-solved and negative-gain targets remain scientifically informative. A later actor-visible protocol must introduce proposal identity and observation-quality diagnostics as a separate selection stage rather than retroactively interpreting the present oracle fields as measurements.
 
-=== `V1` Observed-Target Admission
+=== Observed-Target Admission
 
-The implemented `V1` audit path keeps this oracle sampler separate from
-actor-visible target selection. For each observed or predicted target record
-$hat(e)$, it compares only same-class GT OBB rows using oriented 3D IoU:
+The observed-target audit (implementation anchor `V1`) keeps the oracle task
+sampler separate from actor-visible target selection. For each observed or
+predicted target record $hat(e)$, it compares only same-class GT OBB rows using
+oriented 3D IoU:
 
 $
   #eqs.entity.target_identity_iou
@@ -77,16 +68,14 @@ $
   #eqs.entity.target_identity_acceptance
 $
 
-Equality at $0.20$ is rejected; zero qualifying rows are rejected; and multiple
-qualifying rows are explicitly marked ambiguous and rejected. A single
-compatible candidate is admitted only with IoU $>0.20$. This implemented `V1`
-contract has no runner-up-gap or composite-$mu$ claim. The preceding sampler
-description remains the current `V0` oracle-task path: its geometry-valid GT-row
-admission is historical `V0` evidence, not actor-visible `V1` matching.
+Equality at $0.20$ is rejected, as are zero or multiple qualifying rows. The
+contract has no runner-up-gap or composite-score claim. The current rollout
+sampler remains a distinct oracle-task path: geometry-valid GT-row admission is
+not evidence of actor-visible matching.
 
 === Candidate View Generation
 
-Candidate generation turns one oracle instruction into a finite action table. Every quantitative choice---source population, target cap, shell size, family weights, motion limits, pruning thresholds, rollout recipes, renderer settings, and retention policy---belongs to the resolved run manifest and report bundle. The Methods text defines semantics only; it does not designate one mutable TOML profile as canonical.
+Candidate generation turns one oracle instruction into a finite action table. Every quantitative choice---source population, target cap, shell size, family weights, motion limits, pruning thresholds, rollout recipes, renderer settings, and retention policy---belongs to the resolved run manifest and report bundle. This chapter defines semantics only; it does not designate one mutable configuration profile as canonical.
 
 At rollout step $t$, candidate generation constructs a full shell
 
@@ -122,7 +111,17 @@ The sampler draws a capped direction in the reference rig frame and reinterprets
   caption: [One pinned finite-candidate decision state from ASE scene 81286, sample `ASE_81286_Atek_000035`, rollout row 73, and step row 121. Panel A uses a 35-degree vertical-FOV perspective view to place logged camera history, root state, target OBB, selected path, and a deterministically thinned set of wire frusta in the real scene. Panel B uses a 7.8-metre-wide orthographic bird's-eye view and retains all 60 candidate centres: 25 rows are admissible, 35 are hard-rejected by the clearance rule, and oracle-greedy selects shell 47. Dense scene geometry is z-buffered; OBBs, paths, centres, and camera glyphs remain vector overlays. Full eye, look-at, up, clipping, and resolution parameters are recorded in the figure JSON. This is an auditable contract example, not a policy-performance result.],
 ) <fig:candidate-generation-geometry>
 
-The three core position families then reinterpret this capped direction. Let $bold(f)=bold(e)_z$ be the rig-forward unit vector, $bold(b)_e$ the supplied target bearing in the reference frame, $bold(l)_e = norm(bold(e)_y times bold(b)_e)$ the horizontal lateral direction, and $bold(e)_y$ the world-up direction expressed in the sampling frame. The family directions are:
+The three core position families then reinterpret this capped direction. The
+shared normalization operator is
+
+$
+  #eqs.action.unit_vector
+$
+
+Let $bold(f)=bold(e)_z$ be the rig-forward unit vector, $bold(b)_e$ the supplied
+target bearing in the reference frame, $bold(l)_e = op("unit")(bold(e)_y times
+bold(b)_e)$ the horizontal lateral direction, and $bold(e)_y$ the world-up
+direction expressed in the sampling frame. The family directions are:
 
 $
   #eqs.action.family_directions
@@ -332,7 +331,21 @@ $
 
 The target source defines the supervised task, the candidate mixture defines learnable action support, validity defines admissibility, and the recipe defines which chains enter replay. Reporting must therefore cover target-task coverage, valid fanout and invalid reasons by family, selected-family diversity, gain distributions, and retention cost before attributing policy behavior to non-myopic planning. The paired train-only pilots are bandwidth and candidate-profile probes; they are non-confirmatory and provide no held-out policy-performance evidence.
 
-=== Reconstruction-Quality Metric <sec:thesis-reconstruction-quality-metric>
+== Measurement and Outcomes
+
+Task construction and action admission specify the intervention; measurement
+specifies what consequence is compared. The oracle renders a selected
+candidate from the @ground-truth:short mesh, backprojects its depth, updates the
+privileged evaluation cloud through the frozen fusion rule, crops points and
+mesh to the selected target, and evaluates point--mesh error
+@VIN-NBV-frahm2025. The crop, rendering, fusion, and scoring path are
+oracle-only.
+
+// evidence:
+// - @VIN-NBV-frahm2025 -> docs/literature/tex-src/arXiv-VIN-NBV/sec/3_methods.tex:36-44,78-92 (candidate rendering and reconstruction-improvement scoring)
+// - ARIA-NBV intervention path -> aria_nbv/aria_nbv/oracle/_scoring.py:94-163, aria_nbv/aria_nbv/oracle/evidence.py:343-381
+
+=== Operational Reconstruction Error <sec:thesis-reconstruction-quality-metric>
 
 // evidence:
 // - aria_nbv/aria_nbv/oracle/evidence.py:93-101,343-381 -> ASE GT-depth is the thesis evaluation source; MPS semi-dense points are a legacy diagnostic source.
@@ -372,6 +385,16 @@ The completeness reduction gives every mesh face equal weight. It is deliberatel
 // - @EFM3D-straub2024 -> docs/literature/tex-src/arXiv-EFM3D/supplemental_text.tex:154-169 (fixed surface samples and 5 cm precision/recall).
 // - @VIN-NBV-frahm2025 -> docs/literature/tex-src/arXiv-VIN-NBV/sec/4_experiments.tex:63-67 (Chamfer primary metric; coverage and F1 diagnostics).
 
+=== Reliability under the Frozen Protocol
+
+Reliability asks whether repeated execution of the same declared intervention
+produces stable errors and candidate rankings. It therefore covers rendering,
+backprojection, crop construction, point fusion and capping, numerical failure
+handling, and any stochastic sampling used by the metric. Deterministic code
+paths and a fixed mesh make the protocol reproducible in principle, but they do
+not establish repeatability across the intended study population. That evidence
+remains a prerequisite for RQ1 rather than an inferred property of the formula.
+
 #figure(
   publication-table(
     columns: (1.05fr, 1.45fr, 1.32fr),
@@ -401,6 +424,16 @@ For comparison, a common squared point-sampled Chamfer convention draws a refere
 
 Its apparent symmetry does not remove sampling-density dependence: changing the number or distribution of samples changes the finite approximation. Some benchmarks also use unsquared distances, so the norm and squaring convention are part of the metric contract rather than an interchangeable naming detail. At tolerance $tau$, precision counts reconstructed samples with a reference neighbour closer than $tau$, recall counts reference samples with a reconstructed neighbour closer than $tau$, and $F_(1,tau)=2 "Prec"_tau "Rec"_tau/("Prec"_tau+"Rec"_tau)$. These scores are physically interpretable but can change with the selected threshold and discard error magnitude on either side of it. Volumetric coverage and information gain are valuable for exploration and mapping, yet they measure discovered space or uncertainty reduction rather than the target reconstruction-quality change defined here.
 
+=== Construct Validity
+
+Construct validity asks what the operational error represents. In this thesis it
+measures idealized target-surface evidence under ASE depth, a selected target
+crop, equal-face mesh reduction, and the declared reconstruction update. It is
+not a representation-independent measure of object quality, perceived quality,
+or scene completeness. The rendering and fusion operator are part of the
+estimand: two systems using the same point--mesh formula but different state
+updates do not measure the same intervention effect.
+
 The implementation crops mesh faces when any vertex lies inside the oriented
 target @oriented-bounding-box and evaluates the selected point--mesh scorer.
 Geometry-invalid candidates are removed by the hard action mask and retain
@@ -410,9 +443,13 @@ the recipe either skips the affected row or table, or clears oracle-label
 validity and Q-training eligibility, while reporting the oracle failure
 independently rather than assigning a candidate reason code.
 
-This thesis therefore treats the metric as an operational estimand over a frozen evaluation pipeline, not as a representation-independent surface quantity. Every compared policy must share the same target mesh and crop, ASE-depth source, renderer and backprojection, fusion and point cap, and metric configuration. A future real-data evaluation that replaces ASE depth with MPS semi-dense evidence must separately quantify its texture-, gradient-, and uncertainty-dependent sampling effects; those concerns are not properties of the current oracle cloud.
+Every compared policy must therefore share the same target mesh and crop,
+ASE-depth source, renderer and backprojection, fusion and point cap, and metric
+configuration. Replacing ASE depth with MPS semi-dense evidence would define a
+different intervention and would require separate analysis of texture,
+gradient, uncertainty, and sampling effects.
 
-=== Target-Specific @relative-reconstruction-improvement:short
+=== RRI, Training Reward, and Endpoint Gain
 
 The thesis objective is not the absolute point--mesh error alone, but its normalized reduction after a fixed acquisition budget. It distinguishes state-relative RRI, the additive target-root reward, and endpoint gain: all are dimensionless reductions of the same target-cropped error, but their denominators and scientific roles differ.
 
