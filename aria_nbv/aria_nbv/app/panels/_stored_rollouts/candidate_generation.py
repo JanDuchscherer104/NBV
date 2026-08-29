@@ -539,14 +539,15 @@ def _candidate_benchmark_figures(
 
     titles = (
         "Candidate family attempted → valid → selected funnel",
+        "Candidate family survival",
         "Candidate support (target-normalized ground plane)",
         "Candidate support (target-normalized 3D)",
         "Candidate view jitter (bounded boxes and uncapped spherical support)",
         "Candidate benchmark resource and timing summary",
     )
-    if not records or not any(record.points for record in records):
+    if not records:
         figures = []
-        for title in titles[:4]:
+        for title in titles[:5]:
             figure = go.Figure()
             figure.update_layout(title=title)
             figure.add_annotation(
@@ -554,7 +555,7 @@ def _candidate_benchmark_figures(
             )
             figures.append(figure)
         resources = go.Figure()
-        resources.update_layout(title=titles[4])
+        resources.update_layout(title=titles[5])
         resources.add_annotation(
             text="unavailable: no persisted timing/resource facts",
             x=0.5,
@@ -574,10 +575,11 @@ def _candidate_benchmark_figures(
     funnel = px.bar(funnel_rows, x="stage", y="count", title="Candidate family attempted → valid → selected funnel")
     for trace in funnel.data:
         trace.name = trace.name or "candidate funnel"
-    plane, support, _, jitter = candidate_support_figures(
+    plane, support, survival, jitter = candidate_support_figures(
         records,
         show_view_directions=show_view_directions,
     )
+    survival.update_layout(title="Candidate family survival")
     plane.update_layout(title="Candidate support (target-normalized ground plane)")
     support.update_layout(title="Candidate support (target-normalized 3D)")
     jitter.update_layout(title="Candidate view jitter (bounded boxes and uncapped spherical support)")
@@ -604,7 +606,7 @@ def _candidate_benchmark_figures(
             showarrow=False,
         )
     resources.update_layout(title="Candidate benchmark resource and timing summary")
-    return funnel, plane, support, jitter, resources
+    return funnel, survival, plane, support, jitter, resources
 
 
 def _candidate_evidence_roles(population: dict[str, Any]) -> dict[str, EvidenceRole]:

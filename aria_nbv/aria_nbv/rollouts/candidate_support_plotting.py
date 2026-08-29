@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from typing import cast
 
 import pandas as pd
@@ -32,26 +32,13 @@ def _point_frame(records: Iterable[CandidateBenchmark]) -> pd.DataFrame:
     return pd.DataFrame(rows, columns=("x", "y", "z", "family", "status", "candidate_id", "state", "lineage"))
 
 
-def candidate_support_figures(
+def candidate_ground_support_figure(
     records: Iterable[CandidateBenchmark],
     *,
     show_view_directions: bool = False,
-) -> tuple[go.Figure, go.Figure, go.Figure, go.Figure]:
-    """Build ground-plane, 3-D, family-survival, and jitter figures.
-
-    Args:
-        records: Bounded factual-state records whose points already use the
-            normalized target-aligned proposal-support frame.
-        show_view_directions: Add short ground-plane camera-forward arrows for
-            actor-valid candidates when their persisted direction is present.
-
-    Returns:
-        Ground-plane support, three-dimensional support, family-survival, and
-        per-candidate view-jitter figures. The first two figures mark the
-        factual expansion/root and persisted task target explicitly. The jitter view
-        retains dotted caps only for bounded rows; any uncapped spherical row
-        selects fixed yaw ``[-180, 180]`` and pitch ``[-90, 90]`` axes.
-    """
+    family_colors: Mapping[str, str] | None = None,
+) -> go.Figure:
+    """Build the canonical target-aligned ground-plane support figure."""
 
     records = tuple(records)
     frame = _point_frame(records)
@@ -64,6 +51,7 @@ def candidate_support_figures(
         hover_data=["candidate_id", "state"] if not frame.empty else None,
         title="Candidate centers in target-aligned support (ground plane)",
         labels={"x": "target-forward / d", "y": "target-lateral / d"},
+        color_discrete_map=dict(family_colors or {}),
     )
     ground.add_trace(
         go.Scatter(
@@ -71,7 +59,7 @@ def candidate_support_figures(
             y=[0],
             mode="markers",
             name="Factual expansion/root",
-            marker={"symbol": "cross", "size": 12},
+            marker={"symbol": "cross", "size": 12, "color": "black"},
         )
     )
     targets = {
@@ -86,7 +74,7 @@ def candidate_support_figures(
                 y=[target[1] for target in sorted(targets)],
                 mode="markers",
                 name="Persisted task target centre",
-                marker={"symbol": "star", "size": 12},
+                marker={"symbol": "star", "size": 12, "color": "#9467bd"},
             )
         )
     if show_view_directions:
@@ -133,7 +121,41 @@ def candidate_support_figures(
             yref="paper",
             showarrow=False,
         )
+    return ground
 
+
+def candidate_support_figures(
+    records: Iterable[CandidateBenchmark],
+    *,
+    show_view_directions: bool = False,
+) -> tuple[go.Figure, go.Figure, go.Figure, go.Figure]:
+    """Build ground-plane, 3-D, family-survival, and jitter figures.
+
+    Args:
+        records: Bounded factual-state records whose points already use the
+            normalized target-aligned proposal-support frame.
+        show_view_directions: Add short ground-plane camera-forward arrows for
+            actor-valid candidates when their persisted direction is present.
+
+    Returns:
+        Ground-plane support, three-dimensional support, family-survival, and
+        per-candidate view-jitter figures. The first two figures mark the
+        factual expansion/root and persisted task target explicitly. The jitter view
+        retains dotted caps only for bounded rows; any uncapped spherical row
+        selects fixed yaw ``[-180, 180]`` and pitch ``[-90, 90]`` axes.
+    """
+
+    records = tuple(records)
+    frame = _point_frame(records)
+    ground = candidate_ground_support_figure(records, show_view_directions=show_view_directions)
+
+    unavailable_reasons = sorted(
+        {
+            reason
+            for record in records
+            if (reason := record.lineage.get("proposal_support_unavailable_reason")) is not None
+        }
+    )
     support = go.Figure()
     if not frame.empty:
         support.add_trace(
@@ -270,4 +292,4 @@ def candidate_support_figures(
     return ground, support, survival, jitter
 
 
-__all__ = ["candidate_support_figures"]
+__all__ = ["candidate_ground_support_figure", "candidate_support_figures"]

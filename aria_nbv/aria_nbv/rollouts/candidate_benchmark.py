@@ -24,6 +24,7 @@ import numpy as np
 import pandas as pd
 
 SCHEMA_ID = "aria-nbv-candidate-benchmark-v1"
+CANDIDATE_SUPPORT_METRICS_REVISION = 1
 MANIFEST_NAME = "manifest.json"
 DATA_NAME = "candidates.parquet"
 MULTI_STORE_BINDING_ALGORITHM = "sha256-canonical-json-v1"
@@ -388,14 +389,14 @@ def benchmarks_from_reader(
         )
     for row in audit_rows:
         key = (str(row["scene"]), f"rollout:{row['rollout_row_id']}/step:{row['step_row_id']}")
-        grouped.setdefault(key, {}).setdefault(str(row["position"]), []).append(row)
+        grouped.setdefault(key, {}).setdefault(str(row["mixture"]), []).append(row)
     result = []
     for (scene, state), family_rows in sorted(grouped.items()):
         families = []
         candidate_ids: list[int] = []
         coordinates: list[tuple[float, float, float]] = []
         frame_ids: set[str] = set()
-        lineage: dict[str, str] = {}
+        lineage: dict[str, str] = {"family_identity": "mixture_component"}
         points: list[CandidatePoint] = []
         state_rows = [row for rows in family_rows.values() for row in rows]
         missing_geometry = projection is not None and any(
@@ -669,6 +670,7 @@ def candidate_support_metrics(
     actor_known = [value for value in actor_values if isinstance(value, bool)]
     actor_valid = sum(actor_known)
     metrics: dict[str, float | int | None] = {
+        "metrics_revision": CANDIDATE_SUPPORT_METRICS_REVISION,
         "actor_valid_fraction": (actor_valid / len(actor_known)) if actor_known else None,
         "per_state_valid_support": actor_valid if actor_known else None,
         "target_side_count_balance": target_side_count_balance(point_list),
@@ -682,13 +684,17 @@ def candidate_support_metrics(
             if projected_target_centers is not None and total_target_centers
             else None
         ),
+        "target_center_projected_count": projected_target_centers,
+        "target_center_evaluated_count": total_target_centers,
     }
     if configured_families is None:
         metrics["zero_valid_family_state_rate"] = None
+        metrics["zero_valid_family_count"] = None
     else:
         families = tuple(configured_families)
         if not families:
             metrics["zero_valid_family_state_rate"] = None
+            metrics["zero_valid_family_count"] = None
         else:
             zero = sum(
                 1
@@ -699,6 +705,7 @@ def candidate_support_metrics(
                 )
             )
             metrics["zero_valid_family_state_rate"] = zero / len(families)
+            metrics["zero_valid_family_count"] = zero
     jitter = [
         point
         for point in point_list
@@ -721,6 +728,8 @@ def candidate_support_metrics(
     ]
     metrics.update(
         {
+            "view_jitter_evaluated_count": len(jitter),
+            "view_jitter_bounded_count": len(bounded),
             "nonzero_jitter_fraction": len(nonzero) / len(jitter) if jitter else None,
             "bounded_jitter_declaration_fraction": len(bounded) / len(jitter) if jitter else None,
             "bounded_jitter_cap_compliance_fraction": len(compliant) / len(bounded) if bounded else None,
@@ -1017,6 +1026,7 @@ def read_bundle(path: Path | str, *, expected_binding: Mapping[str, str]) -> Can
 
 __all__ = [
     "SCHEMA_ID",
+    "CANDIDATE_SUPPORT_METRICS_REVISION",
     "BINDING_KEYS",
     "CandidateBenchmark",
     "CandidateBenchmarkBundle",

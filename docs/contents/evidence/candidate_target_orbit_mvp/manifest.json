@@ -16,9 +16,12 @@
   },
   "reducer": {
     "path": "docs/contents/evidence/candidate_target_orbit_mvp/build_evidence.py",
-    "sha256": "b4bc4c701e065a537f3e1c5aeb4fdf878638a38999bc18cdb9a013578591ddeb",
+    "sha256": "5d1e4e851353b520fba39cbee68d09c3eac0336ffa4b6f3e5985951cb6dca7d6",
     "command": "cd aria_nbv && python ../docs/contents/evidence/candidate_target_orbit_mvp/build_evidence.py --baseline-store /ABSOLUTE/OUTPUT/realistic_core.zarr --candidate-store /ABSOLUTE/OUTPUT/target_orbit_mvp.zarr",
     "canonical_geometry_owner": "aria_nbv.rollouts.inspection.proposal_support_geometry",
+    "canonical_metrics_owner": "aria_nbv.rollouts.candidate_benchmark.candidate_support_metrics",
+    "canonical_metrics_revision": 1,
+    "canonical_plot_owner": "aria_nbv.rollouts.candidate_support_plotting.candidate_ground_support_figure",
     "alignment": "target_aligned_z_up",
     "origin": "factual_expansion_pose",
     "scale": "current_target_distance"
@@ -28,7 +31,7 @@
     "sha256": "e0b348ec59ba428c62c2f5ba4d11a81c8946f70a3dc57f7662adcf73523ee0bc",
     "row_count": 240,
     "summary_path": "docs/contents/evidence/candidate_target_orbit_mvp/summary.json",
-    "summary_sha256": "3e5ab2b64804f9e461fad4eda538e924171d06f617ce9cbd1cec91f1780a5fa9"
+    "summary_sha256": "92c838f47c311461dc9ebd962b869c280db2b139416efd6f931b95b031fd21b5"
   },
   "raw_artifacts": {
     "baseline_store_manifest_sha256": "6dc2c6d4425a5b66e4c1360476fb50588626a7080b3c99b144ef99cccceee7a2",
@@ -119,7 +122,7 @@
     "target_side_neutral_count": 0,
     "target_side_balance_undefined_scene_count": 0,
     "target_side_balance_undefined_state_count": 0,
-    "mean_circular_target_orbit_span_deg": 70.21970214915316,
+    "mean_circular_target_orbit_span_deg": 70.21970214915319,
     "target_orbit_span_undefined_scene_count": 0,
     "target_orbit_span_undefined_state_count": 0,
     "target_center_inside_calibrated_image_count": 93,
@@ -156,7 +159,7 @@
   "plot": {
     "path": "docs/contents/evidence/candidate_target_orbit_mvp/candidate-centers.png",
     "interactive_path": "docs/contents/evidence/candidate_target_orbit_mvp/candidate-centers.html",
-    "source_html_sha256": "81d21e2b8c644b23f5954218af3ac6361a38ec34cee18d2ba5071dd816d86d35",
-    "sha256": "6ad71552903dcc7c6b9841f66223143797ecc536d60cfb10b7d3f58d57a0df51"
+    "source_html_sha256": "62af6004ecabc8cd7881f2ff6bb56a9da7a4396701cf91603e34768276983430",
+    "sha256": "a519525dd1c8e2287849b1caae0fa22ce8c219e30fb39dbf9c963560e6e5a9ba"
   }
 }

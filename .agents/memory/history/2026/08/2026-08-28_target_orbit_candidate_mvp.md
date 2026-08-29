@@ -45,6 +45,8 @@ target-normalized support plot.
 - The exact CUDA replay improved mean best target-root gain from `0.046999` to
   `0.048152`, target lateral balance from `0.000` to `0.208`, and worst-state
   valid support from `21` to `26` across two real scenes.
+- Supersession: the v3 target-aligned evidence recomputed target lateral balance
+  as `0.500`; the earlier `0.208` value mixed coordinate frames and is invalid.
 - One family/state pair still has zero valid rows. Family-aware refill and
   scale-up admission therefore remain unresolved rather than being hidden by
   aggregate validity.

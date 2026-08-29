@@ -313,22 +313,24 @@ def test_reporting_frames_are_canonical_reader_projection(tmp_path: Path) -> Non
         candidate_benchmark_report_frames(path, expected_binding={})
 
 
-def test_public_benchmark_figures_expose_five_named_groups_and_support_metadata() -> None:
+def test_public_benchmark_figures_expose_six_named_groups_and_support_metadata() -> None:
     figures = candidate_generation._candidate_benchmark_figures((_record(),))
     assert [figure.layout.title.text for figure in figures] == [
         "Candidate family attempted → valid → selected funnel",
+        "Candidate family survival",
         "Candidate support (target-normalized ground plane)",
         "Candidate support (target-normalized 3D)",
         "Candidate view jitter (bounded boxes and uncapped spherical support)",
         "Candidate benchmark resource and timing summary",
     ]
     assert all(trace.name for figure in figures for trace in figure.data)
-    assert {str(trace.name).split(", ")[0] for trace in figures[1].data} == {
+    assert {str(trace.name).split(", ")[0] for trace in figures[2].data} == {
         "Factual expansion/root",
         "forward",
         "target",
     }
-    trace = figures[2].data[0]
+    assert {str(value) for value in figures[1].data[0].x} == {"forward", "target"}
+    trace = figures[3].data[0]
     assert len(trace.x) == len(trace.y) == len(trace.z) == 2
     assert list(trace.customdata[:, 0]) == [3, 4]
     assert list(trace.customdata[:, 3]) == ["cfg-a", "cfg-b"]
@@ -339,9 +341,9 @@ def test_public_benchmark_figures_expose_five_named_groups_and_support_metadata(
 def test_public_benchmark_ground_plot_option_adds_valid_camera_forward_arrows() -> None:
     figures = candidate_generation._candidate_benchmark_figures((_record(),), show_view_directions=True)
 
-    assert len(figures[1].layout.annotations) == 2
-    assert all(annotation.showarrow for annotation in figures[1].layout.annotations)
-    first_arrow = figures[1].layout.annotations[0]
+    assert len(figures[2].layout.annotations) == 2
+    assert all(annotation.showarrow for annotation in figures[2].layout.annotations)
+    first_arrow = figures[2].layout.annotations[0]
     assert (first_arrow.ax, first_arrow.ay) == pytest.approx((0.1, 0.2))
     assert (first_arrow.x, first_arrow.y) == pytest.approx((0.14, 0.2))
 
@@ -371,7 +373,7 @@ def test_benchmark_figure_bulk_projection_preserves_point_status_and_funnel_tota
 
     figures = candidate_generation._candidate_benchmark_figures((_record(), additional))
 
-    support = figures[2].data[0]
+    support = figures[3].data[0]
     assert list(support.x) == [0.1, -0.2, 0.5]
     assert list(support.customdata[:, 2]) == ["valid", "selected", "invalid"]
     assert list(support.customdata[:, 3]) == ["cfg-a", "cfg-b", "unavailable"]
@@ -384,6 +386,7 @@ def test_benchmark_reader_filters_state_before_applying_candidate_limit(monkeypa
             "scene": "scene-a",
             "rollout_row_id": rollout_id,
             "step_row_id": step_id,
+            "mixture": "forward_component",
             "position": "forward_local",
             "candidate_row_id": candidate_id,
             "actor_action": True,
@@ -445,6 +448,7 @@ def test_benchmark_reader_joins_canonical_projection_and_bounds_state_request(mo
                 "scene": "scene",
                 "rollout_row_id": 4,
                 "step_row_id": 7,
+                "mixture": "target_component",
                 "position": "target_bearing_local",
                 "candidate_row_id": 11,
                 "actor_action": True,
@@ -481,6 +485,7 @@ def test_benchmark_reader_retains_counts_when_state_projection_is_unavailable(
                 "scene": "scene",
                 "rollout_row_id": 4,
                 "step_row_id": 7,
+                "mixture": "target_component",
                 "position": "target_bearing_local",
                 "candidate_row_id": 11,
                 "actor_action": True,
@@ -495,9 +500,18 @@ def test_benchmark_reader_retains_counts_when_state_projection_is_unavailable(
     assert result[0].families[0].attempted == 1
     assert result[0].families[0].valid == 1
     assert result[0].points == ()
+    assert result[0].families[0].family == "target_component"
+    assert result[0].lineage["family_identity"] == "mixture_component"
     assert result[0].lineage["proposal_support_unavailable_reason"] == "missing_target"
     figures = candidate_support_figures(result)
     for figure in figures[:2]:
+        assert "proposal support unavailable: missing_target" in {
+            annotation.text for annotation in figure.layout.annotations
+        }
+    panel_figures = candidate_generation._candidate_benchmark_figures(result)
+    assert list(panel_figures[0].data[0].y) == [1, 1, 0]
+    assert set(panel_figures[1].data[0].x) == {"target_component"}
+    for figure in panel_figures[2:4]:
         assert "proposal support unavailable: missing_target" in {
             annotation.text for annotation in figure.layout.annotations
         }
@@ -524,6 +538,7 @@ def test_benchmark_reader_applies_small_state_limit_after_complete_shell_project
             "scene": "scene",
             "rollout_row_id": 4,
             "step_row_id": 7,
+            "mixture": f"target_component_{candidate_id}",
             "position": "target_bearing_local",
             "candidate_row_id": candidate_id,
             "actor_action": True,
@@ -542,6 +557,54 @@ def test_benchmark_reader_applies_small_state_limit_after_complete_shell_project
 
     assert projection_calls == [{"rollout_row_ids": (4,), "step_row_ids": (7,), "max_candidates": None}]
     assert result[0].candidate_ids == (11,)
+    assert result[0].points[0].family == "target_component_11"
+    assert result[0].points[0].position == "target_bearing_local"
+
+
+def test_benchmark_reader_keeps_distinct_components_that_share_one_position(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from aria_nbv.rollouts import inspection
+
+    projected = tuple(
+        SimpleNamespace(candidate_row_id=candidate_id, frame_id="frame", x=float(candidate_id), y=0.0, z=0.0)
+        for candidate_id in (11, 12)
+    )
+    frame = SimpleNamespace(frame_id="frame", target_x=1.0, target_y=0.0, target_z=0.0)
+    monkeypatch.setattr(
+        inspection,
+        "proposal_support_geometry",
+        lambda *_args, **_kwargs: SimpleNamespace(points=projected, frames=(frame,), issues=()),
+    )
+    monkeypatch.setattr(
+        inspection,
+        "candidate_audit_rows",
+        lambda *_args, **_kwargs: [
+            {
+                "scene": "scene",
+                "rollout_row_id": 4,
+                "step_row_id": 7,
+                "mixture": family,
+                "position": "target_bearing_local",
+                "candidate_row_id": candidate_id,
+                "actor_action": True,
+                "selected": False,
+            }
+            for candidate_id, family in ((11, "radial_towards_target_bearing"), (12, "target_point_anchor"))
+        ],
+    )
+
+    result = benchmarks_from_reader(SimpleNamespace(root={}), state_key="rollout:4/step:7", candidate_limit=2)
+
+    assert [family.family for family in result[0].families] == [
+        "radial_towards_target_bearing",
+        "target_point_anchor",
+    ]
+    assert [point.family for point in result[0].points] == [
+        "radial_towards_target_bearing",
+        "target_point_anchor",
+    ]
+    assert {point.position for point in result[0].points} == {"target_bearing_local"}
 
 
 def test_benchmark_reader_does_not_hide_real_projection_failures(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -581,18 +644,19 @@ def test_benchmark_reader_uses_native_state_filters_and_bounded_limit(monkeypatc
 
 def test_empty_benchmark_figures_show_no_matching_or_resource_annotations() -> None:
     figures = candidate_generation._candidate_benchmark_figures(())
-    assert len(figures) == 5
+    assert len(figures) == 6
     assert [figure.layout.title.text for figure in figures] == [
         "Candidate family attempted → valid → selected funnel",
+        "Candidate family survival",
         "Candidate support (target-normalized ground plane)",
         "Candidate support (target-normalized 3D)",
         "Candidate view jitter (bounded boxes and uncapped spherical support)",
         "Candidate benchmark resource and timing summary",
     ]
-    for figure in figures[:4]:
+    for figure in figures[:5]:
         assert "No matching benchmark candidates" in {annotation.text for annotation in figure.layout.annotations}
     assert "unavailable: no persisted timing/resource facts" in {
-        annotation.text for annotation in figures[4].layout.annotations
+        annotation.text for annotation in figures[5].layout.annotations
     }
 
 
@@ -654,7 +718,7 @@ def test_benchmark_panel_dispatches_only_after_toggle_and_propagates_state_and_l
     validity_support._render_targets_and_support(Session())
     assert ("records", {"state_key": "state-1", "candidate_limit": 123}) in calls
     assert ("export", {"state_key": "state-1"}) in calls
-    assert sum(kind == "plot" for kind, _ in calls) == 5
+    assert sum(kind == "plot" for kind, _ in calls) == 6
     assert sum(kind == "download" for kind, _ in calls) == 1
 
 
@@ -718,3 +782,38 @@ def test_target_orbit_portable_reducer_retains_an_empty_expected_state() -> None
     assert summary["worst_state_valid_count"] == 0
     assert summary["oracle_opportunity_undefined_state_count"] == 1
     assert summary["oracle_opportunity_undefined_scene_count"] == 1
+
+
+def test_target_orbit_portable_reducer_uses_canonical_support_metrics() -> None:
+    repo_root = Path(__file__).resolve().parents[3]
+    namespace = runpy.run_path(str(repo_root / "docs/contents/evidence/candidate_target_orbit_mvp/build_evidence.py"))
+    rows = namespace["_read_rows"]()
+    state_rows = [row for row in rows if row["profile"] == "target_orbit_mvp" and row["scene"] == "889"]
+    points = namespace["_candidate_points"](state_rows)
+    canonical = candidate_support_metrics(
+        points,
+        configured_families=namespace["PROFILE_FAMILIES"]["target_orbit_mvp"],
+        projected_target_centers=sum(row["target_center_in_calibrated_image"] is True for row in state_rows),
+        total_target_centers=len(state_rows),
+    )
+    reduced = namespace["_state_metrics"](
+        state_rows,
+        namespace["PROFILE_FAMILIES"]["target_orbit_mvp"],
+    )
+
+    assert reduced["family_zero_rate"] == canonical["zero_valid_family_state_rate"]
+    assert reduced["family_zero_count"] == canonical["zero_valid_family_count"]
+    assert reduced["side_balance"] == canonical["target_side_count_balance"]
+    assert reduced["orbit_span_deg"] == canonical["target_relative_orbit_span_deg"]
+    assert reduced["projection_fraction"] == canonical["target_center_projection_fraction"]
+    assert reduced["jitter_nonzero_fraction"] == canonical["nonzero_jitter_fraction"]
+
+
+def test_target_orbit_shared_plot_gives_challenger_only_family_a_legend_entry() -> None:
+    repo_root = Path(__file__).resolve().parents[3]
+    namespace = runpy.run_path(str(repo_root / "docs/contents/evidence/candidate_target_orbit_mvp/build_evidence.py"))
+    figure = namespace["_candidate_plot"](namespace["_read_rows"](), show_view_directions=False)
+
+    orbit_traces = [trace for trace in figure.data if str(trace.name).split(", ")[0] == "target_orbit"]
+    assert orbit_traces
+    assert any(trace.showlegend for trace in orbit_traces)

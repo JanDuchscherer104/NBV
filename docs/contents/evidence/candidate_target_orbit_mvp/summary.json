@@ -39,7 +39,7 @@
     "family_state_pair_count": 8,
     "family_zero_valid_state_count": 1,
     "family_zero_valid_state_rate": 0.125,
-    "mean_circular_target_orbit_span_deg": 70.21970214915316,
+    "mean_circular_target_orbit_span_deg": 70.21970214915319,
     "mean_state_best_target_root_gain": 0.04815240344032645,
     "mean_target_side_count_balance": 0.5,
     "oracle_opportunity_undefined_scene_count": 0,

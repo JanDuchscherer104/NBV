@@ -10,7 +10,6 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
-import math
 from collections import defaultdict
 from collections.abc import Collection
 from pathlib import Path
@@ -18,6 +17,14 @@ from typing import Any
 
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
+
+from aria_nbv.rollouts.candidate_benchmark import (
+    CandidateBenchmark,
+    CandidateFamilyCounts,
+    CandidatePoint,
+    candidate_support_metrics,
+)
+from aria_nbv.rollouts.candidate_support_plotting import candidate_ground_support_figure
 
 HERE = Path(__file__).resolve().parent
 ROWS_PATH = HERE / "candidate-rows.jsonl"
@@ -41,7 +48,6 @@ PROFILE_FAMILIES = {
         }
     ),
 }
-TARGET_POSITIONS = {"target_bearing_local", "target_orbit"}
 
 
 def _sha256(path: Path) -> str:
@@ -149,118 +155,146 @@ def _mean(values: list[float]) -> float | None:
     return sum(values) / len(values) if values else None
 
 
-def _circular_span_deg(angles: list[float]) -> float | None:
-    if not angles:
-        return None
-    wrapped = sorted(angle % 360.0 for angle in angles)
-    gaps = [right - left for left, right in zip(wrapped, wrapped[1:], strict=False)]
-    gaps.append(wrapped[0] + 360.0 - wrapped[-1])
-    return 360.0 - max(gaps)
+def _candidate_points(rows: Collection[dict[str, Any]]) -> tuple[CandidatePoint, ...]:
+    """Project portable rows into the canonical candidate-support DTO."""
+
+    points = []
+    for row in rows:
+        direction_values = tuple(row.get(f"view_direction_{axis}") for axis in "xyz")
+        direction = (
+            None
+            if any(value is None for value in direction_values)
+            else tuple(float(value) for value in direction_values)
+        )
+        xyz = tuple(float(row[axis]) for axis in "xyz")
+        target_relative = tuple(
+            float(row[axis]) - float(row[f"target_{axis}"]) for axis in "xyz"
+        )
+        state_key = (
+            f"rollout:{int(row['rollout_row_id'])}/step:{int(row['step_row_id'])}"
+        )
+        points.append(
+            CandidatePoint(
+                candidate_id=int(row["candidate_row_id"]),
+                xyz=xyz,
+                family=str(row["family"]),
+                position=str(row["position"]),
+                actor_valid=bool(row["actor_valid"]),
+                selected=bool(row["selected"]),
+                state_key=state_key,
+                target_relative_xyz=target_relative,
+                view_direction_xyz=direction,
+                view_jitter_yaw_deg=row["view_jitter_yaw_deg"],
+                view_jitter_pitch_deg=row["view_jitter_pitch_deg"],
+                view_jitter_is_bounded=row["view_jitter_is_bounded"],
+                view_jitter_azimuth_limit_deg=row["view_jitter_azimuth_limit_deg"],
+                view_jitter_elevation_limit_deg=row["view_jitter_elevation_limit_deg"],
+            )
+        )
+    return tuple(points)
+
+
+def _profile_benchmarks(
+    rows: Collection[dict[str, Any]],
+) -> tuple[CandidateBenchmark, ...]:
+    """Build state records consumed by the shared candidate-support plot owner."""
+
+    grouped: dict[tuple[str, int, int], list[dict[str, Any]]] = defaultdict(list)
+    for row in rows:
+        grouped[
+            (str(row["scene"]), int(row["rollout_row_id"]), int(row["step_row_id"]))
+        ].append(row)
+    records = []
+    for (scene, rollout_id, step_id), state_rows in sorted(grouped.items()):
+        points = _candidate_points(state_rows)
+        families = []
+        for family in sorted({point.family for point in points}):
+            family_points = [point for point in points if point.family == family]
+            families.append(
+                CandidateFamilyCounts(
+                    family=family,
+                    applicable=True,
+                    attempted=len(family_points),
+                    valid=sum(point.actor_valid for point in family_points),
+                    selected=sum(point.selected for point in family_points),
+                    denominator=len(family_points),
+                )
+            )
+        targets = {
+            tuple(float(row[f"target_{axis}"]) for axis in "xyz") for row in state_rows
+        }
+        if len(targets) != 1:
+            raise ValueError(
+                f"portable evidence state {(scene, rollout_id, step_id)!r} spans multiple targets"
+            )
+        target_x, target_y, target_z = targets.pop()
+        records.append(
+            CandidateBenchmark(
+                state_key=f"rollout:{rollout_id}/step:{step_id}",
+                scene_key=scene,
+                families=tuple(families),
+                geometry={
+                    "target_x": target_x,
+                    "target_y": target_y,
+                    "target_z": target_z,
+                },
+                candidate_ids=tuple(point.candidate_id for point in points),
+                coordinates=tuple(point.xyz for point in points),
+                lineage={"family_identity": "mixture_component"},
+                points=points,
+            )
+        )
+    return tuple(records)
 
 
 def _state_metrics(
     rows: list[dict[str, Any]], families: Collection[str]
 ) -> dict[str, float | int | None]:
+    points = _candidate_points(rows)
     valid = [row for row in rows if row["actor_valid"]]
-    target_rows = [row for row in rows if row["position"] in TARGET_POSITIONS]
-    lateral = []
-    for row in target_rows:
-        value = float(row["y"]) - float(row["target_y"])
-        if math.isfinite(value):
-            lateral.append(value)
-    positive = sum(value > 1e-9 for value in lateral)
-    negative = sum(value < -1e-9 for value in lateral)
-    non_neutral = positive + negative
-    neutral = len(lateral) - non_neutral
-    angles = [
-        math.degrees(
-            math.atan2(
-                float(row["y"]) - float(row["target_y"]),
-                float(row["x"]) - float(row["target_x"]),
-            )
-        )
-        for row in target_rows
-        if math.hypot(
-            float(row["x"]) - float(row["target_x"]),
-            float(row["y"]) - float(row["target_y"]),
-        )
-        > 1e-9
-    ]
     gains = [
         float(row["target_root_gain"])
         for row in valid
         if row["target_root_gain"] is not None
     ]
     evaluated = [row for row in rows if row["target_view_evaluated"]]
-    jitter = [
-        row
-        for row in rows
-        if row["view_jitter_yaw_deg"] is not None
-        and row["view_jitter_pitch_deg"] is not None
-    ]
-    bounded = [row for row in jitter if row["view_jitter_is_bounded"] is True]
-    compliant = [
-        row
-        for row in bounded
-        if row["view_jitter_azimuth_limit_deg"] is not None
-        and row["view_jitter_elevation_limit_deg"] is not None
-        and abs(float(row["view_jitter_yaw_deg"]))
-        <= float(row["view_jitter_azimuth_limit_deg"])
-        and abs(float(row["view_jitter_pitch_deg"]))
-        <= float(row["view_jitter_elevation_limit_deg"])
-    ]
-    return {
-        "actor_valid_fraction": len(valid) / len(rows) if rows else 0.0,
-        "valid_count": len(valid),
-        "family_zero_rate": sum(
-            not any(row["family"] == family and row["actor_valid"] for row in rows)
-            for family in families
-        )
-        / len(families),
-        "family_zero_count": sum(
-            not any(row["family"] == family and row["actor_valid"] for row in rows)
-            for family in families
+    support = candidate_support_metrics(
+        points,
+        configured_families=families,
+        projected_target_centers=sum(
+            row["target_center_in_calibrated_image"] is True for row in evaluated
         ),
-        "side_balance": None
-        if not non_neutral
-        else 1.0 - abs(positive - negative) / non_neutral,
-        "side_positive_count": positive,
-        "side_negative_count": negative,
-        "side_neutral_count": neutral,
-        "side_balance_undefined": int(non_neutral == 0),
-        "orbit_span_deg": _circular_span_deg(angles),
+        total_target_centers=len(evaluated),
+    )
+    jitter_count = int(support["view_jitter_evaluated_count"] or 0)
+    bounded_count = int(support["view_jitter_bounded_count"] or 0)
+    return {
+        "actor_valid_fraction": support["actor_valid_fraction"] if rows else 0.0,
+        "valid_count": int(support["per_state_valid_support"] or 0),
+        "family_zero_rate": support["zero_valid_family_state_rate"],
+        "family_zero_count": int(support["zero_valid_family_count"] or 0),
+        "side_balance": support["target_side_count_balance"],
+        "side_positive_count": int(support["target_side_positive_count"] or 0),
+        "side_negative_count": int(support["target_side_negative_count"] or 0),
+        "side_neutral_count": int(support["target_side_neutral_count"] or 0),
+        "side_balance_undefined": int(support["target_side_balance_undefined"] or 0),
+        "orbit_span_deg": support["target_relative_orbit_span_deg"],
         "best_target_root_gain": max(gains) if gains else None,
         "oracle_opportunity_undefined": int(not gains),
-        "projection_fraction": (
-            sum(row["target_center_in_calibrated_image"] is True for row in evaluated)
-            / len(evaluated)
-            if evaluated
-            else None
-        ),
+        "projection_fraction": support["target_center_projection_fraction"],
         "projection_undefined": int(not evaluated),
-        "jitter_count": len(jitter),
-        "bounded_jitter_count": len(bounded),
-        "uncapped_spherical_count": sum(
-            row["view_jitter_is_bounded"] is False for row in jitter
-        ),
-        "jitter_nonzero_fraction": (
-            sum(
-                abs(float(row["view_jitter_yaw_deg"])) > 1e-9
-                or abs(float(row["view_jitter_pitch_deg"])) > 1e-9
-                for row in jitter
-            )
-            / len(jitter)
-            if jitter
-            else None
-        ),
-        "bounded_jitter_declaration_fraction": (
-            len(bounded) / len(jitter) if jitter else None
-        ),
-        "bounded_jitter_cap_compliance_fraction": (
-            len(compliant) / len(bounded) if bounded else None
-        ),
-        "jitter_undefined": int(not jitter),
-        "bounded_jitter_compliance_undefined": int(not bounded),
+        "jitter_count": jitter_count,
+        "bounded_jitter_count": bounded_count,
+        "uncapped_spherical_count": int(support["uncapped_spherical_count"] or 0),
+        "jitter_nonzero_fraction": support["nonzero_jitter_fraction"],
+        "bounded_jitter_declaration_fraction": support[
+            "bounded_jitter_declaration_fraction"
+        ],
+        "bounded_jitter_cap_compliance_fraction": support[
+            "bounded_jitter_cap_compliance_fraction"
+        ],
+        "jitter_undefined": int(jitter_count == 0),
+        "bounded_jitter_compliance_undefined": int(bounded_count == 0),
     }
 
 
@@ -391,7 +425,11 @@ def _profile_summary(
     }
 
 
-def _plot(rows: list[dict[str, Any]], *, show_view_directions: bool) -> None:
+def _candidate_plot(
+    rows: list[dict[str, Any]], *, show_view_directions: bool
+) -> go.Figure:
+    """Compose the shared ground-support view into the frozen two-profile layout."""
+
     figure = make_subplots(
         rows=1, cols=2, subplot_titles=("realistic_core", "target-orbit MVP")
     )
@@ -399,97 +437,24 @@ def _plot(rows: list[dict[str, Any]], *, show_view_directions: bool) -> None:
     colors = dict(
         zip(families, ("#1f77b4", "#2ca02c", "#ff7f0e", "#d62728"), strict=True)
     )
+    legend_names: set[str] = set()
     for column, profile in enumerate(PROFILES, start=1):
         profile_rows = [row for row in rows if row["profile"] == profile]
-        for family in families:
-            family_rows = [row for row in profile_rows if row["family"] == family]
-            if not family_rows:
-                continue
-            figure.add_trace(
-                go.Scatter(
-                    x=[row["x"] for row in family_rows],
-                    y=[row["y"] for row in family_rows],
-                    mode="markers",
-                    name=family,
-                    legendgroup=family,
-                    showlegend=column == 1,
-                    marker={
-                        "color": colors[family],
-                        "size": 8,
-                        "symbol": [
-                            "diamond"
-                            if row["selected"]
-                            else "circle"
-                            if row["actor_valid"]
-                            else "x"
-                            for row in family_rows
-                        ],
-                    },
-                    customdata=[
-                        [row["scene"], row["candidate_row_id"], row["actor_valid"]]
-                        for row in family_rows
-                    ],
-                    hovertemplate="scene=%{customdata[0]}<br>candidate=%{customdata[1]}<br>actor-valid=%{customdata[2]}<extra></extra>",
-                ),
-                row=1,
-                col=column,
-            )
-        figure.add_trace(
-            go.Scatter(
-                x=[0],
-                y=[0],
-                mode="markers",
-                name="Factual expansion/root",
-                showlegend=column == 1,
-                marker={"symbol": "cross", "size": 13, "color": "black"},
-            ),
-            row=1,
-            col=column,
+        profile_figure = candidate_ground_support_figure(
+            _profile_benchmarks(profile_rows),
+            show_view_directions=show_view_directions,
+            family_colors=colors,
         )
-        if show_view_directions:
-            for candidate in profile_rows:
-                if (
-                    not candidate["actor_valid"]
-                    or candidate["view_direction_x"] is None
-                ):
-                    continue
-                direction_x = float(candidate["view_direction_x"])
-                direction_y = float(candidate["view_direction_y"])
-                norm = math.hypot(direction_x, direction_y)
-                if norm <= 1e-9:
-                    continue
-                arrow_length = 0.04
-                axis_suffix = "" if column == 1 else str(column)
-                figure.add_annotation(
-                    x=float(candidate["x"]) + arrow_length * direction_x / norm,
-                    y=float(candidate["y"]) + arrow_length * direction_y / norm,
-                    ax=float(candidate["x"]),
-                    ay=float(candidate["y"]),
-                    xref=f"x{axis_suffix}",
-                    yref=f"y{axis_suffix}",
-                    axref=f"x{axis_suffix}",
-                    ayref=f"y{axis_suffix}",
-                    showarrow=True,
-                    arrowhead=2,
-                    arrowsize=0.7,
-                    arrowwidth=1.0,
-                    arrowcolor="rgba(40,40,40,0.65)",
-                )
-        targets = sorted(
-            {(float(row["target_x"]), float(row["target_y"])) for row in profile_rows}
-        )
-        figure.add_trace(
-            go.Scatter(
-                x=[target[0] for target in targets],
-                y=[target[1] for target in targets],
-                mode="markers",
-                name="Oracle task target centre",
-                showlegend=column == 1,
-                marker={"symbol": "star", "size": 14, "color": "#9467bd"},
-            ),
-            row=1,
-            col=column,
-        )
+        for trace in profile_figure.data:
+            name = str(trace.name)
+            trace.showlegend = name not in legend_names
+            legend_names.add(name)
+            figure.add_trace(trace, row=1, col=column)
+        for annotation in profile_figure.layout.annotations:
+            payload = annotation.to_plotly_json()
+            for key in ("xref", "yref", "axref", "ayref"):
+                payload.pop(key, None)
+            figure.add_annotation(**payload, row=1, col=column)
     figure.update_xaxes(
         title_text="target-forward displacement / d", scaleanchor="y", scaleratio=1
     )
@@ -501,7 +466,7 @@ def _plot(rows: list[dict[str, Any]], *, show_view_directions: bool) -> None:
         template="plotly_white",
         width=1800,
         height=1050,
-        legend_title="candidate family / anchor",
+        legend_title="candidate family / status / anchor",
         annotations=[
             *figure.layout.annotations,
             {
@@ -519,6 +484,13 @@ def _plot(rows: list[dict[str, Any]], *, show_view_directions: bool) -> None:
             },
         ],
     )
+    return figure
+
+
+def _plot(rows: list[dict[str, Any]], *, show_view_directions: bool) -> None:
+    """Write canonical interactive and raster evidence from portable rows."""
+
+    figure = _candidate_plot(rows, show_view_directions=show_view_directions)
     html_path = ARROW_HTML_PATH if show_view_directions else HTML_PATH
     png_path = ARROW_PNG_PATH if show_view_directions else PNG_PATH
     html_path.write_text(
