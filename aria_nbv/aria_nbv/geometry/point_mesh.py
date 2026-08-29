@@ -172,6 +172,32 @@ class PreparedMeshQuery:
             and self.verts.dtype == dtype
         )
 
+    def matches_request(
+        self,
+        verts: torch.Tensor,
+        faces: torch.Tensor,
+        *,
+        device: torch.device | str,
+        dtype: torch.dtype,
+        mesh: "trimesh.Trimesh | None",
+    ) -> bool:
+        """Validate immediate use against exact sources, including inference tensors.
+
+        Matching unavailable mutation counters are safe only at this explicit
+        request boundary. :meth:`matches` remains fail-closed for cross-request
+        cache reuse.
+        """
+
+        return (
+            verts is self._source_verts
+            and faces is self._source_faces
+            and _tensor_version(verts) == self._source_verts_version
+            and _tensor_version(faces) == self._source_faces_version
+            and mesh is self._source_mesh
+            and self.verts.device == _resolved_device(device)
+            and self.verts.dtype == dtype
+        )
+
     def point_distance(self, points: torch.Tensor, *, squared: bool = False) -> torch.Tensor:
         """Return point-to-mesh distances for matching device/dtype points.
 
