@@ -907,13 +907,10 @@ def _bounded_promotion_marker_blocker(store: Path, manifest: Mapping[str, Any]) 
         return f"Promoted rollout {store.name} has an incomplete promotion marker pair."
     payloads: list[dict[str, Any]] = []
     for path in markers:
-        try:
-            payload = json.loads(path.read_text(encoding="utf-8"))
-        except (OSError, ValueError, TypeError) as exc:
-            return f"Promoted rollout {store.name} marker {path.name} is unreadable: {type(exc).__name__}: {exc}"
-        if not isinstance(payload, dict):
-            return f"Promoted rollout {store.name} marker {path.name} is not a JSON object."
-        payloads.append(payload)
+        status, payload = _read_bounded_json_object(path)
+        if payload is None:
+            return f"Promoted rollout {store.name} marker {path.name} is {status.replace('_', ' ')}."
+        payloads.append(dict(payload))
     success, owner = payloads
     if success.get("sidecar_kind") != "rollout_shard_success":
         return f"Promoted rollout {store.name} success marker has no typed sidecar kind."

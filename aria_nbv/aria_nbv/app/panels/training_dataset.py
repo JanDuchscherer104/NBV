@@ -111,33 +111,70 @@ def _retained_deep_statistics(state: Any, identity: str) -> dict[str, Any] | Non
 
 
 @st.cache_data(show_spinner="Inspecting manifests and indexes…", max_entries=32)  # type: ignore[untyped-decorator]
-def _cached_bundle_summary(
+def _cached_bundle_summary_inner(
     request: DatasetBundleSummaryRequest,
 ) -> DatasetBundleEvidence:
-    """Build evidence from one complete generation-bound domain request."""
+    """Cache one frozen summary product by its complete domain request."""
 
     return inspect_dataset_bundle(request)
 
 
+def _cached_bundle_summary(request: DatasetBundleSummaryRequest) -> DatasetBundleEvidence:
+    """Return summary evidence only while its request generation stays current."""
+
+    assert_dataset_bundle_generation_current(request.generation)
+    result = cast(DatasetBundleEvidence, _cached_bundle_summary_inner(request))
+    assert_dataset_bundle_generation_current(request.generation)
+    return result
+
+
 @st.cache_data(show_spinner="Scanning rollout arrays and target identities…", max_entries=16)  # type: ignore[untyped-decorator]
-def _cached_deep_statistics(
+def _cached_deep_statistics_inner(
     root_store: str,
     rollout_stores: tuple[str, ...],
     generation: DatasetBundleGeneration,
 ) -> dict[str, Any]:
-    """Return deep rollout statistics cached by immutable artifact identity."""
+    """Cache deep rollout statistics by immutable artifact identity."""
 
     selection = DatasetBundleSelection(
         Path(root_store),
         tuple(Path(path) for path in rollout_stores),
     )
+    return compute_dataset_bundle_deep_statistics(selection)
+
+
+def _cached_deep_statistics(
+    root_store: str,
+    rollout_stores: tuple[str, ...],
+    generation: DatasetBundleGeneration,
+) -> dict[str, Any]:
+    """Return cached deep evidence only while its generation stays current."""
+
     assert_dataset_bundle_generation_current(generation)
-    result = compute_dataset_bundle_deep_statistics(selection)
+    result = cast(dict[str, Any], _cached_deep_statistics_inner(root_store, rollout_stores, generation))
     assert_dataset_bundle_generation_current(generation)
     return result
 
 
 @st.cache_data(show_spinner="Constructing Q_H datasets and DataModule…", max_entries=8)  # type: ignore[untyped-decorator]
+def _cached_qh_readiness_inner(
+    root_store: str,
+    rollout_stores: tuple[str, ...],
+    generation: DatasetBundleGeneration,
+    batch_size: int,
+    seed: int,
+    contract: QhReadinessContract,
+) -> QhCorpusReadiness:
+    """Cache the explicit Q_H dataset/DataModule readiness product."""
+
+    return build_qh_corpus_readiness(
+        DatasetBundleSelection(Path(root_store), tuple(Path(path) for path in rollout_stores)),
+        contract=contract,
+        batch_size=batch_size,
+        seed=seed,
+    )
+
+
 def _cached_qh_readiness(
     root_store: str,
     rollout_stores: tuple[str, ...],
@@ -146,20 +183,40 @@ def _cached_qh_readiness(
     seed: int,
     contract: QhReadinessContract,
 ) -> QhCorpusReadiness:
-    """Cross the real Q_H dataset/DataModule seam after explicit request."""
+    """Return cached Q_H readiness only while its generation stays current."""
 
     assert_dataset_bundle_generation_current(generation)
-    result = build_qh_corpus_readiness(
-        DatasetBundleSelection(Path(root_store), tuple(Path(path) for path in rollout_stores)),
-        contract=contract,
-        batch_size=batch_size,
-        seed=seed,
+    result = cast(
+        QhCorpusReadiness,
+        _cached_qh_readiness_inner(root_store, rollout_stores, generation, batch_size, seed, contract),
     )
     assert_dataset_bundle_generation_current(generation)
     return result
 
 
 @st.cache_data(show_spinner="Reading one Q_H chain and collating one batch…", max_entries=8)  # type: ignore[untyped-decorator]
+def _cached_qh_preview_inner(
+    root_store: str,
+    rollout_stores: tuple[str, ...],
+    generation: DatasetBundleGeneration,
+    stage: str,
+    chain_index: int,
+    batch_size: int,
+    seed: int,
+    contract: QhReadinessContract,
+) -> QhBatchPreview:
+    """Cache one explicitly requested bounded chain and DataLoader batch."""
+
+    return preview_qh_batch(
+        DatasetBundleSelection(Path(root_store), tuple(Path(path) for path in rollout_stores)),
+        contract=contract,
+        stage=stage,
+        chain_index=chain_index,
+        batch_size=batch_size,
+        seed=seed,
+    )
+
+
 def _cached_qh_preview(
     root_store: str,
     rollout_stores: tuple[str, ...],
@@ -170,16 +227,21 @@ def _cached_qh_preview(
     seed: int,
     contract: QhReadinessContract,
 ) -> QhBatchPreview:
-    """Materialize one bounded chain and DataLoader batch after explicit request."""
+    """Return a cached Q_H preview only while its generation stays current."""
 
     assert_dataset_bundle_generation_current(generation)
-    result = preview_qh_batch(
-        DatasetBundleSelection(Path(root_store), tuple(Path(path) for path in rollout_stores)),
-        contract=contract,
-        stage=stage,
-        chain_index=chain_index,
-        batch_size=batch_size,
-        seed=seed,
+    result = cast(
+        QhBatchPreview,
+        _cached_qh_preview_inner(
+            root_store,
+            rollout_stores,
+            generation,
+            stage,
+            chain_index,
+            batch_size,
+            seed,
+            contract,
+        ),
     )
     assert_dataset_bundle_generation_current(generation)
     return result
@@ -188,10 +250,10 @@ def _cached_qh_preview(
 def _clear_training_dataset_caches() -> None:
     """Clear this page's cached read models and selection-bound session results."""
 
-    _cached_bundle_summary.clear()
-    _cached_deep_statistics.clear()
-    _cached_qh_readiness.clear()
-    _cached_qh_preview.clear()
+    _cached_bundle_summary_inner.clear()
+    _cached_deep_statistics_inner.clear()
+    _cached_qh_readiness_inner.clear()
+    _cached_qh_preview_inner.clear()
     _clear_training_dataset_results()
 
 
@@ -783,12 +845,12 @@ def render_training_dataset_page() -> None:  # pragma: no cover - Streamlit UI
         st.subheader("Bundle readiness")
         root_payload = evidence.root.to_jsonable()
         split_counts = cast(dict[str, int], root_payload.get("split_counts", {}))
-        root_samples = sum(split_counts.values())
+        root_samples = evidence.root.get("sample_count")
         rollout_payloads = [row.to_jsonable() for row in evidence.rollouts]
         included_rollouts = [row for row in rollout_payloads if bool(row.get("included_in_training_totals"))]
         rollout_counts = [row.get("counts", {}) for row in included_rollouts]
         summary_columns = st.columns(5)
-        summary_columns[0].metric("Root samples", f"{root_samples:,}")
+        summary_columns[0].metric("Root samples", _metric_value(root_samples))
         summary_columns[1].metric("Compatible rollout stores", f"{len(included_rollouts)} / {len(evidence.rollouts)}")
         summary_columns[2].metric(
             "Rollouts", _metric_value(sum(int(count.get("rollouts", 0)) for count in rollout_counts))

@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import inspect
 import json
-from collections.abc import Generator, Iterable
+from collections.abc import Callable, Generator, Iterable
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, cast, get_type_hints
@@ -17,6 +17,8 @@ import streamlit as st
 from streamlit.testing.v1 import AppTest
 
 import aria_nbv.app.panels.training_dataset as training_dataset
+import aria_nbv.dataset_bundle as dataset_bundle
+from aria_nbv.app.panels._stored_rollouts import session as stored_rollout_session
 from aria_nbv.app.panels.training_dataset import (
     _cached_deep_statistics,
     _cached_qh_preview,
@@ -46,10 +48,12 @@ from aria_nbv.dataset_bundle import (
     DatasetBundleSummaryRequest,
     QhBatchPreview,
     QhCorpusReadiness,
+    QhStageReadiness,
     build_dataset_bundle_summary,
     capture_dataset_bundle_generation,
 )
 from aria_nbv.rollouts.zarr_store import ROLLOUT_ZARR_SCHEMA_VERSION
+from aria_nbv.utils import Stage
 from aria_nbv.utils.fingerprints import stable_msgspec_hash
 
 _PATH_CONFIG_FIELDS = (
@@ -210,6 +214,20 @@ def test_hub_discovers_composes_and_scans_explicit_stores(
     assert root.as_posix() in str(app.session_state)
 
 
+def test_unavailable_root_sample_count_is_never_rendered_as_zero(
+    isolated_path_config: PathConfig,
+    tmp_path: Path,
+) -> None:
+    root, _source_hash = _write_root_store(isolated_path_config.offline_cache_dir)
+    (root / "sample_index.jsonl").write_text("not-json\n", encoding="utf-8")
+
+    app = _app(tmp_path).run()
+
+    assert not app.exception
+    assert _metrics(app)["Root samples"] == "Unavailable"
+    assert any("Blocked" in error.value for error in app.error)
+
+
 def test_initial_render_never_dispatches_deep_or_qh_acquisition(
     monkeypatch: pytest.MonkeyPatch,
     isolated_path_config: PathConfig,
@@ -234,6 +252,29 @@ def test_initial_render_never_dispatches_deep_or_qh_acquisition(
     assert calls == {"deep": 0, "qh": 0, "preview": 0}
 
 
+def test_initial_summary_never_opens_deep_vin_or_rollout_readers(
+    monkeypatch: pytest.MonkeyPatch,
+    isolated_path_config: PathConfig,
+    tmp_path: Path,
+) -> None:
+    _root, source_hash = _write_root_store(isolated_path_config.offline_cache_dir)
+    rollout = _write_rollout_store(isolated_path_config.offline_cache_dir, source_hash)
+
+    def _unexpected_reader(*_args: object, **_kwargs: object) -> Any:
+        pytest.fail("initial summary opened a deep array reader")
+
+    monkeypatch.setattr(dataset_bundle, "VinOfflineStoreReader", _unexpected_reader)
+    monkeypatch.setattr(dataset_bundle, "RolloutZarrStoreReader", _unexpected_reader)
+
+    app = _app(tmp_path).run()
+    app.multiselect[0].set_value([rollout.as_posix()])
+    app = app.run()
+
+    assert not app.exception
+    assert _metrics(app)["Root samples"] == "2"
+    assert _metrics(app)["Compatible rollout stores"] == "1 / 1"
+
+
 def test_cached_bundle_summary_accepts_one_complete_request() -> None:
     signature = inspect.signature(training_dataset._cached_bundle_summary)
 
@@ -247,17 +288,26 @@ def test_initial_summary_failure_is_contained_and_actionable(
     tmp_path: Path,
 ) -> None:
     _write_root_store(isolated_path_config.offline_cache_dir)
+    app = _app(tmp_path)
+    for key in (
+        training_dataset._VALIDATED_STATE_KEY,
+        training_dataset._DEEP_STATE_KEY,
+        training_dataset._QH_READINESS_STATE_KEY,
+        training_dataset._QH_PREVIEW_STATE_KEY,
+    ):
+        app.session_state[key] = ("stale-generation", "stale-sentinel")
 
     def _fail(_request: DatasetBundleSummaryRequest) -> Any:
         raise RuntimeError("summary-sentinel")
 
     monkeypatch.setattr(training_dataset, "_cached_bundle_summary", _fail)
 
-    app = _app(tmp_path).run()
+    app = app.run()
 
     assert not app.exception
     assert any("Bundle summary failed" in error.value for error in app.error)
     assert any("summary-sentinel" in error.value for error in app.error)
+    assert "stale-sentinel" not in str(app.session_state)
 
 
 def test_validation_failure_is_section_local_and_drops_retained_evidence(
@@ -317,6 +367,8 @@ def test_dispatched_section_failure_drops_stale_evidence(
     _write_root_store(isolated_path_config.offline_cache_dir)
     app = _app(tmp_path).run()
     app.session_state[state_key] = ("stale-generation", "stale-sentinel")
+    if button_label == "Preflight Q_H corpus":
+        app.session_state[training_dataset._QH_PREVIEW_STATE_KEY] = ("stale-generation", "stale-preview")
 
     def _fail(*_args: object, **_kwargs: object) -> Any:
         raise RuntimeError("section-sentinel")
@@ -329,6 +381,150 @@ def test_dispatched_section_failure_drops_stale_evidence(
     assert any(diagnostic in error.value for error in app.error)
     assert any("section-sentinel" in error.value for error in app.error)
     assert state_key not in str(app.session_state)
+    if button_label == "Preflight Q_H corpus":
+        assert training_dataset._QH_PREVIEW_STATE_KEY not in str(app.session_state)
+
+
+def test_qh_preview_failure_drops_stale_preview(
+    monkeypatch: pytest.MonkeyPatch,
+    isolated_path_config: PathConfig,
+    tmp_path: Path,
+) -> None:
+    root, _source_hash = _write_root_store(isolated_path_config.offline_cache_dir)
+    readiness = QhCorpusReadiness(
+        selection=DatasetBundleSelection(root, ()),
+        verdict="Ready",
+        blockers=(),
+        stages=(QhStageReadiness(Stage.TRAIN, True, 1, 1, 1, ("scene-a",), 1, {}),),
+        contract={},
+        actor_contract={},
+        loader_settings={"batch_size": 1, "seed": 0},
+        scene_disjoint=True,
+        storage=(),
+    )
+    monkeypatch.setattr(training_dataset, "_cached_qh_readiness", lambda *_args, **_kwargs: readiness)
+    app = _app(tmp_path).run()
+    preflight = next(button for button in app.button if button.label == "Preflight Q_H corpus")
+    app = preflight.click().run()
+    app.session_state[training_dataset._QH_PREVIEW_STATE_KEY] = ("stale-generation", "stale-preview")
+
+    def _fail_preview(*_args: object, **_kwargs: object) -> Any:
+        raise RuntimeError("preview-sentinel")
+
+    monkeypatch.setattr(training_dataset, "_cached_qh_preview", _fail_preview)
+    preview = next(button for button in app.button if button.label == "Preview one chain and batch")
+    app = preview.click().run()
+
+    assert not app.exception
+    assert any("Q_H preview failed" in error.value for error in app.error)
+    assert any("preview-sentinel" in error.value for error in app.error)
+    assert training_dataset._QH_PREVIEW_STATE_KEY not in str(app.session_state)
+
+
+@pytest.mark.parametrize("acquisition", ["summary", "validation", "deep", "readiness", "preview"])  # type: ignore[untyped-decorator]
+def test_warmed_cache_hits_remain_guarded_before_and_after_acquisition(
+    acquisition: str,
+    monkeypatch: pytest.MonkeyPatch,
+    isolated_path_config: PathConfig,
+) -> None:
+    root, _source_hash = _write_root_store(isolated_path_config.offline_cache_dir)
+    selection, generation = capture_dataset_bundle_generation(root, ())
+    root_arg = root.as_posix()
+    domain_calls = 0
+    acquire: Callable[[], Any]
+
+    if acquisition in {"summary", "validation"}:
+        cache_owner = training_dataset._cached_bundle_summary_inner
+        validate_rollouts = acquisition == "validation"
+        expected = build_dataset_bundle_summary(selection, validate_rollouts=validate_rollouts)
+
+        def counted_summary(_request: DatasetBundleSummaryRequest) -> Any:
+            nonlocal domain_calls
+            domain_calls += 1
+            return expected
+
+        monkeypatch.setattr(training_dataset, "inspect_dataset_bundle", counted_summary)
+
+        def acquire_summary() -> Any:
+            return training_dataset._cached_bundle_summary(
+                DatasetBundleSummaryRequest(
+                    selection=selection,
+                    generation=generation,
+                    validate_rollouts=validate_rollouts,
+                )
+            )
+
+        acquire = acquire_summary
+    elif acquisition == "deep":
+        cache_owner = training_dataset._cached_deep_statistics_inner
+
+        def counted_deep(_selection: DatasetBundleSelection) -> dict[str, Any]:
+            nonlocal domain_calls
+            domain_calls += 1
+            return {"aggregate": {}}
+
+        monkeypatch.setattr(training_dataset, "compute_dataset_bundle_deep_statistics", counted_deep)
+
+        def acquire_deep() -> Any:
+            return training_dataset._cached_deep_statistics(root_arg, (), generation)
+
+        acquire = acquire_deep
+    elif acquisition == "readiness":
+        cache_owner = training_dataset._cached_qh_readiness_inner
+        expected_readiness = QhCorpusReadiness(selection, "Blocked", ("fixture",), (), None, None, {}, None, ())
+
+        def counted_readiness(*_args: Any, **_kwargs: Any) -> QhCorpusReadiness:
+            nonlocal domain_calls
+            domain_calls += 1
+            return expected_readiness
+
+        monkeypatch.setattr(training_dataset, "build_qh_corpus_readiness", counted_readiness)
+
+        def acquire_readiness() -> Any:
+            return training_dataset._cached_qh_readiness(
+                root_arg, (), generation, 1, 0, training_dataset._QH_READINESS_CONTRACT
+            )
+
+        acquire = acquire_readiness
+    else:
+        cache_owner = training_dataset._cached_qh_preview_inner
+        preview = QhBatchPreview(Stage.TRAIN, 0, {}, 1, ({},), (1,), {}, {}, 0, 0, 1, 1)
+
+        def counted_preview(*_args: Any, **_kwargs: Any) -> QhBatchPreview:
+            nonlocal domain_calls
+            domain_calls += 1
+            return preview
+
+        monkeypatch.setattr(training_dataset, "preview_qh_batch", counted_preview)
+
+        def acquire_preview() -> Any:
+            return training_dataset._cached_qh_preview(
+                root_arg, (), generation, "train", 0, 1, 0, training_dataset._QH_READINESS_CONTRACT
+            )
+
+        acquire = acquire_preview
+
+    cache_owner.clear()
+    acquire()
+    assert domain_calls == 1
+    guard_calls = 0
+
+    def counted_guard(_generation: Any) -> None:
+        nonlocal guard_calls
+        guard_calls += 1
+
+    monkeypatch.setattr(training_dataset, "assert_dataset_bundle_generation_current", counted_guard)
+    acquire()
+    assert guard_calls == 2
+    assert domain_calls == 1
+
+    monkeypatch.undo()
+    manifest = root / "manifest.json"
+    manifest.write_bytes(manifest.read_bytes() + b"\n")
+    with pytest.raises(DatasetBundleGenerationChangedError):
+        acquire()
+    assert domain_calls == 1
+    cache_owner.clear()
 
 
 @pytest.mark.parametrize("acquisition", ["deep", "readiness", "preview"])  # type: ignore[untyped-decorator]
@@ -542,6 +738,30 @@ def test_qh_control_change_clears_displayed_readiness_and_preview(monkeypatch: p
     assert state == {}
 
 
+def test_training_dataset_refresh_is_page_local_to_stored_rollouts(monkeypatch: pytest.MonkeyPatch) -> None:
+    state = {
+        training_dataset._VALIDATED_STATE_KEY: object(),
+        training_dataset._DEEP_STATE_KEY: object(),
+        training_dataset._QH_READINESS_STATE_KEY: object(),
+        training_dataset._QH_PREVIEW_STATE_KEY: object(),
+        stored_rollout_session.CORPUS_SUMMARY_STATE_KEY: object(),
+        "unrelated:test-sentinel": object(),
+    }
+    monkeypatch.setattr(st, "session_state", state)
+    monkeypatch.setattr(
+        stored_rollout_session,
+        "clear_rollout_page_caches",
+        lambda: pytest.fail("Training Dataset refresh cleared Stored Rollouts"),
+    )
+
+    training_dataset._clear_training_dataset_caches()
+
+    assert stored_rollout_session.CORPUS_SUMMARY_STATE_KEY in state
+    assert "unrelated:test-sentinel" in state
+    assert not any(key.startswith("training_dataset_") for key in state)
+    assert "_stored_rollouts" not in inspect.getsource(training_dataset._clear_training_dataset_caches)
+
+
 def test_page_retained_slots_reject_invalid_or_stale_values() -> None:
     evidence = cast(Any, SimpleNamespace())
     assert _retained_bundle_evidence(("digest", evidence), "digest") is None
@@ -567,6 +787,11 @@ def test_download_payload_is_deterministic_and_keeps_denominators_distinct(tmp_p
     payload = json.loads(first)
 
     assert first == second
+    expected = evidence.to_jsonable()
+    expected["deep_statistics"] = deep
+    expected["q_h_readiness"] = None
+    expected["q_h_batch_preview"] = None
+    assert first == (json.dumps(expected, indent=2, sort_keys=True) + "\n").encode()
     assert payload["aggregate"]["persisted_rollout_target_rows"] == 2
     assert payload["deep_statistics"]["aggregate"] == deep["aggregate"]
 

@@ -828,6 +828,31 @@ def test_malformed_promotion_marker_pair_is_visible_but_excluded(tmp_path: Path)
     assert any(finding.code == "rollout_promotion_invalid" for finding in evidence.findings)
 
 
+def test_oversized_promotion_marker_is_bounded_visible_and_excluded(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    root, source_hash = _write_root_store(tmp_path)
+    rollout = _write_rollout_store(tmp_path, name="oversized-promotion.zarr", source_hash=source_hash)
+    (rollout / "_SUCCESS.json").write_bytes(b"{" + b" " * dataset_bundle._MAX_AUTHORITATIVE_JSON_BYTES + b"}")
+    (rollout / "_owner.json").write_text("{}", encoding="utf-8")
+    original_read_text = Path.read_text
+
+    def bounded_only(path: Path, *args: Any, **kwargs: Any) -> str:
+        if path.name in {"_SUCCESS.json", "_owner.json"}:
+            pytest.fail("promotion markers must not use unbounded read_text")
+        return original_read_text(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "read_text", bounded_only)
+
+    evidence = build_dataset_bundle_summary(DatasetBundleSelection(root, (rollout,)))
+
+    assert evidence.rollouts[0]["included_in_training_totals"] is False
+    assert evidence.aggregate["compatible_rollout_store_count"] == 0
+    finding = next(finding for finding in evidence.findings if finding.code == "rollout_promotion_invalid")
+    assert "_SUCCESS.json is oversized" in finding.message
+
+
 def test_typed_promotion_marker_pair_remains_eligible_without_deep_validation(tmp_path: Path) -> None:
     root, source_hash = _write_root_store(tmp_path)
     rollout = _write_rollout_store(tmp_path, name="promoted.zarr", source_hash=source_hash)
