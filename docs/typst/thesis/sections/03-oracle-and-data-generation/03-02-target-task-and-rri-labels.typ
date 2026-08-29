@@ -119,7 +119,7 @@ $
 $
 
 Let $bold(f)=bold(e)_z$ be the rig-forward unit vector, $bold(b)_e$ the supplied
-target bearing in the reference frame, $bold(l)_e = op("unit")(bold(e)_y times
+target bearing in the reference frame, $bold(l)_e = op("normalize")(bold(e)_y times
 bold(b)_e)$ the horizontal lateral direction, and $bold(e)_y$ the world-up
 direction expressed in the sampling frame. The family directions are:
 

@@ -3,7 +3,7 @@
 #let action = (
     space: $ cal(A)^"cont" subset bb(R)^3 times op("SO")(2) $,
     unit_vector: $
-      op("unit")(bold(v)) = bold(v) / norm(bold(v))_2,
+      op("normalize")(bold(v)) = bold(v) / norm(bold(v))_2,
       quad
       bold(v) != bold(0)
     $,
@@ -26,24 +26,24 @@
     $,
     capped_direction: $
       bold(d)_i^0 =
-      op("unit")((sqrt(1 - y'^2) sin psi', y', sqrt(1 - y'^2) cos psi'))
+      op("normalize")((sqrt(1 - y'^2) sin psi', y', sqrt(1 - y'^2) cos psi'))
     $,
     family_directions: $
       bold(d)_i^"forward"
       =
-      op("unit")(bold(f) + alpha_f (bold(d)_i^0 - (bold(d)_i^0 dot bold(f)) bold(f))),
+      op("normalize")(bold(f) + alpha_f (bold(d)_i^0 - (bold(d)_i^0 dot bold(f)) bold(f))),
       quad
       alpha_f = 0.45
       \
       bold(d)_i^"target"
       =
-      op("unit")(bold(b)_e + alpha_t (bold(d)_i^0 - (bold(d)_i^0 dot bold(b)_e) bold(b)_e)),
+      op("normalize")(bold(b)_e + alpha_t (bold(d)_i^0 - (bold(d)_i^0 dot bold(b)_e) bold(b)_e)),
       quad
       alpha_t = 0.4
       \
       bold(d)_i^"bypass"
       =
-      op("unit")(
+      op("normalize")(
         0.55 bold(b)_e
         + 0.85 op("sign")(d_(i,x)^0) bold(l)_e
         + op("clip")(d_(i,y)^0, -0.35, 0.35) bold(e)_y
@@ -55,10 +55,10 @@
       bold(c)_i^w = bold(T)_r^w (r_i bold(d)_i^(k(i)))
     $,
     target_lookat_frame: $
-      bold(z)_i^w = op("unit")(bold(p)_e - bold(c)_i^w),
+      bold(z)_i^w = op("normalize")(bold(p)_e - bold(c)_i^w),
       quad
       bold(y)_i^w =
-      op("unit")(bold(e)_y - (bold(e)_y^T bold(z)_i^w) bold(z)_i^w),
+      op("normalize")(bold(e)_y - (bold(e)_y^T bold(z)_i^w) bold(z)_i^w),
       quad
       bold(x)_i^w = bold(y)_i^w times bold(z)_i^w
     $,
