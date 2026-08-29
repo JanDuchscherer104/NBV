@@ -12,6 +12,7 @@ import json
 import os
 import platform
 from dataclasses import asdict, dataclass
+from functools import lru_cache
 from typing import Any, Literal, cast
 
 import torch
@@ -42,6 +43,8 @@ class GeometryBackendProvenance:
     pytorch3d_version: str | None
     pytorch3d_url: str | None
     pytorch3d_commit: str | None
+    pytorch3d_cuda_available: bool
+    pytorch3d_cuda_error: str | None
     mojo_available: bool
     mojo_import_error: str | None
     mojo_operations: tuple[str, ...]
@@ -69,8 +72,7 @@ def resolve_geometry_backend(requested: GeometryBackend | None = None) -> str:
 
     backend = requested or requested_backend_from_env()
     if backend == "cuda":
-        if not torch.cuda.is_available():
-            raise RuntimeError(f"{BACKEND_ENV_VAR}=cuda requires available CUDA")
+        _require_pytorch3d_cuda()
         return "cuda"
     if backend == "mojo":
         if not _mojo_available():
@@ -79,6 +81,7 @@ def resolve_geometry_backend(requested: GeometryBackend | None = None) -> str:
     if backend == "cpu":
         return "cpu"
     if torch.cuda.is_available():
+        _require_pytorch3d_cuda()
         return "cuda"
     if _mojo_available():
         return "mojo"
@@ -102,8 +105,7 @@ def resolve_geometry_device(value: str | torch.device | None) -> torch.device:
 
     requested = requested_backend_from_env()
     if requested == "cuda":
-        if not torch.cuda.is_available():
-            raise ValueError(f"{BACKEND_ENV_VAR}=cuda requires available CUDA")
+        _require_pytorch3d_cuda(error_type=ValueError)
         return torch.device("cuda")
     if requested == "mojo":
         if not _mojo_available():
@@ -111,6 +113,8 @@ def resolve_geometry_device(value: str | torch.device | None) -> torch.device:
         return torch.device("cpu")
     if requested == "cpu":
         return torch.device("cpu")
+    if configured.type == "cuda":
+        _require_pytorch3d_cuda(error_type=ValueError)
     return configured
 
 
@@ -130,6 +134,7 @@ def collect_geometry_backend_provenance(requested: GeometryBackend | None = None
     direct_url = _pytorch3d_direct_url()
     _validate_pytorch3d_identity(direct_url)
     provider = _provider_status()
+    cuda_available, cuda_error = _pytorch3d_cuda_probe()
     operations = provider.get("mojo_operations", ())
     if not isinstance(operations, (list, tuple)) or not all(isinstance(operation, str) for operation in operations):
         operations = ()
@@ -145,6 +150,8 @@ def collect_geometry_backend_provenance(requested: GeometryBackend | None = None
         pytorch3d_version=_package_version("pytorch3d"),
         pytorch3d_url=_pytorch3d_url(direct_url),
         pytorch3d_commit=_pytorch3d_commit(direct_url),
+        pytorch3d_cuda_available=cuda_available,
+        pytorch3d_cuda_error=cuda_error,
         mojo_available=bool(provider.get("mojo_available", False)),
         mojo_import_error=import_error if isinstance(import_error, str) else None,
         mojo_operations=tuple(operations),
@@ -221,6 +228,50 @@ def _provider_status() -> dict[str, Any]:
 
 def _mojo_available() -> bool:
     return bool(_provider_status().get("mojo_available", False))
+
+
+@lru_cache(maxsize=1)
+def _pytorch3d_cuda_probe() -> tuple[bool, str | None]:
+    """Run one minimal PyTorch3D CUDA kernel to verify the compiled provider."""
+
+    if not torch.cuda.is_available():
+        return False, "Torch CUDA is unavailable"
+    try:
+        from pytorch3d.renderer.mesh.rasterize_meshes import rasterize_meshes
+        from pytorch3d.structures import Meshes
+
+        device = torch.device("cuda")
+        vertices = torch.tensor(
+            [[-0.5, -0.5, 1.0], [0.5, -0.5, 1.0], [0.0, 0.5, 1.0]],
+            dtype=torch.float32,
+            device=device,
+        )
+        faces = torch.tensor([[0, 1, 2]], dtype=torch.int64, device=device)
+        mesh = Meshes(verts=[vertices], faces=[faces])
+        rasterize_meshes(
+            mesh,
+            image_size=1,
+            blur_radius=0.0,
+            faces_per_pixel=1,
+            bin_size=0,
+            max_faces_per_bin=1,
+        )
+    except Exception as error:  # noqa: BLE001 - capability probes return diagnostics
+        return False, f"{type(error).__name__}: {error}"
+    return True, None
+
+
+def _require_pytorch3d_cuda(*, error_type: type[Exception] = RuntimeError) -> None:
+    if not torch.cuda.is_available():
+        raise error_type(f"{BACKEND_ENV_VAR}=cuda requires available CUDA")
+    available, error = _pytorch3d_cuda_probe()
+    if available:
+        return
+    detail = f" Probe failed: {error}." if error else ""
+    raise error_type(
+        f"{BACKEND_ENV_VAR}=cuda requires working PyTorch3D CUDA rasterization."
+        f"{detail} Rebuild PyTorch3D with CUDA_HOME and FORCE_CUDA=1."
+    )
 
 
 def _legacy_provider_counters(provider: Any) -> dict[str, int]:

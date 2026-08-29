@@ -205,7 +205,9 @@ seed_args+=(--canonical-cache-root "$canonical_cache_root")
 "$shared_python" "$repo_root/scripts/graphify_worktree_seed.py" "${seed_args[@]}"
 
 if [[ "$check_only" == false ]]; then
-  "$shared_python" "$repo_root/scripts/reconcile_graphify_worktree.py" --root "$repo_root"
+  if ! "$shared_python" "$repo_root/scripts/check_graphify_freshness.py" --quiet; then
+    "$shared_python" "$repo_root/scripts/reconcile_graphify_worktree.py" --root "$repo_root"
+  fi
 else
   "$shared_python" "$repo_root/scripts/check_graphify_freshness.py" --usable --quiet || \
     fail "seeded Graphify generation is not query-admissible"

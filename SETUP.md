@@ -64,29 +64,12 @@ PY
 ```
 
 Torch CUDA availability is not sufficient for the rollout/oracle renderer.
-PyTorch3D is compiled locally and must pass its own CUDA rasterization smoke:
+PyTorch3D is compiled locally and must pass its own CUDA rasterization smoke.
+The project backend preflight runs that smoke and records the result:
 
 ```sh
 cd aria_nbv
-uv run python - <<'PY'
-import torch
-from pytorch3d.renderer import FoVPerspectiveCameras, MeshRasterizer, RasterizationSettings
-from pytorch3d.structures import Meshes
-
-if not torch.cuda.is_available():
-    raise SystemExit("Torch CUDA is unavailable.")
-
-device = torch.device("cuda")
-verts = torch.tensor([[-0.5, -0.5, 2.0], [0.5, -0.5, 2.0], [0.0, 0.5, 2.0]], device=device)
-faces = torch.tensor([[0, 1, 2]], dtype=torch.int64, device=device)
-mesh = Meshes(verts=[verts], faces=[faces])
-rasterizer = MeshRasterizer(
-    cameras=FoVPerspectiveCameras(device=device),
-    raster_settings=RasterizationSettings(image_size=8, blur_radius=0.0, faces_per_pixel=1),
-)
-rasterizer(mesh)
-print("pytorch3d_cuda_rasterization_ok")
-PY
+PYTORCH3D_BACKEND=cuda uv run nbv-pytorch3d-backend
 ```
 
 ### CPU and GPU expectations
