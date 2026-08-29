@@ -79,8 +79,8 @@ coverage.
 ==== RQ5 — Online discrete bridge <ssec:rq5>
 
 *If offline headroom, replay support, and actor-visible scoring are established,
-does online interaction over the unchanged discrete candidate contract improve
-endpoint target gain or calibration over the offline policy?*
+does online interaction over the unchanged discrete candidate set and validity
+rules improve endpoint target gain or calibration over the offline policy?*
 
 RQ5 keeps the target, information, candidate, validity, and endpoint assumptions
 of RQ1--RQ4 unchanged. It is not required for the offline finite-candidate
@@ -119,7 +119,7 @@ rules before policy outcomes are inspected.
       index-cell([RQ3]), [information boundary], [matching, ranking, calibration, and leakage audits], [end-to-end actor-visible protocol],
       index-cell([RQ4]), [population and support], [candidate, replay, validity, and coverage diagnostics], [scene-disjoint aggregation],
       index-cell([RQ5]), [conditional extension], [matched online discrete-policy evaluation], [offline gates satisfied first],
-      index-cell([RQ6]), [deferred extension], [continuous or simulator-backed evaluation], [separate action and cost contract],
+      index-cell([RQ6]), [deferred extension], [continuous or simulator-backed evaluation], [separate action space and cost comparison],
     ),
   ),
   caption: [Research-question-to-evidence map.],
