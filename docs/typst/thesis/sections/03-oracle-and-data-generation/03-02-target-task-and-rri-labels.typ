@@ -26,7 +26,7 @@ $
 
 The finite action interface consists of a candidate table $cal(Q)_t$, hard validity mask $bold(m)_t$, and invalid-reason vector $bold(rho)_t$. The admissible set is $cal(A)_t = {i : m_(t,i)=1}$. Invalid rows remain logged for coverage and failure analysis but lie outside policy argmax, sampling, loss targets, and bootstrap maximization. Low RRI is a valid low-utility outcome; it is never an encoding for infeasibility.
 
-For target $e$, the oracle computes the target-cropped point--mesh error #symb.entity.target_error. Candidate selection and #symb.rl.qh supervision use root-normalized target gain; state-relative @relative-reconstruction-improvement:short is retained as a diagnostic. Fixed-budget endpoint gain is the intended policy estimand, but the current replay store records cumulative selected-chain gains rather than an independent post-horizon endpoint reconstruction for every policy. Confirmatory policy comparisons must therefore add matched oracle endpoint re-evaluation or an explicitly persisted endpoint record.
+For target $e$, the oracle computes the target-cropped point--mesh error defined by the measurement contract. Candidate selection and #symb.rl.qh supervision use root-normalized target gain; state-relative @relative-reconstruction-improvement:short is retained as a diagnostic. Fixed-budget endpoint gain is the intended policy estimand, but the current replay store records cumulative selected-chain gains rather than an independent post-horizon endpoint reconstruction for every policy. Confirmatory policy comparisons must therefore add matched oracle endpoint re-evaluation or an explicitly persisted endpoint record.
 
 === Target Selection
 
