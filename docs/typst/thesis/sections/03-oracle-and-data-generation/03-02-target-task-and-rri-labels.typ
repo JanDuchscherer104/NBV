@@ -295,7 +295,7 @@ annotated as uncapped spherical support and are not represented by a bounded box
       [Jitter compliance], [Bounded-jitter rows per state], [fraction], [State--scene--cohort macro; report undefined, nonzero, and uncapped support separately.],
     ),
   ),
-  caption: [Candidate-generation diagnostics and their population contracts. Every state-level quantity is reduced before scene and cohort aggregation.],
+  caption: [Candidate-generation diagnostics and their aggregation populations. Every state-level quantity is reduced before scene and cohort aggregation.],
 ) <tab:candidate-support-metric-contract>
 
 === Rollout Branch Sampling and Dataset Impact
