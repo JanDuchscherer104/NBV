@@ -11,10 +11,14 @@ scan. Neither path repairs, migrates, or writes a store.
 from __future__ import annotations
 
 import json
+import os
+import stat
 from collections import Counter
+from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass, fields
+from hashlib import sha256
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Literal, TypeAlias, cast, overload
 
 import msgspec
 import numpy as np
@@ -29,13 +33,16 @@ from .data_handling.qh_data.views import (
 from .data_handling.vin_store.format import VinOfflineIndexRecord, VinOfflineManifest
 from .data_handling.vin_store.store import OFFLINE_DATASET_VERSION, VinOfflineStoreConfig, VinOfflineStoreReader
 from .data_handling.vin_store.target_inventory import inspect_target_inventory
+from .dataset_topology import discover_vin_store_dirs
 from .rollouts.inspection import (
     build_effective_streamlit_trust,
     build_manifest_facts,
     build_promotion_evidence,
     build_schema_validation,
+    discover_rollout_store_paths,
 )
-from .rollouts.manifest import read_rollout_store_manifest
+from .rollouts.manifest import manifest_sha256, read_rollout_store_manifest
+from .rollouts.shard_manifest import ROLLOUT_SHARD_MANIFEST_VERSION
 from .rollouts.zarr_store import ROLLOUT_ZARR_SCHEMA_VERSION, RolloutZarrStoreReader
 from .utils import Stage
 from .utils.fingerprints import stable_msgspec_hash
@@ -45,6 +52,128 @@ DatasetBundleVerdict = Literal["Ready", "Incomplete", "Blocked"]
 
 FindingSeverity = Literal["blocking", "incomplete", "information"]
 """Effect of one bundle finding on the aggregate readiness verdict."""
+
+GenerationEntryStatus = Literal["present", "missing", "broken_alias"]
+"""Resolution state of one selected filesystem entry."""
+
+JsonScalar: TypeAlias = None | bool | int | float | str
+
+
+@dataclass(frozen=True, slots=True)
+class FrozenJsonArray(Sequence["FrozenJsonValue"]):
+    """Immutable recursively typed JSON array."""
+
+    values: tuple["FrozenJsonValue", ...]
+
+    @overload
+    def __getitem__(self, index: int) -> "FrozenJsonValue": ...
+
+    @overload
+    def __getitem__(self, index: slice) -> tuple["FrozenJsonValue", ...]: ...
+
+    def __getitem__(self, index: int | slice) -> "FrozenJsonValue | tuple[FrozenJsonValue, ...]":
+        return self.values[index]
+
+    def __len__(self) -> int:
+        return len(self.values)
+
+    def to_jsonable(self) -> list[Any]:
+        """Return a fresh mutable JSON projection."""
+
+        return [_thaw_json(value) for value in self.values]
+
+
+@dataclass(frozen=True, slots=True)
+class FrozenJsonObject(Mapping[str, "FrozenJsonValue"]):
+    """Immutable recursively typed JSON object with deterministic ordering."""
+
+    entries: tuple[tuple[str, "FrozenJsonValue"], ...]
+
+    def __getitem__(self, key: str) -> "FrozenJsonValue":
+        for candidate, value in self.entries:
+            if candidate == key:
+                return value
+        raise KeyError(key)
+
+    def __iter__(self) -> Iterator[str]:
+        return (key for key, _value in self.entries)
+
+    def __len__(self) -> int:
+        return len(self.entries)
+
+    def to_jsonable(self) -> dict[str, Any]:
+        """Return a fresh mutable JSON projection."""
+
+        return {key: _thaw_json(value) for key, value in self.entries}
+
+
+FrozenJsonValue: TypeAlias = JsonScalar | FrozenJsonArray | FrozenJsonObject
+
+
+@dataclass(frozen=True, slots=True)
+class DatasetBundleEntryFingerprint:
+    """Bounded selected-entry and authoritative-metadata identity."""
+
+    selected_entry: Path
+    entry_status: GenerationEntryStatus
+    entry_kind: str | None
+    symlink_target: str | None
+    inode: int | None
+    ctime_ns: int | None
+    mtime_ns: int | None
+    size: int | None
+    canonical_target: Path | None
+    metadata: tuple[tuple[str, str, str | None, int, int, int, int], ...]
+
+
+@dataclass(frozen=True, slots=True)
+class DatasetBundleGeneration:
+    """Versioned replacement-sensitive identity for one selected bundle."""
+
+    identity_version: Literal["dataset-bundle-generation-v1"]
+    root: DatasetBundleEntryFingerprint
+    rollouts: tuple[DatasetBundleEntryFingerprint, ...]
+    generation_digest: str
+
+
+class DatasetBundleGenerationChangedError(RuntimeError):
+    """Raised when selected bundle entries change during acquisition."""
+
+    def __init__(self, expected: DatasetBundleGeneration, observed: DatasetBundleGeneration) -> None:
+        self.expected = expected
+        self.observed = observed
+        expected_entries = (expected.root, *expected.rollouts)
+        observed_entries = (observed.root, *observed.rollouts)
+        paths = "; ".join(
+            f"expected_selected={left.selected_entry.as_posix()} "
+            f"expected_canonical={_path_text(left.canonical_target)} "
+            f"observed_selected={right.selected_entry.as_posix()} "
+            f"observed_canonical={_path_text(right.canonical_target)}"
+            for left, right in zip(expected_entries, observed_entries, strict=False)
+        )
+        super().__init__(
+            "Dataset bundle generation changed: "
+            f"expected={expected.generation_digest} observed={observed.generation_digest}; "
+            f"{paths}"
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class DatasetBundleDiscovery:
+    """Bounded filenames-only candidates for the Training Dataset page."""
+
+    root_stores: tuple[Path, ...]
+    rollout_stores: tuple[Path, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class DatasetBundleSummaryRequest:
+    """Complete cache request for lightweight or validated bundle evidence."""
+
+    selection: "DatasetBundleSelection"
+    generation: DatasetBundleGeneration
+    coral_artifact_roots: tuple[Path, ...] = ()
+    validate_rollouts: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -69,6 +198,183 @@ class DatasetBundleSelection:
             raise ValueError("The VIN root store cannot also be selected as a rollout store.")
         object.__setattr__(self, "root_store", root)
         object.__setattr__(self, "rollout_stores", rollouts)
+
+
+def discover_dataset_bundle_candidates(cache_root: Path) -> DatasetBundleDiscovery:
+    """Discover filenames-only root and rollout candidates below ``cache_root``."""
+
+    return DatasetBundleDiscovery(
+        root_stores=tuple(discover_vin_store_dirs(cache_root)),
+        rollout_stores=tuple(discover_rollout_store_paths(cache_root)),
+    )
+
+
+def capture_dataset_bundle_generation(
+    root_entry: Path,
+    rollout_entries: tuple[Path, ...],
+) -> tuple[DatasetBundleSelection, DatasetBundleGeneration]:
+    """Capture selected entries before resolving the canonical bundle selection.
+
+    The bounded fingerprint includes selected-entry ``lstat`` identity and only
+    authoritative root metadata. Payload chunks are never enumerated. Rollout
+    membership is canonicalized by absolute selected-entry path because its
+    input order has no scientific meaning.
+    """
+
+    root_selected = _absolute_selected_entry(root_entry)
+    rollout_selected = tuple(
+        sorted(
+            {_absolute_selected_entry(path) for path in rollout_entries},
+            key=lambda path: path.as_posix(),
+        )
+    )
+    generation = _capture_dataset_bundle_generation_value(root_selected, rollout_selected)
+    return _selection_from_generation(generation), generation
+
+
+def _capture_dataset_bundle_generation_value(
+    root_selected: Path,
+    rollout_selected: tuple[Path, ...],
+) -> DatasetBundleGeneration:
+    """Fingerprint a bundle without applying semantic selection validation."""
+
+    root = _capture_bundle_entry(root_selected)
+    rollouts = tuple(_capture_bundle_entry(path) for path in rollout_selected)
+    payload = {
+        "root": _generation_entry_json(root),
+        "rollouts": [_generation_entry_json(entry) for entry in rollouts],
+    }
+    identity_version: Literal["dataset-bundle-generation-v1"] = "dataset-bundle-generation-v1"
+    canonical_json = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    digest = sha256(f"{identity_version}\n{canonical_json}".encode()).hexdigest()
+    return DatasetBundleGeneration(identity_version, root, rollouts, digest)
+
+
+def _selection_from_generation(generation: DatasetBundleGeneration) -> DatasetBundleSelection:
+    return DatasetBundleSelection(
+        generation.root.canonical_target or generation.root.selected_entry,
+        tuple(entry.canonical_target or entry.selected_entry for entry in generation.rollouts),
+    )
+
+
+def assert_dataset_bundle_generation_current(generation: DatasetBundleGeneration) -> None:
+    """Raise when any selected entry or bounded authoritative metadata changed."""
+
+    observed = _capture_dataset_bundle_generation_value(
+        _absolute_selected_entry(generation.root.selected_entry),
+        tuple(_absolute_selected_entry(entry.selected_entry) for entry in generation.rollouts),
+    )
+    if observed.generation_digest != generation.generation_digest:
+        raise DatasetBundleGenerationChangedError(generation, observed)
+
+
+def _absolute_selected_entry(path: Path) -> Path:
+    return Path(os.path.abspath(Path(path).expanduser()))
+
+
+def _capture_bundle_entry(selected_entry: Path) -> DatasetBundleEntryFingerprint:
+    try:
+        entry = selected_entry.lstat()
+    except OSError:
+        return DatasetBundleEntryFingerprint(selected_entry, "missing", None, None, None, None, None, None, None, ())
+    entry_kind = _entry_kind(entry.st_mode)
+    symlink_target = os.readlink(selected_entry) if stat.S_ISLNK(entry.st_mode) else None
+    try:
+        canonical_target = selected_entry.resolve(strict=True)
+    except OSError:
+        status: GenerationEntryStatus = "broken_alias" if symlink_target is not None else "missing"
+        canonical_target = None
+    else:
+        status = "present"
+    metadata = () if canonical_target is None else _bounded_metadata_fingerprints(canonical_target)
+    return DatasetBundleEntryFingerprint(
+        selected_entry=selected_entry,
+        entry_status=status,
+        entry_kind=entry_kind,
+        symlink_target=symlink_target,
+        inode=entry.st_ino,
+        ctime_ns=entry.st_ctime_ns,
+        mtime_ns=entry.st_mtime_ns,
+        size=entry.st_size,
+        canonical_target=canonical_target,
+        metadata=metadata,
+    )
+
+
+def _bounded_metadata_fingerprints(root: Path) -> tuple[tuple[str, str, str | None, int, int, int, int], ...]:
+    candidates = [
+        root / "manifest.json",
+        root / "_SUCCESS.json",
+        root / "_owner.json",
+        root / "zarr.json",
+        root / ".zgroup",
+        root / ".zattrs",
+        root / "sample_index.jsonl",
+    ]
+    splits = root / "splits"
+    if splits.is_dir():
+        candidates.extend(splits.glob("*.npy"))
+    rows: list[tuple[str, str, str | None, int, int, int, int]] = []
+    for path in sorted(candidates, key=lambda candidate: candidate.relative_to(root).as_posix()):
+        try:
+            entry = path.lstat()
+        except OSError:
+            continue
+        relative_name = path.relative_to(root).as_posix()
+        target = os.readlink(path) if stat.S_ISLNK(entry.st_mode) else None
+        rows.append(
+            (
+                relative_name,
+                _entry_kind(entry.st_mode),
+                target,
+                entry.st_ino,
+                entry.st_ctime_ns,
+                entry.st_mtime_ns,
+                entry.st_size,
+            )
+        )
+    return tuple(rows)
+
+
+def _entry_kind(mode: int) -> str:
+    if stat.S_ISLNK(mode):
+        return "symlink"
+    if stat.S_ISDIR(mode):
+        return "directory"
+    if stat.S_ISREG(mode):
+        return "file"
+    return "other"
+
+
+def _generation_entry_json(entry: DatasetBundleEntryFingerprint) -> dict[str, Any]:
+    return {
+        "selected_entry": entry.selected_entry.as_posix(),
+        "selected_entry_fingerprint": [
+            ".",
+            entry.entry_status,
+            entry.entry_kind,
+            entry.symlink_target,
+            entry.inode,
+            entry.ctime_ns,
+            entry.mtime_ns,
+            entry.size,
+        ],
+        "canonical_target": _path_text(entry.canonical_target),
+        "metadata": [list(row) for row in entry.metadata],
+    }
+
+
+def _generation_json(generation: DatasetBundleGeneration) -> dict[str, Any]:
+    return {
+        "identity_version": generation.identity_version,
+        "root": _generation_entry_json(generation.root),
+        "rollouts": [_generation_entry_json(entry) for entry in generation.rollouts],
+        "generation_digest": generation.generation_digest,
+    }
+
+
+def _path_text(path: Path | None) -> str | None:
+    return None if path is None else path.as_posix()
 
 
 @dataclass(frozen=True, slots=True)
@@ -105,22 +411,25 @@ class DatasetBundleEvidence:
     selection: DatasetBundleSelection
     """Normalized root and rollout selection."""
 
+    generation: DatasetBundleGeneration
+    """Selected-entry and canonical-target attribution for this acquisition."""
+
     verdict: DatasetBundleVerdict
     """Strict readiness verdict derived from :attr:`findings`."""
 
-    root: dict[str, Any]
+    root: FrozenJsonObject
     """VIN manifest, index, split, schema, and storage summary."""
 
-    rollouts: tuple[dict[str, Any], ...]
+    rollouts: tuple[FrozenJsonObject, ...]
     """All selected rollout summaries, including incompatible stores."""
 
-    aggregate: dict[str, Any]
+    aggregate: FrozenJsonObject
     """Totals over compatible stores only; unavailable values remain ``None``."""
 
-    topology: dict[str, Any]
+    topology: FrozenJsonObject
     """Compact root-to-rollout dependency nodes and classified edges."""
 
-    coral_artifacts: tuple[dict[str, Any], ...]
+    coral_artifacts: tuple[FrozenJsonObject, ...]
     """Optional CORAL binner artifacts; missing provenance never blocks readiness."""
 
     findings: tuple[DatasetBundleFinding, ...]
@@ -134,12 +443,13 @@ class DatasetBundleEvidence:
                 "root_store": self.selection.root_store.as_posix(),
                 "rollout_stores": [path.as_posix() for path in self.selection.rollout_stores],
             },
+            "generation": _generation_json(self.generation),
             "verdict": self.verdict,
-            "root": self.root,
-            "rollouts": list(self.rollouts),
-            "aggregate": self.aggregate,
-            "topology": self.topology,
-            "coral_artifacts": list(self.coral_artifacts),
+            "root": self.root.to_jsonable(),
+            "rollouts": [row.to_jsonable() for row in self.rollouts],
+            "aggregate": self.aggregate.to_jsonable(),
+            "topology": self.topology.to_jsonable(),
+            "coral_artifacts": [row.to_jsonable() for row in self.coral_artifacts],
             "findings": [finding.to_jsonable() for finding in self.findings],
         }
 
@@ -341,6 +651,21 @@ class QhBatchPreview:
         }
 
 
+def prepare_dataset_bundle_export(
+    evidence: DatasetBundleEvidence,
+    deep_statistics: Mapping[str, Any] | None = None,
+    qh_readiness: QhCorpusReadiness | None = None,
+    qh_preview: QhBatchPreview | None = None,
+) -> bytes:
+    """Serialize the already acquired Training Dataset products exactly once."""
+
+    payload = evidence.to_jsonable()
+    payload["deep_statistics"] = None if deep_statistics is None else dict(deep_statistics)
+    payload["q_h_readiness"] = None if qh_readiness is None else qh_readiness.to_jsonable()
+    payload["q_h_batch_preview"] = None if qh_preview is None else qh_preview.to_jsonable()
+    return (json.dumps(payload, indent=2, sort_keys=True) + "\n").encode()
+
+
 def build_qh_corpus_readiness(
     selection: DatasetBundleSelection,
     *,
@@ -419,29 +744,123 @@ def _qh_promotion_blockers(selection: DatasetBundleSelection) -> tuple[str, ...]
 
     blockers: list[str] = []
     for store in selection.rollout_stores:
-        marker_present = _promotion_marker_present(store)
-        if not marker_present:
-            # V0/non-promoted stores intentionally have no promotion trust
-            # contract; their existing lineage/provenance checks above remain
-            # the compatibility boundary.
-            continue
-        try:
-            reader = RolloutZarrStoreReader(store)
-            manifest_facts = build_manifest_facts(reader)
-            promotion = build_promotion_evidence(reader, manifest_payload=manifest_facts.payload)
-        except Exception as exc:
-            blockers.append(f"Q_H rollout trust could not be evaluated for {store.name}: {type(exc).__name__}: {exc}")
-            continue
-        try:
-            schema = build_schema_validation(reader)
-            trust = build_effective_streamlit_trust(schema, promotion)
-        except Exception as exc:
-            blockers.append(f"Q_H promoted rollout validation failed for {store.name}: {type(exc).__name__}: {exc}")
-            continue
-        if not trust.ok:
-            detail = "; ".join(trust.errors[:3]) or "unknown trust error"
-            blockers.append(f"Q_H promoted rollout {store.name} is not trusted: {detail}")
+        blocker = _rollout_promotion_blocker(store)
+        if blocker is not None:
+            blockers.append(blocker)
     return tuple(blockers)
+
+
+def _rollout_promotion_blocker(store: Path) -> str | None:
+    """Return one fail-closed trust error for an advertised promoted store."""
+
+    if not _promotion_marker_present(store):
+        return None
+    try:
+        reader = RolloutZarrStoreReader(store)
+        manifest_facts = build_manifest_facts(reader)
+        promotion = build_promotion_evidence(reader, manifest_payload=manifest_facts.payload)
+    except Exception as exc:
+        return f"Q_H rollout trust could not be evaluated for {store.name}: {type(exc).__name__}: {exc}"
+    try:
+        schema = build_schema_validation(reader)
+        trust = build_effective_streamlit_trust(schema, promotion)
+    except Exception as exc:
+        return f"Q_H promoted rollout validation failed for {store.name}: {type(exc).__name__}: {exc}"
+    if trust.ok:
+        return None
+    detail = "; ".join(trust.errors[:3]) or "unknown trust error"
+    return f"Q_H promoted rollout {store.name} is not trusted: {detail}"
+
+
+def _bounded_promotion_marker_blocker(store: Path, manifest: Mapping[str, Any]) -> str | None:
+    """Validate advertised marker membership/JSON without opening Zarr arrays."""
+
+    markers = tuple(store / name for name in ("_SUCCESS.json", "_owner.json"))
+    present = tuple(_lstat_exists(path) for path in markers)
+    if not any(present):
+        return None
+    if not all(present):
+        return f"Promoted rollout {store.name} has an incomplete promotion marker pair."
+    payloads: list[dict[str, Any]] = []
+    for path in markers:
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError, TypeError) as exc:
+            return f"Promoted rollout {store.name} marker {path.name} is unreadable: {type(exc).__name__}: {exc}"
+        if not isinstance(payload, dict):
+            return f"Promoted rollout {store.name} marker {path.name} is not a JSON object."
+        payloads.append(payload)
+    success, owner = payloads
+    if success.get("sidecar_kind") != "rollout_shard_success":
+        return f"Promoted rollout {store.name} success marker has no typed sidecar kind."
+    if owner.get("sidecar_kind") != "rollout_shard_owner":
+        return f"Promoted rollout {store.name} owner marker has no typed sidecar kind."
+    required_text = (
+        "writer_config_hash",
+        "source_manifest_hash",
+        "split_manifest_hash",
+        "source_cache_version",
+        "split",
+    )
+    shard_id = owner.get("shard_id")
+    if (
+        not isinstance(shard_id, str)
+        or not shard_id.startswith("shard-")
+        or not shard_id.removeprefix("shard-").isdigit()
+        or any(not isinstance(owner.get(field), str) or not owner[field] for field in required_text)
+        or not isinstance(owner.get("generation_revision_hash"), str)
+        or not isinstance(owner.get("num_source_rows"), int)
+        or isinstance(owner.get("num_source_rows"), bool)
+        or owner["num_source_rows"] <= 0
+        or not _is_sha256(owner.get("rollout_manifest_sha256"))
+        or not _is_sha256(owner.get("rollout_store_content_sha256"))
+    ):
+        return f"Promoted rollout {store.name} owner marker has malformed typed ownership values."
+    shared_fields = (
+        "shard_id",
+        "writer_config_hash",
+        "source_manifest_hash",
+        "split_manifest_hash",
+        "generation_revision_hash",
+        "source_cache_version",
+        "split",
+        "num_source_rows",
+        "rollout_manifest_sha256",
+        "rollout_store_content_sha256",
+        "campaign_binding",
+    )
+    if any(field not in success or field not in owner or success[field] != owner[field] for field in shared_fields):
+        return f"Promoted rollout {store.name} markers have incomplete or inconsistent typed ownership."
+    if not _is_sha256(success.get("owner_sha256")) or success.get("owner_sha256") != manifest_sha256(owner):
+        return f"Promoted rollout {store.name} success marker does not bind its owner marker."
+    if owner.get("rollout_manifest_sha256") != manifest_sha256(dict(manifest)):
+        return f"Promoted rollout {store.name} marker does not bind the rollout manifest."
+    generation = manifest.get("generation")
+    shard = generation.get("shard") if isinstance(generation, Mapping) else None
+    shard_fields = (
+        "shard_id",
+        "writer_config_hash",
+        "source_manifest_hash",
+        "split_manifest_hash",
+        "generation_revision_hash",
+        "source_cache_version",
+        "split",
+        "campaign_binding",
+    )
+    if (
+        not isinstance(shard, Mapping)
+        or shard.get("manifest_version") != ROLLOUT_SHARD_MANIFEST_VERSION
+        or not isinstance(shard.get("rows"), list)
+        or len(shard["rows"]) != owner["num_source_rows"]
+        or any(shard.get(field) != owner.get(field) for field in shard_fields)
+        or shard.get("num_rows") != owner.get("num_source_rows")
+    ):
+        return f"Promoted rollout {store.name} manifest has no matching typed shard ownership."
+    return None
+
+
+def _is_sha256(value: Any) -> bool:
+    return isinstance(value, str) and len(value) == 64 and all(character in "0123456789abcdef" for character in value)
 
 
 def _promotion_marker_present(store: Path) -> bool:
@@ -705,6 +1124,40 @@ def _plain_value(value: Any) -> Any:
     return value
 
 
+def _freeze_json(value: Any) -> FrozenJsonValue:
+    """Freeze one JSON-compatible value at the evidence product seam."""
+
+    if value is None or isinstance(value, bool | int | float | str):
+        return value
+    if isinstance(value, Path):
+        return value.as_posix()
+    if isinstance(value, Mapping):
+        return FrozenJsonObject(
+            tuple(sorted(((str(key), _freeze_json(item)) for key, item in value.items()), key=lambda row: row[0]))
+        )
+    if isinstance(value, Sequence) and not isinstance(value, str | bytes | bytearray):
+        return FrozenJsonArray(tuple(_freeze_json(item) for item in value))
+    if isinstance(value, set | frozenset):
+        frozen = tuple(_freeze_json(item) for item in value)
+        return FrozenJsonArray(tuple(sorted(frozen, key=lambda item: json.dumps(_thaw_json(item), sort_keys=True))))
+    raise TypeError(f"Unsupported evidence value {type(value).__name__}")
+
+
+def _freeze_object(value: Mapping[str, Any]) -> FrozenJsonObject:
+    frozen = _freeze_json(value)
+    if not isinstance(frozen, FrozenJsonObject):  # pragma: no cover - construction invariant
+        raise TypeError("Expected a JSON object")
+    return frozen
+
+
+def _thaw_json(value: FrozenJsonValue) -> Any:
+    """Project frozen JSON values without leaking their internal containers."""
+
+    if isinstance(value, FrozenJsonObject | FrozenJsonArray):
+        return value.to_jsonable()
+    return value
+
+
 def build_dataset_bundle_summary(
     selection: DatasetBundleSelection,
     *,
@@ -726,6 +1179,39 @@ def build_dataset_bundle_summary(
         ``rollouts`` but are excluded from ``aggregate`` training totals.
     """
 
+    _canonical_selection, generation = capture_dataset_bundle_generation(
+        selection.root_store,
+        selection.rollout_stores,
+    )
+    return inspect_dataset_bundle(
+        DatasetBundleSummaryRequest(
+            selection=selection,
+            generation=generation,
+            coral_artifact_roots=coral_artifact_roots,
+            validate_rollouts=validate_rollouts,
+        )
+    )
+
+
+def inspect_dataset_bundle(request: DatasetBundleSummaryRequest) -> DatasetBundleEvidence:
+    """Acquire frozen bundle evidence against one complete generation-bound request."""
+
+    observed_generation = _capture_dataset_bundle_generation_value(
+        _absolute_selected_entry(request.generation.root.selected_entry),
+        tuple(_absolute_selected_entry(entry.selected_entry) for entry in request.generation.rollouts),
+    )
+    if observed_generation.generation_digest != request.generation.generation_digest:
+        raise DatasetBundleGenerationChangedError(request.generation, observed_generation)
+    observed_selection = _selection_from_generation(observed_generation)
+    if observed_selection != request.selection:
+        raise ValueError("DatasetBundleSummaryRequest selection does not match its generation.")
+    evidence = _build_dataset_bundle_summary_unchecked(request)
+    assert_dataset_bundle_generation_current(request.generation)
+    return evidence
+
+
+def _build_dataset_bundle_summary_unchecked(request: DatasetBundleSummaryRequest) -> DatasetBundleEvidence:
+    selection = request.selection
     findings: list[DatasetBundleFinding] = []
     root, root_records = _root_summary(selection.root_store, findings=findings)
     root_usable = not any(
@@ -738,7 +1224,7 @@ def build_dataset_bundle_summary(
             root_hash=root_hash if isinstance(root_hash, str) else None,
             root_records=root_records,
             root_usable=root_usable,
-            validate=validate_rollouts,
+            validate=request.validate_rollouts,
             findings=findings,
         )
         for path in selection.rollout_stores
@@ -754,9 +1240,19 @@ def build_dataset_bundle_summary(
 
     aggregate = _aggregate_summary(root, rollout_rows)
     topology = _bundle_topology(selection.root_store, rollout_rows)
-    coral = tuple(_catalog_coral_artifacts(coral_artifact_roots))
+    coral = tuple(_catalog_coral_artifacts(request.coral_artifact_roots))
     verdict = _verdict(findings)
-    return DatasetBundleEvidence(selection, verdict, root, rollout_rows, aggregate, topology, coral, tuple(findings))
+    return DatasetBundleEvidence(
+        selection,
+        request.generation,
+        verdict,
+        _freeze_object(root),
+        tuple(_freeze_object(row) for row in rollout_rows),
+        _freeze_object(aggregate),
+        _freeze_object(topology),
+        tuple(_freeze_object(row) for row in coral),
+        tuple(findings),
+    )
 
 
 def compute_dataset_bundle_deep_statistics(selection: DatasetBundleSelection) -> dict[str, Any]:
@@ -1133,6 +1629,19 @@ def _rollout_summary(
             )
         )
 
+    promotion_blocker = (
+        _rollout_promotion_blocker(store) if validate else _bounded_promotion_marker_blocker(store, manifest)
+    )
+    if promotion_blocker is not None:
+        findings.append(
+            DatasetBundleFinding(
+                "blocking",
+                "rollout_promotion_invalid",
+                promotion_blocker,
+                store.as_posix(),
+            )
+        )
+
     validation_status = "not_run"
     if validate:
         try:
@@ -1257,7 +1766,7 @@ def _source_identity_matches(row: dict[str, Any], record: VinOfflineIndexRecord)
 def _canonical_key(value: Any) -> str:
     if value in (None, ""):
         return ""
-    return compact_ase_atek_sample_id(str(value)).rsplit("::", maxsplit=1)[-1]
+    return str(compact_ase_atek_sample_id(str(value)).rsplit("::", maxsplit=1)[-1])
 
 
 def _aggregate_summary(root: dict[str, Any], rollouts: tuple[dict[str, Any], ...]) -> dict[str, Any]:
@@ -1390,7 +1899,7 @@ def _decoded_dictionary_values(reader: RolloutZarrStoreReader, array_path: str, 
 
 
 def _required_array(reader: RolloutZarrStoreReader, path: str, dtype: Any) -> np.ndarray:
-    return np.asarray(reader.array(path), dtype=dtype).reshape(-1)
+    return cast(np.ndarray, np.asarray(reader.array(path), dtype=dtype).reshape(-1))
 
 
 def _distribution(values: np.ndarray) -> dict[str, float | int | None]:
@@ -1511,18 +2020,30 @@ def _verdict(findings: list[DatasetBundleFinding]) -> DatasetBundleVerdict:
 
 
 __all__ = [
+    "DatasetBundleDiscovery",
     "DatasetBundleEvidence",
+    "DatasetBundleEntryFingerprint",
     "DatasetBundleFinding",
+    "DatasetBundleGeneration",
+    "DatasetBundleGenerationChangedError",
     "DatasetBundleSelection",
+    "DatasetBundleSummaryRequest",
     "DatasetBundleVerdict",
+    "FrozenJsonArray",
+    "FrozenJsonObject",
     "NormalizedStorageMetric",
     "QhBatchPreview",
     "QhCorpusReadiness",
     "QhReadinessContract",
     "QhStageReadiness",
+    "assert_dataset_bundle_generation_current",
     "build_dataset_bundle_summary",
     "build_qh_corpus_readiness",
+    "capture_dataset_bundle_generation",
     "compute_dataset_bundle_deep_statistics",
+    "discover_dataset_bundle_candidates",
+    "inspect_dataset_bundle",
+    "prepare_dataset_bundle_export",
     "preview_qh_batch",
     "scan_root_gt_obb_target_opportunities",
 ]

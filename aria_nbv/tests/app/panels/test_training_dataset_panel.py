@@ -15,8 +15,11 @@ import pytest
 import streamlit as st
 from streamlit.testing.v1 import AppTest
 
+import aria_nbv.app.panels.training_dataset as training_dataset
 from aria_nbv.app.panels.training_dataset import (
-    _artifact_identity,
+    _cached_deep_statistics,
+    _cached_qh_preview,
+    _cached_qh_readiness,
     _clear_qh_results_for_control_change,
     _deep_metric_value,
     _download_payload,
@@ -24,6 +27,8 @@ from aria_nbv.app.panels.training_dataset import (
     _qh_preview_identity,
     _qh_readiness_for_identity,
     _qh_readiness_identity,
+    _retained_bundle_evidence,
+    _retained_deep_statistics,
     _target_inventory_explanation,
     _target_inventory_frames,
 )
@@ -35,10 +40,12 @@ from aria_nbv.data_handling.vin_store.format import (
 )
 from aria_nbv.data_handling.vin_store.store import OFFLINE_DATASET_VERSION
 from aria_nbv.dataset_bundle import (
+    DatasetBundleGenerationChangedError,
     DatasetBundleSelection,
     QhBatchPreview,
     QhCorpusReadiness,
     build_dataset_bundle_summary,
+    capture_dataset_bundle_generation,
 )
 from aria_nbv.rollouts.zarr_store import ROLLOUT_ZARR_SCHEMA_VERSION
 from aria_nbv.utils.fingerprints import stable_msgspec_hash
@@ -65,7 +72,7 @@ def _element_labels(elements: Iterable[Any]) -> list[str]:
     return [str(element.label) for element in elements]
 
 
-@pytest.fixture
+@pytest.fixture  # type: ignore[untyped-decorator]
 def isolated_path_config(tmp_path: Path) -> Generator[PathConfig, None, None]:
     """Point the singleton path owner at one isolated app workspace."""
 
@@ -201,6 +208,59 @@ def test_hub_discovers_composes_and_scans_explicit_stores(
     assert root.as_posix() in str(app.session_state)
 
 
+def test_initial_render_never_dispatches_deep_or_qh_acquisition(
+    monkeypatch: pytest.MonkeyPatch,
+    isolated_path_config: PathConfig,
+    tmp_path: Path,
+) -> None:
+    _write_root_store(isolated_path_config.offline_cache_dir)
+    calls = {"deep": 0, "qh": 0, "preview": 0}
+
+    def _unexpected(name: str) -> None:
+        calls[name] += 1
+        raise AssertionError(f"unexpected initial-render {name} acquisition")
+
+    monkeypatch.setattr(
+        training_dataset, "compute_dataset_bundle_deep_statistics", lambda _selection: _unexpected("deep")
+    )
+    monkeypatch.setattr(training_dataset, "build_qh_corpus_readiness", lambda *_args, **_kwargs: _unexpected("qh"))
+    monkeypatch.setattr(training_dataset, "preview_qh_batch", lambda *_args, **_kwargs: _unexpected("preview"))
+
+    app = _app(tmp_path).run()
+
+    assert not app.exception
+    assert calls == {"deep": 0, "qh": 0, "preview": 0}
+
+
+@pytest.mark.parametrize("acquisition", ["deep", "readiness", "preview"])  # type: ignore[untyped-decorator]
+def test_explicit_acquisition_rejects_replacement_under_stale_generation(
+    acquisition: str,
+    monkeypatch: pytest.MonkeyPatch,
+    isolated_path_config: PathConfig,
+) -> None:
+    root, _source_hash = _write_root_store(isolated_path_config.offline_cache_dir)
+    _selection, generation = capture_dataset_bundle_generation(root, ())
+
+    def _replace_manifest(*_args: object, **_kwargs: object) -> Any:
+        manifest_path = root / "manifest.json"
+        payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+        payload["replacement_during_acquisition"] = acquisition
+        manifest_path.write_text(json.dumps(payload), encoding="utf-8")
+        return object()
+
+    root_arg = root.as_posix()
+    with pytest.raises(DatasetBundleGenerationChangedError):
+        if acquisition == "deep":
+            monkeypatch.setattr(training_dataset, "compute_dataset_bundle_deep_statistics", _replace_manifest)
+            _cached_deep_statistics(root_arg, (), generation)
+        elif acquisition == "readiness":
+            monkeypatch.setattr(training_dataset, "build_qh_corpus_readiness", _replace_manifest)
+            _cached_qh_readiness(root_arg, (), generation, 1, 0, training_dataset._QH_READINESS_CONTRACT)
+        else:
+            monkeypatch.setattr(training_dataset, "preview_qh_batch", _replace_manifest)
+            _cached_qh_preview(root_arg, (), generation, "train", 0, 1, 0, training_dataset._QH_READINESS_CONTRACT)
+
+
 def test_blocked_store_remains_selected_but_is_excluded_from_totals(
     isolated_path_config: PathConfig,
     tmp_path: Path,
@@ -288,7 +348,7 @@ def test_selected_root_blocker_is_not_mislabeled_as_rollout_finding(
 
 
 def test_qh_preview_reuses_only_exact_selection_and_controls() -> None:
-    selection_a = ("selection-a",)
+    selection_a = "generation-a"
     baseline = _qh_preview_identity(
         selection_a,
         stage="train",
@@ -301,7 +361,7 @@ def test_qh_preview_reuses_only_exact_selection_and_controls() -> None:
 
     assert _qh_preview_for_identity(state, baseline) is evidence
     for changed in (
-        _qh_preview_identity(("selection-b",), stage="train", chain_index=0, batch_size=4, seed=7),
+        _qh_preview_identity("generation-b", stage="train", chain_index=0, batch_size=4, seed=7),
         _qh_preview_identity(selection_a, stage="val", chain_index=0, batch_size=4, seed=7),
         _qh_preview_identity(selection_a, stage="train", chain_index=1, batch_size=4, seed=7),
         _qh_preview_identity(selection_a, stage="train", chain_index=0, batch_size=8, seed=7),
@@ -311,7 +371,7 @@ def test_qh_preview_reuses_only_exact_selection_and_controls() -> None:
 
 
 def test_qh_readiness_hides_stale_preflight_after_loader_control_changes() -> None:
-    selection = ("selection",)
+    selection = "generation"
     baseline = _qh_readiness_identity(selection, batch_size=4, seed=7)
     evidence = cast(QhCorpusReadiness, SimpleNamespace())
     state = (baseline, evidence)
@@ -331,6 +391,14 @@ def test_qh_control_change_clears_displayed_readiness_and_preview(monkeypatch: p
     _clear_qh_results_for_control_change()
 
     assert state == {}
+
+
+def test_page_retained_slots_reject_invalid_or_stale_values() -> None:
+    evidence = cast(Any, SimpleNamespace())
+    assert _retained_bundle_evidence(("digest", evidence), "digest") is None
+    assert _retained_bundle_evidence({"digest": evidence}, "digest") is None
+    assert _retained_deep_statistics(("other", {"aggregate": {}}), "digest") is None
+    assert _retained_deep_statistics(("digest", {"aggregate": {}}), "digest") == {"aggregate": {}}
 
 
 def test_download_payload_is_deterministic_and_keeps_denominators_distinct(tmp_path: Path) -> None:
@@ -354,70 +422,22 @@ def test_download_payload_is_deterministic_and_keeps_denominators_distinct(tmp_p
     assert payload["deep_statistics"]["aggregate"] == deep["aggregate"]
 
 
-def test_artifact_identity_uses_bounded_metadata_and_ignores_payload_chunks(tmp_path: Path) -> None:
-    store = tmp_path / "store.zarr"
-    payload = store / "candidates" / "target_rri" / "c" / "0"
-    payload.parent.mkdir(parents=True)
-    payload.write_bytes(b"large-payload-chunk")
-    manifest = store / "manifest.json"
-    manifest.write_text("{}", encoding="utf-8")
-
-    identity = _artifact_identity(store)
-
-    assert [row[0] for row in identity] == [store.as_posix(), manifest.as_posix()]
-    assert all(len(row) == 5 for row in identity)
-
-
-def test_artifact_identity_includes_promotion_sidecars_and_detects_same_path_replacement(tmp_path: Path) -> None:
-    store = tmp_path / "store.zarr"
-    store.mkdir()
-    for name in ("manifest.json", "_SUCCESS.json", "_owner.json"):
-        (store / name).write_text("{}", encoding="utf-8")
-
-    before = _artifact_identity(store)
-    owner = store / "_owner.json"
-    owner.unlink()
-    owner.write_text("{}", encoding="utf-8")
-
-    after = _artifact_identity(store)
-
-    assert {Path(row[0]).name for row in before} == {"store.zarr", "manifest.json", "_SUCCESS.json", "_owner.json"}
-    assert before != after
-
-
-def test_artifact_identity_retains_broken_promotion_marker_membership(tmp_path: Path) -> None:
-    store = tmp_path / "store.zarr"
-    store.mkdir()
-    (store / "manifest.json").write_text("{}", encoding="utf-8")
-    (store / "_SUCCESS.json").symlink_to(tmp_path / "missing-success.json")
-
-    identity = _artifact_identity(store)
-
-    assert (store / "_SUCCESS.json").as_posix() in {row[0] for row in identity}
-
-
-def test_artifact_identity_tolerates_metadata_disappearing_during_stat(
+def test_download_payload_uses_displayed_evidence_without_reacquisition(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    store = tmp_path / "store.zarr"
-    store.mkdir()
-    manifest = store / "manifest.json"
-    manifest.write_text("{}", encoding="utf-8")
-    original_lstat = Path.lstat
-    manifest_stat_calls = 0
+    root, source_hash = _write_root_store(tmp_path)
+    rollout = _write_rollout_store(tmp_path, source_hash)
+    evidence = build_dataset_bundle_summary(DatasetBundleSelection(root, (rollout,)))
+    monkeypatch.setattr(
+        training_dataset,
+        "inspect_dataset_bundle",
+        lambda _request: pytest.fail("download must not reacquire evidence"),
+    )
 
-    def _lstat(path: Path, *args: Any, **kwargs: Any) -> Any:
-        nonlocal manifest_stat_calls
-        if path == manifest:
-            manifest_stat_calls += 1
-            if manifest_stat_calls >= 1:
-                raise FileNotFoundError(path)
-        return original_lstat(path, *args, **kwargs)
+    payload = json.loads(_download_payload(evidence, None))
 
-    monkeypatch.setattr(Path, "lstat", _lstat)
-
-    assert all(row[0] != manifest.as_posix() for row in _artifact_identity(store))
+    assert payload["generation"]["generation_digest"] == evidence.generation.generation_digest
 
 
 def test_deep_metric_value_marks_partial_counts_and_unavailable_failures() -> None:

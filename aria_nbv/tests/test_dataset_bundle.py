@@ -1,16 +1,18 @@
 from __future__ import annotations
 
 import json
+import os
 from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any
+from typing import Any, cast
 
 import numpy as np
 import pytest
 import torch
 from efm3d.aria.pose import PoseTW
 
+import aria_nbv.dataset_bundle as dataset_bundle
 from aria_nbv.data_handling.qh_data import QhActorTensors, QhChain, QhDatasetConfig
 from aria_nbv.data_handling.qh_data.views import QhActorStateContract, QhChainKey, QhSupervision
 from aria_nbv.data_handling.vin_store.format import (
@@ -23,19 +25,149 @@ from aria_nbv.data_handling.vin_store.format import (
 from aria_nbv.data_handling.vin_store.store import OFFLINE_DATASET_VERSION
 from aria_nbv.data_handling.vin_store.views import VinSnippetView
 from aria_nbv.dataset_bundle import (
+    DatasetBundleGenerationChangedError,
     DatasetBundleSelection,
+    DatasetBundleSummaryRequest,
+    FrozenJsonArray,
+    FrozenJsonObject,
     QhReadinessContract,
+    assert_dataset_bundle_generation_current,
     build_dataset_bundle_summary,
     build_qh_corpus_readiness,
+    capture_dataset_bundle_generation,
     compute_dataset_bundle_deep_statistics,
+    inspect_dataset_bundle,
     preview_qh_batch,
     scan_root_gt_obb_target_opportunities,
 )
+from aria_nbv.rollouts.manifest import manifest_sha256
 from aria_nbv.rollouts.qh_geometry import QhGeometryContract
 from aria_nbv.rollouts.qh_reader import QhDataContract
 from aria_nbv.rollouts.zarr_store import ROLLOUT_ZARR_SCHEMA_VERSION
 from aria_nbv.utils import Stage
 from aria_nbv.utils.fingerprints import stable_msgspec_hash
+
+
+def test_dataset_bundle_generation_is_bounded_stable_and_population_order_independent(tmp_path: Path) -> None:
+    root = tmp_path / "root"
+    first = tmp_path / "first.zarr"
+    second = tmp_path / "second.zarr"
+    for store in (root, first, second):
+        store.mkdir()
+        (store / "manifest.json").write_text("{}", encoding="utf-8")
+    payload = first / "candidates" / "target_rri" / "c" / "0"
+    payload.parent.mkdir(parents=True)
+    payload.write_bytes(b"payload-chunk")
+
+    _selection, baseline = capture_dataset_bundle_generation(root, (first, second))
+    _selection, permuted = capture_dataset_bundle_generation(root, (second, first))
+    payload.write_bytes(b"changed-payload-chunk")
+    _selection, payload_changed = capture_dataset_bundle_generation(root, (first, second))
+
+    assert baseline == permuted
+    assert payload_changed == baseline
+    assert all("candidates/" not in row[0] for entry in baseline.rollouts for row in entry.metadata)
+
+
+def test_dataset_bundle_generation_detects_same_path_atomic_replacement(tmp_path: Path) -> None:
+    root = tmp_path / "root"
+    root.mkdir()
+    before_stat = root.stat()
+    _selection, before = capture_dataset_bundle_generation(root, ())
+    replacement = tmp_path / "replacement"
+    replacement.mkdir()
+    root.rmdir()
+    os.replace(replacement, root)
+    os.utime(root, ns=(before_stat.st_atime_ns, before_stat.st_mtime_ns))
+
+    _selection, after = capture_dataset_bundle_generation(root, ())
+
+    assert after.generation_digest != before.generation_digest
+    with pytest.raises(DatasetBundleGenerationChangedError) as exc_info:
+        assert_dataset_bundle_generation_current(before)
+    assert exc_info.value.expected == before
+    assert exc_info.value.observed == after
+    assert before.generation_digest in str(exc_info.value)
+    assert after.generation_digest in str(exc_info.value)
+
+
+def test_dataset_bundle_generation_preserves_alias_text_and_broken_status(tmp_path: Path) -> None:
+    target = tmp_path / "target"
+    target.mkdir()
+    alias = tmp_path / "root-alias"
+    alias.symlink_to("target", target_is_directory=True)
+    selection, direct = capture_dataset_bundle_generation(alias, ())
+    alias.unlink()
+    alias.symlink_to("./target", target_is_directory=True)
+    relinked_selection, relinked = capture_dataset_bundle_generation(alias, ())
+
+    assert selection.root_store == target.resolve()
+    assert relinked_selection.root_store == selection.root_store
+    assert direct.root.symlink_target == "target"
+    assert relinked.root.symlink_target == "./target"
+    assert relinked.generation_digest != direct.generation_digest
+
+    alias.unlink()
+    alias.symlink_to("missing-target", target_is_directory=True)
+    _selection, broken = capture_dataset_bundle_generation(alias, ())
+    alias.unlink()
+    _selection, missing = capture_dataset_bundle_generation(alias, ())
+    assert broken.root.entry_status == "broken_alias"
+    assert missing.root.entry_status == "missing"
+    assert broken.generation_digest != missing.generation_digest
+
+
+def test_dataset_bundle_generation_alias_retarget_to_root_raises_typed_change(tmp_path: Path) -> None:
+    root = tmp_path / "root"
+    rollout = tmp_path / "rollout"
+    root.mkdir()
+    rollout.mkdir()
+    root_alias = tmp_path / "root-alias"
+    rollout_alias = tmp_path / "rollout-alias"
+    root_alias.symlink_to(root, target_is_directory=True)
+    rollout_alias.symlink_to(rollout, target_is_directory=True)
+    _selection, generation = capture_dataset_bundle_generation(root_alias, (rollout_alias,))
+    rollout_alias.unlink()
+    rollout_alias.symlink_to(root, target_is_directory=True)
+
+    with pytest.raises(DatasetBundleGenerationChangedError):
+        assert_dataset_bundle_generation_current(generation)
+
+
+def test_dataset_bundle_request_rejects_selection_generation_mismatch(tmp_path: Path) -> None:
+    first = tmp_path / "first"
+    second = tmp_path / "second"
+    first.mkdir()
+    second.mkdir()
+    selection, generation = capture_dataset_bundle_generation(first, ())
+
+    with pytest.raises(ValueError, match="does not match"):
+        inspect_dataset_bundle(
+            DatasetBundleSummaryRequest(
+                selection=replace(selection, root_store=second),
+                generation=generation,
+            )
+        )
+
+
+def test_dataset_bundle_acquisition_rejects_mid_read_generation_change(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    root, _source_hash = _write_root_store(tmp_path)
+    selection, generation = capture_dataset_bundle_generation(root, ())
+    original = dataset_bundle._build_dataset_bundle_summary_unchecked
+
+    def _mutating_build(request: DatasetBundleSummaryRequest) -> dataset_bundle.DatasetBundleEvidence:
+        evidence = original(request)
+        manifest = root / "manifest.json"
+        manifest.write_bytes(manifest.read_bytes() + b"\n")
+        return evidence
+
+    monkeypatch.setattr(dataset_bundle, "_build_dataset_bundle_summary_unchecked", _mutating_build)
+
+    with pytest.raises(DatasetBundleGenerationChangedError):
+        inspect_dataset_bundle(DatasetBundleSummaryRequest(selection=selection, generation=generation))
 
 
 def test_qh_readiness_requires_an_explicit_named_contract(tmp_path: Path) -> None:
@@ -285,7 +417,7 @@ def test_qh_readiness_fails_closed_for_empty_train_overlap_and_contract_mismatch
     }
     _patch_qh_stages(monkeypatch, mismatch)
     assert (
-        "incompatible learning contracts"
+        "incompatible learning semantics"
         in build_qh_corpus_readiness(selection, contract=_QH_READINESS_CONTRACT).blockers[0]
     )
 
@@ -475,6 +607,27 @@ def test_lightweight_bundle_aggregates_compatible_rollouts_without_duplicating_r
     json.dumps(evidence.to_jsonable(), sort_keys=True)
 
 
+def test_dataset_bundle_evidence_is_deeply_immutable_with_export_parity(tmp_path: Path) -> None:
+    root, source_hash = _write_root_store(tmp_path)
+    rollout = _write_rollout_store(tmp_path, name="frozen.zarr", source_hash=source_hash)
+
+    evidence = build_dataset_bundle_summary(DatasetBundleSelection(root, (rollout,)))
+    exported = evidence.to_jsonable()
+
+    assert isinstance(evidence.root, FrozenJsonObject)
+    assert isinstance(evidence.root["split_counts"], FrozenJsonObject)
+    assert isinstance(evidence.rollouts[0]["counts"], FrozenJsonObject)
+    assert isinstance(evidence.topology["nodes"], FrozenJsonArray)
+    with pytest.raises(TypeError):
+        evidence.root["sample_count"] = 99  # type: ignore[index]
+    with pytest.raises(TypeError):
+        evidence.root["split_counts"]["train"] = 99  # type: ignore[index]
+    exported["root"]["sample_count"] = 99
+    assert evidence.to_jsonable()["root"]["sample_count"] == 2
+    assert json.loads(json.dumps(evidence.to_jsonable(), sort_keys=True)) == evidence.to_jsonable()
+    assert evidence.to_jsonable()["generation"]["generation_digest"] == evidence.generation.generation_digest
+
+
 def test_incompatible_hash_and_split_rows_remain_visible_but_are_excluded(tmp_path: Path) -> None:
     root, source_hash = _write_root_store(tmp_path)
     compatible = _write_rollout_store(tmp_path, name="ok.zarr", source_hash=source_hash)
@@ -496,6 +649,90 @@ def test_incompatible_hash_and_split_rows_remain_visible_but_are_excluded(tmp_pa
     assert any(finding.code == "source_split_identity_mismatch" for finding in evidence.findings)
 
 
+def test_invalid_promoted_store_remains_visible_but_is_excluded(tmp_path: Path) -> None:
+    root, source_hash = _write_root_store(tmp_path)
+    rollout = _write_rollout_store(tmp_path, name="invalid-promotion.zarr", source_hash=source_hash)
+    (rollout / "_SUCCESS.json").symlink_to(tmp_path / "missing-success.json")
+
+    evidence = build_dataset_bundle_summary(DatasetBundleSelection(root, (rollout,)))
+
+    assert len(evidence.rollouts) == 1
+    assert evidence.rollouts[0]["included_in_training_totals"] is False
+    assert evidence.aggregate["compatible_rollout_store_count"] == 0
+    assert any(finding.code == "rollout_promotion_invalid" for finding in evidence.findings)
+
+
+def test_malformed_promotion_marker_pair_is_visible_but_excluded(tmp_path: Path) -> None:
+    root, source_hash = _write_root_store(tmp_path)
+    rollout = _write_rollout_store(tmp_path, name="malformed-promotion.zarr", source_hash=source_hash)
+    for name in ("_SUCCESS.json", "_owner.json"):
+        (rollout / name).write_text("{}", encoding="utf-8")
+
+    evidence = build_dataset_bundle_summary(DatasetBundleSelection(root, (rollout,)))
+
+    assert evidence.rollouts[0]["included_in_training_totals"] is False
+    assert evidence.aggregate["compatible_rollout_store_count"] == 0
+    assert any(finding.code == "rollout_promotion_invalid" for finding in evidence.findings)
+
+
+def test_typed_promotion_marker_pair_remains_eligible_without_deep_validation(tmp_path: Path) -> None:
+    root, source_hash = _write_root_store(tmp_path)
+    rollout = _write_rollout_store(tmp_path, name="promoted.zarr", source_hash=source_hash)
+    manifest_path = rollout / "manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    shard = {
+        "manifest_version": "rollout-shard-manifest-v3",
+        "shard_id": "shard-000000",
+        "writer_config_hash": "c" * 64,
+        "source_manifest_hash": source_hash,
+        "split_manifest_hash": "b" * 64,
+        "generation_revision_hash": "d" * 64,
+        "source_cache_version": str(OFFLINE_DATASET_VERSION),
+        "split": "train",
+        "num_rows": 1,
+        "rows": [{"sample_index": 0}],
+        "campaign_binding": None,
+    }
+    manifest["generation"]["shard"] = shard
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+    manifest_hash = manifest_sha256(manifest)
+    owner = {
+        "sidecar_kind": "rollout_shard_owner",
+        **{key: value for key, value in shard.items() if key != "num_rows"},
+        "num_source_rows": shard["num_rows"],
+        "rollout_manifest_sha256": manifest_hash,
+        "rollout_store_content_sha256": "a" * 64,
+    }
+    success = {
+        "sidecar_kind": "rollout_shard_success",
+        **{key: owner[key] for key in owner if key not in {"sidecar_kind"}},
+        "owner_sha256": manifest_sha256(owner),
+    }
+    (rollout / "_owner.json").write_text(json.dumps(owner), encoding="utf-8")
+    (rollout / "_SUCCESS.json").write_text(json.dumps(success), encoding="utf-8")
+
+    evidence = build_dataset_bundle_summary(DatasetBundleSelection(root, (rollout,)))
+
+    assert evidence.rollouts[0]["included_in_training_totals"] is True, [
+        finding.to_jsonable() for finding in evidence.findings
+    ]
+    assert not any(finding.code == "rollout_promotion_invalid" for finding in evidence.findings)
+
+    manifest["generation"]["shard"]["shard_id"] = None
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+    owner["shard_id"] = None
+    owner["rollout_manifest_sha256"] = manifest_sha256(manifest)
+    success.update({key: owner[key] for key in owner if key != "sidecar_kind"})
+    success["owner_sha256"] = manifest_sha256(owner)
+    (rollout / "_owner.json").write_text(json.dumps(owner), encoding="utf-8")
+    (rollout / "_SUCCESS.json").write_text(json.dumps(success), encoding="utf-8")
+
+    malformed = build_dataset_bundle_summary(DatasetBundleSelection(root, (rollout,)))
+
+    assert malformed.rollouts[0]["included_in_training_totals"] is False
+    assert any(finding.code == "rollout_promotion_invalid" for finding in malformed.findings)
+
+
 def test_blocked_root_excludes_every_rollout_from_training_totals_and_topology(tmp_path: Path) -> None:
     root, source_hash = _write_root_store(tmp_path)
     rollout = _write_rollout_store(tmp_path, name="compatible.zarr", source_hash=source_hash)
@@ -507,7 +744,7 @@ def test_blocked_root_excludes_every_rollout_from_training_totals_and_topology(t
     assert evidence.rollouts[0]["included_in_training_totals"] is False
     assert evidence.aggregate["compatible_rollout_store_count"] == 0
     assert evidence.aggregate["rollout_count"] == 0
-    assert evidence.topology["edges"][0]["resolution"] == "blocked"
+    assert evidence.topology.to_jsonable()["edges"][0]["resolution"] == "blocked"
     assert any(finding.code == "root_split_unreadable" for finding in evidence.findings)
 
 
@@ -544,7 +781,7 @@ def test_coral_catalog_is_non_blocking_and_labels_missing_provenance(tmp_path: P
 
     assert evidence.verdict == "Incomplete"
     assert any(finding.code == "no_rollout_supervision_selected" for finding in evidence.findings)
-    assert evidence.coral_artifacts == (
+    assert tuple(row.to_jsonable() for row in evidence.coral_artifacts) == (
         {
             "path": artifact.resolve().as_posix(),
             "num_classes": 3,
@@ -571,7 +808,7 @@ def test_deep_statistics_reports_trainable_coverage_without_mutating_summary(
             pass
 
         def array(self, path: str) -> np.ndarray:
-            arrays = {
+            arrays: dict[str, np.ndarray] = {
                 "candidates/q_train_mask": np.asarray([True, False, True]),
                 "candidates/target_rri": np.asarray([0.2, np.nan, -0.1], dtype=np.float32),
                 "candidates/target_root_gain": np.asarray([0.3, np.nan, -0.2], dtype=np.float32),
@@ -629,10 +866,10 @@ def test_root_gt_obb_scan_counts_only_finite_non_padding_rows(monkeypatch: pytes
     ]
     manifest.write(root / "manifest.json")
 
-    valid = np.zeros((34,), dtype=np.float32)
+    valid: np.ndarray = np.zeros((34,), dtype=np.float32)
     valid[:6] = [0, 2, 0, 1, 0, 3]
     valid[18:30] = [1, 0, 0, 0, 1, 0, 0, 0, 1, 10, 20, 30]
-    padded = np.full((34,), -1.0, dtype=np.float32)
+    padded: np.ndarray = np.full((34,), -1.0, dtype=np.float32)
     nonfinite = valid.copy()
     nonfinite[0] = np.nan
     finite_nonpositive_geometry = valid.copy()
@@ -643,11 +880,14 @@ def test_root_gt_obb_scan_counts_only_finite_non_padding_rows(monkeypatch: pytes
             pass
 
         def read_numeric_block(self, record: VinOfflineIndexRecord, _name: str) -> np.ndarray:
-            return np.stack(
-                [
-                    valid if record.sample_index == 0 else finite_nonpositive_geometry,
-                    padded if record.sample_index == 0 else nonfinite,
-                ]
+            return cast(
+                np.ndarray,
+                np.stack(
+                    [
+                        valid if record.sample_index == 0 else finite_nonpositive_geometry,
+                        padded if record.sample_index == 0 else nonfinite,
+                    ]
+                ),
             )
 
         def read_optional_record(self, _record: VinOfflineIndexRecord, _name: str) -> Any | None:
