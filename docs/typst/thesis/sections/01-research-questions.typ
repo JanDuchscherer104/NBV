@@ -5,29 +5,16 @@
 
 === Research aim and evaluation logic <ssec:rq-objectives>
 
-The research questions follow the hierarchy of the thesis argument. RQ1 fixes
-what is measured. RQ2 tests whether a non-myopic planning opportunity exists and
-whether a learned model can recover it. RQ3 and RQ4 test whether the
-actor-visible information and generated data support that comparison. RQ5 and
-RQ6 are conditional extensions beyond the core offline finite-candidate claim.
+The thesis asks one principal question: whether bounded lookahead contains
+target-specific endpoint value and whether an actor-visible learned model can
+recover it. Three enabling questions establish whether that answer is
+interpretable: RQ1 fixes the measured outcome, RQ3 fixes the legitimate
+information boundary, and RQ4 fixes candidate and replay support. RQ5 and RQ6
+remain conditional extensions beyond the core offline finite-candidate claim.
 
-=== RQ1 — Target-specific objective and endpoint contract <ssec:rq1>
+=== Principal question
 
-*Can target-conditioned finite-candidate NBV be evaluated through a stable,
-target-specific reconstruction objective under a fixed acquisition budget?*
-
-For a target $e$, the oracle measures reconstruction error on a frozen target
-crop. The primary estimand is the quality change from the root state to the
-endpoint after $H$ acquisitions:
-
-#eqs.entity.endpoint_gain
-
-State-relative RRI is a one-step diagnostic, root-normalized gain supplies the
-training reward, and endpoint gain remains the policy outcome. A positive answer
-requires a frozen, repeatable metric and equal acquisition horizons; runtime,
-invalid actions, and oracle calls are reported separately.
-
-=== RQ2 — Bounded lookahead and learned recovery <ssec:rq2>
+==== RQ2 — Bounded lookahead and learned recovery <ssec:rq2>
 
 *Does bounded oracle lookahead improve fixed-budget target reconstruction over
 one-step oracle-greedy selection, and, if so, can an offline finite-horizon value
@@ -44,21 +31,39 @@ recovery fraction are not yet frozen, RQ2 remains prospective. Absent headroom
 is a negative result for the evaluated support, not a universal claim about
 target-aware planning.
 
-=== RQ3 — Actor-visible target and information state <ssec:rq3>
+=== Enabling validity questions
 
-*Which actor-visible target and history representation supports one-step and
-finite-horizon candidate scoring without privileged target geometry, oracle
-labels, or unselected candidate renders at decision time?*
+==== RQ1 — Target-specific objective and endpoint contract <ssec:rq1>
 
-Ground-truth target tasks remain restricted to supervision and evaluation. The
-actor-facing `V1` protocol admits an observed proposal only when exactly one
-same-class ground-truth box has oriented 3D IoU strictly greater than $0.20$.
-The scorer then receives the proposal-derived target descriptor, causal egocentric
-evidence, remaining budget, and requested horizon, but no privileged geometry,
-candidate renders, or oracle values. Evaluation covers held-out ranking and
-calibration, matching failures, and actor/oracle leakage.
+*Can target-conditioned finite-candidate NBV be evaluated through a stable,
+target-specific reconstruction objective under a fixed acquisition budget?*
 
-=== RQ4 — Candidate, replay, and population support <ssec:rq4>
+For a target $e$, the oracle measures reconstruction error on a frozen target
+crop. The primary estimand is the quality change from the root state to the
+endpoint after $H$ acquisitions:
+
+#eqs.entity.endpoint_gain
+
+State-relative RRI is a one-step diagnostic, root-normalized gain supplies the
+training reward, and endpoint gain remains the policy outcome. A positive answer
+requires a frozen, repeatable metric and equal acquisition horizons; runtime,
+invalid actions, and oracle calls are reported separately.
+
+==== RQ3 — Actor-visible target and information state <ssec:rq3>
+
+*Which end-to-end target, action-support, and history protocol supports
+one-step and finite-horizon candidate scoring without privileged target
+geometry, oracle labels, or unselected candidate renders at decision time?*
+
+Ground-truth target tasks remain restricted to task construction, supervision,
+and evaluation. The actor-facing protocol must account for how the target
+instruction, candidate support, hard validity mask, selected state update, and
+scorer inputs are produced. The scorer receives only the declared target
+descriptor, causal egocentric evidence, remaining budget, and requested horizon;
+evaluation separately audits matching failures, ranking and calibration, and
+actor/oracle leakage.
+
+==== RQ4 — Candidate, replay, and population support <ssec:rq4>
 
 *Do the candidate generator, validity rules, rollout recipes, and replay
 population provide adequate and diverse support for the RQ1--RQ3 estimands?*
@@ -70,7 +75,9 @@ replay and horizon support, and resource cost. Scene-disjoint splits and
 scene-level aggregation prevent dense sampling from masquerading as population
 coverage.
 
-=== RQ5 — Conditional online discrete bridge <ssec:rq5>
+=== Conditional extensions
+
+==== RQ5 — Online discrete bridge <ssec:rq5>
 
 *If offline headroom, replay support, and actor-visible scoring are established,
 does online interaction over the unchanged discrete candidate contract improve
@@ -79,7 +86,7 @@ endpoint target gain or calibration over the offline policy?*
 RQ5 retains the target, information, candidate, validity, and endpoint contracts
 of RQ1--RQ4. It is not required for the core offline claim.
 
-=== RQ6 — Deferred continuous or simulator-backed control <ssec:rq6>
+==== RQ6 — Continuous or simulator-backed control <ssec:rq6>
 
 *If the finite-candidate evidence is stable, does a continuous or hierarchical
 target-then-pose policy provide measurable headroom over the best discrete
@@ -107,10 +114,10 @@ rules before policy outcomes are inspected.
     columns: (0.42fr, 1.08fr, 1.32fr, 1.18fr),
     header: ([*RQ*], [*Question role*], [*Primary evidence*], [*Interpretation gate*]),
     rows: (
-      index-cell([RQ1]), [objective], [target reconstruction endpoint gain], [frozen repeatable metric; fixed horizon and budget],
-      index-cell([RQ2]), [policy comparison], [paired greedy, lookahead, and learned-policy outcomes], [meaningful headroom before recovery],
-      index-cell([RQ3]), [actor support], [ranking, calibration, matching failures, and leakage audits], [actor-visible inputs only],
-      index-cell([RQ4]), [population support], [candidate, replay, validity, and coverage diagnostics], [scene-disjoint aggregation],
+      index-cell([RQ2]), [principal question], [paired greedy, lookahead, and learned-policy outcomes], [meaningful headroom before recovery],
+      index-cell([RQ1]), [enabling measurement validity], [target reconstruction endpoint gain], [frozen repeatable metric; fixed horizon and budget],
+      index-cell([RQ3]), [enabling information validity], [matching, ranking, calibration, and leakage audits], [end-to-end actor-visible protocol],
+      index-cell([RQ4]), [enabling support validity], [candidate, replay, validity, and coverage diagnostics], [scene-disjoint aggregation],
       index-cell([RQ5]), [conditional extension], [matched online discrete-policy evaluation], [offline gates satisfied first],
       index-cell([RQ6]), [deferred extension], [continuous or simulator-backed evaluation], [separate action and cost contract],
     ),

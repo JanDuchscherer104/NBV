@@ -74,11 +74,12 @@ horizon does not create evidence for transitions that the data never resolves.
 // - @CQL-kumar2020 -> docs/literature/tex-src/arXiv-CQL/introduction.tex:3-12, docs/literature/tex-src/arXiv-CQL/method.tex:1-20 (offline distribution shift and conservative value learning)
 
 Together, partial observability, state-dependent choices, and finite-horizon
-return define what a non-myopic scorer must predict @POMDPRobotics-lauri2023
-@FixedHorizonTD-deAsis2020. They do not yet determine how the observation
-history, target, and candidate geometry should be represented. That question is
-the next dependency: the representation must retain the distinctions on which
-future target quality actually depends.
+return make candidate value explicitly relational @POMDPRobotics-lauri2023
+@FixedHorizonTD-deAsis2020. A camera pose has no context-free value: its value
+depends on the causal information state, requested target, currently admissible
+support, horizon, state-update rule, and continuation policy. The next
+dependency is therefore representational: the actor state must preserve the
+distinctions on which those future consequences depend.
 
 // evidence:
 // - @POMDPRobotics-lauri2023 -> docs/literature/tex-src/arXiv-POMDP-Robotics-Survey/root.tex:505-505, docs/literature/tex-src/arXiv-POMDP-Robotics-Survey/root.tex:589-606 (history and belief-state role under partial observability)
