@@ -449,6 +449,30 @@ def test_single_generator_rebuilds_p3d_cache_after_inference(
     assert not observed_triangles[1].is_inference()
 
 
+def test_single_generator_does_not_retain_autograd_mesh_source() -> None:
+    cfg = _base_cfg().model_copy(update={"min_distance_to_mesh": 0.1, "num_samples": 1})
+    generator = CandidateViewGenerator(cfg)
+    mesh, verts, faces = _mesh_triplet(cfg.device)
+    leaf = verts.detach().clone().requires_grad_()
+    mesh_verts = leaf * 1.0
+
+    generator.generate(
+        reference_pose=_identity_pose(device=cfg.device),
+        gt_mesh=mesh,
+        mesh_verts=mesh_verts,
+        mesh_faces=faces,
+        camera_calib_template=_dummy_camera(cfg.device),
+        occupancy_extent=torch.tensor(
+            [-10.0, 10.0, -10.0, 10.0, -10.0, 10.0],
+            dtype=torch.float32,
+            device=cfg.device,
+        ),
+    )
+
+    assert mesh_verts.grad_fn is not None
+    assert generator._mesh_query is None
+
+
 def test_paired_seed_is_derived_from_resolved_component_seed_for_direct_and_replay(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

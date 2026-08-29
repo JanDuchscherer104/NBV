@@ -247,6 +247,16 @@ def test_prepared_mesh_query_rejects_mutated_source_tensors() -> None:
     assert not query.matches(verts, faces, device="cpu", dtype=torch.float32, mesh=None)
 
 
+def test_prepared_mesh_query_does_not_persist_autograd_source() -> None:
+    leaf = torch.ones((3, 3), dtype=torch.float32, requires_grad=True)
+    verts = leaf * 2.0
+    faces = torch.tensor([[0, 1, 2]], dtype=torch.int64)
+    query = geometry.PreparedMeshQuery(verts, faces, device="cpu", dtype=torch.float32)
+
+    assert query.matches(verts, faces, device="cpu", dtype=torch.float32, mesh=None)
+    assert not query.is_persistently_reusable
+
+
 def test_prepared_mesh_query_resolves_unindexed_cuda_for_reuse(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
