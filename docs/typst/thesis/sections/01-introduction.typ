@@ -16,19 +16,35 @@ into the repeated choice of where to look next @ViewPlanningSurvey-scott2003
 // - @ViewPlanningSurvey-scott2003 -> DOI 10.1145/641865.641868 (local primary text unavailable; three-dimensional view-planning scope)
 // - @PB-NBV-jia2025 -> docs/literature/tex-src/arXiv-PB-NBV/sections/related.tex:5-24, docs/literature/tex-src/arXiv-PB-NBV/jzz_2025_ral_resub.tex:55-70 (finite candidate generation, scoring, and selection)
 
+A spatial representation is useful here because of the decisions it supports,
+not because map fidelity is an end in itself. Dense-map representations preserve
+different queries and incur different sensing, computational, and storage
+trade-offs, so their adequacy depends on the downstream task
+@SLAMHandbookDenseMaps-reijgwart2026. For target-specific NBV, the relevant test
+is therefore whether the actor state preserves the distinctions needed to predict
+the reconstruction consequences of candidate views—not whether it reproduces the
+most complete possible world model.
+
+// evidence:
+// - @SLAMHandbookDenseMaps-reijgwart2026 -> https://github.com/SLAM-Handbook-contributors/slam-handbook-public-release/blob/c9d50ef410bf1a280b33a70854592fb4c8deaedb/main.pdf#page=135, https://github.com/SLAM-Handbook-contributors/slam-handbook-public-release/blob/c9d50ef410bf1a280b33a70854592fb4c8deaedb/main.pdf#page=161 (task-dependent representation and downstream-use trade-offs)
+
 With a limited acquisition budget, a view is “best” only relative to an
 objective. Coverage rewards newly observed surface, information criteria reward
 reduced uncertainty, and quality-driven methods evaluate the reconstruction
 itself @SCONE-guedon2022 @FisherRF-jiang2024 @VIN-NBV-frahm2025. These objectives
-can disagree. A view may reveal more of a room without exposing the occluded
-surface of a requested object, while a small side-step may improve that object
-but add little scene-wide coverage. Target conditioning therefore specifies
-*whose geometry* should improve; it is not generic semantic awareness.
+can disagree. Even “information gain” is not unique: D-, A-, and E-optimal
+design summarize uncertainty volume, average variance, and worst-case variance,
+respectively @SLAMHandbookTheory-rosen2026. A view may reveal more of a room or
+reduce one uncertainty summary without exposing the occluded surface of a
+requested object, while a small side-step may improve that object but add little
+scene-wide coverage. Target conditioning therefore specifies *whose geometry*
+should improve; it is not generic semantic awareness.
 
 // evidence:
 // - @SCONE-guedon2022 -> docs/literature/tex-src/arXiv-SCONE/camera_ready_1_intro.tex:24-26 (surface-coverage objective)
 // - @FisherRF-jiang2024 -> docs/literature/tex-src/arXiv-FisherRF/sec/method.tex:4-19 (Fisher-information view utility)
 // - @VIN-NBV-frahm2025 -> docs/literature/tex-src/arXiv-VIN-NBV/sec/3_methods.tex:36-44,78-97 (reconstruction-quality objective, sampled candidates, and greedy selection)
+// - @SLAMHandbookTheory-rosen2026 -> https://github.com/SLAM-Handbook-contributors/slam-handbook-public-release/blob/c9d50ef410bf1a280b33a70854592fb4c8deaedb/main.pdf#page=191 (FIM scalarization through D-, A-, and E-optimality)
 
 Existing methods supply the necessary ingredients under different assumptions.
 VIN-NBV ranks sampled candidates by direct reconstruction improvement,
