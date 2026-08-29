@@ -29,6 +29,7 @@ from pydantic import Field
 from ..data_handling.qh_contracts import validate_experiment_profile
 from ..data_handling.qh_data import QhDatasetConfig
 from ..data_handling.qh_data.views import QhActorStateContract
+from ..geometry_backend import expected_pytorch3d_identity
 from ..rollouts.inspection import oracle_headroom_evidence
 from ..rollouts.qh_reader import QhDataContract
 from ..rollouts.zarr_store import RolloutZarrStoreReader
@@ -53,8 +54,6 @@ _MANIFEST_FILENAME = "manifest.json"
 _SCORER_STATE_FILENAME = "scorer-state.pt"
 _TRAINING_RECEIPT_FILENAME = "training-receipt.json"
 _SELECTION_RECEIPT_FILENAME = "checkpoint-selection-receipt.json"
-_PYTORCH3D_VCS_URL = "https://github.com/facebookresearch/pytorch3d.git"
-_PYTORCH3D_VCS_COMMIT = "b6a77ad7aaf41ed90fca80ce6a2bac3c462a7881"
 _IDENTITY_FIELDS = {
     "actor_state_contract",
     "actor_state_contract_hash",
@@ -1238,12 +1237,13 @@ def _bundle_dependencies() -> dict[str, str]:
     identity, even if it happened to resolve to the same commit once.
     """
 
+    pytorch3d_url, _ = expected_pytorch3d_identity()
     return {
         "python": f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}",
         "torch": str(torch.__version__),
         "pytorch_lightning": importlib.metadata.version("pytorch-lightning"),
         "pytorch3d": importlib.metadata.version("pytorch3d"),
-        "pytorch3d_vcs_url": _PYTORCH3D_VCS_URL,
+        "pytorch3d_vcs_url": pytorch3d_url,
         "pytorch3d_vcs_commit": _installed_pytorch3d_vcs_commit(),
     }
 
@@ -1262,7 +1262,8 @@ def _installed_pytorch3d_vcs_commit() -> str:
         commit = payload["vcs_info"]["commit_id"]
     except (json.JSONDecodeError, KeyError, TypeError) as error:
         raise ValueError("Q_H bundle runtime has malformed PyTorch3D VCS provenance.") from error
-    if (url, vcs, commit) != (_PYTORCH3D_VCS_URL, "git", _PYTORCH3D_VCS_COMMIT):
+    expected_url, expected_commit = expected_pytorch3d_identity()
+    if (url, vcs, commit) != (expected_url, "git", expected_commit):
         raise ValueError("Q_H bundle runtime PyTorch3D VCS identity does not match the exact project pin.")
     return str(commit)
 

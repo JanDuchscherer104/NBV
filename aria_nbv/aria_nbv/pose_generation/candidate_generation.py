@@ -231,7 +231,7 @@ class CandidateViewGeneratorConfig(TargetConfig["CandidateViewGenerator"]):
     Set to ``None`` to keep the current global RNG state (non-deterministic).
     """
 
-    _resolve_device = field_validator("device", mode="before")(BaseConfig._resolve_device)
+    _resolve_device = field_validator("device", mode="before")(BaseConfig._resolve_geometry_device)
 
     _coerce_verbosity = field_validator("verbosity", mode="before")(BaseConfig._coerce_verbosity)
 

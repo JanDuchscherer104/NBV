@@ -5,8 +5,8 @@ from __future__ import annotations
 
 import argparse
 import os
-from pathlib import Path
 import sys
+from pathlib import Path
 
 FAMILIES = ("scaffold", "package", "docs")
 
@@ -28,6 +28,7 @@ SCAFFOLD_PATHS = {
     "scripts/graphify_worktree_seed.py",
     "scripts/reconcile_graphify_worktree.py",
     "scripts/setup_codex_worktree_env.sh",
+    "scripts/sync_ubuntu_artifacts.py",
     "scripts/scaffold_audit.py",
     "scripts/skill_sources.py",
     "scripts/scaffold/run_routing_trials.py",
@@ -52,6 +53,7 @@ SCAFFOLD_PATHS = {
     "scripts/tests/test_reconcile_graphify_worktree.py",
     "scripts/tests/test_graphify_session_readiness.py",
     "scripts/tests/test_setup_worktree_env.sh",
+    "scripts/tests/test_sync_ubuntu_artifacts.py",
 }
 
 DOCS_PATHS = {
@@ -148,11 +150,7 @@ def main() -> int:
     args = parser.parse_args()
 
     try:
-        selected = (
-            set(FAMILIES)
-            if args.full
-            else select_families(parse_nul_paths(sys.stdin.buffer.read()))
-        )
+        selected = set(FAMILIES) if args.full else select_families(parse_nul_paths(sys.stdin.buffer.read()))
     except (UnicodeDecodeError, ValueError) as error:
         parser.error(str(error))
 

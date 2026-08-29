@@ -11,7 +11,7 @@ dependencies = [
     "torch==2.4.1",
     "torchvision==0.19.1",
     "torchaudio==2.4.1",
-    "pytorch3d @ git+https://github.com/facebookresearch/pytorch3d.git@b6a77ad7aaf41ed90fca80ce6a2bac3c462a7881",
+    "pytorch3d==0.7.9",
     # Scientific computing
     "numpy>=1.26.4",
     "scipy",
@@ -94,6 +94,7 @@ dependencies = [
     nbv-optuna                = "aria_nbv.lightning.cli:optuna_main"
     nbv-wandb                 = "aria_nbv.lightning.cli:wandb_main"
     nbv-report                = "aria_nbv.reporting.cli:main"
+    nbv-pytorch3d-backend     = "aria_nbv.geometry_backend:main"
     nbv-cli                   = "aria_nbv.lightning.cli:main"
 
 
@@ -135,9 +136,16 @@ packages = ["aria_nbv"]
 allow-direct-references = true
 
 [tool.uv]
+# Supported execution lanes: Ubuntu CUDA on x86-64 and Apple Silicon research.
+environments = [
+    "sys_platform == 'linux' and platform_machine == 'x86_64'",
+    "sys_platform == 'darwin' and platform_machine == 'arm64'",
+]
 # Ensure pytorch3d is built with the runtime torch
 extra-build-dependencies = { pytorch3d = [
-    "torch",
+    "torch==2.4.1",
+    "mojo==1.0.0b2; sys_platform == 'darwin' and platform_machine == 'arm64'",
+    "mojo-compiler==1.0.0b2; sys_platform == 'darwin' and platform_machine == 'arm64'",
 ], openpoints-shim = [
     "torch==2.4.1",
     "ninja",
@@ -154,6 +162,10 @@ extra-build-dependencies = { pytorch3d = [
     explicit = true
 
     [tool.uv.sources]
+    pytorch3d = [
+        { git = "https://github.com/facebookresearch/pytorch3d.git", rev = "b6a77ad7aaf41ed90fca80ce6a2bac3c462a7881", marker = "sys_platform == 'linux'" },
+        { git = "https://github.com/JanDuchscherer104/pytorch3d.git", rev = "0b213747a5610e56e8be5c0c7a11fca67a883018", marker = "sys_platform == 'darwin' and platform_machine == 'arm64'" },
+    ]
     torch = [{ index = "pytorch-cu121", marker = "sys_platform == 'linux'" }]
     torchvision = [
         { index = "pytorch-cu121", marker = "sys_platform == 'linux'" },

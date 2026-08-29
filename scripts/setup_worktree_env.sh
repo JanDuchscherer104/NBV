@@ -7,7 +7,7 @@ set -euo pipefail
 # worktree topology checks below.
 unset GIT_DIR GIT_WORK_TREE
 
-repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
 
 git_dir_for_worktree() {
   local worktree="$1" marker gitdir

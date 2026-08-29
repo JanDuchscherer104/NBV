@@ -9,6 +9,7 @@ import hashlib
 import importlib.metadata
 import json
 import math
+import platform
 import sys
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -28,7 +29,17 @@ from aria_nbv.rollouts.zarr_store import (
 from tests.rollout_fixtures import build_rollout_records
 
 _ROOT = Path(__file__).resolve().parents[1]
-_GOLDEN = _ROOT / "aria_nbv" / "tests" / "fixtures" / "replay_oracle_golden.json"
+_FIXTURES = _ROOT / "aria_nbv" / "tests" / "fixtures"
+_GOLDEN = _FIXTURES / "replay_oracle_golden.json"
+_DARWIN_ARM64_GOLDEN = _FIXTURES / "replay_oracle_golden_darwin_arm64.json"
+
+
+def _golden_path() -> Path:
+    """Return the platform-specific deterministic fixture when one exists."""
+
+    if platform.system() == "Darwin" and platform.machine() == "arm64":
+        return _DARWIN_ARM64_GOLDEN
+    return _GOLDEN
 
 
 def _assert_import_provenance() -> None:
@@ -231,10 +242,11 @@ def main() -> int:
         print(json.dumps(current, sort_keys=True, indent=2))
         return 0
     if args.update_golden:
-        _GOLDEN.write_text(json.dumps(current, sort_keys=True, indent=2) + "\n", encoding="utf-8")
-        print(f"Updated {_GOLDEN}.")
+        golden = _golden_path()
+        golden.write_text(json.dumps(current, sort_keys=True, indent=2) + "\n", encoding="utf-8")
+        print(f"Updated {golden}.")
         return 0
-    expected = json.loads(_GOLDEN.read_text(encoding="utf-8"))
+    expected = json.loads(_golden_path().read_text(encoding="utf-8"))
     tolerances = expected.get("tolerances", {})
     errors = _mismatches(
         expected,

@@ -94,7 +94,7 @@ class OracleRriLabelerConfig(TargetConfig["OracleRriLabeler"]):
     verbosity: Verbosity = Verbosity.QUIET
     """Pipeline progress verbosity; nested stages retain their own settings."""
 
-    _resolve_device = field_validator("device", mode="before")(BaseConfig._resolve_device)
+    _resolve_device = field_validator("device", mode="before")(BaseConfig._resolve_geometry_device)
 
 
 class OracleRriLabeler:

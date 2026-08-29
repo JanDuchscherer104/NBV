@@ -1,0 +1,78 @@
+# One-sample Apple Silicon VIN store for real-data pose/render/RRI validation.
+#
+# Usage:
+#   cd aria_nbv
+#   PYTORCH3D_BACKEND=mojo uv run nbv-build-offline \
+#     --config-path ../.configs/build_vin_offline_macos_smoke.toml
+
+include_backbone            = false
+include_depths              = true
+include_pointclouds         = true
+include_diagnostic_payloads = false
+include_gt_obbs             = true
+include_detected_obbs       = false
+include_trajectory_metadata = true
+vin_pad_points              = 4096
+semidense_max_points        = 4096
+semidense_include_obs_count = false
+max_candidates              = 3
+samples_per_shard           = 1
+max_samples                 = 1
+train_val_split             = 0.0
+overwrite                   = true
+num_failures_allowed        = 0
+
+[store]
+store_dir = "vin_offline_macos_smoke"
+
+[dataset]
+atek_variant = "efm"
+scene_ids    = ["81283"]
+batch_size   = 1
+wds_shuffle  = false
+wds_repeat   = false
+load_meshes  = true
+require_mesh = true
+
+[labeler]
+device                = "cpu"
+backprojection_stride = 32
+
+    [labeler.generator]
+    device                 = "cpu"
+    camera_label           = "rgb"
+    num_samples            = 3
+    oversample_factor      = 1.0
+    max_resamples          = 1
+    align_to_gravity       = true
+    min_radius             = 0.5
+    max_radius             = 1.0
+    min_elev_deg           = -15.0
+    max_elev_deg           = 20.0
+    delta_azimuth_deg      = 120.0
+    sampling_strategy      = "uniform_sphere"
+    kappa                  = 4.0
+    min_distance_to_mesh   = 0.2
+    ensure_collision_free  = true
+    ensure_free_space      = true
+    collision_backend      = "pytorch3d"
+    ray_subsample          = 64
+    step_clearance         = 0.1
+    view_direction_mode    = "radial_away"
+    view_max_azimuth_deg   = 45.0
+    view_max_elevation_deg = 25.0
+    view_roll_jitter_deg   = 0.0
+    seed                   = 0
+
+    [labeler.depth]
+    max_candidates_final = 3
+    resolution_scale     = 0.1
+
+        [labeler.depth.renderer]
+        device         = "cpu"
+        znear          = 0.001
+        zfar           = 20.0
+        cull_backfaces = false
+        blur_radius    = 0.0
+        bin_size       = 0
+        dtype          = "float32"

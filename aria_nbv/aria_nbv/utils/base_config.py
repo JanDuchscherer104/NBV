@@ -139,6 +139,14 @@ class BaseConfig(BaseSettings):
         return torch.device(value)
 
     @staticmethod
+    def _resolve_geometry_device(value: str | torch.device) -> torch.device:
+        """Resolve a device at the public PyTorch3D geometry boundary."""
+
+        from ..geometry_backend import resolve_geometry_device
+
+        return resolve_geometry_device(value)
+
+    @staticmethod
     def _coerce_verbosity(value: Any) -> Verbosity:
         """Normalize verbosity values accepted across config models."""
         return Verbosity.from_any(value)

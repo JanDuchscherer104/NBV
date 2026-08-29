@@ -3,12 +3,12 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 import re
 import subprocess
 import sys
 import tempfile
 import unittest
+from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
@@ -32,17 +32,13 @@ class SelectionTests(unittest.TestCase):
 
     def test_g002_agent_status_inputs_select_scaffold_validation(self) -> None:
         self.assertEqual(
-            select_families(
-                ["scripts/agent_status.py", "scripts/tests/test_agent_status.py"]
-            ),
+            select_families(["scripts/agent_status.py", "scripts/tests/test_agent_status.py"]),
             {"scaffold"},
         )
 
     def test_workflow_keeps_stable_unfiltered_ci_identity(self) -> None:
         workflow = (REPO_ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
-        pull_request_block = workflow.split("  pull_request:\n", 1)[1].split(
-            "  push:\n", 1
-        )[0]
+        pull_request_block = workflow.split("  pull_request:\n", 1)[1].split("  push:\n", 1)[0]
 
         self.assertTrue(workflow.startswith("name: Root Verification\n"))
         self.assertEqual(pull_request_block.strip(), "")
@@ -51,16 +47,18 @@ class SelectionTests(unittest.TestCase):
         jobs_block = workflow.split("jobs:\n", 1)[1]
         self.assertEqual(
             re.findall(r"^  [A-Za-z0-9_-]+:$", jobs_block, re.MULTILINE),
-            ["  ci:"],
+            ["  ci:", "  macos-geometry:"],
         )
+        self.assertIn("needs: ci\n    if: needs.ci.outputs.package == 'true'", workflow)
+        self.assertIn("runs-on: macos-26", workflow)
         self.assertNotIn("ci-gate", workflow)
         self.assertIn(
             'pip install --upgrade pip pytest PyYAML "graphifyy==0.9.48"',
             workflow,
         )
-        pdf_validator = workflow.split(
-            "      - name: Install PDF evidence validator\n", 1
-        )[1].split("      - name: Set up uv\n", 1)[0]
+        pdf_validator = workflow.split("      - name: Install PDF evidence validator\n", 1)[1].split(
+            "      - name: Set up uv\n", 1
+        )[0]
         self.assertIn("if: steps.impact.outputs.docs == 'true'", pdf_validator)
         self.assertIn("sudo apt-get update", pdf_validator)
         self.assertIn(
@@ -72,31 +70,28 @@ class SelectionTests(unittest.TestCase):
         )[0]
         self.assertIn("if: steps.impact.outputs.package == 'true'", setup_uv)
         self.assertIn(
-            'python -m pip install --disable-pip-version-check --no-input '
-            '"uv==0.12.5"',
+            'python -m pip install --disable-pip-version-check --no-input "uv==0.12.5"',
             setup_uv,
         )
         self.assertIn('uv_version="$(python -m uv --version)"', setup_uv)
         self.assertIn('"uv 0.12.5"|"uv 0.12.5 "*', setup_uv)
         self.assertNotIn("astral-sh/setup-uv@", workflow)
         self.assertNotIn("uses: actions/cache@", workflow)
-        self.assertEqual(workflow.count("python -m uv sync --locked --extra dev"), 1)
-        sync = workflow.split("      - name: Sync package validation environment\n", 1)[
-            1
-        ].split("      - name: Set up Quarto\n", 1)[0]
+        self.assertEqual(workflow.count("python -m uv sync --locked --extra dev"), 2)
+        sync = workflow.split("      - name: Sync package validation environment\n", 1)[1].split(
+            "      - name: Set up Quarto\n", 1
+        )[0]
         self.assertIn("if: steps.impact.outputs.package == 'true'", sync)
         self.assertIn("run: python -m uv sync --locked --extra dev", workflow)
         self.assertNotIn("pip install --upgrade pip uv", workflow)
-        package_validation = workflow.split(
-            "      - name: Validate package contracts\n", 1
-        )[1].split("      - name: Validate documentation\n", 1)[0]
+        package_validation = workflow.split("      - name: Validate package contracts\n", 1)[1].split(
+            "      - name: Validate documentation\n", 1
+        )[0]
         self.assertIn('UV_NO_SYNC: "1"', package_validation)
-        self.assertEqual(workflow.count('UV_NO_SYNC: "1"'), 1)
+        self.assertEqual(workflow.count('UV_NO_SYNC: "1"'), 2)
         self.assertEqual(package_validation.count('UV_NO_SYNC: "1"'), 1)
         self.assertIn('PYTEST_WORKERS: "0"', package_validation)
-        self.assertIn(
-            'make UV="python -m uv" ruff-full package-smoke', package_validation
-        )
+        self.assertIn('make UV="python -m uv" ruff-full package-smoke', package_validation)
         makefile = (REPO_ROOT / "Makefile").read_text(encoding="utf-8")
         self.assertIn("UV ?= uv", makefile)
         self.assertIn("QH_CI_PYTHON ?= $(UV) run --extra dev python", makefile)
@@ -106,7 +101,7 @@ class SelectionTests(unittest.TestCase):
             "$(UV) run --extra dev pytest --import-mode=importlib $(PYTEST_WORKERS_FLAG) $(PACKAGE_SMOKE_TESTS)",
             "$(UV) run --extra dev mypy --no-incremental $(MYPY_JUNIT_FLAG) tests/data_handling/public_api_typing_contract.py",
             "$(UV) run --extra dev ruff format --check --quiet aria_nbv tests",
-            "$(UV) run --extra dev ruff check --output-format \"$(RUFF_CHECK_OUTPUT_FORMAT)\" $(RUFF_FIX_FLAG) aria_nbv tests",
+            '$(UV) run --extra dev ruff check --output-format "$(RUFF_CHECK_OUTPUT_FORMAT)" $(RUFF_FIX_FLAG) aria_nbv tests',
         ):
             with self.subTest(command=command):
                 self.assertIn(command, makefile)
@@ -114,8 +109,7 @@ class SelectionTests(unittest.TestCase):
         self.assertIn("TYPST_VERSION: 0.14.2", workflow)
         self.assertIn("TYPST_EXPECTED_VERSION: typst 0.14.2 (b33de9de)", workflow)
         self.assertIn(
-            "https://github.com/typst/typst/releases/download/"
-            "v0.14.2/typst-x86_64-unknown-linux-musl.tar.xz",
+            "https://github.com/typst/typst/releases/download/v0.14.2/typst-x86_64-unknown-linux-musl.tar.xz",
             workflow,
         )
         self.assertIn(
@@ -125,24 +119,18 @@ class SelectionTests(unittest.TestCase):
         self.assertIn("curl --fail --location --retry 5", workflow)
         self.assertIn("sha256sum --check --strict", workflow)
         self.assertIn('echo "${install_root}" >> "${GITHUB_PATH}"', workflow)
-        self.assertIn(
-            'test "$(typst --version)" = "${TYPST_EXPECTED_VERSION}"', workflow
-        )
+        self.assertIn('test "$(typst --version)" = "${TYPST_EXPECTED_VERSION}"', workflow)
         self.assertNotIn("typst-community/setup-typst", workflow)
         self.assertNotIn("typst-version:", workflow)
         self.assertNotIn('token: ""', workflow)
-        self.assertIn(
-            "make agents-db-validate check-agent-memory scaffold-audit", workflow
-        )
+        self.assertIn("make agents-db-validate check-agent-memory scaffold-audit", workflow)
         self.assertIn(
             "python3 -m pytest -q scripts/tests/test_debrief_index.py "
             "scripts/tests/test_validate_agent_memory_threads.py",
             workflow,
         )
         self.assertIn("python3 scripts/tests/test_agent_governance_g002.py", workflow)
-        self.assertIn(
-            "python3 -m pytest -q scripts/tests/test_routing_trials.py", workflow
-        )
+        self.assertIn("python3 -m pytest -q scripts/tests/test_routing_trials.py", workflow)
         self.assertIn("python3 scripts/tests/test_graphify_worktree_seed.py", workflow)
         self.assertIn('"scripts/build_graphify_projection.py"', workflow)
         self.assertIn('"scripts/literature_catalog.py"', workflow)
@@ -179,9 +167,7 @@ class SelectionTests(unittest.TestCase):
         self.assertIn('"scripts/tests/test_graphify_worktree_seed.py"', workflow)
         self.assertIn('"scripts/tests/test_reconcile_graphify_worktree.py"', workflow)
         self.assertIn('"scripts/tests/test_graphify_session_readiness.py"', workflow)
-        self.assertIn(
-            '"scripts/tests/test_ownership_consolidation_contract.py"', workflow
-        )
+        self.assertIn('"scripts/tests/test_ownership_consolidation_contract.py"', workflow)
         self.assertIn('"scripts/tests/test_routing_trials.py"', workflow)
         self.assertIn('"scripts/tests/test_validate_agent_memory_retired.py"', workflow)
         self.assertIn('"scripts/tests/test_validate_agent_memory_threads.py"', workflow)
@@ -194,9 +180,7 @@ class SelectionTests(unittest.TestCase):
         )
         self.assertIn("python3 scripts/tests/test_reconcile_graphify_worktree.py", workflow)
         self.assertIn("python3 scripts/tests/test_graphify_session_readiness.py", workflow)
-        self.assertIn(
-            "make qmd-frontmatter-check api-docs-self-test docs-render-core", workflow
-        )
+        self.assertIn("make qmd-frontmatter-check api-docs-self-test docs-render-core", workflow)
         self.assertIn(
             "make ownership-consolidation-contract PYTHON_INTERPRETER=python",
             workflow,
@@ -205,8 +189,7 @@ class SelectionTests(unittest.TestCase):
         self.assertIn("steps.impact.outputs.docs == 'true'", workflow)
         makefile = (REPO_ROOT / "Makefile").read_text(encoding="utf-8")
         self.assertIn(
-            "docs-render-core: graphify-projection-self-test "
-            "graphify-projection-live-check",
+            "docs-render-core: graphify-projection-self-test graphify-projection-live-check",
             makefile,
         )
         self.assertIn("graphify-projection-live-check: _check_python", makefile)
@@ -224,8 +207,7 @@ class SelectionTests(unittest.TestCase):
             makefile,
         )
         self.assertIn(
-            "scripts/build_graphify_projection.py --check --aria-code-ref "
-            '"$$(git rev-parse HEAD)"',
+            'scripts/build_graphify_projection.py --check --aria-code-ref "$$(git rev-parse HEAD)"',
             makefile,
         )
 
@@ -246,9 +228,7 @@ class SelectionTests(unittest.TestCase):
             "aria_nbv/aria_nbv/__init__.py": {"package"},
             "aria_nbv/aria_nbv/pose_generation/candidate_generation.py": {"package"},
             "aria_nbv/aria_nbv/pose_generation/geometry.py": {"package"},
-            "aria_nbv/tests/pose_generation/test_api_geometry_contracts.py": {
-                "package"
-            },
+            "aria_nbv/tests/pose_generation/test_api_geometry_contracts.py": {"package"},
             ".configs/example.toml": {"package"},
             ".graphifyignore": {"docs"},
             "scripts/build_graphify_projection.py": {"docs"},
@@ -326,14 +306,10 @@ class SelectionTests(unittest.TestCase):
         skill_root = REPO_ROOT / ".agents/skills/graphify"
         context_path = REPO_ROOT / ".agents/skills/aria-nbv-context/SKILL.md"
         context_guidance = context_path.read_text(encoding="utf-8")
-        boundary_owner = (
-            ".agents/skills/aria-nbv-context/references/graphify-aria-boundary.md"
-        )
+        boundary_owner = ".agents/skills/aria-nbv-context/references/graphify-aria-boundary.md"
         boundary_guidance = (REPO_ROOT / boundary_owner).read_text(encoding="utf-8")
 
-        graphify_branch = context_guidance.split("## Branch Index", 1)[1].split(
-            "## Completion", 1
-        )[0]
+        graphify_branch = context_guidance.split("## Branch Index", 1)[1].split("## Completion", 1)[0]
         self.assertIn(
             "[`references/graphify-aria-boundary.md`](references/graphify-aria-boundary.md)",
             graphify_branch,
@@ -344,9 +320,7 @@ class SelectionTests(unittest.TestCase):
         self.assertIn("scripts/setup_worktree_env.sh", boundary_guidance)
         self.assertIn("graphify hook install", boundary_guidance)
         self.assertIn("## Upstream Lifecycle And Hooks", boundary_guidance)
-        self.assertIn(
-            "skips hook rebuilds inside linked Git worktrees", boundary_guidance
-        )
+        self.assertIn("skips hook rebuilds inside linked Git worktrees", boundary_guidance)
         self.assertTrue((REPO_ROOT / boundary_owner).is_file())
         self.assertEqual(
             (skill_root / ".graphify_version").read_text(encoding="utf-8").strip(),
@@ -383,9 +357,7 @@ class SelectionTests(unittest.TestCase):
                 ["git", "-C", repo, "config", "user.email", "ci@example.invalid"],
                 check=True,
             )
-            subprocess.run(
-                ["git", "-C", repo, "config", "user.name", "CI Test"], check=True
-            )
+            subprocess.run(["git", "-C", repo, "config", "user.name", "CI Test"], check=True)
             source = repo / "aria_nbv/source.py"
             source.parent.mkdir()
             source.write_text("VALUE = 1\n", encoding="utf-8")
@@ -463,9 +435,7 @@ class SelectionTests(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
 
     def test_freshness_fixture_uses_portable_graphify_resolution(self) -> None:
-        fixture = (REPO_ROOT / "scripts/tests/test_graphify_freshness.py").read_text(
-            encoding="utf-8"
-        )
+        fixture = (REPO_ROOT / "scripts/tests/test_graphify_freshness.py").read_text(encoding="utf-8")
         self.assertNotIn("/home/jd/repos/ARIA-NBV", fixture)
         self.assertIn('ROOT / "graphify-out/.graphify_python"', fixture)
         self.assertIn("Graphify 0.9.48 is required", fixture)

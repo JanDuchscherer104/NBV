@@ -2,7 +2,7 @@
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-SANDBOX="$(mktemp -d "${TMPDIR:-/tmp}/aria-worktree-env.XXXXXX")"
+SANDBOX="$(cd "$(mktemp -d "${TMPDIR:-/tmp}/aria-worktree-env.XXXXXX")" && pwd -P)"
 trap 'rm -rf "${SANDBOX}"' EXIT
 
 SHARED_ROOT="${SANDBOX}/shared"
@@ -211,8 +211,33 @@ grep -Fq "ARIA_NBV_SHARED_ROOT must identify the parent worktree" \
 
 snapshot_tree() {
   local root="$1"
-  find "${root}" -mindepth 1 -printf '%P %y\n' | LC_ALL=C sort
-  find "${root}" -type f -print0 | LC_ALL=C sort -z | xargs -0 -r sha256sum
+  python3 - "${root}" <<'PY'
+import hashlib
+import os
+import sys
+from pathlib import Path
+
+root = Path(sys.argv[1])
+entries: list[str] = []
+digests: list[str] = []
+for path in root.rglob("*"):
+    relative = path.relative_to(root).as_posix()
+    if path.is_symlink():
+        kind = "l"
+    elif path.is_dir():
+        kind = "d"
+    elif path.is_file():
+        kind = "f"
+        digest = hashlib.sha256(path.read_bytes()).hexdigest()
+        digests.append(f"{digest}  {path}")
+    else:
+        kind = "?"
+    entries.append(f"{relative} {kind}")
+print("\n".join(sorted(entries)))
+if entries and digests:
+    print()
+print("\n".join(sorted(digests)))
+PY
 }
 
 # The public Codex boundary rejects malformed mode declarations before it ranks
