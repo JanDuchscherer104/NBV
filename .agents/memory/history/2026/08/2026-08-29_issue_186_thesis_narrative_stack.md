@@ -18,7 +18,7 @@ touched_owner_paths:
   - scripts/tests/test_typst_authoring_hygiene.py
 codex_thread: codex://threads/01a04e7a-ee77-7950-909c-61d1e1cb45b4
 repo_object_format: sha1
-repo_head: 766f74b8625f16cce036592bcd7ac50869427729
+repo_head: 5dbce4d313c5cac033c5061d83ec6fe2656d149a
 repo_branch: "codex/issue-186-thesis-evidence-gates"
 worktree_kind: linked
 ---
@@ -27,7 +27,7 @@ worktree_kind: linked
 Implement every scientifically and editorially valid suggestion from GitHub issue 186 as an orthogonal four-branch thesis stack based on `origin/main`.
 
 ## Method
-Audited the issue against the live base, separated edits by canonical narrative owner, and implemented four cumulative lanes: thesis spine and Foundations; experimental world and measurement validity; selected finite-horizon Method; and evidence stages with result-owned interpretation. Moved implementation registries and unselected hypotheses to explicit development-only owners, regenerated notation and PDF artifacts, and reviewed rendered pages after each lane. A subsequent whole-stack regression audit and explicit same-context scientific review compared every changed submission-facing source with the merge-base, repaired ten accepted narrative or executable-template regressions at their owning layers, and restacked all descendants.
+Audited the issue against the live base, separated edits by canonical narrative owner, and implemented four cumulative lanes: thesis spine and Foundations; experimental world and measurement validity; selected finite-horizon Method; and evidence stages with result-owned interpretation. Moved implementation registries and unselected hypotheses to explicit development-only owners, regenerated notation and PDF artifacts, and reviewed rendered pages after each lane. A subsequent whole-stack regression audit and two same-context scientific-review passes compared every changed submission-facing source with the merge-base, repaired eleven accepted narrative or executable-template regressions at their owning layers, and restacked all descendants.
 
 ## Findings
 - `docs/typst/thesis/sections/01-introduction.typ`, `01-research-questions.typ`, and `02-foundations/` now state RQ2 directly, name the measurement, information, and support conditions without a principal/enabling hierarchy, and develop a relational account of view value.
@@ -38,17 +38,17 @@ Audited the issue against the live base, separated edits by canonical narrative 
 - Canonical unit-vector notation was added through `docs/typst/shared/equations/action.typ` and `docs/notation.yml`; generated projections and the tracked thesis PDF were regenerated.
 
 ## Commits
-- [04fc79c90e7a4f9781cc2eb0044d06ac58fcc72c](https://github.com/JanDuchscherer104/ARIA-NBV/commit/04fc79c90e7a4f9781cc2eb0044d06ac58fcc72c) — final narrative-spine and Foundations layer
-- [bedd5dc576e9bf076ad36588622b57c4bd2b1c32](https://github.com/JanDuchscherer104/ARIA-NBV/commit/bedd5dc576e9bf076ad36588622b57c4bd2b1c32) — final experimental-world and measurement layer
-- [8c8075c9bb640ff3c61317f5785232a3448e20b4](https://github.com/JanDuchscherer104/ARIA-NBV/commit/8c8075c9bb640ff3c61317f5785232a3448e20b4) — final selected finite-horizon Method layer
-- [766f74b8625f16cce036592bcd7ac50869427729](https://github.com/JanDuchscherer104/ARIA-NBV/commit/766f74b8625f16cce036592bcd7ac50869427729) — final evidence-stage, Conclusion, and rendered-PDF layer
+- [e589adc54c4cad1a480a339a6b236ebef23e10c1](https://github.com/JanDuchscherer104/ARIA-NBV/commit/e589adc54c4cad1a480a339a6b236ebef23e10c1) — final narrative-spine and Foundations layer
+- [60d639dec549bf9405228b259debf4cc95a05b98](https://github.com/JanDuchscherer104/ARIA-NBV/commit/60d639dec549bf9405228b259debf4cc95a05b98) — final experimental-world and measurement layer
+- [a2f4943e84e188bcd814e4f57e37dce697138bb9](https://github.com/JanDuchscherer104/ARIA-NBV/commit/a2f4943e84e188bcd814e4f57e37dce697138bb9) — final selected finite-horizon Method layer
+- [5dbce4d313c5cac033c5061d83ec6fe2656d149a](https://github.com/JanDuchscherer104/ARIA-NBV/commit/5dbce4d313c5cac033c5061d83ec6fe2656d149a) — final evidence-stage, Conclusion, and rendered-PDF layer
 
 ## Verification
 - `make glossary`: passed with 57 terms, 110 symbols, and 113 equations.
 - `make thesis-literature-provenance`: 31 tests passed.
 - `make typst-authoring-contract`: 21 tests passed after updating the intentional publication-table inventory from 29 to 25 across the stack.
 - `make thesis-marker-contract`, `make thesis-pdf-ci`, `make thesis-pdf`, and `git diff --check`: passed.
-- The regression and scientific-review passes covered every changed submission-facing Typst source against merge-base `fae1b1b08e31978fd16234d1f32f090738ad0403`; ten accepted findings were patched and rechecked.
+- The regression and scientific-review passes covered every changed submission-facing Typst source against merge-base `fae1b1b08e31978fd16234d1f32f090738ad0403`; eleven accepted findings were patched and rechecked.
 - Rendered-page review covered the changed Chapter 1--8 ranges and the standalone evidence-gate figure. It found and repaired one duplicate RQ2 heading; the final 114-page PDF has no clipping, overlap, broken table, unreadable figure, or orphaned chapter page in the affected ranges.
 - Submission-mode compilation remained correctly blocked because no explicit confirmatory thesis-data artifact was supplied. The work promotes no empirical-result claim.
 
