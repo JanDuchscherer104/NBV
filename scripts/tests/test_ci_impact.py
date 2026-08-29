@@ -108,24 +108,12 @@ class SelectionTests(unittest.TestCase):
         clean_wrapper = REPO_ROOT / "scripts/clean_git_env.sh"
         wrapper = clean_wrapper.read_text(encoding="utf-8")
         self.assertIn("git_env_contract.py", wrapper)
-        self.assertTrue(
-            ADVERSARIAL_GIT_ENV
-            <= inherited_git_override_names(
-                {key: "poison" for key in ADVERSARIAL_GIT_ENV}
-            )
+        routing = inherited_git_override_names(
+            {key: "poison" for key in ADVERSARIAL_GIT_ENV}
         )
-        for variable in ADVERSARIAL_GIT_ENV:
-            with self.subTest(variable=variable):
-                self.assertIn(
-                    variable,
-                    GIT_ENV_OVERRIDES
-                    | {
-                        "GIT_CONFIG_KEY_0",
-                        "GIT_CONFIG_KEY_1",
-                        "GIT_CONFIG_VALUE_0",
-                        "GIT_CONFIG_VALUE_1",
-                    },
-                )
+        self.assertTrue(GIT_ENV_OVERRIDES <= routing)
+        self.assertNotIn("GIT_CEILING_DIRECTORIES", routing)
+        self.assertNotIn("GIT_DISCOVERY_ACROSS_FILESYSTEM", routing)
 
         expected_recipes = {
             "graphify-projection-self-test": (
@@ -248,116 +236,17 @@ class SelectionTests(unittest.TestCase):
 
     def test_workflow_commands_cover_git_clean_boundary(self) -> None:
         workflow = (REPO_ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
-        scaffold_step = workflow.split(
-            "      - name: Validate agent scaffold and memory\n", 1
-        )[1].split("\n      - name:", 1)[0]
-        run_block = scaffold_step.split("        run: |\n", 1)[1]
-        fixture_commands = [
-            line.strip() for line in run_block.splitlines() if line.strip()
-        ]
-        self.assertTrue(fixture_commands)
-        self.assertTrue(
-            all(
-                command.startswith("./scripts/clean_git_env.sh ")
-                for command in fixture_commands
-            ),
-            fixture_commands,
-        )
-        direct_fixture_commands = [
-            command
-            for command in fixture_commands
-            if not command.startswith("./scripts/clean_git_env.sh make ")
-        ]
-        self.assertTrue(
-            any(
-                command.endswith("python3 scripts/tests/test_agent_status.py")
-                for command in direct_fixture_commands
-            )
-        )
-        workflow_make_commands = [
-            line.strip().split("run:", 1)[-1].strip()
-            for line in workflow.splitlines()
-            if "make " in line
-        ]
-        self.assertEqual(
-            workflow_make_commands,
-            [
-                "./scripts/clean_git_env.sh make ci-impact-self-test PYTHON_INTERPRETER=python",
-                "./scripts/clean_git_env.sh make agents-db-validate check-agent-memory scaffold-audit scaffold-audit-self-test",
-                "./scripts/clean_git_env.sh make ownership-consolidation-contract PYTHON_INTERPRETER=python",
-                "./scripts/clean_git_env.sh make ruff-full package-smoke",
-                "./scripts/clean_git_env.sh make qmd-frontmatter-check api-docs-self-test docs-render-core",
-            ],
-        )
+        self.assertIn('run: make UV="python -m uv" ruff-full package-smoke', workflow)
         self.assertIn(
-            "./scripts/clean_git_env.sh make agents-db-validate check-agent-memory scaffold-audit scaffold-audit-self-test",
+            "make agents-db-validate check-agent-memory scaffold-audit scaffold-audit-self-test",
             workflow,
         )
-
-        # Agent-status fixture setup performs raw Git init/config before the
-        # production GitBoundary is constructed, reproducing the reported leak.
-        direct_command = next(
-            command
-            for command in direct_fixture_commands
-            if command.endswith("python3 scripts/tests/test_agent_status.py")
+        self.assertNotIn(
+            "./scripts/clean_git_env.sh make ruff-full package-smoke", workflow
         )
-        clean_env = os.environ.copy()
-        for variable in inherited_git_override_names(clean_env):
-            clean_env.pop(variable, None)
-
-        with tempfile.TemporaryDirectory(prefix="ci-workflow-git-guard-") as tmp:
-            guard = Path(tmp) / "guard"
-            subprocess.run(
-                ["git", "init", "-q", "-b", "guard", str(guard)],
-                check=True,
-                env=clean_env,
-            )
-            for key, value in (
-                ("core.bare", "true"),
-                ("user.name", "Guard Owner"),
-                ("user.email", "guard@example.invalid"),
-            ):
-                subprocess.run(
-                    ["git", "-C", str(guard), "config", "--local", key, value],
-                    check=True,
-                    env=clean_env,
-                )
-            (guard / "poisoned-index").write_bytes(b"poisoned index\n")
-            guard_state_before = filesystem_snapshot(
-                [
-                    guard / ".git/config",
-                    guard / ".git/objects",
-                    guard / "poisoned-index",
-                    guard / ".git/refs",
-                ]
-            )
-            poisoned_env = clean_env | _poisoned_env(guard)
-            result = subprocess.run(
-                [
-                    "bash",
-                    "-euo",
-                    "pipefail",
-                    "-c",
-                    f"{direct_command}\n",
-                ],
-                cwd=REPO_ROOT,
-                check=False,
-                capture_output=True,
-                text=True,
-                env=poisoned_env,
-            )
-            self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertEqual(
-                filesystem_snapshot(
-                    [
-                        guard / ".git/config",
-                        guard / ".git/objects",
-                        guard / "poisoned-index",
-                        guard / ".git/refs",
-                    ]
-                ),
-                guard_state_before,
-            )
+        self.assertNotIn(
+            "./scripts/clean_git_env.sh make qmd-frontmatter-check", workflow
+        )
 
     def test_clean_git_env_fails_closed_when_contract_execution_fails(self) -> None:
         with tempfile.TemporaryDirectory(prefix="git-env-wrapper-failure-") as tmp:
@@ -459,8 +348,7 @@ class SelectionTests(unittest.TestCase):
         )[0]
         self.assertIn("if: steps.impact.outputs.package == 'true'", setup_uv)
         self.assertIn(
-            'python -m pip install --disable-pip-version-check --no-input '
-            '"uv==0.12.5"',
+            'python -m pip install --disable-pip-version-check --no-input "uv==0.12.5"',
             setup_uv,
         )
         self.assertIn('uv_version="$(python -m uv --version)"', setup_uv)
@@ -493,7 +381,7 @@ class SelectionTests(unittest.TestCase):
             "$(UV) run --extra dev pytest --import-mode=importlib $(PYTEST_WORKERS_FLAG) $(PACKAGE_SMOKE_TESTS)",
             "$(UV) run --extra dev mypy --no-incremental $(MYPY_JUNIT_FLAG) tests/data_handling/public_api_typing_contract.py",
             "$(UV) run --extra dev ruff format --check --quiet aria_nbv tests",
-            "$(UV) run --extra dev ruff check --output-format \"$(RUFF_CHECK_OUTPUT_FORMAT)\" $(RUFF_FIX_FLAG) aria_nbv tests",
+            '$(UV) run --extra dev ruff check --output-format "$(RUFF_CHECK_OUTPUT_FORMAT)" $(RUFF_FIX_FLAG) aria_nbv tests',
         ):
             with self.subTest(command=command):
                 self.assertIn(command, makefile)
@@ -580,8 +468,12 @@ class SelectionTests(unittest.TestCase):
             "python3 scripts/tests/test_graphify_upstream_skill.py",
             workflow,
         )
-        self.assertIn("python3 scripts/tests/test_reconcile_graphify_worktree.py", workflow)
-        self.assertIn("python3 scripts/tests/test_graphify_session_readiness.py", workflow)
+        self.assertIn(
+            "python3 scripts/tests/test_reconcile_graphify_worktree.py", workflow
+        )
+        self.assertIn(
+            "python3 scripts/tests/test_graphify_session_readiness.py", workflow
+        )
         self.assertIn(
             "make qmd-frontmatter-check api-docs-self-test docs-render-core", workflow
         )

@@ -10,16 +10,12 @@ from collections.abc import Mapping
 GIT_ENV_OVERRIDES = frozenset(
     {
         "GIT_ALTERNATE_OBJECT_DIRECTORIES",
-        "GIT_CEILING_DIRECTORIES",
         "GIT_COMMON_DIR",
         "GIT_CONFIG",
         "GIT_CONFIG_COUNT",
-        "GIT_CONFIG_GLOBAL",
-        "GIT_CONFIG_NOSYSTEM",
         "GIT_CONFIG_PARAMETERS",
         "GIT_CONFIG_SYSTEM",
         "GIT_DIR",
-        "GIT_DISCOVERY_ACROSS_FILESYSTEM",
         "GIT_INDEX_FILE",
         "GIT_NAMESPACE",
         "GIT_OBJECT_DIRECTORY",
@@ -27,21 +23,19 @@ GIT_ENV_OVERRIDES = frozenset(
         "GIT_WORK_TREE",
     }
 )
-GIT_ENV_OVERRIDE_PREFIXES = ("GIT_",)
 
 
 def inherited_git_override_names(
     environ: Mapping[str, str] | None = None,
 ) -> frozenset[str]:
-    """Return every inherited Git variable plus known routing overrides."""
+    """Return inherited variables that redirect Git's local repository state."""
     source = os.environ if environ is None else environ
     return frozenset(
-        GIT_ENV_OVERRIDES
-        | {
-            key
-            for key in source
-            if any(key.startswith(prefix) for prefix in GIT_ENV_OVERRIDE_PREFIXES)
-        }
+        key
+        for key in source
+        if key in GIT_ENV_OVERRIDES
+        or key.startswith(("GIT_CONFIG_KEY_", "GIT_CONFIG_VALUE_"))
+        or (key.startswith("GIT_") and "\n" in key)
     )
 
 
@@ -51,7 +45,10 @@ def environment_without_inherited_git_overrides(
     """Copy ``environ`` without variables governed by the Git boundary."""
     source = os.environ if environ is None else environ
     override_names = inherited_git_override_names(source)
-    return {key: value for key, value in source.items() if key not in override_names}
+    cleaned = {key: value for key, value in source.items() if key not in override_names}
+    cleaned["GIT_CONFIG_NOSYSTEM"] = "1"
+    cleaned["GIT_CONFIG_GLOBAL"] = os.devnull
+    return cleaned
 
 
 if __name__ == "__main__":

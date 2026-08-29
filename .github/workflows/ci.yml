@@ -180,7 +180,7 @@ jobs:
         if: >-
           steps.impact.outputs.scaffold == 'true' ||
           steps.impact.outputs.docs == 'true'
-        run: ./scripts/clean_git_env.sh make ownership-consolidation-contract PYTHON_INTERPRETER=python
+        run: make ownership-consolidation-contract PYTHON_INTERPRETER=python
 
       - name: Validate package contracts
         if: steps.impact.outputs.package == 'true'
@@ -193,4 +193,4 @@ jobs:
         if: steps.impact.outputs.docs == 'true'
         env:
           CI_RENDER_DIR: ${{ runner.temp }}/aria-nbv-ci-renders
-        run: ./scripts/clean_git_env.sh make qmd-frontmatter-check api-docs-self-test docs-render-core
+        run: make qmd-frontmatter-check api-docs-self-test docs-render-core
