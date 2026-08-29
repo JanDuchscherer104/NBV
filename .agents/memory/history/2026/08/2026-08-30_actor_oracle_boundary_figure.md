@@ -9,7 +9,7 @@ canonical_updates_needed: []
 touched_owner_paths: [docs/typst/thesis/figures/actor_oracle_boundary.typ, docs/typst/thesis/sections/03-oracle-and-data-generation/03-01-state-and-visibility.typ]
 codex_thread: codex://threads/01a04f6f-b0ec-7073-9d78-9dd125d8436b
 repo_object_format: sha1
-repo_head: a6cde270a03d4337e0798ed6f3e89209425a3c76
+repo_head: b6f4e9615bc980951688dcda300a692e5b537ada
 repo_branch: "codex/thesis-figure-actor-oracle-boundary"
 worktree_kind: linked
 ---
@@ -33,10 +33,17 @@ hard mask only downstream, and branches reason codes to audit. The integration
 owner now supplies a shorter complementary caption and detailed alternative
 text. PR review further narrowed candidate renders to the compact hard-valid
 subset, preserving the contrast with scorer outputs for all materialized rows.
+Exact-head rereview then exposed two further boundary errors. The final figure
+marks `v0_gt_input` as a privileged, non-deployable target control and
+`v1_observed` as actor-visible, while separating the hard action mask used for
+selection and feasibility supervision from nested Q-label support used for
+value loss and successor backup. The adjacent prose now states the same mask
+and provenance hierarchy without adding a thesis page.
 
 ## Commits
 - [a6cde270a03d4337e0798ed6f3e89209425a3c76](https://github.com/JanDuchscherer104/ARIA-NBV/commit/a6cde270a03d4337e0798ed6f3e89209425a3c76)
 - [ab48be5c5f9ac84ad93e6d75ddeaae31dbe1a649](https://github.com/JanDuchscherer104/ARIA-NBV/commit/ab48be5c5f9ac84ad93e6d75ddeaae31dbe1a649)
+- [b6f4e9615bc980951688dcda300a692e5b537ada](https://github.com/JanDuchscherer104/ARIA-NBV/commit/b6f4e9615bc980951688dcda300a692e5b537ada)
 
 ## Verification
 - standalone Typst compile: pass
@@ -47,6 +54,9 @@ subset, preserving the contrast with scorer outputs for all materialized rows.
   `affa517d29a113751d5f6ac2eecba288211d9412`: APPROVE/CLEAN, zero P0--P2
 - independent review of the hard-valid-render correction at tree
   `91bbdfe18b02186ea2ab44e423c70760af5a20e1`: APPROVE/CLEAN
+- 69 target-protocol and Q_H mask-contract tests: pass
+- independent scientific review of the protocol/mask correction at tree
+  `0b35f83a7b5da5cdf86ae3b97af52570f2b1b0a5`: APPROVE/CLEAN, zero findings
 - `git diff --check`: pass
 
 ## Canonical Owner Impact
