@@ -137,6 +137,7 @@ class PreparedMeshQuery:
         self.triangles: torch.Tensor | None = None
         self.points_first_idx: torch.Tensor | None = None
         self.triangles_first_idx: torch.Tensor | None = None
+        self._pytorch3d_cache_inference: bool | None = None
         self.mesh = mesh
         self._proximity_query: _ProximityQuery | None = None
         self._ray_engines: dict[bool, _RayIntersector] = {}
@@ -226,24 +227,39 @@ class PreparedMeshQuery:
             return _devices_match(self._device, device)
         return bool(self._materialized_device == _resolved_device(device))
 
+    def _clear_pytorch3d_cache(self) -> None:
+        """Discard a prepared bundle that cannot cross execution modes safely."""
+
+        self.verts = None
+        self.faces = None
+        self.triangles = None
+        self.points_first_idx = None
+        self.triangles_first_idx = None
+        self._materialized_device = None
+        self._pytorch3d_cache_inference = None
+
     def pytorch3d_mesh(self) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        """Return normalized vertices, faces, and triangles, materializing once."""
+        """Return normalized mesh tensors while caching only autograd-safe state."""
+
+        target_device = self._materialized_device or _resolved_device(self._device)
+        inference_mode = torch.is_inference_mode_enabled()
+        if self._pytorch3d_cache_inference and not inference_mode:
+            self._clear_pytorch3d_cache()
+        if self.faces is None:
+            self.faces = self._source_faces.to(device=target_device, dtype=torch.int64)
+            self.points_first_idx = torch.zeros(1, device=target_device, dtype=torch.int64)
+            self.triangles_first_idx = torch.zeros(1, device=target_device, dtype=torch.int64)
+            self._materialized_device = target_device
+
+        if torch.is_grad_enabled() and self._source_verts.requires_grad:
+            verts = self._source_verts.to(device=target_device, dtype=self._dtype)
+            return verts, self.faces, verts[self.faces]
 
         if self.triangles is None:
-            target_device = _resolved_device(self._device)
-            verts = self._source_verts.to(device=target_device, dtype=self._dtype)
-            faces = self._source_faces.to(device=target_device, dtype=torch.int64)
-            triangles = verts[faces]
-            points_first_idx = torch.zeros(1, device=target_device, dtype=torch.int64)
-            triangles_first_idx = torch.zeros(1, device=target_device, dtype=torch.int64)
-            self.verts = verts
-            self.faces = faces
-            self.triangles = triangles
-            self.points_first_idx = points_first_idx
-            self.triangles_first_idx = triangles_first_idx
-            self._materialized_device = target_device
+            self.verts = self._source_verts.to(device=target_device, dtype=self._dtype)
+            self.triangles = self.verts[self.faces]
+            self._pytorch3d_cache_inference = inference_mode
         assert self.verts is not None
-        assert self.faces is not None
         return self.verts, self.faces, self.triangles
 
     def point_distance(self, points: torch.Tensor, *, squared: bool = False) -> torch.Tensor:
