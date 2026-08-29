@@ -13,7 +13,7 @@ touched_owner_paths:
   - docs/typst/thesis/main.pdf
 codex_thread: codex://threads/01a04e7a-ee77-7950-909c-61d1e1cb45b4
 repo_object_format: sha1
-repo_head: 1c9fdef11ac76eb595f965cf9f039ba2d183ddb9
+repo_head: ca50ded55a4522101362415231cb49982f242fac
 repo_branch: "codex/issue-186-slam-theory"
 worktree_kind: linked
 ---
@@ -32,14 +32,14 @@ Screened the 669-page public release at revision `c9d50ef410bf1a280b33a70854592f
 - The scientific review found no Handbook-derived claim escalation, actor/oracle leakage, estimand drift, mathematical inconsistency, or unsupported result.
 
 ## Commits
-- [e99f74c7c15ac6ea27ea7e85887e895658f4d739](https://github.com/JanDuchscherer104/ARIA-NBV/commit/e99f74c7c15ac6ea27ea7e85887e895658f4d739) — source registration, chapter citations, and theoretical Introduction framing
-- [1c9fdef11ac76eb595f965cf9f039ba2d183ddb9](https://github.com/JanDuchscherer104/ARIA-NBV/commit/1c9fdef11ac76eb595f965cf9f039ba2d183ddb9) — regenerated 114-page thesis PDF after the final restack
+- [9d085540816a8bdbf951dd4ca44b74391636906c](https://github.com/JanDuchscherer104/ARIA-NBV/commit/9d085540816a8bdbf951dd4ca44b74391636906c) — source registration, chapter citations, and theoretical Introduction framing
+- [ca50ded55a4522101362415231cb49982f242fac](https://github.com/JanDuchscherer104/ARIA-NBV/commit/ca50ded55a4522101362415231cb49982f242fac) — regenerated 121-page thesis PDF after current-main integration and the final prose repair
 
 ## Verification
-- Literature manifest parsing resolved 50 rows; both Handbook citation keys join the registered repository identity.
+- Literature manifest parsing resolved all 53 rows; both Handbook citation keys join the registered repository identity.
 - `make thesis-literature-provenance typst-authoring-contract thesis-marker-contract thesis-pdf-ci`: passed with 31 provenance and 21 authoring tests.
-- The full docs verification command passed with 57 glossary terms, 110 symbols, 113 equations, 50 API-doc tests, and a complete Quarto render.
-- Poppler review of the Introduction and all R-011 owner pages found no clipping, overlap, broken table, unreadable figure, or damaged hierarchy.
+- The full docs verification command passed with 57 glossary terms, 110 symbols, 122 equations, 50 API-doc tests, and a complete Quarto render.
+- Poppler review of the Introduction, all regression owners, and the preserved current-main development pages found no clipping, overlap, broken table, unreadable figure, or damaged hierarchy in the final 121-page PDF.
 
 ## Canonical Owner Impact
 The public source registry, bibliography, active Introduction, and tracked PDF contain the accepted additions. The source-audited research packet and scientific-review findings remain in ignored OMX artifacts; no further canonical update is required.
