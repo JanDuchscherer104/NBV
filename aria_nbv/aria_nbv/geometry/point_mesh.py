@@ -40,8 +40,10 @@ def _tensor_version(tensor: torch.Tensor) -> int | None:
 
 
 def tensor_identity_token(tensor: torch.Tensor) -> tuple[object, ...] | None:
-    """Return a mutation-sensitive identity token, or ``None`` when unsafe to cache."""
+    """Return a mutation-sensitive token for tensors safe in derived caches."""
 
+    if tensor.requires_grad:
+        return None
     version = _tensor_version(tensor)
     if version is None:
         return None

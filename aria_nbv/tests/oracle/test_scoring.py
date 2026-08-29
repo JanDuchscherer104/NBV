@@ -244,3 +244,73 @@ def test_public_score_accepts_inference_mode_tensors_without_reusing_mesh() -> N
     torch.testing.assert_close(first.rri, second.rri)
     assert first_mesh is None
     assert not scorer._mesh_cache
+
+
+def test_public_score_rematerializes_gradient_mesh_for_each_backward() -> None:
+    torch.manual_seed(2)
+    verts, faces = _unit_square_mesh(torch.device("cpu"), dtype=torch.float32)
+    verts.requires_grad_()
+    points_t = torch.randn((16, 3), dtype=torch.float32)
+    points_q = torch.randn((2, 4, 3), dtype=torch.float32)
+    lengths_q = torch.tensor([4, 3], dtype=torch.long)
+    extend = torch.tensor([-2, 2, -2, 2, -2, 2], dtype=torch.float32)
+    scorer = PreparedRriScorerConfig().setup_target()
+
+    first = scorer.score(
+        points_t=points_t,
+        points_q=points_q,
+        lengths_q=lengths_q,
+        gt_verts=verts,
+        gt_faces=faces,
+        extend=extend,
+    )
+    first.rri.sum().backward()
+    first_grad = verts.grad.detach().clone()
+    verts.grad = None
+
+    second = scorer.score(
+        points_t=points_t,
+        points_q=points_q,
+        lengths_q=lengths_q,
+        gt_verts=verts,
+        gt_faces=faces,
+        extend=extend,
+    )
+    second.rri.sum().backward()
+
+    assert verts.grad is not None
+    torch.testing.assert_close(verts.grad, first_grad)
+    assert not scorer._mesh_cache
+
+
+def test_public_score_does_not_reuse_no_grad_mesh_for_backward() -> None:
+    torch.manual_seed(3)
+    verts, faces = _unit_square_mesh(torch.device("cpu"), dtype=torch.float32)
+    verts.requires_grad_()
+    points_t = torch.randn((16, 3), dtype=torch.float32)
+    points_q = torch.randn((2, 4, 3), dtype=torch.float32)
+    lengths_q = torch.tensor([4, 3], dtype=torch.long)
+    extend = torch.tensor([-2, 2, -2, 2, -2, 2], dtype=torch.float32)
+    scorer = PreparedRriScorerConfig().setup_target()
+
+    with torch.no_grad():
+        scorer.score(
+            points_t=points_t,
+            points_q=points_q,
+            lengths_q=lengths_q,
+            gt_verts=verts,
+            gt_faces=faces,
+            extend=extend,
+        )
+    result = scorer.score(
+        points_t=points_t,
+        points_q=points_q,
+        lengths_q=lengths_q,
+        gt_verts=verts,
+        gt_faces=faces,
+        extend=extend,
+    )
+    result.rri.sum().backward()
+
+    assert verts.grad is not None
+    assert not scorer._mesh_cache

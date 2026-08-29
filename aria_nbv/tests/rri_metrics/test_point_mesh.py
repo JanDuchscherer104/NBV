@@ -5,6 +5,7 @@ from __future__ import annotations
 import torch
 
 from aria_nbv.geometry import PreparedMeshQuery
+from aria_nbv.geometry.point_mesh import tensor_identity_token
 from aria_nbv.rri_metrics import point_mesh
 
 
@@ -64,3 +65,10 @@ def test_chunking_bounds_materialized_triangle_rows(monkeypatch) -> None:
     )
 
     assert triangle_rows == [2 * faces.shape[0], 2 * faces.shape[0], faces.shape[0]]
+
+
+def test_derived_cache_token_rejects_gradient_bearing_tensors() -> None:
+    tensor = torch.ones(3, requires_grad=True)
+
+    assert tensor_identity_token(tensor) is None
+    assert tensor_identity_token(tensor.detach()) is not None
