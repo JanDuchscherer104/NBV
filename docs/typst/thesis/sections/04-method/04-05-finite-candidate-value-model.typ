@@ -1,59 +1,46 @@
 #import "../../../shared/macros.typ": *
 #import "../../../shared/symbols.typ": symb
 #import "../../../shared/equations.typ": eqs
-#import "../../draft_markers.typ": thesis_status, research_todo, decision_todo, prune_todo
+#import "../../draft_markers.typ": thesis_status
 
-== Target-Conditioned Finite-Horizon Value Model
-
-#prune_todo(
-  [Retain scalar requested-horizon conditional Q with direct continuous Huber regression as the core. Keep exact horizon two, CORAL, residual, behavior-return, and alternative estimator variants explicitly labelled as diagnostics or ablations.],
-  source: [this section; aria_nbv/aria_nbv/lightning/qh_module.py],
-  gate: [a frozen scorer interface, training objective, checkpoint, and matched policy evaluation],
-)
-
-=== Implemented scorer and training interface
+== Target-Conditioned Finite-Horizon Value
 
 #thesis_status(
   implementation: "partial",
   evidence: "pending",
-  citation: [@VIN-NBV-frahm2025 @CORAL-cao2019 @DoubleDQN-vanHasselt2015],
-  source: "aria_nbv/aria_nbv/data_handling/qh_contracts.py; aria_nbv/aria_nbv/vin/models/target_finite_horizon.py; aria_nbv/aria_nbv/lightning/qh_module.py; aria_nbv/aria_nbv/lightning/qh_q2_certification.py; aria_nbv/aria_nbv/oracle/pipelines/online_qh.py; aria_nbv/tests/lightning/test_qh_gpu_smoke.py; aria_nbv/tests/lightning/test_qh_q2_certification.py",
-  gate: [retain the one-step scorer as a matched control, populate a held-out exact-Q2 receipt, and require independent oracle-rescored policy evidence],
-)[The modular A0/A1 finite-horizon scorer, H0/H1 pose-history seam, S0 root-moments and privileged S1 selected-surface scene carriers, typed output, scalar horizon query, feasibility auxiliary, regression/CORAL value decoders, fitted-Q learner, bounded exact-Q2 certifier, hard-masked online adapter, and dense-valid data path are implemented. Bounded one-epoch CUDA contract fixtures cover both decoders for deployable CF0 bundle reconstruction and source-matched CF+ H0/S1 optimization. These tests establish executable updates, not population-level evidence. An initial five-chain CF+ comparison was inspected during S1 architecture development and therefore belongs to development evidence, not the confirmatory test split. Its numerical outputs have no immutable run receipt in this repository and support no thesis result. Neither CF+ profile is publishable as an inference bundle. A1 remains the default interaction and H0 the default history control; H1 and S1 are exploratory. The learned exact-Q2 and scientific policy gates remain unmet.]
+  citation: [@FittedQIteration-ernst2005 @FixedHorizonTD-deAsis2020 @DoubleDQN-vanHasselt2015 @UVFA-schaul2015],
+  source: "aria_nbv/aria_nbv/vin/models/target_finite_horizon.py; aria_nbv/aria_nbv/lightning/qh_module.py; aria_nbv/aria_nbv/lightning/qh_q2_certification.py; aria_nbv/aria_nbv/oracle/pipelines/online_qh.py; aria_nbv/tests/lightning/test_qh_q2_certification.py",
+  gate: [populate a frozen held-out exact-Q2 receipt; establish oracle headroom; evaluate endpoint recovery on untouched scenes],
+)[The selected method is A1--H0--S0 with a scalar requested horizon, direct continuous Huber regression, fitted-Q recursion, and hard-masked online selection. The implementation path is tested, but learned exact-Q2 accuracy and policy evidence remain absent.]
 
-The actor DTO carries root semidense evidence, target pose and extent admitted by the declared target-input protocol, root-relative candidate geometry, selected-pose history, remaining budget, and candidate materialization support. The non-deployable `v0_gt_input` protocol provides privileged GT-derived target geometry; deployable `v1_observed` requires an actor-visible descriptor and binds its source, construction provenance, and hash in the training and held-out receipts. The DTO deliberately excludes supervision and audit lineage from scorer inputs. In `root_moments_v1`, semidense support is the number of finite persisted points divided by that chain's persisted point length; the collated batch width is padding only and cannot change the scene token or candidate scores. The current model makes this an executable `S0-pose` baseline, but neither a trained checkpoint nor task-sufficient reconstruction state follows from interface tests alone.
+=== Conditional scorer
 
-The H0 scorer has two source roles. Deployable `qh_cf0_v1` requires the selected-observation carrier to be absent. Privileged `qh_cfplus_gt_depth_v1` requires the complete CF-GT prefix $bold(o)_t=(D,V,K,T_(r arrow.l c))_(j<t)^"sel"$ with the same source tag, raster and pose shapes, dtypes, device, and exact causal support as the factual selected-pose history. In the source-matched H0 control these facts are admission conditions only: depth values, depth-valid entries, calibration values, and selected-camera poses do not enter either prediction branch. For any two structurally admissible carriers,
+The actor input contains root semidense and supported EFM3D summaries, target
+geometry admitted by the declared source protocol, relative candidate geometry,
+the factual selected-pose prefix, remaining budget, and materialization support.
+Oracle gains, target crops, meshes, associations, and audit lineage are
+excluded. The current `root_moments_v1` scene summary and H0 pose history make
+this an executable `S0-pose` baseline, not a task-sufficient reconstruction
+state.
 
-#eqs.model.qh_cfplus_h0_control
-
-This invariance makes CF+ H0 the correct source-matched null model for a later S1 encoder: H0 and S1 can share the CF+ population, seed, optimizer, and carrier contract. Their difference nevertheless estimates the complete S1 package, including geometry consumption, added point-network capacity, initialization, and its stochastic path; it does not identify geometry alone. CF+ H0 is not a selected-depth value estimator, and CF0-versus-CF+ H0 differences would primarily confound source population rather than identify a representation gain. Dataset provenance reports admitted CF+ source rows and scenes relative to the immutable actor split. It also reports distinct admitted source--target tasks, but leaves their coverage fraction undefined because the actor store does not enumerate the complete target-task denominator. H0/S1 results therefore estimate performance conditional on CF-GT carrier availability and cannot silently become a claim about the complete root--target population. Lightning must explicitly mark the run privileged; the deployable bundle validator rejects the CF+ profile even if a manifest falsely clears that boolean marker.
-
-The implemented S1 control consumes that carrier without widening the downstream scorer. For selected view $j<t$ and sampled valid pixel $u$, canonical float32 backprojection uses the persisted metric depth, linear pinhole, and root-from-camera pose before expressing the point from the factual current camera. A shared point MLP and masked mean/maximum pooling form a fixed-width residual:
-
-#eqs.model.qh_s1_selected_surface
-
-The zero-output condition $W_"pt"^(0)=0$ is an experimental-control constraint. Under a matched seed, fresh S1 and H0 models have identical common weights and exactly identical conditional-Q and feasibility predictions; the mere presence of a higher-capacity carrier cannot perturb the comparison before training. Only the bias-free final projection is zeroed. Its first gradient is proportional to the already nonzero pooled statistic $bold(g)_t^"S1"$, so ordinary backpropagation can open the residual immediately. The point MLP itself receives no task gradient through a zero projection on that first update and begins adapting after $W_"pt"$ moves away from zero. This short delay is the intended cost of an exact nested-model comparison, and requires no learned gate, warm-up schedule, or checkpoint variant.
-
-The metric divisor $sigma_"xyz"$, pixel stride, view-chunk bound, point width, raster geometry, source profile, and identity-start rule are experiment identity. The executable carrier records this contract as `root_moments_plus_selected_surface_points_identity_start_v1`. The older `root_moments_plus_selected_surface_points_v1` discriminator did not distinguish random from zero-residual initialization; readers retain it as `unknown_legacy_v1` evidence, but new training, warm start, inference, and bundle publication reject it. PyTorch3D is pinned to the exact resolved VCS commit, and deployable manifests verify the installed direct-URL commit rather than recording only the package version. $rho^"pixel"$ is valid sampled pixels divided by causal sampled-pixel capacity; $rho^"view"$ is selected observations with any valid point divided by causal observation count. An empty or all-invalid prefix yields exactly the root-moments control throughout training. Mean pooling makes the carrier density weighted rather than duplicate invariant: globally replicating point support together with sampled capacity preserves the statistic, whereas duplicating only a surface subset changes its empirical weight. It retains neither source-view identity nor ray/free/unknown semantics, and it is target- and candidate-independent. Candidate-relative point attention and Déjà-View-style recurrent refinement remain later, separately promoted interactions.
-
-The first five-chain CF+ comparison cannot serve as confirmatory evidence because its outcomes informed the next S1 initialization choice. It is reclassified as development evidence and its unreceipted numerical summaries are omitted. A valid S1 comparison requires an immutable research-run artifact binding the split role, store and scorer identities, checkpoints, seeds, selected fitted-Q row count, exact-Q2 row count, chain-level aggregation, and uncertainty. Model selection must then stop before evaluation on a new untouched scene-disjoint test manifest. Until that protocol is executed, S1 remains a package-level optimization probe: neither geometry benefit, candidate-local attention, nor recursive-value improvement is established.
-
-The scorer emits two policy-facing tensors before masking:
+Before the hard action mask is applied, the scorer emits
 
 #eqs.rl.qh_scorer_interface
 
-`conditional_q` is finite for every materialized row and is trained only where hard validity and Q-label support admit a target. `feasibility_logits` is produced by a target-, horizon-, and action-mask-independent physical trunk and may receive binary supervision on labelled materialized rows. A configured value decoder may attach training-only tensors, but neither policy masking nor feasibility reads them. Lightning owns hard-mask admission, decoder-specific value loss, optional feasibility BCE, exact $h arrow.l h-1$ recursion checks, Double-Q targets, and target synchronization. Online inference compacts conditional values only through the authoritative hard mask.
+for every materialized row. `conditional_q` alone carries return units and
+enters regression, Bellman backup, and online ranking. Feasibility logits are a
+separate auxiliary prediction; multiplying them by value would mix meanings.
+The training adapter owns hard-valid label and bootstrap admission, while
+online inference owns the final masked selection.
 
-=== Scalar requested-horizon scorer
+The selected A1 interaction lets each candidate query shared scene, target,
+history, budget, and horizon tokens. A0 supplies the matched independent-row
+control. Both use the same geometric query and value decoder. Their comparison
+therefore asks whether query-dependent state reading helps under a fixed state
+and objective; it does not isolate attention independently of parameter count
+or runtime.
 
-#thesis_status(
-  implementation: "implemented",
-  evidence: "pending",
-  citation: [@FittedQIteration-ernst2005 @FixedHorizonTD-deAsis2020 @UVFA-schaul2015 @DeepSets-zaheer2017 @SetTransformer-lee2019 @zhou2023query],
-  source: "docs/typst/thesis/sections/04-method/04-01-scene-representation-requirements.typ; docs/typst/thesis/sections/04-method/04-02-descriptor-and-encoding-plan.typ; aria_nbv/aria_nbv/lightning/qh_module.py",
-  gate: [exact-Q2 certification, A0/A1 controls, per-horizon support tests, and held-out oracle policy comparison],
-)[One scalar $h$ per state is implemented. Omitting the query uses factual remaining budget; public horizon vectorization remains evidence-gated.]
+=== Scalar requested horizon
 
 Using the finite-horizon return and conditional value defined in
 @sec:thesis-sequential-decision-foundations, the return for target $e$ over
@@ -63,177 +50,93 @@ $
   #eqs.rl.finite_horizon_return
 $
 
-and the learned quantity is
+and the learned value is
 
 $
   #eqs.rl.q_h
 $
 
-The notation $Q_H$ names a bounded finite-horizon family. One model query is
+One model call follows the frozen interface
 
 #eqs.model.qh_frozen_interface
 
-rather than a value from a separately configured fixed-H model. The maximum $H_"max"$ is a dataset, model, and checkpoint contract. Requested residual horizon $h$ is a model input and remaining budget $b_t$ determines whether the query is admissible. The admissible pairs form the triangular domain ${ (b_t,h) : 1 <= h <= b_t <= H_"max" }$: $h=b_t$ requests the full factual residual budget, while $h<b_t$ requests a truncated return from the same factual state. `None` selects the diagonal; it does not mean that the horizon is unknown. The boundary $Q_(0,e)=0$ closes the recursion mathematically, while zero in executable tensors is reserved for padding and not a realized learned query. Syntactically in-range requests still fail closed when their horizon lacks manifest-bound training and promotion support. The step index $t$ stays lineage unless a named non-stationarity ablation uses it.
+The notation $Q_H$ names the bounded family rather than a collection of
+separately configured models. Remaining budget $b_t$ describes the factual
+state; $h$ selects one return from the triangular domain
+${(b_t,h): 1 <= h <= b_t <= H_"max"}$. Omitting $h$ requests the full factual
+residual budget. The mathematical boundary $Q_0=0$ closes recursion, whereas
+zero in executable tensors denotes padding and is never a learned query.
 
-One candidate row is one geometric query. Candidate pose, candidate--target relation, and root-scene support are encoded once; remaining budget and requested horizon stay separate named state tokens. The implemented A0 and A1 controls receive identical query and state-token values and return the same-width context:
+Dense labels train $h=1$ for every hard-valid candidate. For $h>1$, only the
+factual selected action has a successor observation, so recursive supervision
+is necessarily narrower. A bundle records realized support by horizon and
+rejects any requested horizon that lacks frozen training and evaluation
+evidence. A wide syntactic interface is not evidence of wide learned
+capability.
 
-#eqs.model.qh_state_fusion_controls
+=== Direct continuous objective
 
-followed by the same `[query, context, query times context]` decoder input and shared per-row value head. A0 flattens the five tokens in the fixed semantic order scene, target, causal history, budget, horizon and uses an independent-row MLP. A1 uses candidate-to-state cross-attention; candidates never become keys or values. The controls are feature-matched but not parameter-matched, so comparisons report trainable parameters and runtime rather than attributing a difference solely to attention. This conditioning follows the general principle of a shared value approximator queried by an explicit task variable @UVFA-schaul2015. Fixed-H models and separate $Q_1,dots,Q_H$ heads remain ablations rather than competing public interfaces.
+The decoder maps each candidate representation directly to root-normalized
+finite-horizon return. Huber loss retains the metric order and additive units of
+that outcome while limiting the leverage of extreme targets. Losses are first
+averaged within realized state and then within horizon so large candidate
+tables and abundant one-step labels do not silently dominate recursive rows.
+Reported calibration and support remain stratified by horizon.
 
-The history token has its own versioned one-factor seam. H0 performs the original masked mean over selected poses expressed from the current camera. H1 keeps those geometric inputs fixed, adds normalized relative age $a_(t,j)=(t-1-j)/H_"max"$, and applies a causal Transformer with a learned empty-prefix token and last-valid readout. The immediate predecessor has age zero; no absolute step embedding is added. Materialized support must equal the complete prefix $j<t$, while padded states remain zero. H1 exposes causal pose order and prefix length, but it does not add selected observations or change the `S0-pose` state estimand. It remains unpromoted until a matched repeated-seed comparison and held-out endpoint evidence justify its capacity.
+At $h=1$, evaluation can use dense candidate labels to report continuous error,
+within-state pairwise ranking, and greedy regret. Factual $h>1$ transitions do
+not supply counterfactual values for unselected rows, so longer-horizon ranking
+and regret remain undefined until exact or independently oracle-rescored
+candidate tables exist. Recording zero support is more faithful than inventing
+a metric from the selected transition alone.
 
-The public interface scores one $h$ per state and returns $[B,S,N_q]$. Multiple horizons use separate calls; private batching may reuse encodings. A public $L$ axis is introduced only after two real atomic callers, measured inadequacy of private batching, and scalar/vector parity tests exist. Every query receives only the causal state available at step $t$; the learning target, not future scorer input, determines how many rewards the value represents.
+=== Fitted-Q recursion
 
-The candidate materialization mask sanitizes padding. Changing only the valid-action mask cannot change raw conditional Q or feasibility logits:
-
-#eqs.rl.qh_conditional_mask_independence
-
-The valid-action mask instead gates the policy argmax, Q supervision, and every bootstrap maximum. The mask defines $cal(A)_t^"valid"={i : m_(t,i)=1}$ for the thesis-core policy. A hard-invalid but materialized row may retain a finite network output for regular tensor operations, but that number has no supervised or deployable Q interpretation and can never enter selection or backup. The feasibility logit is a separate prediction of admissibility; multiplying it by conditional Q would mix units and changing invalid Q values to zero is unsafe when valid values can be negative. Target-independent root encodings may be reused across targets, but target-dependent candidate generators require per-target tables or a union table with an explicit target--candidate availability mask.
-
-The value family is defined relative to a frozen state and source protocol. An `S0-pose` value, a privileged `CF-GT` selected-depth value, and a deployable observed-state value are different functions even when their tensors have similar shapes. The implemented CF+ H0 control belongs to the CF+ source population but, by construction, still estimates an S0-pose-conditioned function; the privileged selected-depth value begins only when S1 actually consumes the carrier. Likewise, “optimal” means optimal continuation only within the generated finite candidate support, hard-validity contract, represented state, and transition distribution. A pose-only state cannot be promoted to a task-sufficient reconstruction value merely by requesting a longer horizon.
-
-=== Horizon-recursive offline learning <ssec:thesis-horizon-recursive-offline-learning>
-
-Batch fitted Q iteration learns a greedy action-value function from a fixed transition collection through successive supervised regression problems; it does not require online interaction @FittedQIteration-ernst2005. The frozen lower-horizon recursion is
+Batch fitted Q iteration turns the fixed replay collection into successive
+supervised problems @FittedQIteration-ernst2005. The immediate reward is
 
 #eqs.rl.target_root_gain_reward
 
-and, for $h>1$,
+and for $h>1$ the selected method uses the lower-horizon target
 
 #eqs.rl.qh_doubleq_target
 
-where the lower-horizon prediction is detached, frozen, or supplied by a delayed target copy. The essential structural rule for this candidate is $Q_h arrow.l Q_(h-1)$: no horizon value bootstraps from itself. Fixed-horizon TD motivates this recursion and shows that horizon-indexed values can share parameters and be updated in parallel, although a staged $h=1$ to $H$ schedule remains the clearest initial control @FixedHorizonTD-deAsis2020.
-
-The stored evidence gives a particularly strong base case. The executable objective queries $h=1$ for every realized state and supervises every finite hard-valid candidate with continuous one-step root-normalized gain. Candidate losses are averaged within state before state means are averaged within horizon; non-empty horizons then receive equal weight. Selected-transition recursion is disjoint and begins at $h>1$. This prevents large candidate tables and abundant Q1 labels from silently dominating longer horizons. The bundle records the realized state/candidate support by horizon and online inference rejects a requested horizon absent from that support. If a selected first action has a successor table with dense one-step labels, then the exact finite-support H=2 target is
-
-#eqs.rl.qh_exact_q2_target
-
-The implemented certification surface distinguishes two claims. A unit-level
-implementation control injects exact one-step values and proves that the
-recursive tensor path reproduces this target. A frozen-bundle population run
-instead measures the learned recursion error
-
-#eqs.rl.qh_exact_q2_error
-
-on held-out supported rows. That second quantity includes the learned $Q_1$
-approximation and is therefore model evidence, not another implementation
-parity test. The population is censused without actor-tensor materialization,
-stratified by scene and target identity, configured horizon, candidate-width
-bin, candidate generator, rollout recipe, and behavior policy, then selected
-by a deterministic balanced hash under explicit global and per-stratum bounds.
-The receipt reports chain coverage, exact-row support, per-stratum error,
-numeric tolerances, and—when CORAL is used—outer-class occupancy and values
-outside the fixed representative support. Longer-horizon interpretation remains
-gated until this learned $Q_2$ error passes its frozen support and tolerance
-contract and independent held-out endpoint evaluation establishes positive
-oracle-lookahead headroom. The existing persisted terminal-step contrast is a
-diagnostic proxy and cannot satisfy that endpoint gate.
-
-The census denominator is the complete eligible held-out chain population,
-not only chains that happen to contain an exact horizon-two row. A chain that
-terminates or becomes unsupported before factual $h=2$ contributes zero exact
-rows and therefore lowers support coverage. It must not disappear through
-post-hoc filtering. Consequently, an executable one-epoch fit, a valid bundle,
-or even low error on a few supported rows cannot promote $h>2$ when the frozen
-minimum-row, coverage, or tolerance predicate fails.
-
-Double Q is an optional estimator for the learned successor maximum. The
-nonterminal bootstrap first intersects hard action support with factual support
-at horizon $h-1$:
+where the continuation value is detached, frozen, or supplied by a delayed
+copy. The structural rule is $Q_h arrow.l Q_(h-1)$: a horizon never bootstraps
+from itself. The successor maximum intersects the factual horizon support with
+the hard action set,
 
 #eqs.rl.qh_supported_successor_set
 
-The online scorer then selects
+and Double Q separates row selection from delayed evaluation
+@DoubleDQN-vanHasselt2015. This estimator may limit max bias, but it cannot
+repair unsupported actions, aliased state, or missing selected observations.
 
-#eqs.rl.qh_doubleq_index
+=== Why exact horizon two is decisive
 
-and a delayed scorer to evaluate that row. This may reduce overestimation from maximizing noisy learned values @DoubleDQN-vanHasselt2015. It is neither a requirement for offline learning nor the definition of the frozen scalar requested-horizon interface. It cannot repair unsupported long-horizon actions, an aliased actor state, or missing selected-observation evidence.
+When the selected action has a successor table with dense one-step labels, its
+finite-support two-step target is computable exactly:
 
-Complete stored chains also permit regression to truncated Monte-Carlo returns.
-Without off-policy correction, those returns estimate the continuation of the
-behavior policy that generated each chain, $Q^mu$, rather than the greedy
-finite-support value $Q^star$ unless that behavior policy is itself the
-specified target policy
-@ReinforcementLearning-sutton2018[Secs. 5.2 and 5.5, pp. 96–97 and 103–109].
-They are therefore useful controls and diagnostics, but they must not be mixed
-with optimal Bellman targets without naming the estimand.
+#eqs.rl.qh_exact_q2_target
 
-// evidence:
-// - @ReinforcementLearning-sutton2018 -> docs/literature/pdf/RLbook2020.pdf#page=118-119, docs/literature/pdf/RLbook2020.pdf#page=125-131 (Ch. 5, Secs. 5.2 and 5.5, printed pp. 96-97 and 103-109; Monte-Carlo action values and behavior-versus-target-policy returns)
+This makes horizon two the first non-myopic falsification test. A unit test
+can inject exact $Q_1$ values and prove that the tensor path implements the
+equation. A frozen population test instead measures learned recursion error,
 
-The objective-design comparison is therefore:
+#eqs.rl.qh_exact_q2_error
 
-1. dense continuous $Q_1$ supervision on every candidate admitted by `q_train_mask`;
-2. exact selected-action $Q_2$ supervision as a base-case certification;
-3. direct continuous regression versus provenance-bound fixed-support CORAL decoding over the same fitted-Q targets;
-4. the shared scalar-horizon model versus fixed-H or separate-head ablations for $h=1,dots,H_"max"$;
-5. Double-Q selector/evaluator backups as a max-bias ablation;
-6. behavior-policy Monte-Carlo return regression as a separate estimand;
-7. an uncentred one-step-plus-residual decomposition.
+on held-out supported rows. The latter tests the learned $Q_1$ approximation,
+state encoding, masks, successor linkage, and recursive target construction
+together. It is therefore model evidence rather than another implementation
+test.
 
-Because dense one-step rows vastly outnumber selected transitions at longer horizons, training and evaluation report state-normalized loss and continuous-unit mean absolute calibration error separately by horizon. Dense $h=1$ additionally reports within-state pairwise ranking accuracy over unequal-target candidate pairs and greedy selected-action regret. The factual selected-transition labels at $h>1$ do not identify either counterfactual quantity, so their per-horizon ranking-pair and regret-state support remains explicitly zero instead of fabricating a metric. Exact or independently oracle-rescored longer-horizon candidate tables are required before those fields can become nonzero. If requested horizons share one learner, their sampling or weighting must be explicit; an aggregate loss must not allow $Q_1$ to hide longer-horizon failure.
+The held-out evaluation begins with the complete eligible chain population
+rather than only rows on which an exact target is available. Chains that
+terminate or lose support before $h=2$ remain in the denominator with zero exact
+rows. Scene- and target-stratified coverage, error, uncertainty, numeric
+tolerance, candidate width, generator, recipe, and behavior policy are frozen
+before inspection. Low error on a small supported subset cannot justify a
+longer horizon when minimum support or coverage fails.
 
-=== Modular continuous-value decoding
-
-#thesis_status(
-  implementation: "implemented",
-  evidence: "pending",
-  citation: [@CORAL-cao2019 @QRDQN-dabney2017],
-  source: "aria_nbv/aria_nbv/vin/modules/qh_value_decoders.py; aria_nbv/aria_nbv/lightning/qh_module.py; aria_nbv/tests/vin/test_qh_value_decoders.py",
-  gate: [fit-data-only support selection, held-out per-horizon ranking and calibration, support-saturation reports, and matched policy evaluation],
-)[Direct regression and provenance-bound fixed-support CORAL are executable alternatives over the same candidate-state features and the same continuous fitted-Q targets. Regression remains canonical; CORAL is an ordinal ablation, not a new action-value estimand.]
-
-The representation trunk produces one feature vector per materialized candidate row. A terminal decoder maps that vector to the scalar `conditional_q` consumed by the unchanged Double-Q backup and hard-masked selector. The regression decoder applies a per-row MLP and linear output, trained with Huber loss in continuous root-gain return units. The CORAL decoder applies a per-row MLP and $K-1$ cumulative thresholds. For fitted-Q target $y_n$, fixed edges #symb.rl.coral_q_edge create the ordinal class #symb.rl.coral_q_label; standard cumulative binary cross-entropy supervises the thresholds @CORAL-cao2019:
-
-#eqs.rl.qh_coral_interface
-
-CORAL provides order, not metric distance. The continuous interpretation used by backup and ranking is an additional experiment contract: repaired class mass is averaged through fixed, strictly increasing representatives #symb.rl.coral_q_value. Support provenance is a closed value object: `train_fitted_v1` may use training targets only, whereas `predeclared_physical_v1` names a target-independent physical rule and units. Both bind the construction method, source population, split role, ordered input digest, edges, representatives, and self-verifying artifact digest into scorer and bundle identity. Historical fixed-edge configurations remain inspection-only. Changing any of these facts defines another model even if $K$ is unchanged. Invalid candidates are not mapped to the lowest class; hard-invalid and unsupported selected rows are excluded before either Huber or CORAL loss.
-
-The outer CORAL classes are open-ended while decoded values saturate at the outer representatives. Every CORAL run consequently reports the fraction of fitted-Q targets below and above the representative support, the outer-class fraction, and pre-repair cumulative-probability order violations. Train-fitted support must be frozen before validation or test evaluation; physically predeclared support must be frozen before any empirical target outcome is inspected. Targets are never clipped into the outer classes. A one-epoch GPU smoke proves the executable optimization transaction and, only for profiles admitted by the publisher, bundle reconstruction. It does not prove scientific superiority or make Huber and cumulative-BCE loss magnitudes comparable.
-
-If a third decoder is promoted, quantile regression is the most coherent next study: it estimates a return distribution whose expectation can preserve the scalar ranking seam, whereas CORAL only discretizes one scalar target @QRDQN-dabney2017. Such a head is justified only after stochastic returns or actor-state aliasing are measured, and it requires a separately frozen distributional Bellman projection, quantile support, risk-neutral or risk-sensitive decoding rule, and calibration evaluation. It must not be introduced as a stylistic replacement for direct Q.
-
-=== One-step base and finite-horizon residual
-
-#thesis_status(
-  implementation: "exploratory",
-  evidence: "pending",
-  citation: [@CORAL-cao2019 @FixedHorizonTD-deAsis2020],
-  source: "docs/literature/tex-src/arXiv-VIN-NBV/sec/3_methods.tex, ordinal RRI paragraph, line 125; docs/contents/theory/candidate_view_dependence.qmd",
-  gate: [target-specific root-gain calibration and direct-versus-residual ablation across horizons],
-)[The residual decomposition is a testable hypothesis. Direct continuous finite-horizon value prediction remains the required control under whichever time-query interface is selected.]
-
-The hypothesis separates calibrated immediate utility from downstream effects:
-
-$
-  #eqs.rl.qh_residual_decomposition
-$
-
-The base $b_(psi,i)$ must predict continuous one-step target root gain
-
-#eqs.rl.target_root_gain_reward
-
-in the same additive units as the finite-horizon return. Historical state-relative RRI or an ordinal CORAL score may remain auxiliary ranking and calibration outputs, but they are not interchangeable with this additive base unless an explicit calibrated conversion is learned and validated. The residual captures candidate regeneration, selected-observation state changes, occlusion, support, and the requested residual horizon.
-
-It is not exactly mean-centred within each candidate table because duplicate or unrelated rows would then change absolute value targets. Magnitude regularization may be tested without redefining the value field:
-
-$
-  #eqs.rl.qh_uncentered_residual
-$
-
-The historical one-step CORAL score remains a motivated myopic ranking and calibration interface, but it must not be confused with the implemented finite-horizon CORAL decoder above. The historical head discretizes one-step RRI; the new decoder discretizes the continuous fitted-Q target and decodes back to return units. Fixed-H and requested-horizon models, the exact H=2 control, Double-Q ablation, Monte-Carlo control, and residual learner form separate comparisons rather than one implicit architecture.
-
-#research_todo(
-  [Compare staged and joint shared-parameter variable-horizon fitted Q against separate per-horizon heads; include dense Q1, exact Q2, Double Q, behavior-return regression, and the uncentred residual after positive oracle-lookahead headroom is established.],
-  source: [variable-horizon learning-target contract],
-  gate: [A0/A1 learning, per-horizon support report, and headroom report],
-)
-
-#decision_todo(
-  [Freeze the maximum horizon, horizon-sampling or loss-weighting rule, lower-horizon target-update schedule, and target-network rule in the resolved training manifest. For the residual ablation, also record whether the one-step base is frozen, slow-fine-tuned, or jointly trained.],
-  source: [variable-horizon fitted-value hypothesis],
-  gate: [model-selection protocol freeze],
-)
-
-The scientific endpoint is not training loss. For every claimed horizon, selected trajectories are regenerated under the documented candidate and state protocol and re-scored by the same target-specific oracle used for the baselines. After positive oracle-lookahead headroom is established against oracle-greedy, the model succeeds only if it closes a prespecified fraction of the endpoint gap from the actor-visible learned-myopic control to oracle lookahead on held-out scenes without violating horizon, mask, provenance, source, or support constraints.
+Exact $Q_2$ is necessary but not sufficient: policy claims additionally require
+positive equal-budget oracle headroom and held-out endpoint recovery.
