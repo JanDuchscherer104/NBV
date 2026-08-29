@@ -112,3 +112,42 @@ def test_prepared_mesh_query_rejects_mutated_source_tensors() -> None:
 
     verts.add_(1.0)
     assert not query.matches(verts, faces, device="cpu", dtype=torch.float32, mesh=None)
+
+
+def test_prepared_mesh_query_accepts_inference_tensors_without_reusing_them(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    observed_triangles: list[torch.Tensor] = []
+
+    def fake_point_face_distance(
+        points: torch.Tensor,
+        _points_first_idx: torch.Tensor,
+        triangles: torch.Tensor,
+        _triangles_first_idx: torch.Tensor,
+        _max_points: int,
+        _min_triangle_area: float,
+    ) -> torch.Tensor:
+        observed_triangles.append(triangles)
+        return torch.ones(points.shape[0], dtype=points.dtype)
+
+    monkeypatch.setattr(
+        "pytorch3d.loss.point_mesh_distance.point_face_distance",
+        fake_point_face_distance,
+    )
+
+    with torch.inference_mode():
+        verts = torch.tensor(
+            [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]],
+            dtype=torch.float32,
+        )
+        faces = torch.tensor([[0, 1, 2]], dtype=torch.int64)
+        points = torch.tensor([[0.25, 0.25, 1.0]], dtype=torch.float32)
+        first = geometry.PreparedMeshQuery.acquire(None, verts, faces, device="cpu", dtype=torch.float32)
+
+        assert torch.equal(first.point_distance(points), torch.ones(1))
+        assert not first.matches(verts, faces, device="cpu", dtype=torch.float32, mesh=None)
+
+        second = geometry.PreparedMeshQuery.acquire(first, verts, faces, device="cpu", dtype=torch.float32)
+
+    assert second is not first
+    assert len(observed_triangles) == 1

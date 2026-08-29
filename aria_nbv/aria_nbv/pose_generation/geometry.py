@@ -13,18 +13,23 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+import numpy as np
 import torch
+from numpy.typing import NDArray
 
 if TYPE_CHECKING:
-    import trimesh  # type: ignore[import-untyped]
+    import trimesh
 
 DEVICE_FWD = [0.0, 0.0, 1.0]
 
 
-def _tensor_version(tensor: torch.Tensor) -> int:
-    """Return PyTorch's in-place mutation counter for cache invalidation."""
+def _tensor_version(tensor: torch.Tensor) -> int | None:
+    """Return the mutation counter, or ``None`` when Torch does not expose one."""
 
-    return int(getattr(tensor, "_version", 0))
+    try:
+        return int(tensor._version)
+    except (AttributeError, RuntimeError):
+        return None
 
 
 class PreparedMeshQuery:
@@ -33,7 +38,9 @@ class PreparedMeshQuery:
     The query owns device/dtype-normalized mesh tensors and materializes the
     PyTorch3D triangle table once. Optional Trimesh proximity and ray adapters
     are initialized lazily and then reused by every pruning rule sharing this
-    query. Callers must create a new query after mutating the source mesh.
+    query. :meth:`acquire` rejects reuse after source mutation. Inference-mode
+    tensors remain valid for one query but are deliberately not reused because
+    Torch does not expose their mutation counters.
 
     Args:
         verts ``Tensor["V 3", float]``: World-frame vertices in metres.
@@ -67,6 +74,29 @@ class PreparedMeshQuery:
         self._proximity_query: Any | None = None
         self._ray_engines: dict[bool, Any] = {}
 
+    @classmethod
+    def acquire(
+        cls,
+        current: PreparedMeshQuery | None,
+        verts: torch.Tensor,
+        faces: torch.Tensor,
+        *,
+        device: torch.device | str,
+        dtype: torch.dtype,
+        mesh: "trimesh.Trimesh | None" = None,
+    ) -> PreparedMeshQuery:
+        """Reuse a matching query or prepare one for the supplied mesh contract."""
+
+        if current is not None and current.matches(
+            verts,
+            faces,
+            device=device,
+            dtype=dtype,
+            mesh=mesh,
+        ):
+            return current
+        return cls(verts, faces, device=device, dtype=dtype, mesh=mesh)
+
     def matches(
         self,
         verts: torch.Tensor,
@@ -78,11 +108,17 @@ class PreparedMeshQuery:
     ) -> bool:
         """Return whether this query can safely serve the supplied mesh inputs."""
 
+        verts_version = _tensor_version(verts)
+        faces_version = _tensor_version(faces)
         return (
-            verts is self._source_verts
+            self._source_verts_version is not None
+            and self._source_faces_version is not None
+            and verts_version is not None
+            and faces_version is not None
+            and verts is self._source_verts
             and faces is self._source_faces
-            and _tensor_version(verts) == self._source_verts_version
-            and _tensor_version(faces) == self._source_faces_version
+            and verts_version == self._source_verts_version
+            and faces_version == self._source_faces_version
             and mesh is self._source_mesh
             and self.verts.device == torch.device(device)
             and self.verts.dtype == dtype
@@ -101,7 +137,7 @@ class PreparedMeshQuery:
             ValueError: If points do not match the prepared device and dtype.
         """
 
-        from pytorch3d.loss.point_mesh_distance import (  # type: ignore[import-untyped]
+        from pytorch3d.loss.point_mesh_distance import (
             _DEFAULT_MIN_TRIANGLE_AREA,
             point_face_distance,
         )
@@ -127,27 +163,40 @@ class PreparedMeshQuery:
         if self.mesh is None:
             raise ValueError("PreparedMeshQuery requires a Trimesh mesh for signed-distance queries.")
         if self._proximity_query is None:
-            import trimesh  # type: ignore[import-untyped]
+            import trimesh
 
             self._proximity_query = trimesh.proximity.ProximityQuery(self.mesh)
         distances = self._proximity_query.signed_distance(points.detach().cpu().numpy())
         return torch.from_numpy(distances).to(device=points.device, dtype=points.dtype).abs()
 
-    def ray_engine(self, *, use_pyembree: bool) -> Any:
-        """Return one cached Trimesh ray adapter for the requested backend."""
+    def intersects_any(
+        self,
+        origins: NDArray[np.floating[Any]],
+        directions: NDArray[np.floating[Any]],
+        *,
+        max_distance: NDArray[np.floating[Any]],
+        use_pyembree: bool,
+    ) -> NDArray[np.bool_]:
+        """Return whether each bounded ray intersects the prepared mesh."""
 
         if self.mesh is None:
             raise ValueError("PreparedMeshQuery requires a Trimesh mesh for ray queries.")
         engine = self._ray_engines.get(use_pyembree)
         if engine is None:
             if use_pyembree:
-                from trimesh.ray.ray_pyembree import RayMeshIntersector  # type: ignore[import-untyped]
+                from trimesh.ray.ray_pyembree import RayMeshIntersector
 
                 engine = RayMeshIntersector(self.mesh)
             else:
                 engine = self.mesh.ray
             self._ray_engines[use_pyembree] = engine
-        return engine
+        intersections = engine.intersects_any(
+            origins,
+            directions,
+            multiple_hits=False,
+            max_distance=max_distance,
+        )
+        return np.asarray(intersections, dtype=np.bool_)
 
 
 def point_mesh_distance(points: torch.Tensor, verts: torch.Tensor, faces: torch.Tensor) -> torch.Tensor:

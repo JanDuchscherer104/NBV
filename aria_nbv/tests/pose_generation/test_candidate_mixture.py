@@ -191,6 +191,10 @@ def test_mixture_prepares_mesh_query_once_for_all_components(monkeypatch: pytest
         def __init__(self, *_args, **_kwargs) -> None:
             prepared.append(self)
 
+        @classmethod
+        def acquire(cls, current, *args, **kwargs):
+            return current if current is not None else cls(*args, **kwargs)
+
         def matches(self, *_args, **_kwargs) -> bool:
             return True
 
@@ -210,6 +214,67 @@ def test_mixture_prepares_mesh_query_once_for_all_components(monkeypatch: pytest
 
     assert result.mask_valid.shape[0] == 4
     assert len(prepared) == 1
+
+
+def test_mixture_skips_mesh_preparation_when_collision_clearance_is_disabled(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import aria_nbv.pose_generation.candidate_mixture as mixture_module
+
+    class UnexpectedPreparedMeshQuery:
+        @classmethod
+        def acquire(cls, *_args, **_kwargs):
+            raise AssertionError("disabled collision clearance must not prepare mesh state")
+
+    monkeypatch.setattr(mixture_module, "PreparedMeshQuery", UnexpectedPreparedMeshQuery)
+    cfg = CandidateMixtureViewGeneratorConfig(
+        base=_base_cfg().model_copy(
+            update={
+                "ensure_collision_free": True,
+                "step_clearance": 0.0,
+            }
+        ),
+        components=[
+            CandidateMixtureComponentConfig(name="forward", count=2, strategy=ViewDirectionMode.FORWARD_RIG),
+            CandidateMixtureComponentConfig(name="away", count=2, strategy=ViewDirectionMode.RADIAL_AWAY),
+        ],
+    )
+
+    result = _run_generate(cfg)
+
+    assert result.mask_valid.shape[0] == 4
+
+
+def test_mixture_accepts_inference_mode_meshes_without_cross_request_reuse() -> None:
+    cfg = CandidateMixtureViewGeneratorConfig(
+        base=_base_cfg().model_copy(update={"min_distance_to_mesh": 0.1}),
+        components=[
+            CandidateMixtureComponentConfig(name="forward", count=2, strategy=ViewDirectionMode.FORWARD_RIG),
+            CandidateMixtureComponentConfig(name="away", count=2, strategy=ViewDirectionMode.RADIAL_AWAY),
+        ],
+    )
+    generator = CandidateMixtureViewGenerator(cfg)
+
+    with torch.inference_mode():
+        mesh, verts, faces = _mesh_triplet(cfg.device)
+        kwargs = {
+            "reference_pose": _identity_pose(device=cfg.device),
+            "gt_mesh": mesh,
+            "mesh_verts": verts,
+            "mesh_faces": faces,
+            "camera_calib_template": _dummy_camera(cfg.device),
+            "occupancy_extent": torch.tensor(
+                [-10.0, 10.0, -10.0, 10.0, -10.0, 10.0],
+                dtype=torch.float32,
+            ),
+            "runtime_context": CandidateGenerationRuntimeContext(descriptor=_descriptor()),
+        }
+        first_result = generator.generate(**kwargs)
+        first_query = generator._mesh_query
+        second_result = generator.generate(**kwargs)
+
+    assert first_result.mask_valid.shape[0] == second_result.mask_valid.shape[0] == 4
+    assert generator._mesh_query is not first_query
 
 
 def test_paired_seed_is_derived_from_resolved_component_seed_for_direct_and_replay(

@@ -220,18 +220,29 @@ class PathCollisionRule(RuleBase):
         origins_np = origin.expand_as(targets[eligible_indices]).detach().cpu().numpy()
         dirs_np = dirs_norm[eligible_indices].detach().cpu().numpy()
         max_dist = dists[eligible_indices].detach().cpu().numpy()
-        ray_engine = ctx.mesh_query.ray_engine(use_pyembree=False) if ctx.mesh_query is not None else ctx.gt_mesh.ray
-        if backend == CollisionBackend.PYEMBREE and self._pyembree_available:
-            if ctx.mesh_query is not None:
-                ray_engine = ctx.mesh_query.ray_engine(use_pyembree=True)
-            else:
+        use_pyembree = backend == CollisionBackend.PYEMBREE and self._pyembree_available
+        if ctx.mesh_query is not None:
+            intersects = ctx.mesh_query.intersects_any(
+                origins_np,
+                dirs_np,
+                max_distance=max_dist,
+                use_pyembree=use_pyembree,
+            )
+        else:
+            ray_engine = ctx.gt_mesh.ray
+            if use_pyembree:
                 from trimesh.ray.ray_pyembree import RayMeshIntersector  # type: ignore
 
                 ray_engine = RayMeshIntersector(ctx.gt_mesh)
-        elif backend == CollisionBackend.PYEMBREE and not self._pyembree_available:
+            intersects = ray_engine.intersects_any(
+                origins_np,
+                dirs_np,
+                multiple_hits=False,
+                max_distance=max_dist,
+            )
+        if backend == CollisionBackend.PYEMBREE and not self._pyembree_available:
             self.warn_once("pyembree not available; falling back to trimesh ray engine.")
 
-        intersects = ray_engine.intersects_any(origins_np, dirs_np, multiple_hits=False, max_distance=max_dist)
         collide = torch.from_numpy(intersects).to(ctx.mask_valid.device)
         if ctx.cfg.collect_debug_stats:
             evaluated = torch.zeros_like(eligible)

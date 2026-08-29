@@ -535,19 +535,10 @@ class CandidateMixtureViewGenerator:
         component_names: list[str] = []
         from ..rollouts.replay.policy import derive_component_seed
 
-        needs_mesh_query = self.config.base.min_distance_to_mesh > 0 or self.config.base.ensure_collision_free
-        mesh_query = self._mesh_query
-        if needs_mesh_query and (
-            mesh_query is None
-            or not mesh_query.matches(
-                mesh_verts,
-                mesh_faces,
-                device=self.config.device,
-                dtype=reference_pose.t.dtype,
-                mesh=gt_mesh,
-            )
-        ):
-            mesh_query = PreparedMeshQuery(
+        mesh_query = None
+        if self.config.base.requires_mesh_query:
+            mesh_query = PreparedMeshQuery.acquire(
+                self._mesh_query,
                 mesh_verts,
                 mesh_faces,
                 device=self.config.device,

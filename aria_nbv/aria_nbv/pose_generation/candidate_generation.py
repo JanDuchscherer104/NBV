@@ -311,6 +311,12 @@ class CandidateViewGeneratorConfig(TargetConfig["CandidateViewGenerator"]):
         """Return the candidate azimuth span in radians."""
         return radians(self.delta_azimuth_deg)
 
+    @property
+    def requires_mesh_query(self) -> bool:
+        """Return whether an enabled pruning rule needs prepared mesh state."""
+
+        return self.min_distance_to_mesh > 0 or (self.ensure_collision_free and self.step_clearance > 0)
+
 
 def _gravity_align_pose(reference_pose: PoseTW, *, eps: float = 1e-6) -> PoseTW:
     """Return a gravity-aligned variant of ``reference_pose`` with identical translation.
@@ -656,19 +662,9 @@ class CandidateViewGenerator:
             # frame used to construct positions.
             offsets_ref = reference_pose.inverse().transform(centers_world)
 
-        mesh_query = self._mesh_query
-        needs_mesh_query = self.config.min_distance_to_mesh > 0 or self.config.ensure_collision_free
-        if needs_mesh_query and (
-            mesh_query is None
-            or not mesh_query.matches(
-                mesh_verts,
-                mesh_faces,
-                device=device,
-                dtype=centers_world.dtype,
-                mesh=gt_mesh,
-            )
-        ):
-            mesh_query = PreparedMeshQuery(
+        if self.config.requires_mesh_query:
+            mesh_query = PreparedMeshQuery.acquire(
+                self._mesh_query,
                 mesh_verts,
                 mesh_faces,
                 device=device,
@@ -676,7 +672,7 @@ class CandidateViewGenerator:
                 mesh=gt_mesh,
             )
             self._mesh_query = mesh_query
-        elif not needs_mesh_query:
+        else:
             mesh_query = None
 
         ctx = CandidateContext(

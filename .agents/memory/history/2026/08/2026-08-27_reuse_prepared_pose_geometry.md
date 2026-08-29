@@ -20,7 +20,7 @@ worktree_kind: linked
 Eliminate repeated mesh conversion and query-engine construction during candidate pose generation.
 
 ## Method
-Prepared immutable mesh-query state once per generation request and threaded it through samplers, builders, rules, and mixture components.
+Prepared mesh-query state at the generator composition seam and threaded it through samplers, builders, rules, and mixture components. Generator-scoped reuse is mutation-aware; inference-mode tensors without version counters use request-local prepared state.
 
 ## Findings
 `aria_nbv/aria_nbv/pose_generation/geometry.py` now owns reusable PyTorch3D triangles plus Trimesh proximity and ray adapters. Empty eligible candidate sets return before downstream geometry work.
@@ -33,4 +33,4 @@ Prepared immutable mesh-query state once per generation request and threaded it 
 - Focused pose-generation tests: 26 passed, 1 skipped.
 
 ## Canonical Owner Impact
-The pose-generation geometry owners and their focused tests now define request-scoped mesh preparation and reuse.
+The pose-generation geometry owners and their focused tests now define generator-scoped mesh reuse, invalidation, and request-local fallback for untrackable tensors.
