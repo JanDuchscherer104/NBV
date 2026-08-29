@@ -40,7 +40,7 @@ class CandidatePointClouds:
     """Valid point counts ``Tensor[\"C\", int64]`` for each padded row."""
 
     semidense_points: Tensor
-    """Collapsed observed SLAM points ``Tensor[\"K 3\", float]`` in world metres."""
+    """Borrowed immutable collapsed SLAM points ``Tensor[\"K 3\", float]`` in world metres."""
 
     semidense_length: Tensor
     """Observed point count ``Tensor[\"1\", int64]`` for serialization symmetry."""
@@ -143,8 +143,8 @@ def build_candidate_pointclouds(
     return CandidatePointClouds(
         points=padded,
         lengths=lengths,
-        semidense_points=prepared.semidense_points.clone(),
-        semidense_length=prepared.semidense_length.clone(),
+        semidense_points=prepared.semidense_points,
+        semidense_length=prepared.semidense_length,
         occupancy_bounds=occupancy_bounds,
     )
 

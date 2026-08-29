@@ -42,11 +42,12 @@ def test_prepared_sample_geometry_reuses_collapse_and_static_bounds(monkeypatch)
         dtype=torch.float32,
     )
     first = candidate_pointclouds.build_candidate_pointclouds(sample, batch, prepared_sample=prepared)
-    first.semidense_points.add_(10.0)
     second = candidate_pointclouds.build_candidate_pointclouds(sample, batch, prepared_sample=prepared)
 
     assert collapse_calls == 1
-    assert first.semidense_points.data_ptr() != second.semidense_points.data_ptr()
+    assert (
+        first.semidense_points.data_ptr() == second.semidense_points.data_ptr() == prepared.semidense_points.data_ptr()
+    )
     assert second.semidense_points.tolist() == [[3.0, 0.0, 0.0]]
     assert first.occupancy_bounds.tolist() == [-1.0, 3.0, -1.0, 4.0, -1.0, 1.0]
 
