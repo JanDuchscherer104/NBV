@@ -79,30 +79,28 @@ For thesis result tables:
 - do not duplicate all table values in prose;
 - reference the conclusion, not the table object.
 
-## Mermaid / Diagram Policy
+## Conceptual Diagram Policy
 
-- Use Mermaid for architecture, process, topology, and state transitions. Use
-  scientific geometry or data renderers for coordinate geometry, directional
-  fields, and real 3D evidence.
-- Keep `.mmd` as the version-controlled source.
-- Use `aria-nbv-mermaid` for source/style work, then render through the
-  canonical local wrapper in `tools/mermaid`.
-- Include PNG/SVG/PDF with explicit Typst width.
-- Inspect the standalone render and final Typst page.
-- Use notation consistent with `docs/typst/shared`.
+Use `aria-nbv-mermaid` first for the concept brief, explanatory-depth review,
+retain/revise/remove decision, and Mermaid-vs-Typst route for relational work.
+The exact scientific, geometric, spatial, 3D, or quantitative renderer remains owned by
+[`scientific-visualizations.md`](scientific-visualizations.md#renderer-routing).
 
-Typical proposal/thesis render command:
+`typst-authoring` owns accepted Typst source realization, figure inclusion,
+captions, labels, compilation, and final-page inspection. Keep `.mmd` as the
+source of record only for Mermaid-native figures; `tools/mermaid` remains the
+sole local Mermaid lint/render wrapper. Include external PNG/SVG/PDF assets with
+explicit Typst width, inspect standalone and final-page renders, and use notation
+from `docs/typst/shared`.
 
-```bash
-tools/mermaid/scripts/render_mermaid.sh \
-  docs/typst/thesis/figures/proposal_system_flow.mmd \
-  docs/typst/thesis/figures/proposal_system_flow.svg
-```
+For Mermaid lint/render commands and failure behavior, follow the conditional
+[`mermaid-native.md`](../../aria-nbv-mermaid/references/mermaid-native.md)
+branch; do not duplicate the wrapper contract here.
 
-For Quarto pages, use `{mermaid}` fences instead of rendered PNG unless the
-page explicitly needs a static export. For Typst proposal/thesis sources, do
-not paste raw Mermaid; include the rendered asset and keep the `.mmd` beside
-it.
+For Quarto pages, use `{mermaid}` fences instead of rendered PNG unless the page
+explicitly needs a static export. For an intentional Mermaid-backed Typst asset,
+do not paste raw Mermaid; include the rendered asset and keep the `.mmd` beside
+it. Do not create Mermaid intermediates for Fletcher/CeTZ-native figures.
 
 ## Visual QA Checklist
 

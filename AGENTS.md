@@ -16,7 +16,10 @@ tests, configuration, and Typst own behavior and scientific claims.
 - Package work reads `aria_nbv/AGENTS.md`, then the one nested guide that owns
   the touched contract. Docs, bibliography, Typst, and Quarto work starts at
   `docs/AGENTS.md`.
-- Mermaid and thesis-diagram work uses `aria-nbv-mermaid`; notation is owned by
+- Conceptual diagrams and SVGs use `aria-nbv-mermaid` for explanatory review,
+  relational Mermaid-vs-Typst routing, and Mermaid-native work; exact Typst
+  renderer selection, realization, captions, and rendered-page QA use
+  `typst-authoring`. Notation is owned by
   `docs/typst/shared`. Use `aria-nbv-context` for owner-tree traversal, broad
   project context, and current external-library evidence.
 - Vague, high-impact, advisor-facing, architecture, interface-design, committed
