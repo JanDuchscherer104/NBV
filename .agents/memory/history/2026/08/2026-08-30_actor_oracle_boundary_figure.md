@@ -31,10 +31,12 @@ codes appeared inside a scorer-bound candidate table. The revised
 generation, emits one raw conditional value per materialized row, applies the
 hard mask only downstream, and branches reason codes to audit. The integration
 owner now supplies a shorter complementary caption and detailed alternative
-text.
+text. PR review further narrowed candidate renders to the compact hard-valid
+subset, preserving the contrast with scorer outputs for all materialized rows.
 
 ## Commits
 - [a6cde270a03d4337e0798ed6f3e89209425a3c76](https://github.com/JanDuchscherer104/ARIA-NBV/commit/a6cde270a03d4337e0798ed6f3e89209425a3c76)
+- [ab48be5c5f9ac84ad93e6d75ddeaae31dbe1a649](https://github.com/JanDuchscherer104/ARIA-NBV/commit/ab48be5c5f9ac84ad93e6d75ddeaae31dbe1a649)
 
 ## Verification
 - standalone Typst compile: pass
@@ -43,6 +45,8 @@ text.
 - final page 19 color/grayscale visual inspection: pass
 - independent scientific review of tree
   `affa517d29a113751d5f6ac2eecba288211d9412`: APPROVE/CLEAN, zero P0--P2
+- independent review of the hard-valid-render correction at tree
+  `91bbdfe18b02186ea2ab44e423c70760af5a20e1`: APPROVE/CLEAN
 - `git diff --check`: pass
 
 ## Canonical Owner Impact
