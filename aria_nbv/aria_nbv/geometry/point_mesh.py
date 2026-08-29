@@ -192,9 +192,13 @@ class PreparedMeshQuery:
 
     @property
     def is_persistently_reusable(self) -> bool:
-        """Return whether source mutation counters permit cross-request reuse."""
+        """Return whether sources are safe to retain across requests."""
 
-        return self._source_verts_version is not None and self._source_faces_version is not None
+        return (
+            not self._source_verts.requires_grad
+            and self._source_verts_version is not None
+            and self._source_faces_version is not None
+        )
 
     def matches_request(
         self,
