@@ -13,9 +13,7 @@ RQ4 establishes the target, action, and replay support over which the comparison
 is interpretable. RQ5 and RQ6 extend the study only if the offline
 finite-candidate evidence warrants online or continuous-control claims.
 
-=== Bounded lookahead and learned recovery
-
-==== RQ2 — Bounded lookahead and learned recovery <ssec:rq2>
+=== RQ2 — Bounded lookahead and learned recovery <ssec:rq2>
 
 *How much of the fixed-budget endpoint advantage of bounded oracle lookahead
 over one-step oracle-greedy selection can an offline finite-horizon value model
