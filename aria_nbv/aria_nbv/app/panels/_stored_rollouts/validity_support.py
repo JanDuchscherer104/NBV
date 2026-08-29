@@ -36,7 +36,7 @@ def _render_bounded_candidate_geometry(session_handle: Any, *, limit: int) -> No
 
 
 def _render_candidate_benchmark_card(session_handle: Any) -> None:
-    """Render the explicit immutable benchmark card and its five support plots."""
+    """Render the explicit immutable benchmark card and its six support plots."""
     benchmark_enabled = st.toggle(
         "Build immutable candidate benchmark card",
         value=False,

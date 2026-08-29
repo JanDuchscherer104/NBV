@@ -74,6 +74,12 @@ def _mapping_field(value: Any) -> Mapping[str, Any]:
     return value
 
 
+def _optional_text(value: Any) -> str | None:
+    """Preserve missing lineage while normalizing present values to text."""
+
+    return None if value is None else str(value)
+
+
 def _freeze(value: Any) -> Any:
     """Recursively freeze manifest values returned to consumers."""
     if isinstance(value, Mapping):
@@ -456,9 +462,9 @@ def benchmarks_from_reader(
                         bool(family_row.get("actor_action")),
                         bool(family_row.get("selected")),
                         state,
-                        str(family_row.get("candidate_config")),
-                        str(family_row.get("rollout_config")),
-                        str(family_row.get("branch_schedule")),
+                        _optional_text(family_row.get("candidate_config")),
+                        _optional_text(family_row.get("rollout_config")),
+                        _optional_text(family_row.get("branch_schedule")),
                         target_relative_xyz=target_relative,
                         view_direction_xyz=(
                             None

@@ -452,9 +452,13 @@ def _candidate_plot(
             figure.add_trace(trace, row=1, col=column)
         for annotation in profile_figure.layout.annotations:
             payload = annotation.to_plotly_json()
+            axis_suffix = "" if column == 1 else str(column)
+            axis_refs = {"x": f"x{axis_suffix}", "y": f"y{axis_suffix}"}
             for key in ("xref", "yref", "axref", "ayref"):
-                payload.pop(key, None)
-            figure.add_annotation(**payload, row=1, col=column)
+                reference = payload.get(key)
+                if reference in axis_refs:
+                    payload[key] = axis_refs[reference]
+            figure.add_annotation(**payload)
     figure.update_xaxes(
         title_text="target-forward displacement / d", scaleanchor="y", scaleratio=1
     )

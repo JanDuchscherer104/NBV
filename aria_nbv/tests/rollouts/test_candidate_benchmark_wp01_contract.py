@@ -13,6 +13,7 @@ import pytest
 from aria_nbv.app.panels._stored_rollouts import candidate_generation, validity_support
 from aria_nbv.rollouts.candidate_benchmark import (
     BINDING_KEYS,
+    CANDIDATE_SUPPORT_METRICS_REVISION,
     SCHEMA_ID,
     CandidateBenchmark,
     CandidateFamilyCounts,
@@ -422,6 +423,38 @@ def test_benchmark_reader_filters_state_before_applying_candidate_limit(monkeypa
     assert result[0].candidate_ids == (3,)
 
 
+def test_benchmark_reader_preserves_missing_lineage_as_unavailable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "aria_nbv.rollouts.inspection.candidate_audit_rows",
+        lambda *_args, **_kwargs: [
+            {
+                "scene": "scene-a",
+                "rollout_row_id": 1,
+                "step_row_id": 2,
+                "mixture": "forward_component",
+                "position": "forward_local",
+                "candidate_row_id": 3,
+                "actor_action": True,
+                "selected": False,
+                "root_relative_x_m": 0.1,
+                "root_relative_y_m": 0.2,
+                "root_relative_z_m": 0.3,
+            }
+        ],
+    )
+
+    result = benchmarks_from_reader(object())
+
+    point = result[0].points[0]
+    assert point.candidate_config is None
+    assert point.rollout_config is None
+    assert point.branch_schedule is None
+    support = candidate_support_figures(result)[1]
+    assert support.data[0].customdata[0][3] == "unavailable"
+
+
 def test_benchmark_reader_joins_canonical_projection_and_bounds_state_request(monkeypatch: pytest.MonkeyPatch) -> None:
     from aria_nbv.rollouts import inspection
 
@@ -752,6 +785,7 @@ def test_target_orbit_evidence_bundle_is_portable_and_hash_bound() -> None:
     evidence = repo_root / "docs/contents/evidence/candidate_target_orbit_mvp"
     manifest = json.loads((evidence / "manifest.json").read_text())
     summary = json.loads((evidence / "summary.json").read_text())
+    assert manifest["reducer"]["canonical_metrics_revision"] == CANDIDATE_SUPPORT_METRICS_REVISION
     bound_paths = (
         (manifest["generator"]["path"], manifest["generator"]["sha256"]),
         (manifest["reducer"]["path"], manifest["reducer"]["sha256"]),
@@ -817,3 +851,19 @@ def test_target_orbit_shared_plot_gives_challenger_only_family_a_legend_entry() 
     orbit_traces = [trace for trace in figure.data if str(trace.name).split(", ")[0] == "target_orbit"]
     assert orbit_traces
     assert any(trace.showlegend for trace in orbit_traces)
+
+
+def test_target_orbit_view_direction_export_keeps_data_coordinates_and_changes_render() -> None:
+    repo_root = Path(__file__).resolve().parents[3]
+    namespace = runpy.run_path(str(repo_root / "docs/contents/evidence/candidate_target_orbit_mvp/build_evidence.py"))
+    rows = namespace["_read_rows"]()
+    plain = namespace["_candidate_plot"](rows, show_view_directions=False)
+    arrows = namespace["_candidate_plot"](rows, show_view_directions=True)
+    arrow_annotations = [annotation for annotation in arrows.layout.annotations if annotation.showarrow]
+
+    assert arrow_annotations
+    assert all(annotation.xref == annotation.axref for annotation in arrow_annotations)
+    assert all(annotation.yref == annotation.ayref for annotation in arrow_annotations)
+    assert {annotation.axref for annotation in arrow_annotations} == {"x", "x2"}
+    assert {annotation.ayref for annotation in arrow_annotations} == {"y", "y2"}
+    assert plain.to_image(format="png", width=900, height=525) != arrows.to_image(format="png", width=900, height=525)

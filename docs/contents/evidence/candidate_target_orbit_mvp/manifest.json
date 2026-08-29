@@ -16,7 +16,7 @@
   },
   "reducer": {
     "path": "docs/contents/evidence/candidate_target_orbit_mvp/build_evidence.py",
-    "sha256": "5d1e4e851353b520fba39cbee68d09c3eac0336ffa4b6f3e5985951cb6dca7d6",
+    "sha256": "a0130674f0c568831306934ca242efd841221be1b0c9ae1faa1da266a7e3424f",
     "command": "cd aria_nbv && python ../docs/contents/evidence/candidate_target_orbit_mvp/build_evidence.py --baseline-store /ABSOLUTE/OUTPUT/realistic_core.zarr --candidate-store /ABSOLUTE/OUTPUT/target_orbit_mvp.zarr",
     "canonical_geometry_owner": "aria_nbv.rollouts.inspection.proposal_support_geometry",
     "canonical_metrics_owner": "aria_nbv.rollouts.candidate_benchmark.candidate_support_metrics",
