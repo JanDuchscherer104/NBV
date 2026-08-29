@@ -187,6 +187,12 @@ class PreparedMeshQuery:
             )
         )
 
+    @property
+    def is_persistently_reusable(self) -> bool:
+        """Return whether source mutation counters permit cross-request reuse."""
+
+        return self._source_verts_version is not None and self._source_faces_version is not None
+
     def matches_request(
         self,
         verts: torch.Tensor,
