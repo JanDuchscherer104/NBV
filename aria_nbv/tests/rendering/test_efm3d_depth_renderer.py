@@ -106,3 +106,21 @@ def test_ray_engine_cache_invalidates_after_mesh_mutation() -> None:
     second_key = next(iter(renderer._ray_engine_cache))
 
     assert second_key != first_key
+
+
+def test_ray_engine_cache_tracks_backend_assignment() -> None:
+    mesh = trimesh.Trimesh(
+        vertices=np.array([[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]]),
+        faces=np.array([[0, 1, 2]]),
+        process=False,
+    )
+    renderer = Efm3dDepthRendererConfig(device="cpu", backend="trimesh", add_proxy_walls=False).setup_target()
+
+    renderer._ray_engine(mesh)
+    first_key = next(iter(renderer._ray_engine_cache))
+    renderer.config.backend = "auto"
+    renderer._ray_engine(mesh)
+    second_key = next(iter(renderer._ray_engine_cache))
+
+    assert first_key != second_key
+    assert second_key[-1] == "auto"

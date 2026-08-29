@@ -153,3 +153,15 @@ def test_renderer_rebuilds_mesh_after_source_mutation() -> None:
     second_mesh = renderer._prepared_mesh(verts, faces)
 
     assert second_mesh is not first_mesh
+
+
+def test_renderer_inference_tensors_bypass_mesh_cache() -> None:
+    renderer = Pytorch3DDepthRenderer(Pytorch3DDepthRendererConfig(device="cpu", verbosity=0))
+    with torch.inference_mode():
+        verts = torch.tensor([[-1.0, -1.0, 2.0], [1.0, -1.0, 2.0], [0.0, 1.0, 2.0]])
+        faces = torch.tensor([[0, 1, 2]], dtype=torch.int64)
+        first_mesh = renderer._prepared_mesh(verts, faces)
+        second_mesh = renderer._prepared_mesh(verts, faces)
+
+    assert first_mesh is not second_mesh
+    assert renderer._mesh_cache == {}

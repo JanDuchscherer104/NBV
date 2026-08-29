@@ -269,7 +269,7 @@ class Efm3dDepthRenderer:
     def _ray_engine(self, mesh: Trimesh):
         """Return a ray-mesh intersector."""
 
-        key = (id(mesh), hash(mesh))
+        key = (id(mesh), hash(mesh), self.config.backend)
         entry = self._ray_engine_cache.get(key)
         if entry is not None:
             return entry[1]

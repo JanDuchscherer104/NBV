@@ -248,21 +248,28 @@ class Pytorch3DDepthRenderer:
     def _prepared_mesh(self, verts: Tensor, faces: Tensor) -> Meshes:
         """Return a device-local base mesh, reusing unchanged tensor inputs."""
 
+        def stamp(value: Tensor) -> tuple[object, ...] | None:
+            try:
+                version = value._version
+            except RuntimeError:
+                return None
+            return (
+                id(value),
+                tuple(value.shape),
+                tuple(value.stride()),
+                value.storage_offset(),
+                value.dtype,
+                value.device,
+                version,
+            )
+
+        verts_stamp = stamp(verts)
+        faces_stamp = stamp(faces)
+        if verts_stamp is None or faces_stamp is None:
+            return Meshes(verts=[verts.to(self.device)], faces=[faces.to(self.device)])
         key = (
-            id(verts),
-            tuple(verts.shape),
-            tuple(verts.stride()),
-            verts.storage_offset(),
-            verts.dtype,
-            verts.device,
-            verts._version,
-            id(faces),
-            tuple(faces.shape),
-            tuple(faces.stride()),
-            faces.storage_offset(),
-            faces.dtype,
-            faces.device,
-            faces._version,
+            verts_stamp,
+            faces_stamp,
             self.device,
         )
         entry = self._mesh_cache.get(key)
