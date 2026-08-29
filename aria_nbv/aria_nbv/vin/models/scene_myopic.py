@@ -452,10 +452,16 @@ class VinModelV3(nn.Module):
         backbone_stamps = tuple(self._tensor_cache_stamp(value) for value in backbone_values)
         if any(stamp is None for stamp in (*snippet_stamps, *backbone_stamps)):
             return None
+        autocast_stamp = (
+            device.type,
+            torch.is_autocast_enabled(device.type),
+            torch.get_autocast_dtype(device.type),
+        )
         return (
             id(efm),
             id(backbone_out),
             device,
+            autocast_stamp,
             snippet_stamps,
             backbone_stamps,
             tuple((id(param), getattr(param, "_version", None)) for param in self.parameters()),

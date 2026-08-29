@@ -396,6 +396,32 @@ def test_vin_model_v3_inference_tensors_bypass_prepared_scene_cache(
     torch.testing.assert_close(first.logits, second.logits)
 
 
+def test_vin_model_v3_prepared_scene_cache_tracks_autocast_context(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    model = VinModelV3(VinModelV3Config(backbone=None)).eval()
+    field_calls = 0
+    original_field = model._build_field_bundle
+
+    def count_field(*args, **kwargs):
+        nonlocal field_calls
+        field_calls += 1
+        return original_field(*args, **kwargs)
+
+    monkeypatch.setattr(model, "_build_field_bundle", count_field)
+    inputs = _make_v3_scene_cache_inputs()
+    with torch.no_grad():
+        full_precision = _forward_v3_for_scene_cache(model, inputs)
+        with torch.autocast(device_type="cpu", dtype=torch.bfloat16):
+            autocast = _forward_v3_for_scene_cache(model, inputs)
+        with torch.autocast(device_type="cpu", enabled=False):
+            restored_full_precision = _forward_v3_for_scene_cache(model, inputs)
+
+    assert field_calls == 3
+    assert full_precision.logits.shape == autocast.logits.shape == restored_full_precision.logits.shape
+    torch.testing.assert_close(full_precision.logits, restored_full_precision.logits, rtol=0.0, atol=0.0)
+
+
 def test_vin_model_v3_prepared_scene_context_invalidates_after_weight_update(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
