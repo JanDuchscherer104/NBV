@@ -250,7 +250,14 @@ class TargetRriScorer:
                 dtype,
                 mesh_verts_token,
                 mesh_faces_token,
-                tuple(float(value) for value in self._target_obb_world.tensor().detach().cpu().flatten().tolist()),
+                tuple(
+                    float(value)
+                    for value in self._target_obb_world.tensor()  # type: ignore[no-untyped-call]  # efm3d is untyped.
+                    .detach()
+                    .cpu()
+                    .flatten()
+                    .tolist()
+                ),
                 float(self.config.target_crop_margin_m),
             )
         prepared_geometry = self._prepared_target_geometry.get(geometry_key) if geometry_key is not None else None
