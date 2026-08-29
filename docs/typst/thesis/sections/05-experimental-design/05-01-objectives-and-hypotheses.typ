@@ -11,7 +11,7 @@
   gate: [immutable analysis plan plus matched held-out policy table],
 )
 
-=== Candidate-Generation Realism Analysis Contract
+=== Candidate-Support Estimands and Aggregation
 
 RQ4 treats the scene as the independent unit. Candidate-support quality-control
 observations are computed per state, averaged across states within scene, and
