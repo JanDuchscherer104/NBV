@@ -198,6 +198,9 @@ def test_mixture_prepares_mesh_query_once_for_all_components(monkeypatch: pytest
         def matches(self, *_args, **_kwargs) -> bool:
             return True
 
+        def matches_request(self, *_args, **_kwargs) -> bool:
+            return True
+
         def point_distance(self, points: torch.Tensor) -> torch.Tensor:
             return torch.ones(points.shape[0], device=points.device, dtype=points.dtype)
 
@@ -214,6 +217,39 @@ def test_mixture_prepares_mesh_query_once_for_all_components(monkeypatch: pytest
 
     assert result.mask_valid.shape[0] == 4
     assert len(prepared) == 1
+
+
+def test_single_generator_rejects_request_query_from_another_mesh() -> None:
+    from aria_nbv.pose_generation.geometry import PreparedMeshQuery
+
+    cfg = _base_cfg().model_copy(update={"min_distance_to_mesh": 0.1, "num_samples": 1})
+    target_mesh, target_verts, target_faces = _mesh_triplet(cfg.device)
+    other_mesh = trimesh.creation.box(extents=(1.0, 1.0, 1.0))
+    other_mesh.apply_translation((10.0, 0.0, 0.0))
+    other_verts = torch.from_numpy(other_mesh.vertices).to(dtype=torch.float32, device=cfg.device)
+    other_faces = torch.from_numpy(other_mesh.faces).to(dtype=torch.int64, device=cfg.device)
+    query = PreparedMeshQuery(
+        other_verts,
+        other_faces,
+        device=cfg.device,
+        dtype=torch.float32,
+        mesh=other_mesh,
+    )
+    generator = CandidateViewGenerator(cfg, mesh_query=query)
+
+    with pytest.raises(ValueError, match="does not match the supplied mesh contract"):
+        generator.generate(
+            reference_pose=_identity_pose(device=cfg.device),
+            gt_mesh=target_mesh,
+            mesh_verts=target_verts,
+            mesh_faces=target_faces,
+            camera_calib_template=_dummy_camera(cfg.device),
+            occupancy_extent=torch.tensor(
+                [-10.0, 10.0, -10.0, 10.0, -10.0, 10.0],
+                dtype=torch.float32,
+                device=cfg.device,
+            ),
+        )
 
 
 def test_mixture_skips_mesh_preparation_when_collision_clearance_is_disabled(

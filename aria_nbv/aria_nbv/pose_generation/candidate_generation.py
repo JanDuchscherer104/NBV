@@ -672,6 +672,14 @@ class CandidateViewGenerator:
             if self._request_mesh_query is not None:
                 mesh_query = self._request_mesh_query
                 self._request_mesh_query = None
+                if not mesh_query.matches_request(
+                    mesh_verts,
+                    mesh_faces,
+                    device=device,
+                    dtype=centers_world.dtype,
+                    mesh=gt_mesh,
+                ):
+                    raise ValueError("Request-local PreparedMeshQuery does not match the supplied mesh contract.")
             else:
                 mesh_query = PreparedMeshQuery.acquire(
                     self._mesh_query,

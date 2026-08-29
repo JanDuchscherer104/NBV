@@ -136,14 +136,38 @@ class PreparedMeshQuery:
     ) -> bool:
         """Return whether this query can safely serve the supplied mesh inputs."""
 
-        verts_version = _tensor_version(verts)
-        faces_version = _tensor_version(faces)
         return (
             self._source_verts_version is not None
             and self._source_faces_version is not None
-            and verts_version is not None
-            and faces_version is not None
-            and verts is self._source_verts
+            and self.matches_request(
+                verts,
+                faces,
+                device=device,
+                dtype=dtype,
+                mesh=mesh,
+            )
+        )
+
+    def matches_request(
+        self,
+        verts: torch.Tensor,
+        faces: torch.Tensor,
+        *,
+        device: torch.device | str,
+        dtype: torch.dtype,
+        mesh: "trimesh.Trimesh | None",
+    ) -> bool:
+        """Validate a query for immediate use, including inference tensors.
+
+        Unlike :meth:`matches`, this request-scoped check accepts matching
+        unavailable mutation counters. Exact tensor and mesh identity still
+        prevent a prepared query from serving different geometry.
+        """
+
+        verts_version = _tensor_version(verts)
+        faces_version = _tensor_version(faces)
+        return (
+            verts is self._source_verts
             and faces is self._source_faces
             and verts_version == self._source_verts_version
             and faces_version == self._source_faces_version
