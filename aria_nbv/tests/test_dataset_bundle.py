@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 from dataclasses import replace
+from hashlib import sha256
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, cast
@@ -69,6 +70,95 @@ def test_dataset_bundle_generation_is_bounded_stable_and_population_order_indepe
     assert all("candidates/" not in row[0] for entry in baseline.rollouts for row in entry.metadata)
 
 
+def test_dataset_bundle_generation_digest_uses_versioned_canonical_preimage(tmp_path: Path) -> None:
+    root = tmp_path / "root"
+    rollout = tmp_path / "rollout.zarr"
+    root.mkdir()
+    rollout.mkdir()
+
+    _selection, generation = capture_dataset_bundle_generation(root, (rollout,))
+    payload = {
+        "root": dataset_bundle._generation_entry_json(generation.root),
+        "rollouts": [dataset_bundle._generation_entry_json(entry) for entry in generation.rollouts],
+    }
+    canonical_json = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+
+    assert generation.identity_version == "dataset-bundle-generation-v1"
+    assert "generation_digest" not in canonical_json
+    assert (
+        generation.generation_digest == sha256(f"{generation.identity_version}\n{canonical_json}".encode()).hexdigest()
+    )
+
+
+def test_dataset_bundle_generation_parses_authority_fields_into_digest(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "root"
+    rollout = tmp_path / "rollout.zarr"
+    root.mkdir()
+    rollout.mkdir()
+    (root / "manifest.json").write_text('{"version":10}', encoding="utf-8")
+    (rollout / "manifest.json").write_text(
+        '{"manifest_version":"rollout-store-manifest-v1","schema_version":"0.1-draft"}',
+        encoding="utf-8",
+    )
+    for name in ("_SUCCESS.json", "_owner.json"):
+        (rollout / name).write_text(
+            json.dumps({"rollout_store_content_sha256": "a" * 64}),
+            encoding="utf-8",
+        )
+    monkeypatch.setattr(dataset_bundle, "_bounded_metadata_fingerprints", lambda _root: ())
+
+    _selection, baseline = capture_dataset_bundle_generation(root, (rollout,))
+    root_fields = {(field.relative_name, field.field_name): field for field in baseline.root.authoritative_fields}
+    rollout_fields = {
+        (field.relative_name, field.field_name): field for field in baseline.rollouts[0].authoritative_fields
+    }
+
+    assert root_fields[("manifest.json", "version")].value == 10
+    assert rollout_fields[("manifest.json", "manifest_version")].value == "rollout-store-manifest-v1"
+    assert rollout_fields[("manifest.json", "schema_version")].value == "0.1-draft"
+    assert rollout_fields[("_owner.json", "rollout_store_content_sha256")].value == "a" * 64
+    assert rollout_fields[("_SUCCESS.json", "rollout_store_content_sha256")].value == "a" * 64
+
+    (root / "manifest.json").write_text('{"version":11}', encoding="utf-8")
+    _selection, root_version_changed = capture_dataset_bundle_generation(root, (rollout,))
+    assert root_version_changed.generation_digest != baseline.generation_digest
+
+    (root / "manifest.json").write_text('{"version":10}', encoding="utf-8")
+    (rollout / "_owner.json").write_text(
+        json.dumps({"rollout_store_content_sha256": "b" * 64}),
+        encoding="utf-8",
+    )
+    _selection, seal_changed = capture_dataset_bundle_generation(root, (rollout,))
+    assert seal_changed.generation_digest != baseline.generation_digest
+
+
+def test_dataset_bundle_generation_missing_and_invalid_authority_is_deterministic(tmp_path: Path) -> None:
+    root = tmp_path / "root"
+    rollout = tmp_path / "rollout.zarr"
+    root.mkdir()
+    rollout.mkdir()
+
+    _selection, first = capture_dataset_bundle_generation(root, (rollout,))
+    _selection, repeated = capture_dataset_bundle_generation(root, (rollout,))
+
+    assert repeated == first
+    assert {field.status for field in first.root.authoritative_fields} == {"missing_file"}
+    assert {field.status for field in first.rollouts[0].authoritative_fields} == {"missing_file"}
+
+    (root / "manifest.json").write_text("not-json", encoding="utf-8")
+    (rollout / "manifest.json").write_text('{"manifest_version":7}', encoding="utf-8")
+    _selection, invalid = capture_dataset_bundle_generation(root, (rollout,))
+
+    assert invalid.root.authoritative_fields[0].status == "invalid_json"
+    rollout_fields = {field.field_name: field for field in invalid.rollouts[0].authoritative_fields}
+    assert rollout_fields["manifest_version"].status == "invalid_type"
+    assert rollout_fields["schema_version"].status == "missing_field"
+    assert invalid.generation_digest != first.generation_digest
+
+
 def test_dataset_bundle_generation_detects_same_path_atomic_replacement(tmp_path: Path) -> None:
     root = tmp_path / "root"
     root.mkdir()
@@ -87,8 +177,16 @@ def test_dataset_bundle_generation_detects_same_path_atomic_replacement(tmp_path
         assert_dataset_bundle_generation_current(before)
     assert exc_info.value.expected == before
     assert exc_info.value.observed == after
-    assert before.generation_digest in str(exc_info.value)
-    assert after.generation_digest in str(exc_info.value)
+    message = str(exc_info.value)
+    assert f"expected_identity_version={before.identity_version}" in message
+    assert f"expected_generation_digest={before.generation_digest}" in message
+    assert f"observed_identity_version={after.identity_version}" in message
+    assert f"observed_generation_digest={after.generation_digest}" in message
+    assert f"expected_selected={root.as_posix()}" in message
+    assert f"expected_canonical={root.as_posix()}" in message
+    assert f"observed_selected={root.as_posix()}" in message
+    assert f"observed_canonical={root.as_posix()}" in message
+    assert "manifest.json" not in message
 
 
 def test_dataset_bundle_generation_preserves_alias_text_and_broken_status(tmp_path: Path) -> None:

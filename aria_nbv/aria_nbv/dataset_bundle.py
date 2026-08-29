@@ -56,7 +56,27 @@ FindingSeverity = Literal["blocking", "incomplete", "information"]
 GenerationEntryStatus = Literal["present", "missing", "broken_alias"]
 """Resolution state of one selected filesystem entry."""
 
+AuthoritativeFieldStatus = Literal[
+    "present",
+    "missing_file",
+    "invalid_json",
+    "missing_field",
+    "invalid_type",
+    "unreadable",
+    "oversized",
+]
+"""Parse state of one bounded authoritative JSON field."""
+
 JsonScalar: TypeAlias = None | bool | int | float | str
+
+_MAX_AUTHORITATIVE_JSON_BYTES = 1_048_576
+_ROOT_AUTHORITATIVE_FIELDS = (("manifest.json", "version", "int"),)
+_ROLLOUT_AUTHORITATIVE_FIELDS = (
+    ("manifest.json", "manifest_version", "str"),
+    ("manifest.json", "schema_version", "str"),
+    ("_SUCCESS.json", "rollout_store_content_sha256", "str"),
+    ("_owner.json", "rollout_store_content_sha256", "str"),
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -111,6 +131,16 @@ FrozenJsonValue: TypeAlias = JsonScalar | FrozenJsonArray | FrozenJsonObject
 
 
 @dataclass(frozen=True, slots=True)
+class DatasetBundleAuthoritativeField:
+    """One separately parsed seal or version used by generation identity."""
+
+    relative_name: str
+    field_name: str
+    status: AuthoritativeFieldStatus
+    value: int | str | None
+
+
+@dataclass(frozen=True, slots=True)
 class DatasetBundleEntryFingerprint:
     """Bounded selected-entry and authoritative-metadata identity."""
 
@@ -124,6 +154,7 @@ class DatasetBundleEntryFingerprint:
     size: int | None
     canonical_target: Path | None
     metadata: tuple[tuple[str, str, str | None, int, int, int, int], ...]
+    authoritative_fields: tuple[DatasetBundleAuthoritativeField, ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -153,7 +184,10 @@ class DatasetBundleGenerationChangedError(RuntimeError):
         )
         super().__init__(
             "Dataset bundle generation changed: "
-            f"expected={expected.generation_digest} observed={observed.generation_digest}; "
+            f"expected_identity_version={expected.identity_version} "
+            f"expected_generation_digest={expected.generation_digest}; "
+            f"observed_identity_version={observed.identity_version} "
+            f"observed_generation_digest={observed.generation_digest}; "
             f"{paths}"
         )
 
@@ -238,8 +272,8 @@ def _capture_dataset_bundle_generation_value(
 ) -> DatasetBundleGeneration:
     """Fingerprint a bundle without applying semantic selection validation."""
 
-    root = _capture_bundle_entry(root_selected)
-    rollouts = tuple(_capture_bundle_entry(path) for path in rollout_selected)
+    root = _capture_bundle_entry(root_selected, _ROOT_AUTHORITATIVE_FIELDS)
+    rollouts = tuple(_capture_bundle_entry(path, _ROLLOUT_AUTHORITATIVE_FIELDS) for path in rollout_selected)
     payload = {
         "root": _generation_entry_json(root),
         "rollouts": [_generation_entry_json(entry) for entry in rollouts],
@@ -272,11 +306,26 @@ def _absolute_selected_entry(path: Path) -> Path:
     return Path(os.path.abspath(Path(path).expanduser()))
 
 
-def _capture_bundle_entry(selected_entry: Path) -> DatasetBundleEntryFingerprint:
+def _capture_bundle_entry(
+    selected_entry: Path,
+    authoritative_specs: tuple[tuple[str, str, str], ...],
+) -> DatasetBundleEntryFingerprint:
     try:
         entry = selected_entry.lstat()
     except OSError:
-        return DatasetBundleEntryFingerprint(selected_entry, "missing", None, None, None, None, None, None, None, ())
+        return DatasetBundleEntryFingerprint(
+            selected_entry,
+            "missing",
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            (),
+            _missing_authoritative_fields(authoritative_specs),
+        )
     entry_kind = _entry_kind(entry.st_mode)
     symlink_target = os.readlink(selected_entry) if stat.S_ISLNK(entry.st_mode) else None
     try:
@@ -287,6 +336,11 @@ def _capture_bundle_entry(selected_entry: Path) -> DatasetBundleEntryFingerprint
     else:
         status = "present"
     metadata = () if canonical_target is None else _bounded_metadata_fingerprints(canonical_target)
+    authoritative_fields = (
+        _missing_authoritative_fields(authoritative_specs)
+        if canonical_target is None
+        else _parse_authoritative_fields(canonical_target, authoritative_specs)
+    )
     return DatasetBundleEntryFingerprint(
         selected_entry=selected_entry,
         entry_status=status,
@@ -298,7 +352,68 @@ def _capture_bundle_entry(selected_entry: Path) -> DatasetBundleEntryFingerprint
         size=entry.st_size,
         canonical_target=canonical_target,
         metadata=metadata,
+        authoritative_fields=authoritative_fields,
     )
+
+
+def _missing_authoritative_fields(
+    specs: tuple[tuple[str, str, str], ...],
+) -> tuple[DatasetBundleAuthoritativeField, ...]:
+    return tuple(
+        DatasetBundleAuthoritativeField(relative_name, field_name, "missing_file", None)
+        for relative_name, field_name, _expected_type in specs
+    )
+
+
+def _parse_authoritative_fields(
+    root: Path,
+    specs: tuple[tuple[str, str, str], ...],
+) -> tuple[DatasetBundleAuthoritativeField, ...]:
+    documents: dict[str, tuple[AuthoritativeFieldStatus, Mapping[str, Any] | None]] = {}
+    rows: list[DatasetBundleAuthoritativeField] = []
+    for relative_name, field_name, expected_type in specs:
+        if relative_name not in documents:
+            documents[relative_name] = _read_bounded_json_object(root / relative_name)
+        document_status, document = documents[relative_name]
+        if document is None:
+            rows.append(DatasetBundleAuthoritativeField(relative_name, field_name, document_status, None))
+            continue
+        if field_name not in document:
+            rows.append(DatasetBundleAuthoritativeField(relative_name, field_name, "missing_field", None))
+            continue
+        value = document[field_name]
+        if not _matches_authoritative_type(value, expected_type):
+            rows.append(DatasetBundleAuthoritativeField(relative_name, field_name, "invalid_type", None))
+            continue
+        rows.append(DatasetBundleAuthoritativeField(relative_name, field_name, "present", cast(int | str, value)))
+    return tuple(rows)
+
+
+def _read_bounded_json_object(path: Path) -> tuple[AuthoritativeFieldStatus, Mapping[str, Any] | None]:
+    try:
+        with path.open("rb") as stream:
+            payload = stream.read(_MAX_AUTHORITATIVE_JSON_BYTES + 1)
+    except FileNotFoundError:
+        return "missing_file", None
+    except OSError:
+        return "unreadable", None
+    if len(payload) > _MAX_AUTHORITATIVE_JSON_BYTES:
+        return "oversized", None
+    try:
+        decoded = json.loads(payload)
+    except (UnicodeDecodeError, json.JSONDecodeError, RecursionError):
+        return "invalid_json", None
+    if not isinstance(decoded, Mapping):
+        return "invalid_json", None
+    return "present", cast(Mapping[str, Any], decoded)
+
+
+def _matches_authoritative_type(value: Any, expected_type: str) -> bool:
+    if expected_type == "int":
+        return isinstance(value, int) and not isinstance(value, bool)
+    if expected_type == "str":
+        return isinstance(value, str)
+    raise AssertionError(f"unsupported authoritative field type: {expected_type}")
 
 
 def _bounded_metadata_fingerprints(root: Path) -> tuple[tuple[str, str, str | None, int, int, int, int], ...]:
@@ -361,6 +476,15 @@ def _generation_entry_json(entry: DatasetBundleEntryFingerprint) -> dict[str, An
         ],
         "canonical_target": _path_text(entry.canonical_target),
         "metadata": [list(row) for row in entry.metadata],
+        "authoritative_fields": [
+            {
+                "relative_name": field.relative_name,
+                "field_name": field.field_name,
+                "status": field.status,
+                "value": field.value,
+            }
+            for field in entry.authoritative_fields
+        ],
     }
 
 

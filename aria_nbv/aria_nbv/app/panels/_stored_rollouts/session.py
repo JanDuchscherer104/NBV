@@ -766,14 +766,9 @@ def _clear_stored_rollout_caches() -> None:
 
 
 def clear_rollout_page_caches() -> None:
-    """Clear the shared stored-rollout and dataset-bundle read caches."""
+    """Clear only stored-rollout caches and page-local retained state."""
 
     _clear_stored_rollout_caches()
-    # Import lazily to keep the stored-rollout owner independent at module
-    # import time; refresh is the one cross-page invalidation boundary.
-    from ..training_dataset import _clear_training_dataset_caches
-
-    _clear_training_dataset_caches()
 
 
 @st.cache_data(show_spinner="Aggregating validated rollout stores…", max_entries=8)
