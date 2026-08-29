@@ -146,15 +146,21 @@ def chamfer_prepared_point_mesh_batched(
 
     if points.ndim != 3:
         raise ValueError(f"Expected batched points of shape (C,P,3); got {tuple(points.shape)}")
-    if points.device != mesh.verts.device or points.dtype != mesh.verts.dtype:
+    mesh_verts, mesh_faces, mesh_triangles = mesh.pytorch3d_mesh()
+    if points.device != mesh_verts.device or points.dtype != mesh_verts.dtype:
         raise ValueError(
             "PreparedMeshQuery points must match the prepared mesh device and dtype "
-            f"({mesh.verts.device}, {mesh.verts.dtype}); got ({points.device}, {points.dtype})."
+            f"({mesh_verts.device}, {mesh_verts.dtype}); got ({points.device}, {points.dtype})."
         )
 
     bsz = points.shape[0]
     if candidate_chunk_size is None or candidate_chunk_size >= bsz:
-        return _chamfer_point_mesh_batch(points, lengths, mesh=mesh)
+        return _chamfer_point_mesh_batch(
+            points,
+            lengths,
+            mesh_faces=mesh_faces,
+            mesh_triangles=mesh_triangles,
+        )
     if candidate_chunk_size < 1:
         raise ValueError("candidate_chunk_size must be positive when provided.")
 
@@ -162,7 +168,8 @@ def chamfer_prepared_point_mesh_batched(
         _chamfer_point_mesh_batch(
             points[start : start + candidate_chunk_size],
             lengths[start : start + candidate_chunk_size],
-            mesh=mesh,
+            mesh_faces=mesh_faces,
+            mesh_triangles=mesh_triangles,
         )
         for start in range(0, bsz, candidate_chunk_size)
     ]
@@ -177,7 +184,8 @@ def _chamfer_point_mesh_batch(
     points: Tensor,
     lengths: Tensor,
     *,
-    mesh: PreparedMeshQuery,
+    mesh_faces: Tensor,
+    mesh_triangles: Tensor,
 ) -> DistanceBreakdown:
     """Compute one bounded candidate chunk against a shared prepared mesh."""
 
@@ -191,8 +199,8 @@ def _chamfer_point_mesh_batch(
     max_points = int(lengths.max().item())
     point_to_cloud_idx = torch.repeat_interleave(torch.arange(bsz, device=points.device), lengths)
 
-    f = mesh.faces.shape[0]
-    tris = mesh.triangles.repeat(bsz, 1, 1)
+    f = mesh_faces.shape[0]
+    tris = mesh_triangles.repeat(bsz, 1, 1)
     tris_first_idx = torch.arange(0, bsz * f, f, device=points.device, dtype=torch.int64)
     max_tris = f
     tri_to_mesh_idx = torch.repeat_interleave(torch.arange(bsz, device=points.device), f)

@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import torch
 
-from ..geometry import PreparedMeshQuery
+from ..geometry import PreparedMeshQuery, bounded_ray_intersects_any
 
 DEVICE_FWD = [0.0, 0.0, 1.0]
 
@@ -29,4 +29,4 @@ def point_mesh_distance(points: torch.Tensor, verts: torch.Tensor, faces: torch.
     return prepared.point_distance(points).to(device=points.device, dtype=points.dtype)
 
 
-__all__ = ["PreparedMeshQuery", "point_mesh_distance"]
+__all__ = ["bounded_ray_intersects_any", "PreparedMeshQuery", "point_mesh_distance"]
