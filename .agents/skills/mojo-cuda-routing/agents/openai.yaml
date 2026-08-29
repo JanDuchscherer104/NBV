@@ -1,0 +1,4 @@
+interface:
+  display_name: "Mojo CUDA Routing"
+  short_description: "Route ARIA-NBV backend work across Mac Mojo and CUDA"
+  default_prompt: "Use $mojo-cuda-routing to plan an ARIA-NBV backend change across Mac Mojo and Ubuntu CUDA."
