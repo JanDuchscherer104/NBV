@@ -75,10 +75,10 @@ horizon does not create evidence for transitions that the data never resolves.
 
 Together, partial observability, state-dependent choices, and finite-horizon
 return make candidate value explicitly relational @POMDPRobotics-lauri2023
-@FixedHorizonTD-deAsis2020. A camera pose has no context-free value: its value
+@FixedHorizonTD-deAsis2020. A camera pose has no context-free value. Its value
 depends on the causal information state, requested target, currently admissible
 support, horizon, state-update rule, and continuation policy. The next
-dependency is therefore representational: the actor state must preserve the
+dependency is therefore representational. The actor state must preserve the
 distinctions on which those future consequences depend.
 
 // evidence:

@@ -31,45 +31,56 @@ Second, *spatial relationality* requires the target, observer, candidates, and
 observed support to be comparable in a common local geometry. Query-centric
 models express scene elements relative to the active query, reducing dependence
 on an arbitrary global origin @zhou2023query. For target-conditioned NBV, the
-relevant relation is not candidate position in isolation but candidate geometry
-relative to the current observer, target, and accumulated evidence.
+relevant quantity is therefore not candidate position in isolation but candidate
+geometry relative to the current observer, target, and accumulated evidence.
+Coordinate choice also determines which changes should be treated as nuisances.
+Translating the world origin should not change a score, whereas gravity, metric
+scale, camera direction, target orientation, occlusion, and temporal order can
+remain informative @GeometricDeepLearning-bronstein2021. The useful prior is
+thus relative geometry that removes arbitrary coordinates without erasing
+task-relevant physical structure.
 
 // evidence:
 // - @zhou2023query -> docs/literature/tex-src/arXiv-QCNet/main.tex:159-161 (query-centric local frames and relative spatial-temporal positions)
+// - @GeometricDeepLearning-bronstein2021 -> docs/literature/tex-src/arXiv-Geometric-Deep-Learning/geometricpriors.tex:347-411, docs/literature/tex-src/arXiv-Geometric-Deep-Learning/geometricpriors.tex:952-967 (invariance, equivariance, locality, and geometric priors)
 
-Third, *nuisance symmetry* separates transformations that should preserve a
-prediction from physical quantities that should not. Translating the world
-origin should not change a score, and permuting candidate rows should merely
-permute their scores. Gravity, metric scale, camera direction, target
-orientation, occlusion, and temporal order can nevertheless remain informative
-@GeometricDeepLearning-bronstein2021 @DeepSets-zaheer2017
-@SetTransformer-lee2019. The appropriate prior is disciplined equivariance, not
-automatic invariance to every rigid transformation.
+Third, *candidate-order equivariance* follows from the action set itself. A
+candidate table denotes physical viewpoints rather than a ranked sequence, so
+permuting its rows must induce the same permutation of their scores; an invariant
+output would instead discard which score belongs to which action. Deep Sets
+provides invariant aggregation for shared set context, while Set Transformer
+provides permutation-equivariant candidate interaction @DeepSets-zaheer2017
+@SetTransformer-lee2019. This is a behavioral contract rather than an
+architecture prescription: independent row scoring, pooled context, and
+attention can all satisfy it.
 
 // evidence:
-// - @GeometricDeepLearning-bronstein2021 -> docs/literature/tex-src/arXiv-Geometric-Deep-Learning/geometricpriors.tex:347-411, docs/literature/tex-src/arXiv-Geometric-Deep-Learning/geometricpriors.tex:952-967 (invariance, equivariance, locality, and geometric priors)
 // - @DeepSets-zaheer2017 -> docs/literature/tex-src/arXiv-Deep-Sets/nips_2017.tex:103-106 (permutation-invariant set-function decomposition)
 // - @SetTransformer-lee2019 -> docs/literature/tex-src/arXiv-Set-Transformer/03_main.tex:49-65 (permutation-equivariant self-attention and invariant pooling)
 
 Fourth, *physical observability* requires the representation to expose
 missingness and sensing geometry rather than treating unobserved space as
-negative evidence. Point, sparse-voxel, and equivariant message-passing models
-offer different realizations of local geometry and symmetry
-@point-transformer-zhao2021 @MinkowskiEngine-choy2019 @EGNN-satorras2021. They
-are examples, not conclusions: no family is an established improvement here
-until compared under the same observable inputs, target task, and endpoint
-utility.
+negative evidence. Point models retain irregular surface samples and fine local
+relations, but their neighborhoods inherit the sampling pattern. Sparse-voxel
+models supply a regular convolutional structure while avoiding dense-grid cost,
+but introduce a chosen resolution and bounded spatial support. Equivariant
+message-passing models encode transformation rules directly, reducing the burden
+of learning them while committing the model to a chosen symmetry family
+@point-transformer-zhao2021 @MinkowskiEngine-choy2019 @EGNN-satorras2021.
+These families therefore trade spatial fidelity, computational structure, and
+strength of geometric prior. None is an established improvement here until
+compared under the same observable inputs, target task, and endpoint utility.
 
 // evidence:
 // - @point-transformer-zhao2021 -> docs/literature/tex-src/arXiv-Point-Transformer/tex/method.tex:21-27, docs/literature/tex-src/arXiv-Point-Transformer/tex/method.tex:55-62 (local neighborhoods and relative position encoding)
 // - @MinkowskiEngine-choy2019 -> docs/literature/tex-src/arXiv-MinkowskiEngine/sections/1_intro.tex:53-62 (sparse coordinates and computational savings)
 // - @EGNN-satorras2021 -> docs/literature/tex-src/arXiv-EGNN/sections/model.tex:6-20, docs/literature/tex-src/arXiv-EGNN/sections/model.tex:42-60 (relative-coordinate message passing and E(n) equivariance)
 
-These four requirements—causal sufficiency, spatial relationality, nuisance
-symmetry, and physical observability—complete the conceptual dependency chain.
-The literature synthesis can now compare methods by the scientific distinctions
-they preserve, while the Method chapter remains responsible for one concrete
-realization and its tests @EFM3D-straub2024
+These four requirements—causal sufficiency, spatial relationality,
+candidate-order equivariance, and physical observability—complete the conceptual
+dependency chain. The literature synthesis can now compare methods by the
+scientific distinctions they preserve, while the Method chapter remains
+responsible for one concrete realization and its tests @EFM3D-straub2024
 @GeometricDeepLearning-bronstein2021.
 
 // evidence:
