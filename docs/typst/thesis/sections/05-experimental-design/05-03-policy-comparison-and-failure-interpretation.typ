@@ -3,56 +3,77 @@
 #import "../../draft_markers.typ": thesis_status, validation_todo, decision_todo
 #import "../../../shared/tables.typ": publication-table
 
-== Policy Comparison and Statistical Protocol
+== Matched Policies and Failure Attribution
 
 #thesis_status(
   implementation: "partial",
   evidence: "pending",
   source: "aria_nbv/aria_nbv/rollouts/reporting.py; docs/typst/thesis/experiment_data.typ",
-  gate: [frozen held-out manifest, completed paired endpoints, and validated report bundle],
-)[The aggregation and artifact-driven reporting seam exists, but confirmatory paired policy evidence does not.]
+  gate: [frozen held-out manifest, completed paired endpoints, and validated confirmatory report bundle],
+)[Scene-paired aggregation and artifact-driven reporting are implemented; the confirmatory policy population is absent.]
 
-The experimental unit is the scene. Every comparison is paired by scene, target task, root state, candidate-generation distribution, hard validity regime, and acquisition horizon. Planner depth may differ because it defines the decision rule, but every policy receives the same acquisition budget. Repeated snippets, targets, and seeds are aggregated within scene before the primary comparison so that densely sampled scenes do not dominate the estimand.
-
-The primary estimand is the paired per-scene difference in fixed-budget endpoint target-quality gain, using #symb.entity.endpoint_gain. Its $Delta_0^e + epsilon$ denominator is distinct from the $max(Delta_0^e, epsilon)$ denominator of cumulative target-root gain, while state-relative RRI has a state-varying denominator; both remain secondary diagnostics rather than alternate names for the endpoint. The centralized analysis artifact freezes the scene aggregation function, uncertainty procedure, interval level, comparison set, and minimum meaningful effect before final aggregation. Invalid-action rate, runtime, path length, and task/candidate coverage likewise diagnose mechanism and feasibility but do not replace the endpoint estimand. The current replay store alone cannot estimate this endpoint comparison because it does not persist an independent post-budget reconstruction for every policy; confirmatory analysis therefore requires matched endpoint oracle re-evaluation or an equivalent frozen endpoint record.
-
-Support and failure strata are fixed before policy inspection. The report distinguishes source rows without an admitted target task, admitted tasks whose oracle evaluation fails, roots without a valid action, trajectories that terminate before the shared budget, and completed paired trajectories. A policy that cannot continue remains in the comparison with no further gain; it is not silently dropped. These strata delimit the analysis population and expose whether a policy difference is instead a support or systems failure.
+The scene is the independent experimental unit. Comparisons are paired by
+scene, target task, root state, candidate distribution, hard-validity regime,
+and acquisition horizon. Repeated snippets, targets, and seeds are aggregated
+within scene before inference so dense sampling cannot masquerade as independent
+evidence. Policies receive the same number of acquisitions even when their
+planner depth differs.
 
 #figure(
   publication-table(
-    columns: (0.72fr, 0.72fr, 0.58fr, 1.35fr),
-    header: ([*Policy*], [*Decision input*], [*Acquisition budget*], [*Scientific role*]),
+    columns: (0.75fr, 0.78fr, 0.62fr, 1.45fr),
+    header: ([*Policy*], [*Decision information*], [*Budget*], [*Scientific role*]),
     rows: (
       [$pi_"rand"$], [actor-visible], [$H$], [valid-action lower reference],
       [$pi_"learned-1"$], [actor-visible], [$H$], [learned myopic control],
-      [$pi_"oracle-1"$], [oracle immediate reward], [$H$], [one-step oracle-greedy comparator],
-      [$pi_"oracle-look"$], [bounded oracle lookahead], [$H$], [conditional finite-support upper reference],
-      [$pi_Q$], [actor-visible], [$H$], [planned learned finite-horizon gap closure],
+      [$pi_"oracle-1"$], [oracle immediate gain], [$H$], [one-step oracle-greedy comparator],
+      [$pi_"oracle-look"$], [bounded oracle lookahead], [$H$], [privileged bounded-lookahead reference],
+      [$pi_Q$], [actor-visible], [$H$], [finite-horizon recovery policy],
     ),
   ),
-  caption: [Matched policy comparison. All rows acquire the same number of views; oracle access and planner depth define the decision rule rather than the acquisition budget.],
+  caption: [Matched policy roles. Oracle access defines a privileged reference, not a deployable upper bound; every row retains the same acquisition budget.],
 ) <tab:thesis-policy-comparison>
 
-The first inferential comparison is bounded oracle lookahead against one-step oracle greedy. Its evaluation contract freezes one target mesh and crop, ASE-depth source, renderer and backprojection, fusion and point cap, and point--mesh metric configuration for every policy. Repeated evaluation must reproduce the same scores within the declared numerical tolerance; it verifies deterministic execution under this contract, not invariance to a different mesh, sampling process, or metric. The analysis artifact also freezes the meaningful-headroom rule before learned-policy inspection. Learned-control gap-closure ratios are reported only after oracle headroom passes that gate and only when their distinct actor-visible-myopic-to-oracle-lookahead denominator is admissible. The learned comparison then contrasts #symb.rl.qh with the actor-visible myopic control under the same endpoint evaluation and acquisition budget; because neither learned target-conditioned control is presently complete, this comparison remains prospective.
+The primary estimand is the paired per-scene difference in fixed-budget endpoint
+target-quality gain. Crop, mesh, rendering, backprojection, fusion, point cap,
+and point--mesh metric identity are shared across policies. The analysis
+manifest freezes exclusions, within-scene aggregation, interval procedure,
+comparison family, meaningful headroom, and recovered-headroom threshold before
+learned-policy outcomes are inspected. Ratios are reported only when their
+headroom denominator passes the meaningful-effect gate.
+
+#figure(
+  publication-table(
+    text-size: 7.7pt,
+    columns: (0.72fr, 1.08fr, 1.32fr, 1.28fr),
+    header: ([*First failed gate*], [*Admitted interpretation*], [*Not implied*], [*Next discriminating evidence*]),
+    rows: (
+      [measurement], [the oracle outcome is not stable enough for comparison], [anything about planning, learning, or support], [repair and repeat the frozen metric protocol],
+      [population / action support], [the requested estimand lacks an adequate study or action population], [zero utility or policy failure], [report exclusions, family survival, horizon coverage, and resource failures],
+      [oracle headroom], [no meaningful non-myopic structure was detected in the frozen setup], [universal myopia or model inadequacy], [change support or horizon only in a separately declared study],
+      [actor-visible $Q_1$], [the available actor information does not recover immediate target value], [a specifically long-horizon failure], [audit target matching, leakage, calibration, and state support],
+      [exact $Q_2$], [the first learned recursion is unsupported or inaccurate], [endpoint planning value or a need for more architecture], [separate coverage, $Q_1$ error, successor linkage, and bootstrap error],
+      [endpoint recovery], [the admitted learned policy does not recover prespecified headroom], [which mechanism failed], [stratify by support, target observability, replay coverage, and state aliasing],
+    ),
+  ),
+  caption: [Failure-attribution matrix. Interpretation stops at the first failed gate; downstream architecture stories remain hypotheses.],
+) <tab:thesis-failure-attribution>
 
 #validation_todo(
-  [Populate the evidence chain in order: evaluation-contract identity and deterministic repeatability, candidate and target support, oracle-lookahead headroom, myopic-control calibration, finite-horizon gap closure, then representation and architecture ablations. Missing upstream evidence blocks downstream claims rather than becoming a zero result.],
-  source: [thesis objective-to-evidence contract],
-  gate: [artifact-backed Results bundle],
-)
-
-#validation_todo(
-  [Run row-shuffle, mask-isolation, duplicate-row, valid-count, frame-transform, target-source-dropout, and horizon-boundary tests for every model admitted to the policy comparison.],
-  source: [geometric acceptance contract],
-  gate: [architecture validity report],
+  [Populate the six gates in order. Missing upstream evidence blocks downstream quantities rather than becoming a zero result.],
+  source: [confirmatory report bundle and exact-Q2 receipt],
+  gate: [artifact-backed Results chapter],
 )
 
 #decision_todo(
-  [Freeze the scene aggregation, interval procedure, interval level, comparison family, and meaningful-headroom threshold in the resolved analysis manifest rather than in thesis prose.],
-  source: [artifact-driven reporting plan],
-  gate: [confirmatory analysis freeze],
+  [Freeze aggregation, interval level, comparison family, meaningful headroom, and recovery threshold in the resolved analysis manifest.],
+  source: [confirmatory analysis plan],
+  gate: [analysis freeze before outcome inspection],
 )
 
-== Outcome Logic
+Train-only pilots and failed generation attempts remain feasibility evidence.
+Renderer out-of-memory events can motivate batching and resource measurement,
+but they cannot support or refute candidate utility, oracle headroom, or policy
+quality. Likewise, a policy that cannot continue remains in the paired analysis
+with no further gain rather than disappearing from the denominator.
 
-Meaningful, stable lookahead headroom establishes only that the frozen finite-candidate setup contains exploitable non-myopic structure. No meaningful headroom is a setup-specific negative result, not evidence that target-aware planning is universally myopic. A non-reproducible or mismatched evaluation contract, or insufficient paired support, blocks downstream policy claims. Conclusions remain conditional on the frozen metric contract and are not claims of representation independence. Likewise, train-only bandwidth pilots and failed generation attempts, including memory-exhaustion failures, inform compute configuration and throughput planning only; incomplete artifacts cannot establish headroom or policy superiority.

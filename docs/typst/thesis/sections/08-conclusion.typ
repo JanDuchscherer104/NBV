@@ -1,15 +1,33 @@
-#import "../draft_markers.typ": validation_todo
-
 = Conclusion <sec:thesis-conclusion>
 
-#validation_todo(
-  [Rewrite the conclusion as direct, evidence-calibrated answers to RQ1--RQ4. The current conditional outcome tree is useful development guidance but is not a final scientific conclusion.],
-  source: [@sec:thesis-results; @sec:thesis-discussion],
-  gate: [confirmatory results and discussion support one concise answer per research question],
-)
+This thesis formulates target-specific egocentric next-best-view planning as a
+relational finite-action problem: value depends jointly on target, causal
+information state, admissible candidate support, horizon, update rule, and
+continuation policy. It contributes a target-cropped reconstruction outcome, an
+explicit actor--oracle information boundary, hard-mask and factual-replay
+contracts, a scalar-horizon fitted-value method, and a six-stage experimental
+logic from measurement validity to endpoint recovery.
 
-This thesis defines a leakage-auditable experiment for target-conditioned finite-candidate next-best-view planning. Its present contribution is the separation of actor-visible state from oracle supervision, the target-specific reconstruction objective, hard validity and replay contracts, and an artifact-driven reporting seam that keeps provenance and missingness attached to later results.
+The current evidence does not yet answer the principal research question.
+RQ1 remains open because metric repeatability is not established on a frozen
+held-out population. RQ4 remains open because validated target, candidate,
+replay, horizon, and resource support are incomplete. RQ3 has an executable
+information contract but no held-out actor-visible target-conditioned result.
+Consequently, RQ2 has neither an admitted oracle-headroom estimate nor learned
+exact-$Q_2$ and endpoint-recovery evidence. RQ5 and RQ6 remain conditional
+extensions rather than missing experiments in the core claim.
 
-The available evidence does not answer whether bounded oracle lookahead improves fixed-budget target reconstruction over oracle-greedy or whether a learned finite-horizon policy closes the separate endpoint gap from an actor-visible learned-myopic control to oracle lookahead. The current training-source rollout attempts establish pipeline reachability and reveal a renderer resource gate; the development report fixture establishes the data contract only. Neither supports a held-out policy claim, a population-level effect, or a scale estimate.
+Training-source rollouts establish that the pipeline reaches mesh rendering,
+target-specific oracle scoring, selected-action replay, and the fitted-value
+interface; renderer memory exposes a scale gate. These observations justify an
+auditable method and study design, not policy superiority, a population effect,
+deployment readiness, or a scale estimate.
 
-The final scientific conclusion is therefore conditional on evidence that is not yet available. A stable oracle metric and positive paired lookahead effect would define measurable headroom for the evaluated finite support. Negligible headroom would be a setup-specific negative result. Unstable oracle evaluation would block planning claims, and stable headroom without the prescribed learned-control gap closure would remain a learned-control failure with several unresolved mechanisms. These outcomes delimit the thesis without extending it to continuous control, online reinforcement learning, or real-device deployment.
+The eventual conclusion is determined by the first failed gate. Unstable
+measurement blocks planning claims; inadequate support blocks population
+claims; negligible headroom is a setup-specific negative result; failed
+actor-visible $Q_1$ or exact $Q_2$ localizes a learning prerequisite; and stable
+headroom without endpoint recovery is a bounded learned-policy failure. This
+ordering preserves informative negative outcomes without extending them beyond
+the frozen finite-candidate experiment.
+
