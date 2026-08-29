@@ -159,7 +159,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         }
     )
     with tempfile.TemporaryDirectory(prefix="aria-nbv-pytorch3d-", dir=cache_root) as temp_dir:
-        env["TMPDIR"] = temp_dir
+        build_env = {**env, "TMPDIR": temp_dir}
         _run(
             (
                 uv,
@@ -174,7 +174,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 "pytorch3d",
                 f"pytorch3d @ git+{url}@{commit}",
             ),
-            env=env,
+            env=build_env,
         )
 
     admitted = _preflight(preflight, env)
