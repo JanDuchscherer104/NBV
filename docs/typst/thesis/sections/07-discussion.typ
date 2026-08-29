@@ -20,7 +20,7 @@ The scientific limitations are more restrictive. Current attempts use training s
 #thesis_status(
   implementation: "exploratory",
   evidence: "pending",
-  source: [@tab:thesis-scene-representation-design-space; @tab:geometric-learning-ladder],
+  source: [@tab:thesis-counterfactual-state-protocols; @tab:geometric-learning-ladder],
   gate: [a measured limitation that the proposed bridge directly tests],
 )[Alternative representations and policies remain part of the thesis design registry, but they are promoted only as responses to diagnosed bottlenecks.]
 
