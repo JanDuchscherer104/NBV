@@ -972,13 +972,17 @@ def _rollout_promotion_blocker(store: Path) -> str | None:
     """Return one fail-closed trust error for an advertised promoted store."""
 
     _manifest_status, manifest = _read_json_object(store / "manifest.json")
-    if manifest is None and not any(_lstat_exists(store / name) for name in ("_SUCCESS.json", "_owner.json")):
-        return None
-    if manifest is not None and not _promotion_advertised(store, manifest):
-        return None
-    missing = _missing_promotion_markers(store)
+    marker_statuses = {name: read_promotion_marker_json(store / name)[0] for name in ("_SUCCESS.json", "_owner.json")}
+    if all(status == "missing_file" for status in marker_statuses.values()):
+        if manifest is None or not _promotion_advertised(store, manifest):
+            return None
+    missing = tuple(name for name, status in marker_statuses.items() if status == "missing_file")
     if missing:
         return f"Promoted rollout {store.name} has incomplete promotion markers: {', '.join(missing)}."
+    invalid = tuple(name for name, status in marker_statuses.items() if status != "present")
+    if invalid:
+        details = ", ".join(f"{name} is {marker_statuses[name].replace('_', ' ')}" for name in invalid)
+        return f"Promoted rollout {store.name} has invalid promotion markers: {details}."
     try:
         reader = RolloutZarrStoreReader(store)
         manifest_facts = build_manifest_facts(reader)

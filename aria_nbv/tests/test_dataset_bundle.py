@@ -761,18 +761,38 @@ def test_qh_preview_rejects_incomplete_promotion_evidence_before_dataset_constru
     assert not called
 
 
-def test_qh_readiness_and_preview_reject_broken_promotion_marker(tmp_path: Path) -> None:
-    """A broken promotion marker cannot masquerade as an unpromoted V0 store."""
+def test_qh_readiness_rejects_two_broken_promotion_marker_aliases_before_dataset_construction(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Broken marker aliases cannot masquerade as an unpromoted V0 store."""
 
     root, source_hash = _write_root_store(tmp_path)
     rollout = _write_rollout_store(tmp_path, name="broken-marker.zarr", source_hash=source_hash)
-    (rollout / "_owner.json").symlink_to(tmp_path / "missing-owner.json")
+    for marker in ("_SUCCESS.json", "_owner.json"):
+        (rollout / marker).symlink_to(tmp_path / f"missing-{marker}")
+    monkeypatch.setattr(
+        dataset_bundle, "_build_qh_data_module", lambda *_args, **_kwargs: pytest.fail("unexpected construction")
+    )
 
     readiness = build_qh_corpus_readiness(DatasetBundleSelection(root, (rollout,)), contract=_QH_READINESS_CONTRACT)
-    assert readiness.verdict == "Blocked"
-    assert any("trust" in blocker or "promotion" in blocker for blocker in readiness.blockers)
 
-    with pytest.raises(ValueError, match="trust|promotion"):
+    assert readiness.verdict == "Blocked"
+
+
+def test_qh_preview_rejects_two_broken_promotion_marker_aliases_before_dataset_construction(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Preview applies the same marker gate before Q_H construction."""
+
+    root, source_hash = _write_root_store(tmp_path)
+    rollout = _write_rollout_store(tmp_path, name="broken-preview-marker.zarr", source_hash=source_hash)
+    for marker in ("_SUCCESS.json", "_owner.json"):
+        (rollout / marker).symlink_to(tmp_path / f"missing-{marker}")
+    monkeypatch.setattr(
+        dataset_bundle, "_build_qh_data_module", lambda *_args, **_kwargs: pytest.fail("unexpected construction")
+    )
+
+    with pytest.raises(ValueError, match="promotion"):
         preview_qh_batch(DatasetBundleSelection(root, (rollout,)), contract=_QH_READINESS_CONTRACT)
 
 

@@ -25,6 +25,7 @@ import torch
 import zarr
 from numpy.typing import NDArray
 
+from ..oracle.pipelines.shard_promotion import read_promotion_marker_json
 from ..oracle.target_selection import TARGET_INVALID_REASON_CODES
 from ..pose_generation import ViewDirectionMode, candidate_strategy_id
 from ..targets.protocol import ORACLE_GT_TARGET_SOURCE, ActorVisibleTargetSource, TargetInputProtocol
@@ -567,12 +568,15 @@ def promoted_store_validation_error(
     """Return an error when campaign completion evidence is not current."""
 
     store_dir = reader.store_dir
-    success_path = store_dir / "_SUCCESS.json"
-    owner_path = store_dir / "_owner.json"
-    if not success_path.exists() and not owner_path.exists():
+    success_status, _success = read_promotion_marker_json(store_dir / "_SUCCESS.json")
+    owner_status, _owner = read_promotion_marker_json(store_dir / "_owner.json")
+    marker_statuses = (success_status, owner_status)
+    if marker_statuses == ("missing_file", "missing_file"):
         return None
-    if not success_path.exists() or not owner_path.exists():
-        return "promoted rollout evidence is incomplete"
+    if marker_statuses != ("present", "present"):
+        if "missing_file" in marker_statuses:
+            return "promoted rollout evidence is incomplete"
+        return "promoted rollout evidence markers are unreadable"
     payload = reader.manifest() if manifest_payload is None else manifest_payload
     manifest = payload.get("manifest")
     generation = manifest.get("generation") if isinstance(manifest, Mapping) else None
