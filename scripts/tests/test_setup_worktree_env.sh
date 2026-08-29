@@ -350,7 +350,8 @@ rmdir "${SHARED_ROOT}/.data/graphify-semantic-cache/semantic" \
 run_setup "${WORKTREE_ROOT}"
 [[ -d "${SHARED_ROOT}/.data/graphify-semantic-cache/semantic" ]]
 [[ -d "${SHARED_ROOT}/.data/graphify-semantic-cache/semantic-deep" ]]
-grep -Fqx -- "--root ${WORKTREE_ROOT}" "${SANDBOX}/reconcile.log"
+grep -Fqx -- "--quiet" "${SANDBOX}/freshness.log"
+[[ ! -e "${SANDBOX}/reconcile.log" ]]
 [[ -d "${WORKTREE_ROOT}/.data" ]]
 [[ -L "${WORKTREE_ROOT}/.data/ase_efm" ]]
 [[ -L "${WORKTREE_ROOT}/.data/offline_cache" ]]
