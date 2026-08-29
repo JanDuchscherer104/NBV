@@ -20,6 +20,7 @@ PINNED_GRAPHIFY_VERSION = "0.9.48"
 GRAPH = Path("graphify-out/graph.json")
 PROJECTION = Path("graphify-input")
 _HEX_OID = re.compile(r"[0-9a-f]+\Z")
+_PROJECTION_TREE_DRIFT = "projection source tree differs from HEAD"
 
 
 def fail(message: str) -> None:
@@ -54,6 +55,7 @@ def trusted_graphify_cli(root: Path) -> Path:
     discovered = shutil.which("graphify")
     if discovered is None:
         fail("trusted Graphify CLI is unavailable")
+    root = root.resolve()
     cli = Path(discovered).absolute().resolve(strict=True)
     if cli.is_relative_to(root) or not cli.is_file() or not os.access(cli, os.X_OK):
         fail("trusted Graphify CLI is unsafe")
@@ -282,6 +284,16 @@ def configured_modes(raw: str | None = None) -> tuple[str, ...]:
     return modes
 
 
+def projection_rebuild_reasons(root: Path) -> list[str]:
+    """Return projection-owner changes that require rebuilding generated Markdown."""
+
+    return [
+        reason
+        for reason in freshness.projection_owner_changes(root)
+        if reason != _PROJECTION_TREE_DRIFT
+    ]
+
+
 def run(root: Path, *, modes: tuple[str, ...] | None = None) -> None:
     root = root.resolve()
     if not (root / ".git").exists():
@@ -289,7 +301,7 @@ def run(root: Path, *, modes: tuple[str, ...] | None = None) -> None:
     cli, interpreter = trusted_graphify_runtime(root)
     revision = head(root)
     active_modes = configured_modes() if modes is None else modes
-    rebuild_projection = bool(freshness.projection_owner_changes(root))
+    rebuild_projection = bool(projection_rebuild_reasons(root))
 
     scripts = Path(__file__).resolve().parent
     with tempfile.TemporaryDirectory(

@@ -88,6 +88,7 @@ def test_graphify_state_rejects_remote_checkout_mismatch(
 ) -> None:
     revision = "a" * 40
     _write_graph(tmp_path, revision)
+    monkeypatch.setattr(sync, "canonical_primary", lambda _root: tmp_path)
     monkeypatch.setattr(sync, "_local_head", lambda _root: revision)
     monkeypatch.setattr(sync, "_remote_head_full", lambda _remote, _root: "b" * 40)
 
