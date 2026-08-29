@@ -70,6 +70,7 @@ from .rollout_dataset import (
     _apply_manifest_rows,
     _RolloutSourceLineageBuilder,
 )
+from .shard_promotion import promotion_metadata_validation_error
 
 
 class RolloutShardOwnershipConflictError(RuntimeError):
@@ -505,6 +506,9 @@ def _completed_shard_is_current(
         owner = json.loads(owner_path.read_text(encoding="utf-8"))
         store_manifest = read_rollout_store_manifest(final_dir)
     except (json.JSONDecodeError, OSError):
+        return False
+    metadata_error = promotion_metadata_validation_error(store_manifest=store_manifest, success=success, owner=owner)
+    if metadata_error is not None:
         return False
     expected = {
         "shard_id": shard_entry.shard_id,

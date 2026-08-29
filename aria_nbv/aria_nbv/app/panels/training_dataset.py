@@ -46,7 +46,7 @@ _QH_READINESS_STATE_KEY = "training_dataset_qh_readiness"
 _QH_PREVIEW_STATE_KEY = "training_dataset_qh_preview"
 _QH_BATCH_SIZE_KEY = "training_dataset_qh_batch_size"
 _QH_SEED_KEY = "training_dataset_qh_seed"
-_QH_READINESS_CONTRACT = QhReadinessContract("qh_cf0_v1", "evl_v1", "none")
+_QH_READINESS_CONTRACT = QhReadinessContract("qh_cf0_v1", "evl_v1", "none", "qh_dense_valid_fitted_q_v1")
 
 QhReadinessIdentity = tuple[str, int, int]
 QhPreviewIdentity = tuple[str, str, int, int, int]

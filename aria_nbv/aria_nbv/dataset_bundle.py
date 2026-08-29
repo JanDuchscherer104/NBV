@@ -10,6 +10,7 @@ scan. Neither path repairs, migrates, or writes a store.
 
 from __future__ import annotations
 
+import io
 import json
 import os
 import stat
@@ -24,6 +25,7 @@ import msgspec
 import numpy as np
 
 from .data_handling.identifiers import compact_ase_atek_sample_id
+from .data_handling.qh_data.batching import QhObjectiveProfile
 from .data_handling.qh_data.views import (
     QhExperimentProfile,
     QhRootEvlProfile,
@@ -34,15 +36,14 @@ from .data_handling.vin_store.format import VinOfflineIndexRecord, VinOfflineMan
 from .data_handling.vin_store.store import OFFLINE_DATASET_VERSION, VinOfflineStoreConfig, VinOfflineStoreReader
 from .data_handling.vin_store.target_inventory import inspect_target_inventory
 from .dataset_topology import discover_vin_store_dirs
+from .oracle.pipelines.shard_promotion import promotion_metadata_validation_error
 from .rollouts.inspection import (
     build_effective_streamlit_trust,
     build_manifest_facts,
     build_promotion_evidence,
     build_schema_validation,
     discover_rollout_store_paths,
-    promotion_metadata_validation_error,
 )
-from .rollouts.manifest import read_rollout_store_manifest
 from .rollouts.zarr_store import ROLLOUT_ZARR_SCHEMA_VERSION, RolloutZarrStoreReader
 from .utils import Stage
 from .utils.fingerprints import stable_msgspec_hash
@@ -153,7 +154,7 @@ class DatasetBundleEntryFingerprint:
     mtime_ns: int | None
     size: int | None
     canonical_target: Path | None
-    metadata: tuple[tuple[str, str, str | None, int, int, int, int], ...]
+    metadata: tuple[tuple[str, str, str | None, int, int, int, int, int | None, int | None, int | None], ...]
     authoritative_fields: tuple[DatasetBundleAuthoritativeField, ...]
 
 
@@ -389,7 +390,9 @@ def _parse_authoritative_fields(
     return tuple(rows)
 
 
-def _read_bounded_json_object(path: Path) -> tuple[AuthoritativeFieldStatus, Mapping[str, Any] | None]:
+def _read_bounded_regular_file(path: Path) -> tuple[AuthoritativeFieldStatus, bytes | None]:
+    """Read one bounded regular file without blocking on special entries."""
+
     descriptor: int | None = None
     try:
         descriptor = os.open(path, os.O_RDONLY | os.O_NONBLOCK)
@@ -413,6 +416,13 @@ def _read_bounded_json_object(path: Path) -> tuple[AuthoritativeFieldStatus, Map
     payload = b"".join(chunks)
     if len(payload) > _MAX_AUTHORITATIVE_JSON_BYTES:
         return "oversized", None
+    return "present", payload
+
+
+def _read_bounded_json_object(path: Path) -> tuple[AuthoritativeFieldStatus, Mapping[str, Any] | None]:
+    status, payload = _read_bounded_regular_file(path)
+    if payload is None:
+        return status, None
     try:
         decoded = json.loads(payload)
     except (UnicodeDecodeError, json.JSONDecodeError, RecursionError):
@@ -430,7 +440,9 @@ def _matches_authoritative_type(value: Any, expected_type: str) -> bool:
     raise AssertionError(f"unsupported authoritative field type: {expected_type}")
 
 
-def _bounded_metadata_fingerprints(root: Path) -> tuple[tuple[str, str, str | None, int, int, int, int], ...]:
+def _bounded_metadata_fingerprints(
+    root: Path,
+) -> tuple[tuple[str, str, str | None, int, int, int, int, int | None, int | None, int | None], ...]:
     candidates = [
         root / "manifest.json",
         root / "_SUCCESS.json",
@@ -443,7 +455,7 @@ def _bounded_metadata_fingerprints(root: Path) -> tuple[tuple[str, str, str | No
     splits = root / "splits"
     if splits.is_dir():
         candidates.extend(splits.glob("*.npy"))
-    rows: list[tuple[str, str, str | None, int, int, int, int]] = []
+    rows: list[tuple[str, str, str | None, int, int, int, int, int | None, int | None, int | None]] = []
     for path in sorted(candidates, key=lambda candidate: candidate.relative_to(root).as_posix()):
         try:
             entry = path.lstat()
@@ -451,6 +463,7 @@ def _bounded_metadata_fingerprints(root: Path) -> tuple[tuple[str, str, str | No
             continue
         relative_name = path.relative_to(root).as_posix()
         target = os.readlink(path) if stat.S_ISLNK(entry.st_mode) else None
+        target_entry = _regular_file_target_stat(path) if stat.S_ISLNK(entry.st_mode) else None
         rows.append(
             (
                 relative_name,
@@ -460,9 +473,27 @@ def _bounded_metadata_fingerprints(root: Path) -> tuple[tuple[str, str, str | No
                 entry.st_ctime_ns,
                 entry.st_mtime_ns,
                 entry.st_size,
+                None if target_entry is None else target_entry.st_ino,
+                None if target_entry is None else target_entry.st_ctime_ns,
+                None if target_entry is None else target_entry.st_mtime_ns,
             )
         )
     return tuple(rows)
+
+
+def _regular_file_target_stat(path: Path) -> os.stat_result | None:
+    """Return a symlink target stat only after a nonblocking regular-file open."""
+
+    descriptor: int | None = None
+    try:
+        descriptor = os.open(path, os.O_RDONLY | os.O_NONBLOCK)
+        target = os.fstat(descriptor)
+        return target if stat.S_ISREG(target.st_mode) else None
+    except OSError:
+        return None
+    finally:
+        if descriptor is not None:
+            os.close(descriptor)
 
 
 def _entry_kind(mode: int) -> str:
@@ -666,7 +697,7 @@ class QhCorpusReadiness:
     actor_contract: dict[str, Any] | None
     """Exact named actor contract used to construct every stage."""
 
-    loader_settings: dict[str, int | bool]
+    loader_settings: dict[str, int | bool | str]
     """Deterministic DataLoader settings used for admission and preview."""
 
     scene_disjoint: bool | None
@@ -728,6 +759,9 @@ class QhReadinessContract:
 
     selected_observation_protocol: QhSelectedObservationProtocol
     """Selected-observation source bound to the actor contract."""
+
+    objective_profile: QhObjectiveProfile = "qh_dense_valid_fitted_q_v1"
+    """Population-independent fitted-Q objective used for admission and preview."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -826,6 +860,7 @@ def build_qh_corpus_readiness(
         "pin_memory": False,
         "persistent_workers": False,
         "seed": seed,
+        "objective_profile": contract.objective_profile,
     }
     if batch_size < 1:
         return _blocked_qh_readiness(selection, loader_settings, "Q_H batch_size must be positive.")
@@ -1049,6 +1084,7 @@ def _build_qh_data_module(
         persistent_workers=False,
         seed=seed,
         experiment_profile=contract.experiment_profile,
+        objective_profile=contract.objective_profile,
     )
     actor_contract = data_module.train_dataset.actor_state_contract
     if (
@@ -1148,7 +1184,7 @@ def _storage_metric(
 
 def _blocked_qh_readiness(
     selection: DatasetBundleSelection,
-    loader_settings: dict[str, int | bool],
+    loader_settings: dict[str, int | bool | str],
     *blockers: str,
 ) -> QhCorpusReadiness:
     """Return a fail-closed readiness result without partial admission claims."""
@@ -1441,9 +1477,17 @@ def scan_root_gt_obb_target_opportunities(root_store: Path | str) -> dict[str, A
     """
 
     store = Path(root_store).expanduser().resolve()
+    manifest_status, manifest_bytes = _read_bounded_regular_file(store / "manifest.json")
+    index_status, index_bytes = _read_bounded_regular_file(store / "sample_index.jsonl")
     try:
-        manifest = VinOfflineManifest.read(store / "manifest.json")
-        records = tuple(VinOfflineIndexRecord.read_many(store / "sample_index.jsonl"))
+        if manifest_bytes is None:
+            raise OSError(f"manifest.json is {manifest_status.replace('_', ' ')}")
+        if index_bytes is None:
+            raise OSError(f"sample_index.jsonl is {index_status.replace('_', ' ')}")
+        manifest = msgspec.json.decode(manifest_bytes, type=VinOfflineManifest)
+        records = tuple(
+            msgspec.json.decode(line, type=VinOfflineIndexRecord) for line in index_bytes.splitlines() if line.strip()
+        )
     except (OSError, ValueError, TypeError, msgspec.MsgspecError) as exc:
         return _unavailable_target_opportunities(store, f"root_store_unreadable:{type(exc).__name__}:{exc}")
     if not manifest.materialized_blocks.gt_obbs:
@@ -1521,9 +1565,17 @@ def _root_summary(
     *,
     findings: list[DatasetBundleFinding],
 ) -> tuple[dict[str, Any], tuple[VinOfflineIndexRecord, ...]]:
+    manifest_status, manifest_bytes = _read_bounded_regular_file(store / "manifest.json")
+    index_status, index_bytes = _read_bounded_regular_file(store / "sample_index.jsonl")
     try:
-        manifest = VinOfflineManifest.read(store / "manifest.json")
-        records = tuple(VinOfflineIndexRecord.read_many(store / "sample_index.jsonl"))
+        if manifest_bytes is None:
+            raise OSError(f"manifest.json is {manifest_status.replace('_', ' ')}")
+        if index_bytes is None:
+            raise OSError(f"sample_index.jsonl is {index_status.replace('_', ' ')}")
+        manifest = msgspec.json.decode(manifest_bytes, type=VinOfflineManifest)
+        records = tuple(
+            msgspec.json.decode(line, type=VinOfflineIndexRecord) for line in index_bytes.splitlines() if line.strip()
+        )
     except (OSError, ValueError, TypeError, msgspec.MsgspecError) as exc:
         findings.append(
             DatasetBundleFinding(
@@ -1607,8 +1659,11 @@ def _validate_root_records(
         )
     for split in sorted({record.split for record in records}):
         split_path = store / "splits" / f"{split}.npy"
+        split_status, split_bytes = _read_bounded_regular_file(split_path)
         try:
-            persisted = np.asarray(np.load(split_path, allow_pickle=False), dtype=np.int64).reshape(-1)
+            if split_bytes is None:
+                raise OSError(f"split is {split_status.replace('_', ' ')}")
+            persisted = np.asarray(np.load(io.BytesIO(split_bytes), allow_pickle=False), dtype=np.int64).reshape(-1)
         except (OSError, ValueError) as exc:
             findings.append(
                 DatasetBundleFinding(
@@ -1643,8 +1698,13 @@ def _rollout_summary(
     blockers_before = sum(
         finding.severity == "blocking" and finding.store_path == store.as_posix() for finding in findings
     )
+    manifest_status, manifest_bytes = _read_bounded_regular_file(store / "manifest.json")
     try:
-        manifest = read_rollout_store_manifest(store)
+        if manifest_bytes is None:
+            raise OSError(f"manifest.json is {manifest_status.replace('_', ' ')}")
+        manifest = json.loads(manifest_bytes)
+        if not isinstance(manifest, dict):
+            raise TypeError("rollout manifest is not an object")
     except Exception as exc:
         findings.append(
             DatasetBundleFinding(

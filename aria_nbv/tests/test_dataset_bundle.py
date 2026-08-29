@@ -215,6 +215,46 @@ def test_bounded_json_read_rejects_non_regular_entries_without_blocking(
     assert first.root.authoritative_fields[0].status == "unreadable"
 
 
+def test_metadata_symlink_target_identity_rejects_special_files_nonblocking(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "root"
+    root.mkdir()
+    target = tmp_path / "metadata.fifo"
+    os.mkfifo(target)
+    manifest = root / "manifest.json"
+    manifest.symlink_to(target)
+    original_open = os.open
+
+    def _checked_open(path: os.PathLike[str] | str, flags: int, *args: Any, **kwargs: Any) -> int:
+        if Path(path) == manifest:
+            assert flags & os.O_NONBLOCK
+        return original_open(path, flags, *args, **kwargs)
+
+    monkeypatch.setattr(os, "open", _checked_open)
+
+    metadata = dataset_bundle._bounded_metadata_fingerprints(root)
+
+    assert metadata[0][-3:] == (None, None, None)
+
+
+def test_metadata_symlink_target_replacement_changes_generation_identity(tmp_path: Path) -> None:
+    root = tmp_path / "root"
+    root.mkdir()
+    target = tmp_path / "target.json"
+    target.write_text('{"version": 10}', encoding="utf-8")
+    (root / "manifest.json").symlink_to(target)
+
+    _selection, first = capture_dataset_bundle_generation(root, ())
+    replacement = tmp_path / "replacement.json"
+    replacement.write_text('{"version": 11}', encoding="utf-8")
+    replacement.replace(target)
+    _selection, replaced = capture_dataset_bundle_generation(root, ())
+
+    assert replaced.generation_digest != first.generation_digest
+
+
 def test_bounded_json_read_accepts_symlink_to_regular_file(tmp_path: Path) -> None:
     target = tmp_path / "target.json"
     target.write_text('{"version": 10}', encoding="utf-8")
@@ -385,7 +425,7 @@ _QH_CONTRACT = QhDataContract(
     reason_code_version="reasons-v1",
     actor_store_version=str(OFFLINE_DATASET_VERSION),
 )
-_QH_READINESS_CONTRACT = QhReadinessContract("qh_cf0_v1", "evl_v1", "none")
+_QH_READINESS_CONTRACT = QhReadinessContract("qh_cf0_v1", "evl_v1", "none", "legacy_selected_rows_v1")
 
 
 def _qh_chain(*, scene: str, steps: int, width: int, offset: int) -> QhChain:
@@ -482,6 +522,43 @@ def test_qh_readiness_constructs_real_datamodule_and_binds_profile(
     assert readiness.actor_contract is not None
     assert readiness.actor_contract["experiment_profile"] == "qh_cf0_v1"
     assert [config.experiment_profile for config in captured] == ["qh_cf0_v1"] * 3
+
+
+def test_qh_readiness_and_preview_forward_dense_objective_profile_and_reject_incompatible_contract(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Both public Q_H paths retain the named objective at DataModule admission."""
+
+    from aria_nbv.lightning import qh_datamodule
+
+    root, source_hash = _write_root_store(tmp_path)
+    rollout = _write_rollout_store(tmp_path, name="qh-dense-contract.zarr", source_hash=source_hash)
+    stages = {
+        Stage.TRAIN: _QhStageDataset(Stage.TRAIN, (_qh_chain(scene="train", steps=1, width=1, offset=0),)),
+        Stage.VAL: _QhStageDataset(Stage.VAL, ()),
+        Stage.TEST: _QhStageDataset(Stage.TEST, ()),
+    }
+    _patch_qh_stages(monkeypatch, stages)
+    captured_profiles: list[str] = []
+    real_data_module = qh_datamodule.QhDataModule
+
+    def capture_data_module(**kwargs: Any) -> Any:
+        captured_profiles.append(kwargs["objective_profile"])
+        return real_data_module(**kwargs)
+
+    monkeypatch.setattr(qh_datamodule, "QhDataModule", capture_data_module)
+    contract = replace(_QH_READINESS_CONTRACT, objective_profile="qh_dense_valid_fitted_q_v1")
+    selection = DatasetBundleSelection(root, (rollout,))
+
+    readiness = build_qh_corpus_readiness(selection, contract=contract)
+
+    assert readiness.verdict == "Blocked"
+    assert readiness.loader_settings["objective_profile"] == "qh_dense_valid_fitted_q_v1"
+    assert readiness.to_jsonable()["loader_settings"]["objective_profile"] == "qh_dense_valid_fitted_q_v1"
+    assert "dense-valid Q_H objective requires" in readiness.blockers[0]
+    with pytest.raises(ValueError, match="dense-valid Q_H objective requires"):
+        preview_qh_batch(selection, contract=contract)
+    assert captured_profiles == ["qh_dense_valid_fitted_q_v1", "qh_dense_valid_fitted_q_v1"]
 
 
 def test_qh_readiness_reports_realized_maximum_for_early_terminated_chains(
@@ -777,6 +854,35 @@ def _write_rollout_store(
     }
     (store / "manifest.json").write_text(json.dumps(payload), encoding="utf-8")
     return store
+
+
+@pytest.mark.parametrize("fifo_entry", ["vin_manifest", "vin_sample_index", "rollout_manifest"])
+def test_public_bundle_summary_reports_fifo_metadata_as_blocked_visible_evidence(
+    fifo_entry: str, tmp_path: Path
+) -> None:
+    """Public bundle inspection must reject FIFO metadata without blocking."""
+
+    root, source_hash = _write_root_store(tmp_path)
+    rollout = _write_rollout_store(tmp_path, name="fifo.zarr", source_hash=source_hash)
+    if fifo_entry == "vin_manifest":
+        fifo_path = root / "manifest.json"
+        expected_code = "root_store_unreadable"
+    elif fifo_entry == "vin_sample_index":
+        fifo_path = root / "sample_index.jsonl"
+        expected_code = "root_store_unreadable"
+    else:
+        fifo_path = rollout / "manifest.json"
+        expected_code = "rollout_store_unreadable"
+    fifo_path.unlink()
+    os.mkfifo(fifo_path)
+
+    evidence = build_dataset_bundle_summary(DatasetBundleSelection(root, (rollout,)))
+
+    assert evidence.verdict == "Blocked"
+    assert any(finding.code == expected_code for finding in evidence.findings)
+    if fifo_entry == "rollout_manifest":
+        assert evidence.rollouts[0]["included_in_training_totals"] is False
+        assert evidence.rollouts[0]["path"] == rollout.as_posix()
 
 
 def test_lightweight_bundle_aggregates_compatible_rollouts_without_duplicating_root(tmp_path: Path) -> None:

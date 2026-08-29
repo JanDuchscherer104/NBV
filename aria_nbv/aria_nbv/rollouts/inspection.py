@@ -29,7 +29,7 @@ from ..oracle.target_selection import TARGET_INVALID_REASON_CODES
 from ..pose_generation import ViewDirectionMode, candidate_strategy_id
 from ..targets.protocol import ORACLE_GT_TARGET_SOURCE, ActorVisibleTargetSource, TargetInputProtocol
 from .audits import candidate_policy_entropy
-from .manifest import manifest_sha256, read_rollout_store_manifest
+from .manifest import read_rollout_store_manifest
 from .read_model import (
     StoredRollout,
     decode_invalid_reason,
@@ -40,7 +40,6 @@ from .read_model import (
     selected_depth_for_step,
     target_rows,
 )
-from .shard_manifest import RolloutShardEntry
 from .trace import INVALID_REASON_CODES, _candidate_invalid_reasons
 from .zarr_store import (
     Q_H_ARRAY_NAMES,
@@ -594,69 +593,6 @@ def promoted_store_validation_error(
     except (KeyError, TypeError, ValueError):
         return "promoted rollout evidence is malformed"
     return None if evidence is not None else "promoted rollout evidence does not match the canonical store content"
-
-
-def promotion_metadata_validation_error(
-    *,
-    store_manifest: Mapping[str, Any],
-    success: Mapping[str, Any],
-    owner: Mapping[str, Any],
-) -> str | None:
-    """Validate typed promotion metadata without opening Zarr arrays.
-
-    The caller owns bounded reads and marker membership. This leaf contract
-    validates only the already-decoded manifest and sidecar documents against
-    canonical shard ownership and hash-binding rules.
-    """
-
-    if success.get("sidecar_kind") != "rollout_shard_success":
-        return "success marker has no typed sidecar kind"
-    if owner.get("sidecar_kind") != "rollout_shard_owner":
-        return "owner marker has no typed sidecar kind"
-    generation = store_manifest.get("generation")
-    shard_payload = generation.get("shard") if isinstance(generation, Mapping) else None
-    if not isinstance(shard_payload, dict):
-        return "manifest has no matching typed shard ownership"
-    try:
-        shard_entry = RolloutShardEntry.from_jsonable(shard_payload)
-        shard_entry.validate()
-    except (KeyError, TypeError, ValueError, OverflowError):
-        return "manifest has malformed typed shard ownership"
-    stored_shard = dict(shard_payload)
-    expected_shard = shard_entry.to_jsonable()
-    if shard_entry.campaign_binding is None:
-        stored_shard.pop("campaign_binding", None)
-        expected_shard.pop("campaign_binding", None)
-    if stored_shard != expected_shard:
-        return "manifest has noncanonical typed shard ownership"
-
-    campaign_binding = None if shard_entry.campaign_binding is None else shard_entry.campaign_binding.to_jsonable()
-    expected = {
-        "shard_id": shard_entry.shard_id,
-        "writer_config_hash": shard_entry.writer_config_hash,
-        "source_manifest_hash": shard_entry.source_manifest_hash,
-        "split_manifest_hash": shard_entry.split_manifest_hash,
-        "generation_revision_hash": shard_entry.generation_revision_hash,
-        "source_cache_version": shard_entry.source_cache_version,
-        "split": shard_entry.split,
-        "num_source_rows": len(shard_entry.rows),
-        "campaign_binding": campaign_binding,
-    }
-    if any(success.get(key) != value or owner.get(key) != value for key, value in expected.items()):
-        return "markers have incomplete or inconsistent typed ownership"
-    manifest_hash = manifest_sha256(dict(store_manifest))
-    if success.get("rollout_manifest_sha256") != manifest_hash or owner.get("rollout_manifest_sha256") != manifest_hash:
-        return "markers do not bind the rollout manifest"
-    content_hash = owner.get("rollout_store_content_sha256")
-    if not _is_sha256(content_hash) or success.get("rollout_store_content_sha256") != content_hash:
-        return "markers have invalid or inconsistent store-content binding"
-    if not _is_sha256(success.get("owner_sha256")) or success.get("owner_sha256") != manifest_sha256(dict(owner)):
-        return "success marker does not bind its owner marker"
-    return None
-
-
-def _is_sha256(value: Any) -> bool:
-    return isinstance(value, str) and len(value) == 64 and all(character in "0123456789abcdef" for character in value)
 
 
 def _generation_cohort_identity(
