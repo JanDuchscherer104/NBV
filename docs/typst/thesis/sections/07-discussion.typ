@@ -3,8 +3,8 @@
 The available evidence supports an implementation conclusion, not a policy
 conclusion. ARIA-NBV represents target-specific finite actions, separates
 actor-visible inputs from oracle supervision, applies invalidity as a hard
-constraint, records factual selected transitions, and exposes evidence through
-an artifact-driven report seam. These properties make the proposed study
+constraint, records factual selected transitions, and reports observed values
+without replacing missing evidence. These properties make the proposed study
 auditable. They do not establish metric repeatability, held-out population
 support, non-myopic headroom, learned value accuracy, or endpoint improvement.
 
@@ -58,7 +58,7 @@ a deployed egocentric actor would have to infer. The thesis therefore separates
 oracle task construction from actor-visible scoring end to end: target
 instruction, candidate proposal, hard mask, selected observation, and scorer
 input. Real-device or continuous-control claims would change observation,
-action, safety, and cost contracts and remain outside the present evidence.
+action, safety, and cost assumptions and remain outside the present evidence.
 
 The conceptual contribution is consequently an identifiability structure for
 target-specific view planning. View value is relational, invalidity is distinct

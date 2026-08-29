@@ -18,9 +18,9 @@ parts of this evaluation.
 
 Training-source rollouts establish that the pipeline reaches mesh rendering,
 target-specific oracle scoring, selected-action replay, and the fitted-value
-interface; renderer memory exposes a scale gate. These observations justify an
-auditable method and study design, not policy superiority, a population effect,
-deployment readiness, or a scale estimate.
+interface; renderer memory limits the evaluated scale. These observations
+justify an auditable method and study design, not policy superiority, a
+population effect, deployment readiness, or a scale estimate.
 
 The eventual conclusion is determined by the first failed gate. Unstable
 measurement blocks planning claims; inadequate support blocks population
