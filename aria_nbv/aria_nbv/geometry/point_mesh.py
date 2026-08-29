@@ -21,6 +21,23 @@ def _tensor_version(tensor: torch.Tensor) -> int | None:
         return None
 
 
+def tensor_identity_token(tensor: torch.Tensor) -> tuple[object, ...] | None:
+    """Return a mutation-sensitive identity token, or ``None`` when unsafe to cache."""
+
+    version = _tensor_version(tensor)
+    if version is None:
+        return None
+    return (
+        id(tensor),
+        version,
+        tuple(tensor.shape),
+        tuple(tensor.stride()),
+        tensor.storage_offset(),
+        tensor.device,
+        tensor.dtype,
+    )
+
+
 def _matches_versioned_tensor(
     tensor: torch.Tensor,
     expected: torch.Tensor,

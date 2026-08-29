@@ -26,6 +26,7 @@ the upstream hard mask: a finite negative RRI is low utility, not invalidity.
 
 from __future__ import annotations
 
+from collections import OrderedDict
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
@@ -33,9 +34,14 @@ import torch
 from pydantic import Field
 
 from ..geometry import PreparedMeshQuery
+from ..geometry.point_mesh import tensor_identity_token
 from ..rendering.candidate_depth_renderer import CandidateDepthRendererConfig, CandidateDepths
 from ..rendering.candidate_pointclouds import CandidatePointClouds, build_candidate_pointclouds
-from ..rri_metrics.point_mesh import DistanceBreakdown, chamfer_point_mesh, chamfer_point_mesh_batched
+from ..rri_metrics.point_mesh import (
+    DistanceBreakdown,
+    chamfer_prepared_point_mesh,
+    chamfer_prepared_point_mesh_batched,
+)
 from ..rri_metrics.rri import RriResult, compute_rri
 from ..utils.base_config import TargetConfig
 from .evidence import (
@@ -74,26 +80,22 @@ class PreparedRriScorerConfig(TargetConfig["PreparedRriScorer"]):
 
 @dataclass(slots=True)
 class _PreparedRriReference:
-    """Cached current evidence, target mesh, and pre-view distance."""
+    """Current evidence and baseline evaluated against one prepared mesh."""
 
-    sources: tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]
     points_t: torch.Tensor
     mesh: PreparedMeshQuery
     dist_before: DistanceBreakdown
 
 
-def _tensor_cache_token(tensor: torch.Tensor) -> tuple[object, ...]:
-    """Return a mutation-sensitive identity token without copying tensor data."""
+@dataclass(slots=True)
+class _PreparedRriMesh:
+    """Prepared crop plus strong references that keep identity tokens unique."""
 
-    return (
-        id(tensor),
-        getattr(tensor, "_version", None),
-        tuple(tensor.shape),
-        tuple(tensor.stride()),
-        tensor.storage_offset(),
-        tensor.device,
-        tensor.dtype,
-    )
+    sources: tuple[torch.Tensor, torch.Tensor]
+    mesh: PreparedMeshQuery
+
+
+_MESH_CACHE_SIZE = 2
 
 
 class PreparedRriScorer:
@@ -119,8 +121,7 @@ class PreparedRriScorer:
 
     def __init__(self, config: PreparedRriScorerConfig) -> None:
         self.config = config
-        self._reference_token: tuple[object, ...] | None = None
-        self._reference: _PreparedRriReference | None = None
+        self._mesh_cache: OrderedDict[tuple[object, ...], _PreparedRriMesh] = OrderedDict()
 
     def score(
         self,
@@ -187,12 +188,10 @@ class PreparedRriScorer:
             points_tq = torch.cat([points_t_exp, points_q], dim=1)
             lengths_tq = lengths_q + num_t
 
-        dist_after = chamfer_point_mesh_batched(
+        dist_after = chamfer_prepared_point_mesh_batched(
             points_tq,
             lengths_tq,
-            reference.mesh.verts,
-            reference.mesh.faces,
-            prepared_mesh=reference.mesh,
+            reference.mesh,
             candidate_chunk_size=int(self.config.candidate_mesh_batch_size),
         )
 
@@ -206,43 +205,68 @@ class PreparedRriScorer:
         gt_faces: torch.Tensor,
         extend: torch.Tensor,
     ) -> _PreparedRriReference:
-        """Prepare or reuse the immutable pre-view RRI reference state."""
+        """Evaluate current evidence while reusing only stable target geometry."""
 
-        token = (
-            _tensor_cache_token(points_t),
-            _tensor_cache_token(gt_verts),
-            _tensor_cache_token(gt_faces),
-            _tensor_cache_token(extend),
-        )
-        if self._reference is not None and self._reference_token == token:
-            return self._reference
-
-        gt_verts_crop, gt_faces_crop = _crop_mesh_to_aabb(gt_verts, gt_faces, extend)
         fused_points = canonical_fuse_points(
             points_t,
             voxel_size_m=float(self.config.fusion_voxel_size_m),
             max_points=self.config.fusion_max_points,
         )
-        mesh = PreparedMeshQuery(
-            gt_verts_crop,
-            gt_faces_crop,
+        mesh = self._prepare_mesh(
+            gt_verts=gt_verts,
+            gt_faces=gt_faces,
+            extend=extend,
             device=fused_points.device,
             dtype=fused_points.dtype,
         )
-        reference = _PreparedRriReference(
-            sources=(points_t, gt_verts, gt_faces, extend),
+        return _PreparedRriReference(
             points_t=fused_points,
             mesh=mesh,
-            dist_before=chamfer_point_mesh(
+            dist_before=chamfer_prepared_point_mesh(
                 fused_points,
-                mesh.verts,
-                mesh.faces,
-                prepared_mesh=mesh,
+                mesh,
             ),
         )
-        self._reference_token = token
-        self._reference = reference
-        return reference
+
+    def _prepare_mesh(
+        self,
+        *,
+        gt_verts: torch.Tensor,
+        gt_faces: torch.Tensor,
+        extend: torch.Tensor,
+        device: torch.device,
+        dtype: torch.dtype,
+    ) -> PreparedMeshQuery:
+        """Reuse one of the two most recent immutable target-mesh crops."""
+
+        verts_token = tensor_identity_token(gt_verts)
+        faces_token = tensor_identity_token(gt_faces)
+        cache_key: tuple[object, ...] | None = None
+        if verts_token is not None and faces_token is not None:
+            cache_key = (
+                verts_token,
+                faces_token,
+                tuple(float(value) for value in extend.detach().cpu().tolist()),
+                device,
+                dtype,
+            )
+            cached = self._mesh_cache.pop(cache_key, None)
+            if cached is not None:
+                self._mesh_cache[cache_key] = cached
+                return cached.mesh
+
+        gt_verts_crop, gt_faces_crop = _crop_mesh_to_aabb(gt_verts, gt_faces, extend)
+        mesh = PreparedMeshQuery(
+            gt_verts_crop,
+            gt_faces_crop,
+            device=device,
+            dtype=dtype,
+        )
+        if cache_key is not None:
+            self._mesh_cache[cache_key] = _PreparedRriMesh(sources=(gt_verts, gt_faces), mesh=mesh)
+            while len(self._mesh_cache) > _MESH_CACHE_SIZE:
+                self._mesh_cache.popitem(last=False)
+        return mesh
 
 
 class _CandidateRriScoringEngine:

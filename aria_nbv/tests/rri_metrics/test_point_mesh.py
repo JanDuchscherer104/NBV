@@ -24,19 +24,15 @@ def test_chunked_shared_mesh_matches_full_batch() -> None:
     lengths = torch.tensor([7, 6, 5, 4, 3], dtype=torch.long)
     prepared = PreparedMeshQuery(verts, faces, device="cpu", dtype=torch.float32)
 
-    full = point_mesh.chamfer_point_mesh_batched(
+    full = point_mesh.chamfer_prepared_point_mesh_batched(
         points,
         lengths,
-        verts,
-        faces,
-        prepared_mesh=prepared,
+        prepared,
     )
-    chunked = point_mesh.chamfer_point_mesh_batched(
+    chunked = point_mesh.chamfer_prepared_point_mesh_batched(
         points,
         lengths,
-        verts,
-        faces,
-        prepared_mesh=prepared,
+        prepared,
         candidate_chunk_size=2,
     )
 
@@ -59,11 +55,11 @@ def test_chunking_bounds_materialized_triangle_rows(monkeypatch) -> None:
 
     monkeypatch.setattr(point_mesh, "point_face_distance", record_point_face_distance)
 
-    point_mesh.chamfer_point_mesh_batched(
+    prepared = PreparedMeshQuery(verts, faces, device="cpu", dtype=torch.float32)
+    point_mesh.chamfer_prepared_point_mesh_batched(
         points,
         lengths,
-        verts,
-        faces,
+        prepared,
         candidate_chunk_size=2,
     )
 

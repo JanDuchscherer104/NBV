@@ -21,10 +21,10 @@ worktree_kind: linked
 Reuse target geometry, crop state, and reference distances across repeated RRI candidate scoring.
 
 ## Method
-Moved the shared point-to-mesh query into the geometry owner, added mutation-aware request reuse, and bounded candidate mesh evaluation in explicit chunks.
+Moved the shared point-to-mesh query into the geometry owner, added mutation-aware bounded mesh reuse, and kept state-dependent fusion and baseline distances scoped to each score.
 
 ## Findings
-`aria_nbv/aria_nbv/rri_metrics/prepared.py` now owns device- and dtype-aware prepared target state while candidate-dependent geometry remains evaluated on each call.
+`aria_nbv/aria_nbv/geometry/point_mesh.py` owns device- and dtype-aware prepared mesh state. `aria_nbv/aria_nbv/oracle/_scoring.py` caches only stable mesh crops while recomputing candidate- and state-dependent geometry on each call.
 
 ## Commits
 - https://github.com/JanDuchscherer104/ARIA-NBV/commit/6428097e623d5d7b151206fba0dd5e77d3030e05

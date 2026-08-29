@@ -115,33 +115,132 @@ def test_capped_union_preserves_candidate_points_when_root_saturates() -> None:
     assert torch.isclose(fused[0, :10, 0], torch.tensor(1000.0)).any()
 
 
-def test_prepared_reference_reuses_crop_mesh_and_baseline(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_public_score_reuses_two_meshes_but_recomputes_rematerialized_evidence(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     import aria_nbv.oracle._scoring as scoring
 
     verts, faces = _unit_square_mesh(torch.device("cpu"), dtype=torch.float32)
     points_t = torch.randn((16, 3), dtype=torch.float32)
+    points_q = torch.randn((2, 4, 3), dtype=torch.float32)
+    lengths_q = torch.tensor([4, 3], dtype=torch.long)
     extend = torch.tensor([-2, 2, -2, 2, -2, 2], dtype=torch.float32)
     scorer = PreparedRriScorerConfig().setup_target()
     crop_calls = 0
+    baseline_calls = 0
     original_crop = scoring._crop_mesh_to_aabb
+    original_baseline = scoring.chamfer_prepared_point_mesh
 
     def record_crop(*args, **kwargs):
         nonlocal crop_calls
         crop_calls += 1
         return original_crop(*args, **kwargs)
 
+    def record_baseline(*args, **kwargs):
+        nonlocal baseline_calls
+        baseline_calls += 1
+        return original_baseline(*args, **kwargs)
+
     monkeypatch.setattr(scoring, "_crop_mesh_to_aabb", record_crop)
+    monkeypatch.setattr(scoring, "chamfer_prepared_point_mesh", record_baseline)
 
-    first = scorer._prepare_reference(points_t=points_t, gt_verts=verts, gt_faces=faces, extend=extend)
-    second = scorer._prepare_reference(points_t=points_t, gt_verts=verts, gt_faces=faces, extend=extend)
-    points_t.add_(1.0)
-    third = scorer._prepare_reference(points_t=points_t, gt_verts=verts, gt_faces=faces, extend=extend)
-    fourth = scorer._prepare_reference(points_t=points_t.clone(), gt_verts=verts, gt_faces=faces, extend=extend)
+    def score(mesh_verts: torch.Tensor) -> None:
+        scorer.score(
+            points_t=points_t.clone(),
+            points_q=points_q,
+            lengths_q=lengths_q,
+            gt_verts=mesh_verts,
+            gt_faces=faces,
+            extend=extend.clone(),
+        )
 
-    assert first is second
-    assert all(
-        source is expected for source, expected in zip(first.sources, (points_t, verts, faces, extend), strict=True)
+    score(verts)
+    score(verts + torch.tensor([0.0, 0.0, 0.25]))
+    score(verts)
+
+    assert crop_calls == 2
+    assert baseline_calls == 3
+
+
+def test_public_score_honours_mutated_fusion_config() -> None:
+    torch.manual_seed(1)
+    verts, faces = _unit_square_mesh(torch.device("cpu"), dtype=torch.float32)
+    points_t = torch.randn((16, 3), dtype=torch.float32)
+    points_q = torch.randn((2, 8, 3), dtype=torch.float32)
+    lengths_q = torch.tensor([8, 6], dtype=torch.long)
+    extend = torch.tensor([-2, 2, -2, 2, -2, 2], dtype=torch.float32)
+    config = PreparedRriScorerConfig(fusion_voxel_size_m=0.0, fusion_max_points=16)
+    scorer = config.setup_target()
+
+    scorer.score(
+        points_t=points_t,
+        points_q=points_q,
+        lengths_q=lengths_q,
+        gt_verts=verts,
+        gt_faces=faces,
+        extend=extend,
     )
-    assert third is not first
-    assert fourth is not third
-    assert crop_calls == 3
+    config.fusion_max_points = 4
+    updated = scorer.score(
+        points_t=points_t,
+        points_q=points_q,
+        lengths_q=lengths_q,
+        gt_verts=verts,
+        gt_faces=faces,
+        extend=extend,
+    )
+    fresh = (
+        PreparedRriScorerConfig(fusion_voxel_size_m=0.0, fusion_max_points=4)
+        .setup_target()
+        .score(
+            points_t=points_t,
+            points_q=points_q,
+            lengths_q=lengths_q,
+            gt_verts=verts,
+            gt_faces=faces,
+            extend=extend,
+        )
+    )
+
+    for field in (
+        "rri",
+        "pm_dist_before",
+        "pm_dist_after",
+        "pm_acc_before",
+        "pm_comp_before",
+        "pm_acc_after",
+        "pm_comp_after",
+    ):
+        torch.testing.assert_close(getattr(updated, field), getattr(fresh, field))
+
+
+def test_public_score_accepts_inference_mode_tensors_without_reusing_mesh() -> None:
+    scorer = PreparedRriScorerConfig().setup_target()
+
+    with torch.inference_mode():
+        verts, faces = _unit_square_mesh(torch.device("cpu"), dtype=torch.float32)
+        points_t = torch.randn((16, 3), dtype=torch.float32)
+        points_q = torch.randn((1, 4, 3), dtype=torch.float32)
+        lengths_q = torch.tensor([4], dtype=torch.long)
+        extend = torch.tensor([-2, 2, -2, 2, -2, 2], dtype=torch.float32)
+        first = scorer.score(
+            points_t=points_t,
+            points_q=points_q,
+            lengths_q=lengths_q,
+            gt_verts=verts,
+            gt_faces=faces,
+            extend=extend,
+        )
+        first_mesh = next(iter(scorer._mesh_cache.values()), None)
+        second = scorer.score(
+            points_t=points_t,
+            points_q=points_q,
+            lengths_q=lengths_q,
+            gt_verts=verts,
+            gt_faces=faces,
+            extend=extend,
+        )
+
+    torch.testing.assert_close(first.rri, second.rri)
+    assert first_mesh is None
+    assert not scorer._mesh_cache

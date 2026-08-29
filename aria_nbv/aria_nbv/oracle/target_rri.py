@@ -28,10 +28,11 @@ from typing import TYPE_CHECKING
 import torch
 from pydantic import Field, field_validator
 
+from ..geometry.point_mesh import tensor_identity_token
 from ..rendering.candidate_depth_renderer import CandidateDepthRendererConfig
 from ..rri_metrics.returns import log_error_gain, root_normalized_gain
 from ..utils import BaseConfig, Console, TargetConfig, Verbosity
-from ._scoring import PreparedRriScorerConfig, _CandidateRriScoringEngine, _root_error_tensor, _tensor_cache_token
+from ._scoring import PreparedRriScorerConfig, _CandidateRriScoringEngine, _root_error_tensor
 from .evidence import (
     OracleEvidenceInvalidReason,
     OracleRriState,
@@ -240,15 +241,19 @@ class TargetRriScorer:
         crop_start_s = perf_counter()
         device = point_clouds.points.device
         dtype = point_clouds.points.dtype
-        geometry_key = (
-            device,
-            dtype,
-            _tensor_cache_token(self.sample.mesh_verts),
-            _tensor_cache_token(self.sample.mesh_faces),
-            _tensor_cache_token(self._target_obb_world.tensor()),
-            float(self.config.target_crop_margin_m),
-        )
-        prepared_geometry = self._prepared_target_geometry.get(geometry_key)
+        mesh_verts_token = tensor_identity_token(self.sample.mesh_verts)
+        mesh_faces_token = tensor_identity_token(self.sample.mesh_faces)
+        geometry_key: tuple[object, ...] | None = None
+        if mesh_verts_token is not None and mesh_faces_token is not None:
+            geometry_key = (
+                device,
+                dtype,
+                mesh_verts_token,
+                mesh_faces_token,
+                tuple(float(value) for value in self._target_obb_world.tensor().detach().cpu().flatten().tolist()),
+                float(self.config.target_crop_margin_m),
+            )
+        prepared_geometry = self._prepared_target_geometry.get(geometry_key) if geometry_key is not None else None
         if prepared_geometry is None:
             target_obb = self._target_obb_world.to(device=device, dtype=dtype)
             mesh_verts = self.sample.mesh_verts.to(device=device, dtype=dtype)
@@ -268,7 +273,8 @@ class TargetRriScorer:
                 target_mesh_faces,
                 target_extent,
             )
-            self._prepared_target_geometry[geometry_key] = prepared_geometry
+            if geometry_key is not None:
+                self._prepared_target_geometry[geometry_key] = prepared_geometry
         target_obb, mesh_verts, mesh_faces, target_mesh_verts, target_mesh_faces, target_extent = prepared_geometry
 
         target_points_t = crop_points_to_obb(
