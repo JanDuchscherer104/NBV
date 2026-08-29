@@ -19,11 +19,12 @@ independently of file location and tensor shape.
 // - @EFM3D-straub2024 -> docs/literature/tex-src/arXiv-EFM3D/method.tex:1-42 (logged modalities, voxel lifting, and GT-supervised heads)
 
 #figure(
+  alt: "Two separated information-flow lanes. Logged evidence, target context, selected-view history, and protocol-legal candidate features feed the actor state and Q_H scorer, which emits a raw value for every row. A separate authoritative hard mask gates selection, supervised loss, and bootstrap support without changing raw Q_H. Privileged scene assets produce counterfactual renders and oracle targets in a separate offline lane. Predictions and targets meet only after the forward pass at a training-and-evaluation comparison node; no oracle render or label enters the actor state or scorer. Reason codes branch from the hard mask to an audit-only note.",
   align(center, image(
     "../../figures/actor_oracle_boundary.pdf",
     width: 100%,
   )),
-  caption: [Information roles in the offline experiment. The actor side contains calibrated logged observations, derived EFM3D evidence, an explicitly sourced target instruction, the selected-view prefix, remaining budget, candidates, and the hard action mask. The oracle side adds @ground-truth:short geometry, counterfactual renders, labels, and endpoint evaluation. Every stored field keeps its declared information role.],
+  caption: [Actor and oracle boundary. Logged evidence, target context, and protocol-legal candidate features feed the mask-independent #symb.rl.qh scorer. The authoritative hard mask instead gates selection, supervised rows, and bootstrap support. @ground-truth:short assets generate renders and oracle targets that meet predictions only after the forward pass, in loss and metrics. Reason codes remain audit evidence rather than embeddings or low rewards.],
 ) <fig:qh-actor-oracle-contract>
 
 The boundary is also temporal. A render from an unselected candidate is a
