@@ -77,21 +77,25 @@ def _qh_readiness_identity(
 
 
 def _qh_readiness_for_identity(
-    readiness_state: tuple[QhReadinessIdentity, QhCorpusReadiness] | None,
+    readiness_state: Any,
     identity: QhReadinessIdentity,
 ) -> QhCorpusReadiness | None:
     """Return readiness evidence only when its selection and loader controls match."""
 
-    return readiness_state[1] if readiness_state is not None and readiness_state[0] == identity else None
+    if not isinstance(readiness_state, tuple) or len(readiness_state) != 2 or readiness_state[0] != identity:
+        return None
+    return readiness_state[1] if isinstance(readiness_state[1], QhCorpusReadiness) else None
 
 
 def _qh_preview_for_identity(
-    preview_state: tuple[QhPreviewIdentity, QhBatchPreview] | None,
+    preview_state: Any,
     identity: QhPreviewIdentity,
 ) -> QhBatchPreview | None:
     """Return preview evidence only when its selection and controls still match."""
 
-    return preview_state[1] if preview_state is not None and preview_state[0] == identity else None
+    if not isinstance(preview_state, tuple) or len(preview_state) != 2 or preview_state[0] != identity:
+        return None
+    return preview_state[1] if isinstance(preview_state[1], QhBatchPreview) else None
 
 
 def _retained_bundle_evidence(state: Any, identity: str) -> DatasetBundleEvidence | None:
@@ -908,6 +912,9 @@ def render_training_dataset_page() -> None:  # pragma: no cover - Streamlit UI
         readiness_identity = _qh_readiness_identity(identity, batch_size=batch_size, seed=seed)
         qh_state = st.session_state.get(_QH_READINESS_STATE_KEY)
         qh_readiness = _qh_readiness_for_identity(qh_state, readiness_identity)
+        if qh_state is not None and qh_readiness is None:
+            st.session_state.pop(_QH_READINESS_STATE_KEY, None)
+            st.session_state.pop(_QH_PREVIEW_STATE_KEY, None)
         if controls[2].button("Preflight Q_H corpus", type="primary", width="stretch"):
             st.session_state.pop(_QH_READINESS_STATE_KEY, None)
             st.session_state.pop(_QH_PREVIEW_STATE_KEY, None)
@@ -982,6 +989,8 @@ def render_training_dataset_page() -> None:  # pragma: no cover - Streamlit UI
                 )
                 preview_state = st.session_state.get(_QH_PREVIEW_STATE_KEY)
                 qh_preview = _qh_preview_for_identity(preview_state, preview_identity)
+                if preview_state is not None and qh_preview is None:
+                    st.session_state.pop(_QH_PREVIEW_STATE_KEY, None)
                 if preview_controls[2].button("Preview one chain and batch", width="stretch"):
                     st.session_state.pop(_QH_PREVIEW_STATE_KEY, None)
                     qh_preview = None

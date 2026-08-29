@@ -40,9 +40,9 @@ from .rollouts.inspection import (
     build_promotion_evidence,
     build_schema_validation,
     discover_rollout_store_paths,
+    promotion_metadata_validation_error,
 )
-from .rollouts.manifest import manifest_sha256, read_rollout_store_manifest
-from .rollouts.shard_manifest import ROLLOUT_SHARD_MANIFEST_VERSION
+from .rollouts.manifest import read_rollout_store_manifest
 from .rollouts.zarr_store import ROLLOUT_ZARR_SCHEMA_VERSION, RolloutZarrStoreReader
 from .utils import Stage
 from .utils.fingerprints import stable_msgspec_hash
@@ -390,13 +390,27 @@ def _parse_authoritative_fields(
 
 
 def _read_bounded_json_object(path: Path) -> tuple[AuthoritativeFieldStatus, Mapping[str, Any] | None]:
+    descriptor: int | None = None
     try:
-        with path.open("rb") as stream:
-            payload = stream.read(_MAX_AUTHORITATIVE_JSON_BYTES + 1)
+        descriptor = os.open(path, os.O_RDONLY | os.O_NONBLOCK)
+        if not stat.S_ISREG(os.fstat(descriptor).st_mode):
+            return "unreadable", None
+        chunks: list[bytes] = []
+        remaining = _MAX_AUTHORITATIVE_JSON_BYTES + 1
+        while remaining:
+            chunk = os.read(descriptor, remaining)
+            if not chunk:
+                break
+            chunks.append(chunk)
+            remaining -= len(chunk)
     except FileNotFoundError:
         return "missing_file", None
     except OSError:
         return "unreadable", None
+    finally:
+        if descriptor is not None:
+            os.close(descriptor)
+    payload = b"".join(chunks)
     if len(payload) > _MAX_AUTHORITATIVE_JSON_BYTES:
         return "oversized", None
     try:
@@ -897,7 +911,7 @@ def _rollout_promotion_blocker(store: Path) -> str | None:
 
 
 def _bounded_promotion_marker_blocker(store: Path, manifest: Mapping[str, Any]) -> str | None:
-    """Validate advertised marker membership/JSON without opening Zarr arrays."""
+    """Validate bounded marker documents without opening Zarr arrays."""
 
     markers = tuple(store / name for name in ("_SUCCESS.json", "_owner.json"))
     present = tuple(_lstat_exists(path) for path in markers)
@@ -911,77 +925,12 @@ def _bounded_promotion_marker_blocker(store: Path, manifest: Mapping[str, Any]) 
         if payload is None:
             return f"Promoted rollout {store.name} marker {path.name} is {status.replace('_', ' ')}."
         payloads.append(dict(payload))
-    success, owner = payloads
-    if success.get("sidecar_kind") != "rollout_shard_success":
-        return f"Promoted rollout {store.name} success marker has no typed sidecar kind."
-    if owner.get("sidecar_kind") != "rollout_shard_owner":
-        return f"Promoted rollout {store.name} owner marker has no typed sidecar kind."
-    required_text = (
-        "writer_config_hash",
-        "source_manifest_hash",
-        "split_manifest_hash",
-        "source_cache_version",
-        "split",
+    error = promotion_metadata_validation_error(
+        store_manifest=manifest,
+        success=payloads[0],
+        owner=payloads[1],
     )
-    shard_id = owner.get("shard_id")
-    if (
-        not isinstance(shard_id, str)
-        or not shard_id.startswith("shard-")
-        or not shard_id.removeprefix("shard-").isdigit()
-        or any(not isinstance(owner.get(field), str) or not owner[field] for field in required_text)
-        or not isinstance(owner.get("generation_revision_hash"), str)
-        or not isinstance(owner.get("num_source_rows"), int)
-        or isinstance(owner.get("num_source_rows"), bool)
-        or owner["num_source_rows"] <= 0
-        or not _is_sha256(owner.get("rollout_manifest_sha256"))
-        or not _is_sha256(owner.get("rollout_store_content_sha256"))
-    ):
-        return f"Promoted rollout {store.name} owner marker has malformed typed ownership values."
-    shared_fields = (
-        "shard_id",
-        "writer_config_hash",
-        "source_manifest_hash",
-        "split_manifest_hash",
-        "generation_revision_hash",
-        "source_cache_version",
-        "split",
-        "num_source_rows",
-        "rollout_manifest_sha256",
-        "rollout_store_content_sha256",
-        "campaign_binding",
-    )
-    if any(field not in success or field not in owner or success[field] != owner[field] for field in shared_fields):
-        return f"Promoted rollout {store.name} markers have incomplete or inconsistent typed ownership."
-    if not _is_sha256(success.get("owner_sha256")) or success.get("owner_sha256") != manifest_sha256(owner):
-        return f"Promoted rollout {store.name} success marker does not bind its owner marker."
-    if owner.get("rollout_manifest_sha256") != manifest_sha256(dict(manifest)):
-        return f"Promoted rollout {store.name} marker does not bind the rollout manifest."
-    generation = manifest.get("generation")
-    shard = generation.get("shard") if isinstance(generation, Mapping) else None
-    shard_fields = (
-        "shard_id",
-        "writer_config_hash",
-        "source_manifest_hash",
-        "split_manifest_hash",
-        "generation_revision_hash",
-        "source_cache_version",
-        "split",
-        "campaign_binding",
-    )
-    if (
-        not isinstance(shard, Mapping)
-        or shard.get("manifest_version") != ROLLOUT_SHARD_MANIFEST_VERSION
-        or not isinstance(shard.get("rows"), list)
-        or len(shard["rows"]) != owner["num_source_rows"]
-        or any(shard.get(field) != owner.get(field) for field in shard_fields)
-        or shard.get("num_rows") != owner.get("num_source_rows")
-    ):
-        return f"Promoted rollout {store.name} manifest has no matching typed shard ownership."
-    return None
-
-
-def _is_sha256(value: Any) -> bool:
-    return isinstance(value, str) and len(value) == 64 and all(character in "0123456789abcdef" for character in value)
+    return None if error is None else f"Promoted rollout {store.name} {error}."
 
 
 def _promotion_marker_present(store: Path) -> bool:

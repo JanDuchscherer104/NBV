@@ -174,6 +174,24 @@ def _metrics(app: AppTest) -> dict[str, str]:
     return {metric.label: metric.value for metric in app.metric}
 
 
+def _ready_qh_evidence(root: Path) -> QhCorpusReadiness:
+    return QhCorpusReadiness(
+        selection=DatasetBundleSelection(root, ()),
+        verdict="Ready",
+        blockers=(),
+        stages=(QhStageReadiness(Stage.TRAIN, True, 1, 1, 1, ("scene-a",), 1, {}),),
+        contract={},
+        actor_contract={},
+        loader_settings={"batch_size": 1, "seed": 0},
+        scene_disjoint=True,
+        storage=(),
+    )
+
+
+def _qh_preview_evidence() -> QhBatchPreview:
+    return QhBatchPreview(Stage.TRAIN, 0, {}, 1, ({},), (1,), {}, {}, 0, 0, 1, 1)
+
+
 def test_hub_discovers_composes_and_scans_explicit_stores(
     isolated_path_config: PathConfig,
     tmp_path: Path,
@@ -701,7 +719,7 @@ def test_qh_preview_reuses_only_exact_selection_and_controls() -> None:
         batch_size=4,
         seed=7,
     )
-    evidence = cast(QhBatchPreview, SimpleNamespace())
+    evidence = _qh_preview_evidence()
     state = (baseline, evidence)
 
     assert _qh_preview_for_identity(state, baseline) is evidence
@@ -718,12 +736,76 @@ def test_qh_preview_reuses_only_exact_selection_and_controls() -> None:
 def test_qh_readiness_hides_stale_preflight_after_loader_control_changes() -> None:
     selection = "generation"
     baseline = _qh_readiness_identity(selection, batch_size=4, seed=7)
-    evidence = cast(QhCorpusReadiness, SimpleNamespace())
+    evidence = QhCorpusReadiness(DatasetBundleSelection(Path("/root"), ()), "Blocked", (), (), None, None, {}, None, ())
     state = (baseline, evidence)
 
     assert _qh_readiness_for_identity(state, baseline) is evidence
     assert _qh_readiness_for_identity(state, _qh_readiness_identity(selection, batch_size=8, seed=7)) is None
     assert _qh_readiness_for_identity(state, _qh_readiness_identity(selection, batch_size=4, seed=8)) is None
+
+
+@pytest.mark.parametrize(
+    ("helper", "identity", "wrong_payload"),
+    [
+        (_qh_readiness_for_identity, _qh_readiness_identity("generation", batch_size=1, seed=0), object()),
+        (
+            _qh_preview_for_identity,
+            _qh_preview_identity("generation", stage="train", chain_index=0, batch_size=1, seed=0),
+            object(),
+        ),
+    ],
+)
+def test_qh_retained_helpers_reject_untrusted_state(
+    helper: Callable[[Any, Any], Any],
+    identity: Any,
+    wrong_payload: object,
+) -> None:
+    for state in (object(), {}, (), (identity,), (identity, wrong_payload, None), [identity, wrong_payload]):
+        assert helper(state, identity) is None
+    assert helper((identity, wrong_payload), identity) is None
+
+
+def test_exact_key_malformed_qh_state_is_removed_page_locally(
+    isolated_path_config: PathConfig,
+    tmp_path: Path,
+) -> None:
+    root, _source_hash = _write_root_store(isolated_path_config.offline_cache_dir)
+    _selection, generation = capture_dataset_bundle_generation(root, ())
+    readiness_identity = _qh_readiness_identity(generation.generation_digest, batch_size=1, seed=0)
+    app = _app(tmp_path).run()
+    app.session_state[training_dataset._QH_READINESS_STATE_KEY] = (readiness_identity, object())
+    app.session_state[training_dataset._QH_PREVIEW_STATE_KEY] = ("stale", object())
+
+    app = app.run()
+
+    assert not app.exception
+    assert training_dataset._QH_READINESS_STATE_KEY not in str(app.session_state)
+    assert training_dataset._QH_PREVIEW_STATE_KEY not in str(app.session_state)
+
+
+def test_exact_key_malformed_qh_preview_is_removed_page_locally(
+    isolated_path_config: PathConfig,
+    tmp_path: Path,
+) -> None:
+    root, _source_hash = _write_root_store(isolated_path_config.offline_cache_dir)
+    _selection, generation = capture_dataset_bundle_generation(root, ())
+    readiness_identity = _qh_readiness_identity(generation.generation_digest, batch_size=1, seed=0)
+    preview_identity = _qh_preview_identity(
+        generation.generation_digest,
+        stage="train",
+        chain_index=0,
+        batch_size=1,
+        seed=0,
+    )
+    app = _app(tmp_path).run()
+    app.session_state[training_dataset._QH_READINESS_STATE_KEY] = (readiness_identity, _ready_qh_evidence(root))
+    app.session_state[training_dataset._QH_PREVIEW_STATE_KEY] = (preview_identity, object())
+
+    app = app.run()
+
+    assert not app.exception
+    assert training_dataset._QH_READINESS_STATE_KEY in str(app.session_state)
+    assert training_dataset._QH_PREVIEW_STATE_KEY not in str(app.session_state)
 
 
 def test_qh_control_change_clears_displayed_readiness_and_preview(monkeypatch: pytest.MonkeyPatch) -> None:

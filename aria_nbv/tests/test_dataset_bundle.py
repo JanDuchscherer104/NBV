@@ -44,6 +44,7 @@ from aria_nbv.dataset_bundle import (
 from aria_nbv.rollouts.manifest import manifest_sha256
 from aria_nbv.rollouts.qh_geometry import QhGeometryContract
 from aria_nbv.rollouts.qh_reader import QhDataContract
+from aria_nbv.rollouts.shard_manifest import RolloutShardEntry, RolloutShardRow, build_rollout_split_manifest_hash
 from aria_nbv.rollouts.zarr_store import ROLLOUT_ZARR_SCHEMA_VERSION
 from aria_nbv.utils import Stage
 from aria_nbv.utils.fingerprints import stable_msgspec_hash
@@ -167,20 +168,63 @@ def test_dataset_bundle_generation_unreadable_authority_is_deterministic(
     root.mkdir()
     manifest = root / "manifest.json"
     manifest.write_text('{"version":10}', encoding="utf-8")
-    original_open = Path.open
+    original_open = os.open
 
-    def _unreadable(path: Path, *args: Any, **kwargs: Any) -> Any:
-        if path == manifest:
+    def _unreadable(path: os.PathLike[str] | str, *args: Any, **kwargs: Any) -> int:
+        if Path(path) == manifest:
             raise OSError("permission denied")
         return original_open(path, *args, **kwargs)
 
-    monkeypatch.setattr(Path, "open", _unreadable)
+    monkeypatch.setattr(os, "open", _unreadable)
 
     _selection, first = capture_dataset_bundle_generation(root, ())
     _selection, repeated = capture_dataset_bundle_generation(root, ())
 
     assert repeated == first
     assert first.root.authoritative_fields[0].status == "unreadable"
+
+
+@pytest.mark.parametrize("entry_kind", ["fifo", "directory", "device"])
+def test_bounded_json_read_rejects_non_regular_entries_without_blocking(
+    entry_kind: str,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "root"
+    root.mkdir()
+    manifest = root / "manifest.json"
+    if entry_kind == "fifo":
+        os.mkfifo(manifest)
+    elif entry_kind == "directory":
+        manifest.mkdir()
+    else:
+        manifest.symlink_to(os.devnull)
+    original_open = os.open
+
+    def _checked_open(path: os.PathLike[str] | str, flags: int, *args: Any, **kwargs: Any) -> int:
+        if Path(path) == manifest:
+            assert flags & os.O_NONBLOCK
+        return original_open(path, flags, *args, **kwargs)
+
+    monkeypatch.setattr(os, "open", _checked_open)
+
+    _selection, first = capture_dataset_bundle_generation(root, ())
+    _selection, repeated = capture_dataset_bundle_generation(root, ())
+
+    assert repeated == first
+    assert first.root.authoritative_fields[0].status == "unreadable"
+
+
+def test_bounded_json_read_accepts_symlink_to_regular_file(tmp_path: Path) -> None:
+    target = tmp_path / "target.json"
+    target.write_text('{"version": 10}', encoding="utf-8")
+    alias = tmp_path / "manifest.json"
+    alias.symlink_to(target)
+
+    status, payload = dataset_bundle._read_bounded_json_object(alias)
+
+    assert status == "present"
+    assert payload == {"version": 10}
 
 
 def test_dataset_bundle_generation_oversized_authority_is_deterministic(tmp_path: Path) -> None:
@@ -858,26 +902,38 @@ def test_typed_promotion_marker_pair_remains_eligible_without_deep_validation(tm
     rollout = _write_rollout_store(tmp_path, name="promoted.zarr", source_hash=source_hash)
     manifest_path = rollout / "manifest.json"
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    shard = {
-        "manifest_version": "rollout-shard-manifest-v3",
-        "shard_id": "shard-000000",
-        "writer_config_hash": "c" * 64,
-        "source_manifest_hash": source_hash,
-        "split_manifest_hash": "b" * 64,
-        "generation_revision_hash": "d" * 64,
-        "source_cache_version": str(OFFLINE_DATASET_VERSION),
-        "split": "train",
-        "num_rows": 1,
-        "rows": [{"sample_index": 0}],
-        "campaign_binding": None,
-    }
+    row = RolloutShardRow(0, 0, "sample-0", "scene-0", "snippet-0", "train", "source-0", 0)
+    shard_entry = RolloutShardEntry(
+        shard_id="shard-000000",
+        split="train",
+        rows=(row,),
+        writer_config_hash="c" * 64,
+        source_manifest_hash=source_hash,
+        source_cache_version=str(OFFLINE_DATASET_VERSION),
+        split_manifest_hash=build_rollout_split_manifest_hash(
+            source_manifest_hash=source_hash,
+            split="train",
+            records=[row.hash_record()],
+        ),
+        source_store_dir="root",
+        generation_revision_hash="d" * 64,
+    )
+    shard_entry.validate()
+    shard = shard_entry.to_jsonable()
     manifest["generation"]["shard"] = shard
     manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
     manifest_hash = manifest_sha256(manifest)
     owner = {
         "sidecar_kind": "rollout_shard_owner",
-        **{key: value for key, value in shard.items() if key != "num_rows"},
-        "num_source_rows": shard["num_rows"],
+        "shard_id": shard_entry.shard_id,
+        "writer_config_hash": shard_entry.writer_config_hash,
+        "source_manifest_hash": shard_entry.source_manifest_hash,
+        "split_manifest_hash": shard_entry.split_manifest_hash,
+        "generation_revision_hash": shard_entry.generation_revision_hash,
+        "source_cache_version": shard_entry.source_cache_version,
+        "split": shard_entry.split,
+        "num_source_rows": len(shard_entry.rows),
+        "campaign_binding": None,
         "rollout_manifest_sha256": manifest_hash,
         "rollout_store_content_sha256": "a" * 64,
     }
