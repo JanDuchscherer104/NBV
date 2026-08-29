@@ -5,9 +5,9 @@
 #import "../../shared/tables.typ": publication-table, index-cell
 
 #validation_todo(
-  [Replace fixture- and readiness-oriented output with confirmatory results that answer each research question using matched endpoint evaluation, denominators, exclusions, aggregation units, independent-run uncertainty, and immutable artifact provenance.],
-  source: [confirmatory report bundle and analysis manifest],
-  gate: [submission evidence bundle passes all report assertions and every stated result resolves to raw and derived artifacts],
+  [Populate the gate-owned result fields from a confirmatory bundle: population, estimate, uncertainty, admitted conclusion, and blocking condition. Every value must resolve to its raw and derived artifact provenance.],
+  source: [confirmatory report bundle, exact-Q2 receipt, and analysis manifest],
+  gate: [all six evidence gates resolve without fixture or pilot substitution],
 )
 
 #let report-settings = thesis-report-settings()
@@ -22,13 +22,14 @@
   let matches = thesis_data.tables.facts.rows.filter(row => row.store_id == store.store_id and row.key == key)
   matches.len() == 1 and matches.first().value != none and (not denominators or (matches.first().n != none and matches.first().n > 0))
 }))
-#let fact-value(store-id, key, digits: none, with-unit: false) = {
+#let fact-value(store-id, key, digits: none) = {
   let row = report-store-fact(thesis_data, store-id, key)
-  format-report-value(row.value, digits: digits, unit: if with-unit { row.unit } else { none })
+  format-report-value(row.value, digits: digits, unit: row.unit)
 }
 #let result-status(predicate) = if predicate [available] else [not available]
 
 #let population-facts = ("study.population.scenes", "study.population.targets", "study.population.exclusions")
+#let measurement-facts = ("oracle.metric.repeatability.max_abs_diff", "oracle.metric.repeatability.n_repeats", "oracle.metric.repeatability.passed")
 #let candidate-support-facts = (
   "candidate-support.actor-valid-fraction",
   "candidate-support.valid-support-p05",
@@ -43,19 +44,23 @@
   (key: "candidate-support.target-side-balance", aggregation: "state_then_scene_macro"),
   (key: "candidate-support.circular-orbit-span", aggregation: "state_then_scene_macro"),
 )
-#let paired-effect-facts = ("policy.paired_scene_endpoint.effect", "policy.paired_scene_endpoint.ci_low", "policy.paired_scene_endpoint.ci_high", "policy.paired_scene_endpoint.n_scenes", "headroom_gate.passed")
-#let paired-effect-contract = (
+#let headroom-facts = ("policy.paired_scene_endpoint.effect", "policy.paired_scene_endpoint.ci_low", "policy.paired_scene_endpoint.ci_high", "policy.paired_scene_endpoint.n_scenes", "headroom_gate.passed")
+#let headroom-contract = (
   (key: "policy.paired_scene_endpoint.effect", aggregation: "paired_scene_mean_difference"),
   (key: "policy.paired_scene_endpoint.ci_low", aggregation: "paired_scene_mean_difference"),
   (key: "policy.paired_scene_endpoint.ci_high", aggregation: "paired_scene_mean_difference"),
   (key: "policy.paired_scene_endpoint.n_scenes", aggregation: "count"),
   (key: "headroom_gate.passed", aggregation: "paired_scene_decision"),
 )
+#let q1-facts = ("q1.ranking.pairwise_accuracy", "q1.calibration.mae", "q1.population.n_scenes")
+#let q2-facts = ("q2.exact.mae", "q2.exact.coverage", "q2.exact.n_independent_units", "q2.exact.passed")
+#let recovery-facts = ("policy.q_recovery.fraction", "policy.q_recovery.ci_low", "policy.q_recovery.ci_high", "policy.q_recovery.n_scenes", "policy.q_recovery.passed")
 #let resource-facts = ("runtime.wall_time_s", "runtime.peak_gpu_bytes", "storage.total_bytes")
 
 #let confirmatory-evidence = thesis_evidence_status == "confirmatory" and all-stores-valid
 #let population-available = confirmatory-evidence and stores-have-facts(population-facts, denominators: true)
-#let candidate-support-available = confirmatory-evidence and population-available and stores-have-facts(candidate-support-facts, denominators: true) and thesis_data.tables.stores.rows.all(store => {
+#let measurement-available = population-available and stores-have-facts(measurement-facts)
+#let support-available = measurement-available and stores-have-facts(candidate-support-facts, denominators: true) and thesis_data.tables.stores.rows.all(store => {
   let scene-count = report-store-fact(thesis_data, store.store_id, "study.population.scenes").value
   scene-count != none and scene-count > 0 and report-store-facts-match-contract(
     thesis_data,
@@ -64,16 +69,42 @@
     scene-count,
   )
 })
-#let paired-effect-available = confirmatory-evidence and stores-have-facts(paired-effect-facts) and thesis_data.tables.stores.rows.all(store => {
+#let headroom-available = support-available and stores-have-facts(headroom-facts) and thesis_data.tables.stores.rows.all(store => {
   let paired-scenes = report-store-fact(thesis_data, store.store_id, "policy.paired_scene_endpoint.n_scenes").value
   paired-scenes != none and paired-scenes > 0 and report-store-facts-match-contract(
     thesis_data,
     store.store_id,
-    paired-effect-contract,
+    headroom-contract,
     paired-scenes,
   )
 })
+#let q1-available = headroom-available and stores-have-facts(q1-facts)
+#let q2-available = q1-available and stores-have-facts(q2-facts)
+#let recovery-available = q2-available and stores-have-facts(recovery-facts)
 #let resource-available = confirmatory-evidence and stores-have-facts(resource-facts)
+
+The loaded report declares evidence class #emph(thesis_evidence_status). Schema
+validity proves that provenance and missingness are readable; it cannot promote
+a development fixture, training pilot, or incomplete store. Availability is
+therefore cumulative: a downstream gate is reported only when every prerequisite
+and its own required facts are present.
+
+#figure(
+  publication-table(
+    text-size: 7.1pt,
+    columns: (0.48fr, 0.92fr, 0.76fr, 0.78fr, 1.1fr, 1.16fr),
+    header: ([*Gate / RQ*], [*Population*], [*Estimate*], [*Uncertainty*], [*Admitted conclusion*], [*Blocking condition*]),
+    rows: (
+      [measurement / RQ1], [frozen repeated oracle evaluations], [repeatability statistic: #result-status(measurement-available)], [declared numeric tolerance], [metric comparison is admissible], [mismatched identity, absent repeats, or tolerance failure],
+      [support / RQ4], [held-out scenes, targets, and full candidate tables], [coverage and failures: #result-status(support-available)], [exact denominators and scene strata], [study and action populations are described], [missing population, exclusions, or valid-action support],
+      [headroom / RQ2], [paired lookahead and one-step oracle scenes], [endpoint effect: #result-status(headroom-available)], [paired scene interval], [bounded setup contains meaningful non-myopic structure], [measurement/support failure or non-meaningful effect],
+      [actor $Q_1$ / RQ3], [held-out actor-visible candidate states], [ranking and calibration: #result-status(q1-available)], [scene-clustered interval], [actor information recovers immediate target value], [privileged input, matching failure, or inadequate calibration],
+      [exact $Q_2$ / RQ2], [eligible held-out factual successors], [error and coverage: #result-status(q2-available)], [independent-unit tolerance rule], [first recursive target is recovered], [incomplete support or failed recursion tolerance],
+      [endpoint recovery / RQ2], [paired held-out learned and reference policies], [recovered fraction: #result-status(recovery-available)], [paired scene interval], [learned policy recovers prespecified headroom], [any earlier gate or recovery-rule failure],
+    ),
+  ),
+  caption: [Gate-owned result template. “Not available” preserves missingness and names the blocker; it is not a zero estimate.],
+) <tab:thesis-result-availability>
 
 #let result-summary-families = {
   let families = ()
@@ -84,7 +115,13 @@
       (label: [Exclusions], key: "study.population.exclusions"),
     )))
   }
-  if candidate-support-available {
+  if measurement-available {
+    families.push((label: [Measurement], metrics: (
+      (label: [Maximum repeat discrepancy], key: "oracle.metric.repeatability.max_abs_diff", denominator-key: "oracle.metric.repeatability.n_repeats", digits: 5),
+      (label: [Repeatability gate], key: "oracle.metric.repeatability.passed"),
+    )))
+  }
+  if support-available {
     families.push((label: [Candidate support], metrics: (
       (label: [Actor-valid fraction], key: "candidate-support.actor-valid-fraction", digits: 3),
       (label: [P05 valid support], key: "candidate-support.valid-support-p05", digits: 1),
@@ -93,21 +130,29 @@
       (label: [Circular orbit span], key: "candidate-support.circular-orbit-span", digits: 2),
     )))
   }
-  if paired-effect-available {
-    families.push((label: [Policy comparison], metrics: (
-      (
-        label: [Paired endpoint effect],
-        key: "policy.paired_scene_endpoint.effect",
-        low-key: "policy.paired_scene_endpoint.ci_low",
-        high-key: "policy.paired_scene_endpoint.ci_high",
-        denominator-key: "policy.paired_scene_endpoint.n_scenes",
-        digits: 3,
-      ),
-      (
-        label: [Headroom gate],
-        key: "headroom_gate.passed",
-        denominator-key: "policy.paired_scene_endpoint.n_scenes",
-      ),
+  if headroom-available {
+    families.push((label: [Oracle headroom], metrics: (
+      (label: [Paired endpoint effect], key: "policy.paired_scene_endpoint.effect", low-key: "policy.paired_scene_endpoint.ci_low", high-key: "policy.paired_scene_endpoint.ci_high", denominator-key: "policy.paired_scene_endpoint.n_scenes", digits: 3),
+      (label: [Meaningful-headroom gate], key: "headroom_gate.passed", denominator-key: "policy.paired_scene_endpoint.n_scenes"),
+    )))
+  }
+  if q1-available {
+    families.push((label: [Actor Q1], metrics: (
+      (label: [Pairwise ranking], key: "q1.ranking.pairwise_accuracy", denominator-key: "q1.population.n_scenes", digits: 3),
+      (label: [Calibration MAE], key: "q1.calibration.mae", denominator-key: "q1.population.n_scenes", digits: 4),
+    )))
+  }
+  if q2-available {
+    families.push((label: [Exact Q2], metrics: (
+      (label: [Recursive MAE], key: "q2.exact.mae", denominator-key: "q2.exact.n_independent_units", digits: 4),
+      (label: [Complete-support coverage], key: "q2.exact.coverage", denominator-key: "q2.exact.n_independent_units", digits: 3),
+      (label: [Exact-Q2 gate], key: "q2.exact.passed", denominator-key: "q2.exact.n_independent_units"),
+    )))
+  }
+  if recovery-available {
+    families.push((label: [Endpoint recovery], metrics: (
+      (label: [Recovered headroom], key: "policy.q_recovery.fraction", low-key: "policy.q_recovery.ci_low", high-key: "policy.q_recovery.ci_high", denominator-key: "policy.q_recovery.n_scenes", digits: 3),
+      (label: [Recovery gate], key: "policy.q_recovery.passed", denominator-key: "policy.q_recovery.n_scenes"),
     )))
   }
   if resource-available {
@@ -119,6 +164,7 @@
   }
   families
 }
+
 #let result-summary-rows = {
   let rows = ()
   let profile-span = result-summary-families.fold(0, (total, family) => total + family.metrics.len())
@@ -147,76 +193,81 @@
         rows.push(if low-key == none { [—] } else { [#fact-value(store-id, low-key, digits: digits)] })
         rows.push(if high-key == none { [—] } else { [#fact-value(store-id, high-key, digits: digits)] })
         rows.push(if fact.unit == none { [—] } else { [#fact.unit] })
-        rows.push(if denominator-key == none {
-          [#format-report-value(fact.n)]
-        } else {
-          [#fact-value(store-id, denominator-key)]
-        })
+        rows.push(if denominator-key == none { [#format-report-value(fact.n)] } else { [#fact-value(store-id, denominator-key)] })
       }
     }
   }
   rows
 }
 
-The thesis report bundle is loaded through the strict schema checked in `experiment_data.typ`. Its declared evidence class is #emph(thesis_evidence_status). Schema validity establishes only that provenance, missingness, and table contracts are readable; it does not turn a development fixture or an incomplete pilot into scientific evidence.
-
-#figure(
-  publication-table(
-    columns: (1.05fr, 1.75fr, 0.7fr),
-    header: ([*Result*], [*Required evidence*], [*Status*]),
-    rows: (
-      index-cell([Population and targets]), [population facts with denominators in every validated store], [#result-status(population-available)],
-      index-cell([Candidate-support QC]), [five descriptive diagnostics with the frozen state--scene macro identities and exact scene denominators], [#result-status(candidate-support-available)],
-      index-cell([Paired policy effect]), [paired per-scene effect, interval, exact paired-scene count, and headroom decision in every validated store], [#result-status(paired-effect-available)],
-      index-cell([Resource feasibility]), [wall time, peak GPU memory, and storage in every validated store], [#result-status(resource-available)],
-    ),
-  ),
-  caption: [Evidence availability in the loaded report bundle. A status of “not available” means that no thesis result is inferred from fixture values, train-only attempts, or an incomplete store.],
-) <tab:thesis-result-availability>
-
 #if result-summary-rows.len() > 0 [
   #figure(
     publication-table(
       columns: (0.72fr, 0.95fr, 1.05fr, 0.62fr, 0.62fr, 0.62fr, 0.55fr, 0.5fr),
       align: (left, left, left, right, right, right, left, right),
-      text-size: 7.3pt,
-      header: (
-        [*Profile*], [*Result family*], [*Measure*], [*Estimate*], [*CI low*], [*CI high*], [*Unit*], [*$n$*],
-      ),
+      text-size: 7.2pt,
+      header: ([*Profile*], [*Gate*], [*Measure*], [*Estimate*], [*CI low*], [*CI high*], [*Unit*], [*$n$*]),
       rows: result-summary-rows,
     ),
-    caption: [Confirmatory values by profile and result family. Estimates, interval bounds, units, and denominators remain separate; Typst groups neutral report rows without aggregating across profiles.],
+    caption: [Available confirmatory values by profile and gate. Neutral rows are grouped without aggregation across profiles.],
   ) <tab:thesis-confirmatory-values>
 ]
 
-== Candidate and Store Feasibility
+== Measurement Validity
 
-#if candidate-support-available [
-  The confirmatory bundle supplies descriptive candidate-support quality-control diagnostics for every validated store. Actor-valid fraction, lower-tail valid support, configured-family zero rate, target-side balance, and circular orbit span are reported per profile in @tab:thesis-confirmatory-values with the frozen state--scene macro identities and scene denominators. These values audit candidate support; they are not paired policy effects and carry no comparative inference unless a separately preregistered paired scene contrast and interval are present.
+#if measurement-available [
+  The confirmatory bundle contains the frozen repeatability population, statistic, tolerance decision, and provenance needed to admit downstream comparisons; values appear in @tab:thesis-confirmatory-values.
 ] else [
-  The available artifacts show that the finite-candidate rollout path reaches mesh rendering, target-specific oracle scoring, and selected-action replay on training sources. They therefore support an implementation-readiness claim only. A CUDA out-of-memory failure in an unbatched candidate render and later memory-bounded attempts identify rendering as a scale gate; neither establishes rollout throughput, storage cost, candidate-family support, or policy quality for the intended study population.
+  The loaded evidence does not establish repeatability of the frozen target-specific endpoint metric. All downstream policy quantities therefore remain unavailable.
 ]
 
-== Target-Task Coverage
+== Population and Action Support
 
-#if population-available [
-  The confirmatory bundle records scene, target, and exclusion counts with non-zero denominators for every validated profile. These per-profile population values appear in @tab:thesis-confirmatory-values; eligibility and exclusion semantics remain those fixed in the experimental-design contract.
+#if support-available [
+  The report supplies scene, target, and exclusion denominators together with
+  actor-valid fraction, lower-tail valid support, configured-family zero rate,
+  target-side balance, and circular orbit span. These state--scene summaries
+  delimit the supported action population; they are not paired policy effects.
 ] else [
-  The implemented pipeline samples geometry-valid GT target tasks and records target and validity fields in the rollout schema. The loaded bundle does not contain a validated population and exclusion table for the study. Scene coverage, eligible-target coverage, invalid-reason frequencies, and their denominators are consequently unavailable as results.
+  No validated held-out bundle currently defines the study population and complete candidate-support denominators. Training-source reachability and renderer failures remain feasibility observations only.
 ]
 
-== Policy Comparison
+== Oracle Headroom
 
-#if paired-effect-available [
-  The primary estimand is the paired per-scene fixed-budget endpoint difference defined in @sec:thesis-experimental-design. The confirmatory effect, interval, scene count, and headroom-gate decision are reported per validated profile in @tab:thesis-confirmatory-values. Their interpretation remains conditional on the matched-policy and held-out-population contracts rather than on schema validity alone.
+#if headroom-available [
+  The paired scene endpoint effect, interval, denominator, and meaningful-headroom decision are available in @tab:thesis-confirmatory-values. Interpretation remains conditional on the frozen support and metric contracts.
 ] else [
-  The primary estimand is not estimable from the current evidence because no validated held-out bundle contains the matched policy outcomes and aggregation inputs. Oracle repeatability, oracle-lookahead headroom, learned one-step performance, finite-horizon recovery, uncertainty intervals, and sensitivity analyses are therefore not reported.
+  Meaningful equal-budget lookahead headroom over one-step oracle greedy is not estimable from the loaded evidence.
 ]
 
-== Runtime and Storage Gate
+== Actor-Visible One-Step Value
+
+#if q1-available [
+  Held-out actor-visible ranking and calibration are available with scene denominators. They establish only immediate target-value recovery under the admitted target and state protocols.
+] else [
+  No validated held-out result currently shows target-conditioned one-step ranking and calibration from actor-visible inputs.
+]
+
+== Exact Two-Step Recursion
+
+#if q2-available [
+  Exact-Q2 error, complete-support coverage, independent-unit count, and the frozen tolerance decision are available. This admits the first recursive target, not endpoint policy success.
+] else [
+  No qualifying held-out exact-Q2 receipt is available; recursive finite-horizon accuracy is therefore unestablished.
+]
+
+== Endpoint Recovery
+
+#if recovery-available [
+  The recovered-headroom fraction, paired scene interval, denominator, and recovery decision are available under the admitted upstream gates.
+] else [
+  The thesis cannot estimate learned endpoint recovery because the prerequisite gate chain is incomplete.
+]
+
+== Resource Feasibility
 
 #if resource-available [
-  Completed validated stores provide wall time, peak GPU memory, and storage for every profile in @tab:thesis-confirmatory-values. These observed values support feasibility assessment for the recorded runs; extrapolation to cluster throughput or a larger dataset still requires an explicit scaling model.
+  Completed profiles report observed wall time, peak GPU memory, and storage. Extrapolation beyond those runs still requires an explicit scaling model.
 ] else [
-  The runtime and storage claim requires completed validated stores whose resolved manifests, failure records, and resource summaries refer to the same run. Until that evidence exists for both rollout profiles, the large-scale data-generation gate remains pending. The current attempts justify memory-bounded rendering and retained failure provenance, but no extrapolation to cluster throughput or dataset volume.
+  Renderer memory failures motivate bounded rendering and retained failure provenance, but no validated completed-store evidence supports throughput or dataset-volume extrapolation.
 ]

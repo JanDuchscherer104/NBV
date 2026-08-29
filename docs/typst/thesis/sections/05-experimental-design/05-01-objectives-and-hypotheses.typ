@@ -2,12 +2,11 @@
 #import "../../../shared/symbols.typ": symb
 #import "../../../shared/equations.typ": eqs
 #import "../../draft_markers.typ": validation_todo
-#import "../../../shared/tables.typ": publication-table
 
-== Study Population and Evidence Gates
+== Population, Estimands, and Gate Order
 
 #validation_todo(
-  [Preregister the eligible population, exclusions, primary estimands, aggregation unit, number of independent runs, uncertainty interval, minimum meaningful effect, and multiplicity policy before inspecting confirmatory results.],
+  [Preregister the eligible population, exclusions, scene aggregation, independent-run structure, uncertainty interval, meaningful headroom, recovery fraction, and comparison family before inspecting confirmatory outcomes.],
   source: [experiment manifest and analysis specification],
   gate: [immutable analysis plan plus matched held-out policy table],
 )
@@ -43,44 +42,51 @@ diagnostics: projection is calibrated framing rather than visibility, oracle
 opportunity is finite-support headroom rather than policy performance, and
 jitter compliance must preserve the nonzero production seminar-jitter invariant.
 
-The source population comprises ASE/ATEK snippet windows from scenes for which the configured @ground-truth:short mesh and object-box table resolve. A frozen manifest assigns entire scenes to train, validation, or test before model selection; no scene may cross these boundaries through another snippet. Each reported run records the manifest hash and the exact counts of scenes, snippets, admitted target tasks, rollout chains, transitions, and retained candidate rows. A capped train-only pilot is therefore a throughput and support probe, not a sample from which held-out policy performance can be estimated.
+The source population comprises ASE/ATEK snippet windows whose configured
+@ground-truth:short mesh and object-box table resolve. A frozen manifest assigns
+entire scenes to train, validation, or test before model selection; snippets from
+one scene cannot cross those boundaries. Every report records the manifest hash,
+scenes, snippets, admitted target tasks, rollout chains, realized transitions,
+candidate rows, exclusions, and failure strata. A capped training pilot may test
+throughput or support, but it cannot estimate held-out policy performance.
 
-The present data generator defines oracle target tasks by seeded sampling from geometry-valid @ground-truth:short OBB rows. Its task-coverage report therefore describes the available GT pool, sampled tasks, classes, scenes, and later oracle-evaluation failures. It does not measure proposal matching, IoU ambiguity, projected visibility, or actor-observation support. Those quantities belong to a future observed-target selector required for deployable-input claims. Until that selector exists, @ground-truth:short target geometry may define labels and bounded oracle references but cannot be presented as actor-visible input. The privileged-supervision boundary in @fig:qh-actor-oracle-contract applies equally to render-derived evidence: dense @ground-truth:short candidate depth may produce labels, returns, or explicitly named privileged ablations, but it is not a legal actor input. A separate teacher policy, distillation path, or current-belief renderer remains a hypothesis until implemented and evaluated, so none is promoted to a main-text process figure.
+The current task generator samples geometry-valid ground-truth boxes. It can
+therefore establish oracle-task coverage, not actor-visible target discovery.
+Ground-truth target geometry may define task construction, labels, and bounded
+oracle references, but an actor-facing claim additionally requires an
+observation-derived descriptor and an audit of its matching and failure
+population. The same boundary excludes unselected candidate renders and
+oracle-derived labels from decision-time input.
 
-The first policy gate is an actor-visible myopic scorer over the same finite candidate table intended for #symb.rl.qh. The scorer must expose one value per candidate, respect the hard action mask, and be assessed by candidate ranking, calibration, and oracle-rescored selected actions. The existing scene-level VIN scorer is historical substrate; it is not a target-conditioned control until the observed target descriptor is wired into the model and evaluated on a frozen held-out split.
+The evidence sequence in @fig:qh-learning-evidence-loop answers the research
+questions in a fixed order:
 
-The second policy gate estimates whether bounded oracle lookahead has headroom over one-step oracle greedy:
+1. *Measurement validity (RQ1):* freeze crop, render, fusion, and point--mesh
+   metric identity; show repeatability within a declared tolerance.
+2. *Population and action support (RQ4):* establish scene-disjoint target,
+   candidate-family, validity, replay, horizon, and resource coverage with exact
+   denominators.
+3. *Oracle headroom (first half of RQ2):* compare bounded lookahead with
+   one-step oracle greedy under the same acquisition budget,
 
-$
-  #eqs.entity.lookahead_headroom
-$
+   $
+     #eqs.entity.lookahead_headroom
+   $
 
-Only if the preregistered analysis classifies this headroom as meaningful is #symb.rl.qh evaluated for recovery from offline rollout traces:
+4. *Actor-visible $Q_1$ (RQ3):* evaluate target-conditioned one-step ranking,
+   calibration, and oracle-rescored selections without privileged actor input.
+5. *Exact $Q_2$ (recursive validity for RQ2):* measure held-out two-step error
+   and complete-support coverage against the factual finite-support target.
+6. *Endpoint recovery (second half of RQ2):* only after meaningful headroom,
+   estimate the prespecified recovered fraction
 
-$
-  #eqs.entity.q_recovery
-$
+   $
+     #eqs.entity.q_recovery
+   $
 
-Success is measured by matched endpoint oracle evaluation, not predicted values or training loss. If lookahead has no meaningful headroom, the result is scoped to the frozen split, target protocol, candidate generator, horizon, branch factor, and validity regime. If headroom exists but the learned model does not recover it, target observability, action support, replay coverage, reward construction, and model capacity remain separate candidate explanations.
+   from matched endpoint oracle evaluation.
 
-#figure(
-  publication-table(
-    columns: (0.82fr, 1.18fr, 1.52fr),
-    header: ([*Claim*], [*Primary evidence*], [*Decision rule*]),
-    rows: (
-      [Population],
-      [scene-split manifest and coverage bundle],
-      [Inference is restricted to the frozen held-out scene population.],
-      [Task protocol],
-      [GT pool, sampled tasks, classes, and oracle failures],
-      [Current evidence is oracle-task coverage, not observed-target matching.],
-      [Myopic control],
-      [ranking, calibration, and oracle-rescored selections],
-      [Actor-visible target conditioning must be implemented before comparison.],
-      [Planning headroom],
-      [#symb.entity.lookahead_headroom and recovered fraction #symb.entity.q_recovery],
-      [#symb.rl.qh is evaluated only after a meaningful-headroom gate.],
-    ),
-  ),
-  caption: [Objective-to-evidence matrix.],
-) <tab:thesis-objective-evidence>
+RQ5 and RQ6 remain conditional extensions and receive no result slot until the
+offline finite-candidate chain passes. This ordering prevents an attractive
+downstream policy estimate from compensating for an unstable metric, an
+unsupported action set, privileged actor input, or failed recursion.
