@@ -691,6 +691,8 @@ class CandidateViewGenerator:
                 )
                 self._mesh_query = mesh_query if mesh_query.is_persistently_reusable else None
         else:
+            self._request_mesh_query = None
+            self._mesh_query = None
             mesh_query = None
 
         ctx = CandidateContext(

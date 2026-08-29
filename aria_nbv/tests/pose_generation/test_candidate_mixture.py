@@ -254,6 +254,32 @@ def test_single_generator_rejects_request_query_from_another_mesh() -> None:
         )
 
 
+def test_single_generator_discards_unused_injected_query() -> None:
+    from aria_nbv.pose_generation.geometry import PreparedMeshQuery
+
+    cfg = _base_cfg().model_copy(update={"num_samples": 1})
+    mesh, verts, faces = _mesh_triplet(cfg.device)
+    leaf = verts.detach().clone().requires_grad_()
+    query = PreparedMeshQuery(leaf * 1.0, faces, device=cfg.device, dtype=torch.float32, mesh=mesh)
+    generator = CandidateViewGenerator(cfg, mesh_query=query)
+
+    generator.generate(
+        reference_pose=_identity_pose(device=cfg.device),
+        gt_mesh=mesh,
+        mesh_verts=verts,
+        mesh_faces=faces,
+        camera_calib_template=_dummy_camera(cfg.device),
+        occupancy_extent=torch.tensor(
+            [-10.0, 10.0, -10.0, 10.0, -10.0, 10.0],
+            dtype=torch.float32,
+            device=cfg.device,
+        ),
+    )
+
+    assert generator._request_mesh_query is None
+    assert generator._mesh_query is None
+
+
 def test_mixture_skips_mesh_preparation_when_collision_clearance_is_disabled(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
