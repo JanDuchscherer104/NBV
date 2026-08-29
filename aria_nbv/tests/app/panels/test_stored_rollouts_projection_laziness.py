@@ -4,6 +4,8 @@
 
 from __future__ import annotations
 
+import ast
+import inspect
 import json
 import os
 from collections.abc import Callable
@@ -15,6 +17,7 @@ import pytest
 import streamlit as st
 import zarr
 
+from aria_nbv.app.panels import _stored_rollouts_page
 from aria_nbv.app.panels._stored_rollouts import overview_topology, qh_admission, session
 from aria_nbv.configs import PathConfig
 from aria_nbv.oracle.pipelines.rollout_dataset import RolloutDatasetWriterConfig
@@ -41,6 +44,117 @@ def _record(items: list[_T], item: _T, result: _R) -> _R:
 
 def _uncached(function: Any) -> Any:
     return function.__wrapped__
+
+
+def _is_tabs_open_guard(node: ast.If) -> int | None:
+    test = node.test
+    if not isinstance(test, ast.Attribute) or test.attr != "open":
+        return None
+    value = test.value
+    if not isinstance(value, ast.Subscript) or not isinstance(value.value, ast.Name):
+        return None
+    if value.value.id != "tabs" or not isinstance(value.slice, ast.Constant):
+        return None
+    return value.slice.value if isinstance(value.slice.value, int) else None
+
+
+def _call_name(node: ast.Call) -> str | None:
+    parts: list[str] = []
+    target: ast.expr = node.func
+    while isinstance(target, ast.Attribute):
+        parts.append(target.attr)
+        target = target.value
+    if not isinstance(target, ast.Name):
+        return None
+    parts.append(target.id)
+    return ".".join(reversed(parts))
+
+
+def _call_names(nodes: list[ast.stmt]) -> list[str]:
+    return [
+        name for root in nodes for node in ast.walk(root) if isinstance(node, ast.Call) if (name := _call_name(node))
+    ]
+
+
+def _is_build_corpus_summary_guard(node: ast.If) -> bool:
+    test = node.test
+    return (
+        isinstance(test, ast.Call)
+        and _call_name(test) == "st.button"
+        and bool(test.args)
+        and isinstance(test.args[0], ast.Constant)
+        and test.args[0].value == "Build corpus summary"
+    )
+
+
+def test_stored_rollout_workspaces_keep_explicit_dynamic_dispatch() -> None:
+    """MUST-UI-01: every stored-rollout workspace remains dynamically gated."""
+
+    source = inspect.getsource(_stored_rollouts_page.render_stored_rollouts_page)
+    tree = ast.parse(source)
+    tab_calls = [
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and isinstance(node.func.value, ast.Name)
+        and node.func.value.id == "st"
+        and node.func.attr == "tabs"
+    ]
+
+    assert _stored_rollouts_page._SECTIONS == (
+        "Overview",
+        "Reward & reconstruction",
+        "Admission & feasibility",
+        "Failures",
+        "Drill-down",
+    )
+    assert len(tab_calls) == 1
+    keywords = {keyword.arg: keyword.value for keyword in tab_calls[0].keywords}
+    assert _stored_rollouts_page._SECTION_KEY == "stored_rollouts_section"
+    assert isinstance(keywords["key"], ast.Name)
+    assert keywords["key"].id == "_SECTION_KEY"
+    assert isinstance(keywords["on_change"], ast.Constant)
+    assert keywords["on_change"].value == "rerun"
+    indexed_guards = [
+        (index, node)
+        for node in ast.walk(tree)
+        if isinstance(node, ast.If)
+        if (index := _is_tabs_open_guard(node)) is not None
+    ]
+    assert sorted(index for index, _node in indexed_guards) == list(range(len(_stored_rollouts_page._SECTIONS)))
+    guards = dict(indexed_guards)
+
+    expected_calls = {
+        0: {"overview._render_corpus_overview", "overview._render_trust_and_topology"},
+        1: {"overview._render_corpus_evidence"},
+        2: {"overview._render_corpus_admission", "validity_support._render_targets_and_support"},
+        3: {"overview._render_corpus_failures", "failure_triage._render_failure_triage"},
+        4: {
+            "reconstruction._render_scientific_evidence",
+            "inspect_rerun._render_inspect_export_rerun",
+            "overview._render_corpus_details",
+        },
+    }
+    all_calls = _call_names(tree.body)
+    for index, expected in expected_calls.items():
+        guarded_calls = _call_names(guards[index].body)
+        for call in expected:
+            assert all_calls.count(call) == 1
+            assert guarded_calls.count(call) == 1
+
+
+def test_corpus_summary_remains_behind_named_user_dispatch() -> None:
+    """MUST-UI-01: complete-corpus reduction keeps its named button boundary."""
+
+    tree = ast.parse(inspect.getsource(_stored_rollouts_page.render_stored_rollouts_page))
+    guards = [node for node in ast.walk(tree) if isinstance(node, ast.If) and _is_build_corpus_summary_guard(node)]
+
+    assert len(guards) == 1
+    all_calls = _call_names(tree.body)
+    guarded_calls = _call_names(guards[0].body)
+    assert all_calls.count("session._cached_corpus_summary") == 1
+    assert guarded_calls.count("session._cached_corpus_summary") == 1
 
 
 def test_contract_overview_label_is_compact_and_keeps_exact_identity() -> None:
@@ -721,15 +835,25 @@ def test_candidate_benchmark_display_is_bounded_export_is_complete_and_identity_
     identity_checks: list[str] = []
     reader = object()
     handle = session.StoredRolloutSession(Path("/selected.zarr"), "first", reader, object(), {}, None)
+
+    def assert_current_identity() -> str:
+        identity_checks.append("checked")
+        return "first"
+
+    def benchmarks_from_reader(actual_reader: Any, **kwargs: Any) -> tuple[()]:
+        del actual_reader
+        scans.append(kwargs)
+        return ()
+
     monkeypatch.setattr(
         handle,
         "_assert_current_identity",
-        lambda: identity_checks.append("checked") or "first",
+        assert_current_identity,
     )
     monkeypatch.setattr(
         session,
         "benchmarks_from_reader",
-        lambda actual_reader, **kwargs: scans.append(kwargs) or (),
+        benchmarks_from_reader,
     )
     monkeypatch.setattr(session, "benchmark_binding_from_reader", lambda *_args: {"binding": "fixture"})
     monkeypatch.setattr(session, "serialize_bundle_bytes", lambda *_args, **_kwargs: b"bundle")

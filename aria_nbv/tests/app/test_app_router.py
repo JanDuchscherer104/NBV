@@ -6,7 +6,9 @@ import sys
 from dataclasses import dataclass
 from inspect import getsource
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
+
+import pytest
 
 from aria_nbv.app.app import NbvStreamlitApp
 from aria_nbv.app.panels.offline_dataset import render_offline_dataset_page
@@ -41,14 +43,14 @@ class _StreamlitFrame:
         return _Navigation()
 
 
-def test_router_uses_grouped_top_navigation_without_loading_panels(monkeypatch) -> None:
+def test_router_uses_grouped_top_navigation_without_loading_panels(monkeypatch: pytest.MonkeyPatch) -> None:
     import aria_nbv.app.app as app_module
 
     before = {name for name in sys.modules if name.startswith("aria_nbv.app.panels.")}
     frame = _StreamlitFrame()
     monkeypatch.setattr(app_module, "st", frame)
 
-    NbvStreamlitApp(config=object())._render()
+    NbvStreamlitApp(config=cast(Any, object()))._render()
 
     assert frame.position == "top"
     assert frame.pages is not None
@@ -73,7 +75,7 @@ def test_router_uses_grouped_top_navigation_without_loading_panels(monkeypatch) 
     assert after == before
 
 
-def test_campaign_generation_callback_imports_and_calls_only_its_renderer(monkeypatch) -> None:
+def test_campaign_generation_callback_imports_and_calls_only_its_renderer(monkeypatch: pytest.MonkeyPatch) -> None:
     """Selecting the page owns the one lazy campaign-panel import."""
     recipe = object()
     calls: list[dict[str, Any]] = []
@@ -99,6 +101,67 @@ def test_campaign_generation_callback_imports_and_calls_only_its_renderer(monkey
             "s2_recipe_label": "/repo/.configs/reports/s2.toml",
         }
     ]
+
+
+def test_training_dataset_callback_imports_and_calls_only_its_renderer(monkeypatch: pytest.MonkeyPatch) -> None:
+    """PR 0 locks the Training Dataset facade and its explicit lazy dispatch."""
+
+    calls: list[None] = []
+    fake_panel = type(
+        "Panel",
+        (),
+        {"render_training_dataset_page": lambda: calls.append(None)},
+    )
+
+    monkeypatch.setitem(sys.modules, "aria_nbv.app.panels.training_dataset", fake_panel)
+    NbvStreamlitApp(config=cast(Any, object()))._page_training_dataset()
+
+    assert calls == [None]
+
+
+def test_rollout_supervision_callback_preserves_stable_facade_arguments(monkeypatch: pytest.MonkeyPatch) -> None:
+    """PR 0 locks the stored-rollout facade and report-recipe handoff."""
+
+    recipe = object()
+    calls: list[dict[str, Any]] = []
+    fake_panel = type(
+        "Panel",
+        (),
+        {"render_stored_rollouts_panel": lambda **kwargs: calls.append(kwargs)},
+    )
+
+    class Config:
+        s2_report_section_id = "s2"
+
+        def load_s2_report_recipe(self) -> tuple[object, Path]:
+            return recipe, Path("/repo/.configs/reports/s2.toml")
+
+    monkeypatch.setitem(sys.modules, "aria_nbv.app.panels.stored_rollouts", fake_panel)
+    NbvStreamlitApp(config=Config())._page_rollout_supervision()  # type: ignore[arg-type]
+
+    assert calls == [
+        {
+            "s2_recipe": recipe,
+            "s2_section_id": "s2",
+            "s2_recipe_label": "/repo/.configs/reports/s2.toml",
+        }
+    ]
+
+
+def test_live_rollout_callback_imports_and_calls_only_its_renderer(monkeypatch: pytest.MonkeyPatch) -> None:
+    """PR 0 locks the live-lab facade without constructing runtime eagerly."""
+
+    calls: list[None] = []
+    fake_panel = type(
+        "Panel",
+        (),
+        {"render_counterfactual_rollouts_page": lambda: calls.append(None)},
+    )
+
+    monkeypatch.setitem(sys.modules, "aria_nbv.app.panels.counterfactual_rollouts", fake_panel)
+    NbvStreamlitApp(config=cast(Any, object()))._page_live_rollout_lab()
+
+    assert calls == [None]
 
 
 def test_root_store_page_has_no_nested_rollout_route() -> None:
