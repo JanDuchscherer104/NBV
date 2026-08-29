@@ -5,20 +5,22 @@
 
 === Research aim and evaluation logic <ssec:rq-objectives>
 
-The thesis asks one principal question: whether bounded lookahead contains
-target-specific endpoint value and whether an actor-visible learned model can
-recover it. Three enabling questions establish whether that answer is
-interpretable: RQ1 fixes the measured outcome, RQ3 fixes the legitimate
-information boundary, and RQ4 fixes candidate and replay support. RQ5 and RQ6
-remain conditional extensions beyond the core offline finite-candidate claim.
+The core evaluation is conditional. Bounded oracle lookahead must first improve
+fixed-budget endpoint reconstruction relative to one-step oracle-greedy
+selection; only then can an actor-visible offline model be evaluated on how much
+of that advantage it recovers. Measurement stability, a leakage-free information
+boundary, and adequate candidate and replay support determine whether either
+comparison is interpretable. Online interaction and continuous control are
+evaluated only if the offline finite-candidate evidence supports extending the
+claim.
 
-=== Principal question
+=== Core evaluation
 
 ==== RQ2 — Bounded lookahead and learned recovery <ssec:rq2>
 
-*Does bounded oracle lookahead improve fixed-budget target reconstruction over
-one-step oracle-greedy selection, and, if so, can an offline finite-horizon value
-model recover a prespecified fraction of that headroom?*
+*How much of the fixed-budget endpoint advantage of bounded oracle lookahead
+over one-step oracle-greedy selection can an offline finite-horizon value model
+recover from actor-visible evidence?*
 
 The paired endpoint difference under the same scene, target, candidates,
 validity rules, horizon, and budget defines oracle-lookahead headroom:
@@ -27,11 +29,11 @@ validity rules, horizon, and budget defines oracle-lookahead headroom:
 
 The learned comparison proceeds only if headroom passes a predeclared
 meaningful-effect and uncertainty rule. Because that rule and the required
-recovery fraction are not yet frozen, RQ2 remains prospective. Absent headroom
-is a negative result for the evaluated support, not a universal claim about
-target-aware planning.
+recovery fraction are not yet frozen, RQ2 remains prospective. If headroom is
+absent, the evaluated support does not expose a non-myopic advantage; this does
+not establish its universal absence.
 
-=== Enabling validity questions
+=== Validity conditions
 
 ==== RQ1 — Target-specific objective and endpoint contract <ssec:rq1>
 
@@ -75,7 +77,7 @@ replay and horizon support, and resource cost. Scene-disjoint splits and
 scene-level aggregation prevent dense sampling from masquerading as population
 coverage.
 
-=== Conditional extensions
+=== Scope extensions
 
 ==== RQ5 — Online discrete bridge <ssec:rq5>
 
@@ -114,10 +116,10 @@ rules before policy outcomes are inspected.
     columns: (0.42fr, 1.08fr, 1.32fr, 1.18fr),
     header: ([*RQ*], [*Question role*], [*Primary evidence*], [*Interpretation gate*]),
     rows: (
-      index-cell([RQ2]), [principal question], [paired greedy, lookahead, and learned-policy outcomes], [meaningful headroom before recovery],
-      index-cell([RQ1]), [enabling measurement validity], [target reconstruction endpoint gain], [frozen repeatable metric; fixed horizon and budget],
-      index-cell([RQ3]), [enabling information validity], [matching, ranking, calibration, and leakage audits], [end-to-end actor-visible protocol],
-      index-cell([RQ4]), [enabling support validity], [candidate, replay, validity, and coverage diagnostics], [scene-disjoint aggregation],
+      index-cell([RQ2]), [core evaluation], [paired greedy, lookahead, and learned-policy outcomes], [meaningful headroom before recovery],
+      index-cell([RQ1]), [measurement validity], [target reconstruction endpoint gain], [frozen repeatable metric; fixed horizon and budget],
+      index-cell([RQ3]), [information validity], [matching, ranking, calibration, and leakage audits], [end-to-end actor-visible protocol],
+      index-cell([RQ4]), [support validity], [candidate, replay, validity, and coverage diagnostics], [scene-disjoint aggregation],
       index-cell([RQ5]), [conditional extension], [matched online discrete-policy evaluation], [offline gates satisfied first],
       index-cell([RQ6]), [deferred extension], [continuous or simulator-backed evaluation], [separate action and cost contract],
     ),

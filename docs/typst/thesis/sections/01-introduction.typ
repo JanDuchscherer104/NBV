@@ -64,12 +64,12 @@ decision process, not merely of the scorer tensor.
 
 == Aim and bounded problem <ssec:boundary>
 
-The thesis asks a two-stage question. First, does bounded oracle lookahead yield
-better fixed-budget endpoint reconstruction of a requested object than one-step
-oracle-greedy selection? Second, if such headroom exists, can an offline
-finite-horizon model recover a prespecified fraction of it from non-privileged
-inputs? This order separates the existence of a planning opportunity from the
-ability of a learned model to exploit it.
+The core evaluation proceeds in two stages. First, it measures whether bounded
+oracle lookahead yields better fixed-budget endpoint reconstruction of a
+requested object than one-step oracle-greedy selection. Conditional on such
+headroom, it then measures how much of the advantage an offline finite-horizon
+model recovers from actor-visible inputs. This order separates the existence of
+a planning opportunity from the ability of a learned model to exploit it.
 
 At every step, each policy selects from the same finite generated candidates;
 hard-invalid actions are excluded, and the target, horizon, candidate support,
@@ -88,7 +88,7 @@ objective invariant to other reconstruction protocols.
 
 == Contributions and current evidence
 
-The thesis turns this question into four scientific functions:
+The thesis operationalizes this evaluation through four scientific functions:
 
 + It separates one-step RRI, finite-horizon return, and fixed-budget endpoint
   gain within target-specific reconstruction quality.
@@ -136,4 +136,4 @@ finite-horizon value interface evaluated within that world.
 @sec:thesis-experimental-design states which evidence admits or blocks each
 claim. @sec:thesis-results reports the admitted answers in gate order;
 @sec:thesis-discussion attributes their implications and alternatives; and
-@sec:thesis-conclusion returns those bounded answers to the principal question.
+@sec:thesis-conclusion synthesizes what those bounded answers establish.
