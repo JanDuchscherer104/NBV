@@ -31,9 +31,9 @@ positive oracle headroom and held-out endpoint recovery.
 
 The chapter proceeds from the selected state and encoding, through finite
 action and replay semantics, to architectural acceptance properties and the
-finite-horizon learning objective. One status statement accompanies each
-contract so implementation maturity cannot be mistaken for scientific
-evidence.
+finite-horizon learning objective. This order keeps failures interpretable:
+lost state information, malformed action or replay semantics, and value-learning
+error remain distinct explanations rather than an undifferentiated model defect.
 
 #include "04-01-scene-representation-requirements.typ"
 
