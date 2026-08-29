@@ -5,16 +5,15 @@
 
 === Research aim and evaluation logic <ssec:rq-objectives>
 
-The core evaluation is conditional. Bounded oracle lookahead must first improve
+RQ2 joins two conditional comparisons: whether bounded oracle lookahead improves
 fixed-budget endpoint reconstruction relative to one-step oracle-greedy
-selection; only then can an actor-visible offline model be evaluated on how much
-of that advantage it recovers. Measurement stability, a leakage-free information
-boundary, and adequate candidate and replay support determine whether either
-comparison is interpretable. Online interaction and continuous control are
-evaluated only if the offline finite-candidate evidence supports extending the
-claim.
+selection and, if so, how much of that advantage an actor-visible offline model
+recovers. RQ1 defines the outcome, RQ3 defines the admissible information, and
+RQ4 establishes the target, action, and replay support over which the comparison
+is interpretable. RQ5 and RQ6 extend the study only if the offline
+finite-candidate evidence warrants online or continuous-control claims.
 
-=== Core evaluation
+=== Bounded lookahead and learned recovery
 
 ==== RQ2 — Bounded lookahead and learned recovery <ssec:rq2>
 
@@ -33,9 +32,9 @@ recovery fraction are not yet frozen, RQ2 remains prospective. If headroom is
 absent, the evaluated support does not expose a non-myopic advantage; this does
 not establish its universal absence.
 
-=== Validity conditions
+=== Conditions for interpretation
 
-==== RQ1 — Target-specific objective and endpoint contract <ssec:rq1>
+==== RQ1 — Target-specific objective and endpoint outcome <ssec:rq1>
 
 *Can target-conditioned finite-candidate NBV be evaluated through a stable,
 target-specific reconstruction objective under a fixed acquisition budget?*
@@ -116,10 +115,10 @@ rules before policy outcomes are inspected.
     columns: (0.42fr, 1.08fr, 1.32fr, 1.18fr),
     header: ([*RQ*], [*Question role*], [*Primary evidence*], [*Interpretation gate*]),
     rows: (
-      index-cell([RQ2]), [core evaluation], [paired greedy, lookahead, and learned-policy outcomes], [meaningful headroom before recovery],
-      index-cell([RQ1]), [measurement validity], [target reconstruction endpoint gain], [frozen repeatable metric; fixed horizon and budget],
-      index-cell([RQ3]), [information validity], [matching, ranking, calibration, and leakage audits], [end-to-end actor-visible protocol],
-      index-cell([RQ4]), [support validity], [candidate, replay, validity, and coverage diagnostics], [scene-disjoint aggregation],
+      index-cell([RQ2]), [lookahead and recovery], [paired greedy, lookahead, and learned-policy outcomes], [meaningful headroom before recovery],
+      index-cell([RQ1]), [outcome measurement], [target reconstruction endpoint gain], [frozen repeatable metric; fixed horizon and budget],
+      index-cell([RQ3]), [information boundary], [matching, ranking, calibration, and leakage audits], [end-to-end actor-visible protocol],
+      index-cell([RQ4]), [population and support], [candidate, replay, validity, and coverage diagnostics], [scene-disjoint aggregation],
       index-cell([RQ5]), [conditional extension], [matched online discrete-policy evaluation], [offline gates satisfied first],
       index-cell([RQ6]), [deferred extension], [continuous or simulator-backed evaluation], [separate action and cost contract],
     ),

@@ -64,7 +64,7 @@ decision process, not merely of the scorer tensor.
 
 == Aim and bounded problem <ssec:boundary>
 
-The core evaluation proceeds in two stages. First, it measures whether bounded
+The evaluation proceeds in two stages. First, it measures whether bounded
 oracle lookahead yields better fixed-budget endpoint reconstruction of a
 requested object than one-step oracle-greedy selection. Conditional on such
 headroom, it then measures how much of the advantage an offline finite-horizon
@@ -110,7 +110,9 @@ repeatable, the study population and candidate support must contain the relevant
 opportunity, bounded lookahead must exhibit headroom, and factual replay must
 identify the required targets. Only after those conditions hold can a failure
 to recover non-myopic value be attributed primarily to representation or
-learning. This dependency order is the methodological spine of the thesis.
+learning. The order makes a negative result informative: it distinguishes a
+measurement or support failure from a failure of immediate-value learning or
+finite-horizon recursion.
 
 The present evidence supports a methodological contribution rather than a
 policy result. The implementation executes target-specific oracle scoring and
