@@ -1069,6 +1069,29 @@ def test_oversized_promotion_marker_is_bounded_visible_and_excluded(
     assert "_SUCCESS.json is oversized" in finding.message
 
 
+def test_public_bundle_summary_rejects_fifo_promotion_marker_without_blocking(tmp_path: Path) -> None:
+    root, source_hash = _write_root_store(tmp_path)
+    rollout = _write_rollout_store(tmp_path, name="fifo-marker.zarr", source_hash=source_hash)
+    marker = rollout / "_SUCCESS.json"
+    os.mkfifo(marker)
+    previous_handler = signal.getsignal(signal.SIGALRM)
+
+    def _deadline(_signum: int, _frame: object) -> None:
+        raise TimeoutError("FIFO promotion marker summary exceeded its two-second deadline")
+
+    signal.signal(signal.SIGALRM, _deadline)
+    signal.setitimer(signal.ITIMER_REAL, 2)
+    try:
+        evidence = build_dataset_bundle_summary(DatasetBundleSelection(root, (rollout,)))
+    finally:
+        signal.setitimer(signal.ITIMER_REAL, 0)
+        signal.signal(signal.SIGALRM, previous_handler)
+
+    assert evidence.rollouts[0]["included_in_training_totals"] is False
+    assert evidence.aggregate["compatible_rollout_store_count"] == 0
+    assert any(finding.code == "rollout_promotion_invalid" for finding in evidence.findings)
+
+
 def test_typed_promotion_marker_pair_remains_eligible_without_deep_validation(tmp_path: Path) -> None:
     root, source_hash = _write_root_store(tmp_path)
     rollout = _write_rollout_store(tmp_path, name="promoted.zarr", source_hash=source_hash)
@@ -1255,6 +1278,75 @@ def test_deep_statistics_preserves_unavailable_status_when_selected_store_scan_f
     assert deep["aggregate"]["persisted_rollout_unique_target_tasks"] is None
     assert deep["aggregate"]["q_h_trainable_candidates"] is None
     assert deep["aggregate"]["finite_target_rri_candidates"] is None
+
+
+def test_deep_statistics_excludes_promoted_content_trust_failure_before_array_access(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    root, source_hash = _write_root_store(tmp_path)
+    rollout = _write_rollout_store(tmp_path, name="content-mismatch.zarr", source_hash=source_hash)
+    manifest_path = rollout / "manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    row = RolloutShardRow(0, 0, "sample-0", "scene-0", "snippet-0", "train", "source-0", 0)
+    entry = RolloutShardEntry(
+        shard_id="shard-000000",
+        split="train",
+        rows=(row,),
+        writer_config_hash="c" * 64,
+        source_manifest_hash=source_hash,
+        source_cache_version=str(OFFLINE_DATASET_VERSION),
+        split_manifest_hash=build_rollout_split_manifest_hash(
+            source_manifest_hash=source_hash, split="train", records=[row.hash_record()]
+        ),
+        source_store_dir="root",
+        generation_revision_hash="d" * 64,
+    )
+    manifest["generation"]["shard"] = entry.to_jsonable()
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+    owner = {
+        "sidecar_kind": "rollout_shard_owner",
+        "shard_id": entry.shard_id,
+        "writer_config_hash": entry.writer_config_hash,
+        "source_manifest_hash": entry.source_manifest_hash,
+        "split_manifest_hash": entry.split_manifest_hash,
+        "generation_revision_hash": entry.generation_revision_hash,
+        "source_cache_version": entry.source_cache_version,
+        "split": entry.split,
+        "num_source_rows": len(entry.rows),
+        "campaign_binding": None,
+        "rollout_manifest_sha256": manifest_sha256(manifest),
+        "rollout_store_content_sha256": "a" * 64,
+    }
+    success = {
+        "sidecar_kind": "rollout_shard_success",
+        **{key: value for key, value in owner.items() if key != "sidecar_kind"},
+        "owner_sha256": manifest_sha256(owner),
+    }
+    (rollout / "_owner.json").write_text(json.dumps(owner), encoding="utf-8")
+    (rollout / "_SUCCESS.json").write_text(json.dumps(success), encoding="utf-8")
+    original_array = dataset_bundle.RolloutZarrStoreReader.array
+
+    def _unexpected_array(self: Any, path: str) -> Any:
+        pytest.fail(f"content-untrusted promoted store opened candidate array {path}")
+
+    monkeypatch.setattr(
+        dataset_bundle,
+        "_rollout_promotion_blocker",
+        lambda path: (
+            "Promoted rollout content-mismatch.zarr is not trusted: canonical store content mismatch."
+            if path == rollout
+            else None
+        ),
+    )
+    monkeypatch.setattr(dataset_bundle.RolloutZarrStoreReader, "array", _unexpected_array)
+    deep = compute_dataset_bundle_deep_statistics(DatasetBundleSelection(root, (rollout,)))
+    monkeypatch.setattr(dataset_bundle.RolloutZarrStoreReader, "array", original_array)
+
+    assert deep["stores"][0]["path"] == rollout.as_posix()
+    assert deep["stores"][0]["included"] is False
+    assert "canonical store content mismatch" in str(deep["stores"][0]["reason"])
+    assert deep["aggregate"]["eligible_rollout_store_count"] == 0
+    assert deep["aggregate"]["scanned_rollout_store_count"] == 0
 
 
 def test_root_gt_obb_scan_counts_only_finite_non_padding_rows(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:

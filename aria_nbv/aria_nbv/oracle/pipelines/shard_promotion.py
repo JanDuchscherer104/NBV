@@ -2,11 +2,64 @@
 
 from __future__ import annotations
 
+import json
+import os
+import stat
 from collections.abc import Mapping
-from typing import Any
+from typing import Any, Literal, cast
 
 from ...rollouts.manifest import manifest_sha256
 from ...rollouts.shard_manifest import RolloutShardEntry
+
+PromotionMarkerReadStatus = Literal["present", "missing_file", "invalid_json", "unreadable", "oversized"]
+"""Outcome of reading one small promotion marker without following unsafe entries."""
+
+_MAX_PROMOTION_MARKER_JSON_BYTES = 1_048_576
+
+
+def read_promotion_marker_json(
+    path: os.PathLike[str] | str,
+) -> tuple[PromotionMarkerReadStatus, Mapping[str, Any] | None]:
+    """Read one bounded promotion marker without blocking on special files.
+
+    Markers are intentionally small control-plane documents.  Opening them
+    nonblocking and admitting only regular files prevents a FIFO, directory,
+    device, or broken alias from stalling promotion inspection.  Large rollout
+    manifests and indexes are not read through this bounded control-plane seam.
+    """
+
+    descriptor: int | None = None
+    try:
+        if not stat.S_ISREG(os.lstat(path).st_mode):
+            return "unreadable", None
+        descriptor = os.open(path, os.O_RDONLY | os.O_NONBLOCK | getattr(os, "O_NOFOLLOW", 0))
+        if not stat.S_ISREG(os.fstat(descriptor).st_mode):
+            return "unreadable", None
+        chunks: list[bytes] = []
+        remaining = _MAX_PROMOTION_MARKER_JSON_BYTES + 1
+        while remaining:
+            chunk = os.read(descriptor, remaining)
+            if not chunk:
+                break
+            chunks.append(chunk)
+            remaining -= len(chunk)
+        payload = b"".join(chunks)
+    except FileNotFoundError:
+        return "missing_file", None
+    except OSError:
+        return "unreadable", None
+    finally:
+        if descriptor is not None:
+            os.close(descriptor)
+    if len(payload) > _MAX_PROMOTION_MARKER_JSON_BYTES:
+        return "oversized", None
+    try:
+        decoded = json.loads(payload)
+    except (UnicodeDecodeError, json.JSONDecodeError, RecursionError, ValueError):
+        return "invalid_json", None
+    if not isinstance(decoded, Mapping):
+        return "invalid_json", None
+    return "present", cast(Mapping[str, Any], decoded)
 
 
 def promotion_metadata_validation_error(
@@ -89,4 +142,4 @@ def _is_sha256(value: Any) -> bool:
     return isinstance(value, str) and len(value) == 64 and all(character in "0123456789abcdef" for character in value)
 
 
-__all__ = ["promotion_metadata_validation_error"]
+__all__ = ["promotion_metadata_validation_error", "read_promotion_marker_json"]

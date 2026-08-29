@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import os
+import signal
 from collections.abc import Callable
+from pathlib import Path
 from typing import Any
 
 import pytest
 
-from aria_nbv.oracle.pipelines.shard_promotion import promotion_metadata_validation_error
+from aria_nbv.oracle.pipelines.shard_promotion import promotion_metadata_validation_error, read_promotion_marker_json
 from aria_nbv.rollouts.manifest import manifest_sha256
 from aria_nbv.rollouts.shard_manifest import RolloutShardEntry, RolloutShardRow, build_rollout_split_manifest_hash
 
@@ -56,6 +59,65 @@ def test_promotion_metadata_accepts_canonical_typed_shard() -> None:
     store_manifest, success, owner = _promotion_metadata()
 
     assert promotion_metadata_validation_error(store_manifest=store_manifest, success=success, owner=owner) is None
+
+
+def test_read_promotion_marker_json_rejects_nonregular_entries_without_blocking(tmp_path: Path) -> None:
+    """Control-plane marker reads must reject FIFOs rather than wait for writers."""
+
+    marker = tmp_path / "_SUCCESS.json"
+    os.mkfifo(marker)
+    previous_handler = signal.getsignal(signal.SIGALRM)
+
+    def _deadline(_signum: int, _frame: object) -> None:
+        raise TimeoutError("promotion marker FIFO read exceeded its two-second deadline")
+
+    signal.signal(signal.SIGALRM, _deadline)
+    signal.setitimer(signal.ITIMER_REAL, 2)
+    try:
+        assert read_promotion_marker_json(marker) == ("unreadable", None)
+    finally:
+        signal.setitimer(signal.ITIMER_REAL, 0)
+        signal.signal(signal.SIGALRM, previous_handler)
+
+
+@pytest.mark.parametrize(
+    ("payload", "status"),
+    [
+        (b"{", "invalid_json"),
+        (b"[]", "invalid_json"),
+        (b'{"x":' + b"1" * 5_000 + b"}", "invalid_json"),
+        (b"{" + b" " * 1_048_576 + b"}", "oversized"),
+    ],
+)
+def test_read_promotion_marker_json_fails_closed_for_invalid_or_oversized_payload(
+    payload: bytes, status: str, tmp_path: Path
+) -> None:
+    marker = tmp_path / "_SUCCESS.json"
+    marker.write_bytes(payload)
+
+    assert read_promotion_marker_json(marker) == (status, None)
+
+
+@pytest.mark.parametrize("entry_kind", ["missing", "directory", "device", "broken_alias", "regular_alias"])
+def test_read_promotion_marker_json_fails_closed_for_nonregular_or_missing_entries(
+    entry_kind: str, tmp_path: Path
+) -> None:
+    marker = tmp_path / "_SUCCESS.json"
+    if entry_kind == "directory":
+        marker.mkdir()
+    elif entry_kind == "device":
+        marker.symlink_to(os.devnull)
+    elif entry_kind == "broken_alias":
+        marker.symlink_to(tmp_path / "missing.json")
+    elif entry_kind == "regular_alias":
+        target = tmp_path / "marker.json"
+        target.write_text("{}", encoding="utf-8")
+        marker.symlink_to(target)
+
+    status, payload = read_promotion_marker_json(marker)
+
+    assert payload is None
+    assert status == ("missing_file" if entry_kind == "missing" else "unreadable")
 
 
 @pytest.mark.parametrize(

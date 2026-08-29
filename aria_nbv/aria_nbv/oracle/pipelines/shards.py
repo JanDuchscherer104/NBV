@@ -70,7 +70,7 @@ from .rollout_dataset import (
     _apply_manifest_rows,
     _RolloutSourceLineageBuilder,
 )
-from .shard_promotion import promotion_metadata_validation_error
+from .shard_promotion import promotion_metadata_validation_error, read_promotion_marker_json
 
 
 class RolloutShardOwnershipConflictError(RuntimeError):
@@ -496,14 +496,14 @@ def _completed_shard_is_current(
 ) -> bool:
     success_path = final_dir / ROLLOUT_SHARD_SUCCESS_FILENAME
     owner_path = final_dir / ROLLOUT_SHARD_OWNER_FILENAME
-    if not success_path.exists() or not owner_path.exists():
+    success_status, success = read_promotion_marker_json(success_path)
+    owner_status, owner = read_promotion_marker_json(owner_path)
+    if success_status != "present" or owner_status != "present" or success is None or owner is None:
         return False
     validation = validate_rollout_zarr_store(final_dir)
     if not validation.ok:
         return False
     try:
-        success = json.loads(success_path.read_text(encoding="utf-8"))
-        owner = json.loads(owner_path.read_text(encoding="utf-8"))
         store_manifest = read_rollout_store_manifest(final_dir)
     except (json.JSONDecodeError, OSError):
         return False
@@ -519,7 +519,7 @@ def _completed_shard_is_current(
     }
     if not all(success.get(key) == value and owner.get(key) == value for key, value in expected.items()):
         return False
-    if success.get("owner_sha256") != manifest_sha256(owner):
+    if success.get("owner_sha256") != manifest_sha256(dict(owner)):
         return False
     rollout_manifest_sha = manifest_sha256(store_manifest)
     if owner.get("rollout_manifest_sha256") != rollout_manifest_sha:
@@ -555,8 +555,10 @@ def read_validated_completed_shard(
     otherwise failed full shard validation.
     """
     try:
-        owner = json.loads((final_dir / ROLLOUT_SHARD_OWNER_FILENAME).read_text(encoding="utf-8"))
-        success = json.loads((final_dir / ROLLOUT_SHARD_SUCCESS_FILENAME).read_text(encoding="utf-8"))
+        _owner_status, owner = read_promotion_marker_json(final_dir / ROLLOUT_SHARD_OWNER_FILENAME)
+        _success_status, success = read_promotion_marker_json(final_dir / ROLLOUT_SHARD_SUCCESS_FILENAME)
+        if owner is None or success is None:
+            return None
         store_manifest = read_rollout_store_manifest(final_dir)
     except (OSError, ValueError, json.JSONDecodeError):
         return None

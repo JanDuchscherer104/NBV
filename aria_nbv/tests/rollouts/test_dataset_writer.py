@@ -5,6 +5,8 @@
 from __future__ import annotations
 
 import json
+import os
+import signal
 from copy import deepcopy
 from dataclasses import replace
 from pathlib import Path
@@ -31,6 +33,7 @@ from aria_nbv.oracle.pipelines.rollout_dataset import (
     _select_source_manifest_rows,
 )
 from aria_nbv.oracle.pipelines.shards import (
+    RolloutShardOwnershipConflictError,
     plan_rollout_shards,
     plan_rollout_source_manifest,
     read_validated_completed_shard,
@@ -1062,6 +1065,33 @@ def test_read_validated_completed_shard_rejects_tampered_success_binding(tmp_pat
         read_validated_completed_shard(final_dir, shard_entry=entry, writer_config_hash=entry.writer_config_hash)
         is None
     )
+
+
+def test_shard_currentness_and_read_reject_fifo_promotion_marker_without_blocking(tmp_path: Path) -> None:
+    config = _FakeRolloutConfig([_fake_record(0)], store_dir=tmp_path)
+    entry = plan_rollout_shards(config, rows_per_shard=1)[0]
+    final_dir = tmp_path / "final" / entry.shard_id
+    run_rollout_shard(config, shard_entry=entry, output_tmp=tmp_path / "tmp", output_final=final_dir)
+    success = final_dir / "_SUCCESS.json"
+    success.unlink()
+    os.mkfifo(success)
+    previous_handler = signal.getsignal(signal.SIGALRM)
+
+    def _deadline(_signum: int, _frame: object) -> None:
+        raise TimeoutError("FIFO promotion-marker currentness check exceeded its two-second deadline")
+
+    signal.signal(signal.SIGALRM, _deadline)
+    signal.setitimer(signal.ITIMER_REAL, 2)
+    try:
+        assert (
+            read_validated_completed_shard(final_dir, shard_entry=entry, writer_config_hash=entry.writer_config_hash)
+            is None
+        )
+        with pytest.raises(RolloutShardOwnershipConflictError):
+            run_rollout_shard(config, shard_entry=entry, output_tmp=tmp_path / "other.tmp", output_final=final_dir)
+    finally:
+        signal.setitimer(signal.ITIMER_REAL, 0)
+        signal.signal(signal.SIGALRM, previous_handler)
 
 
 def test_rollout_shard_timeout_delegates_atomic_quarantine_and_allows_restart(

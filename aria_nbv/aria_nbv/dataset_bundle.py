@@ -36,7 +36,7 @@ from .data_handling.vin_store.format import VinOfflineIndexRecord, VinOfflineMan
 from .data_handling.vin_store.store import OFFLINE_DATASET_VERSION, VinOfflineStoreConfig, VinOfflineStoreReader
 from .data_handling.vin_store.target_inventory import inspect_target_inventory
 from .dataset_topology import discover_vin_store_dirs
-from .oracle.pipelines.shard_promotion import promotion_metadata_validation_error
+from .oracle.pipelines.shard_promotion import promotion_metadata_validation_error, read_promotion_marker_json
 from .rollouts.inspection import (
     build_effective_streamlit_trust,
     build_manifest_facts,
@@ -1004,12 +1004,11 @@ def _bounded_promotion_marker_blocker(store: Path, manifest: Mapping[str, Any]) 
     missing = _missing_promotion_markers(store)
     if missing:
         return f"Promoted rollout {store.name} has incomplete promotion markers: {', '.join(missing)}."
-    markers = tuple(store / name for name in ("_SUCCESS.json", "_owner.json"))
     payloads: list[dict[str, Any]] = []
-    for path in markers:
-        status, payload = _read_bounded_json_object(path)
+    for name in ("_SUCCESS.json", "_owner.json"):
+        status, payload = read_promotion_marker_json(store / name)
         if payload is None:
-            return f"Promoted rollout {store.name} marker {path.name} is {status.replace('_', ' ')}."
+            return f"Promoted rollout {store.name} marker {name} is {status.replace('_', ' ')}."
         payloads.append(dict(payload))
     error = promotion_metadata_validation_error(
         store_manifest=manifest,
@@ -1447,8 +1446,12 @@ def compute_dataset_bundle_deep_statistics(selection: DatasetBundleSelection) ->
         if not bool(row["included_in_training_totals"]):
             stores.append({"path": row["path"], "included": False, "reason": "lineage_or_schema_blocked"})
             continue
-        eligible_store_count += 1
         path = Path(str(row["path"]))
+        promotion_blocker = _rollout_promotion_blocker(path)
+        if promotion_blocker is not None:
+            stores.append({"path": path.as_posix(), "included": False, "reason": promotion_blocker})
+            continue
+        eligible_store_count += 1
         try:
             reader = RolloutZarrStoreReader(path)
             q_train = _required_array(reader, "candidates/q_train_mask", np.bool_)
