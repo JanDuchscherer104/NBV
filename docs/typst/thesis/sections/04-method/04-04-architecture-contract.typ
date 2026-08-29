@@ -11,7 +11,7 @@
   citation: [@GeometricDeepLearning-bronstein2021],
   source: "aria_nbv/aria_nbv/vin/models/target_finite_horizon.py; aria_nbv/aria_nbv/vin/modules/qh_state_fusion.py; aria_nbv/tests/vin/test_qh_state_fusion.py; aria_nbv/tests/vin/test_target_finite_horizon.py",
   gate: [retain row-equivariance, invalid-row isolation, frame, source, mask-independence, and horizon tests; measure the A0/A1 control],
-)[A1 candidate-to-state cross-attention is the selected interaction; A0 is its feature-matched independent-row control. Both pass the shared executable acceptance contract. Their scientific comparison remains pending.]
+)[A1 candidate-to-state cross-attention is the selected interaction; A0 is its feature-matched independent-row control. Both pass the same executable acceptance tests. Their scientific comparison remains pending.]
 
 Each materialized candidate is an independent query over shared scene, target,
 history, budget, and horizon tokens. A1 uses the candidate as query and those
