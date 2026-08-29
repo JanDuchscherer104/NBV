@@ -486,17 +486,26 @@ class TargetFiniteHorizonScorer(nn.Module):
         current_versions = self._actor_tensor_versions(actor)
         if current_versions is None or admitted.tensor_versions != current_versions:
             raise ValueError("Q_H admitted actor was mutated after admission; admit it again before scoring.")
-        return self._forward_validated(actor, requested_horizon=requested_horizon)
+        return self._forward_validated(
+            actor,
+            requested_horizon=requested_horizon,
+            reuse_admitted_default_horizon=requested_horizon is None,
+        )
 
     def _forward_validated(
         self,
         actor: QhActorTensors,
         *,
         requested_horizon: Tensor | None,
+        reuse_admitted_default_horizon: bool = False,
     ) -> QhScoreOutput:
         """Score an actor whose full or reusable admission already succeeded."""
 
-        horizon = self._validated_requested_horizon(actor, requested_horizon)
+        horizon = (
+            actor.horizon_remaining
+            if reuse_admitted_default_horizon
+            else self._validated_requested_horizon(actor, requested_horizon)
+        )
         candidate_mask = actor.candidate_mask & actor.step_mask.unsqueeze(-1)
         batch_size, steps, width = candidate_mask.shape
 

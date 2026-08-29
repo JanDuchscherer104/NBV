@@ -683,6 +683,26 @@ def test_qh_admitted_forward_retains_requested_horizon_validation() -> None:
         scorer.forward_admitted(admitted, requested_horizon=invalid)
 
 
+def test_qh_admitted_forward_reuses_admitted_default_horizon(monkeypatch: pytest.MonkeyPatch) -> None:
+    actor = _actor()
+    scorer = _scorer()
+    admitted = scorer.admit_actor(actor)
+    validated_horizons: list[torch.Tensor | None] = []
+    original = scorer._validated_requested_horizon
+
+    def record_validation(current_actor: QhActorTensors, requested_horizon: torch.Tensor | None) -> torch.Tensor:
+        validated_horizons.append(requested_horizon)
+        return original(current_actor, requested_horizon)
+
+    monkeypatch.setattr(scorer, "_validated_requested_horizon", record_validation)
+
+    scorer.forward_admitted(admitted)
+    assert validated_horizons == []
+
+    scorer.forward_admitted(admitted, requested_horizon=actor.horizon_remaining)
+    assert validated_horizons == [actor.horizon_remaining]
+
+
 def test_qh_scorer_accepts_bounded_off_diagonal_horizon_query() -> None:
     actor = _actor()
     scorer = _scorer()
