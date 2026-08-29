@@ -965,7 +965,7 @@ def test_thin_guidance_routes_retain_review_and_package_contracts() -> None:
     assert "Architect and\n  critic review outputs stay session-local" in root_guidance
 
     for route in (
-        "Mermaid and thesis-diagram work uses `aria-nbv-mermaid`",
+        "Conceptual diagrams and SVGs use `aria-nbv-mermaid`",
         "Backlog or memory changes use\n  `agents-db`",
         "cleanup uses `simplification`",
         "LRZ work uses `lrz-ai-systems`",

@@ -1,81 +1,81 @@
 ---
 name: aria-nbv-mermaid
-description: Use for ARIA-NBV Mermaid source, local lint and rendering, thesis diagrams, flowcharts, sequence diagrams, and Mermaid style or symbol-map work.
+description: "Use for ARIA-NBV conceptual diagrams and SVGs: explanatory-depth review, Mermaid/Typst routing, Mermaid source and rendering, and interactive thesis-figure research packets."
 ---
 
-# ARIA-NBV Mermaid Figure Skill
+# ARIA-NBV Conceptual Diagrams
 
-This skill owns the local Mermaid seam: versioned `.mmd` source through the
-vendored `tools/mermaid` lint and render commands. It routes notation, final
-document integration, and diagnosed tool failures to their existing owners.
+Own the cross-renderer conceptual-diagram contract: decide what a figure must
+explain, whether it deserves to exist, and which renderer fits the mechanism.
+Retain the repository's canonical Mermaid seam; route accepted Typst-native
+realization and document integration to `typst-authoring`.
 
 ## Use When
 
-- Creating, editing, reviewing, linting, or rendering a repository `.mmd`.
-- Updating `tools/mermaid` templates, examples, style guidance, the symbol map,
-  or the local linter/render wrapper.
-- Turning a local architecture, protocol, storage, or sequence into a Mermaid
-  diagram.
+- Reviewing, retaining, simplifying, revising, replacing, merging, or removing
+  an ARIA-NBV conceptual figure or SVG.
+- Routing a concept to Mermaid-native, Typst-native, scientific/data, or no
+  figure.
+- Creating, editing, linting, or rendering repository `.mmd` source.
+- Preparing an iterative thesis-figure research packet.
 
 ## Read First
 
-1. Read `AGENTS.md` and `docs/AGENTS.md`.
-2. For a thesis figure or any math label, read the local style guide and symbol
-   map; also inspect the relevant `docs/typst/shared` source.
-3. For a rendering or linting failure, capture the exact local command and
-   output before handing the evidence to the nearest owning guide.
-4. For current upstream grammar or renderer behavior, use the external-evidence
-   branch in [`aria-nbv-context`](../aria-nbv-context/SKILL.md) and its
-   [Context7 registry](../aria-nbv-context/references/context7_library_ids.md)
-   only after local owner inspection; local source, lint, and render results
-   remain decisive.
+1. Read `AGENTS.md`, `docs/AGENTS.md`, and the exact thesis passage or software
+   contract the figure explains.
+2. For conceptual review or Mermaid-vs-Typst selection, read
+   [conceptual-diagrams.md](references/conceptual-diagrams.md).
+3. For iterative visual research, also read
+   [interactive-figure-research.md](references/interactive-figure-research.md).
+4. For Mermaid-native source or rendering, read
+   [mermaid-native.md](references/mermaid-native.md).
+5. For mathematical notation, inspect `docs/typst/shared`; for a Typst-native
+   candidate, load `typst-authoring` and its scientific-visualization guidance.
+6. For current upstream API details, use `aria-nbv-context`'s Context7 route
+   after local owner inspection. The local pinned package and exact render remain
+   decisive.
 
-## Seam Rules
+## Ownership Boundary
 
-- Keep `.mmd` as the source of record. `tools/mermaid` owns local template,
-  style, notation-projection, lint, and render behavior; do not add a second
-  Mermaid CLI wrapper to another skill. Its wrapper resolves a repository-local
-  CLI first, then an explicit `MERMAID_CLI` or `PATH` installation.
-- Start from the matching local template or example. Flowcharts use the shared
-  `input`, `compute`, `data`, and `output` classes; math-heavy flowcharts use
-  the supplied frontmatter.
-- Preserve contrast: every shared semantic `classDef` pins
-  `color:#17202A` with its pale fill. Quarto's dark Mermaid theme otherwise
-  mutes labels; the canonical definitions live in
-  [`aria_mermaid_style.md`](../../../tools/mermaid/references/aria_mermaid_style.md#3-node-classes).
-- Keep labels compact. Every new mathematical symbol must already be in shared
-  Typst notation and its Mermaid projection; hand off to `typst-authoring`
-  before changing either owner.
-- Treat lint warnings as review evidence. Preserve existing visual intent and
-  change it only for the requested diagram or a clear style mismatch.
-- Render locally only. If `mmdc` is unavailable, report that condition rather
-  than substituting an online renderer.
+- This skill owns the figure question, explanatory standard, handoff into the
+  owning renderer policy, cross-renderer review packet, and Mermaid-native work.
+- `tools/mermaid` is the sole Mermaid lint/render implementation. Keep `.mmd` as
+  the source of record; do not add another CLI wrapper.
+- `typst-authoring` owns the exact Typst/scientific renderer decision, accepted
+  source realization, captions, labels, inclusion, compilation, rendered-page
+  inspection, and PDF handoff.
+- `scientific-review` independently tests claims, geometry, notation, and
+  caption--figure entailment. It advises; the implementation lane patches valid
+  findings.
+- Data/code owners determine quantitative values and geometry. A diagram never
+  promotes a hypothesis, implementation, or result beyond those owners.
 
 ## Workflow
 
-1. Identify the grammar and destination: source-only, Quarto fence, or a
-   rendered Typst asset.
-2. Copy the matching local template or adapt the closest local example.
-3. For math labels, verify each symbol against the shared Typst owner and
-   `aria_symbol_map.yaml`; stop and hand off if notation must change.
-4. Edit the `.mmd`, then run:
-
-   ```bash
-   python tools/mermaid/scripts/aria_mermaid_lint.py <file.mmd>
-   ```
-
-   Resolve errors. Record warnings that remain intentional.
-5. When the local renderer resolves a CLI, render a review artifact outside
-   tracked figure paths unless an output asset is requested:
-
-   ```bash
-   tools/mermaid/scripts/render_mermaid.sh <file.mmd> /tmp/<name>.svg
-   ```
-
-6. Hand off Quarto inclusion to the nearest docs guide; hand off Typst asset inclusion,
-   captioning, and page inspection to `typst-authoring`.
+1. Write the concept brief: exact source/passages, one reader takeaway, likely
+   misconception, and what the visual can show that prose cannot.
+2. Freeze a baseline at actual thesis page size. Search all consumers and
+   classify the source/render family as active, superseded, orphaned, or
+   development-only.
+3. Judge the figure using both professor and student lenses from the reference.
+   Choose `retain`, `simplify`, `revise`, `replace`, `merge`, or `remove`.
+4. Route relational figures to Mermaid-native or Typst-native work. Route
+   scientific, geometric, spatial, 3D, and quantitative figures to
+   `typst-authoring`, whose scientific-visualization table selects the renderer.
+5. For a review/report request, return the classification, severity-ranked
+   findings, and recommendations without mutation or external publication.
+6. For an authorized change/build request, implement one bounded accepted
+   action through the owning skill. A retained/no-change figure only receives a
+   recorded disposition. Remove a superseded family only after proving its
+   consumers and complete source/render boundary.
+7. For retained or changed candidates, inspect the standalone asset and final
+   pages for reading order, notation, clipping, final-size text, grayscale,
+   caption complementarity, and unsupported implications.
+8. Run an independent scientific review on the exact candidate. Patch valid
+   P0--P2 findings only in an authorized implementation lane.
 
 ## Completion
 
-Report the source path, exact lint result, render result or `mmdc` gap, and
-the destination-owner handoff when one remains.
+Report the concept and decision, canonical source, guidance that affected the
+design, exact lint/compile/render checks, inspected thesis pages, scientific
+review disposition, and any remaining owner handoff.

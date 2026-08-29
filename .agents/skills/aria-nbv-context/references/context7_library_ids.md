@@ -26,8 +26,14 @@ source/tests, and exact ARIA owner. Docker MCP Context7 is deprecated.
   grouping, and glossary printing`.
 - `/cetz-package/cetz` — `canvas coordinates, projections, transforms, anchors,
   and drawing primitives for the selected figure`.
+- `/cetz-package/cetz/v0.4.2` — `coordinate transformations, camera frames,
+  frusta, projections, clipping, layers, intersections, and annotations for a
+  version-specific scientific-figure comparison`.
 - `/jollywatt/typst-fletcher` — `diagram nodes, edges, labels, layouts, and CeTZ
   integration`.
+- `/websites/typst-community_github_io_extra-docs` — `advanced relative
+  positioning, measurement, alignment, reusable layout patterns, and debugging
+  for complex scientific figures`.
 - `/touying-typ/touying` — `slide composition, sections, counters, pauses, and
   reveal behavior`.
 - `/websites/quarto` — `cross-references, project navigation, filters, metadata,

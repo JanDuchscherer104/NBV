@@ -35,7 +35,8 @@ when owners conflict.
   Typst include. `academic-writing` owns source-grounded argument construction;
   `scientific-review` owns independent non-mutating validity review; and
   `typst-authoring` realizes accepted content, notation, citations, and rendered
-  pages. `aria-nbv-mermaid` owns Mermaid procedure and local rendering.
+  pages. `aria-nbv-mermaid` owns conceptual-diagram review, relational
+  Mermaid-vs-Typst routing, and Mermaid procedure/local rendering.
 - Role-disjoint setup and documentation verification commands route through
   [`docs/README.md`](README.md); executable behavior remains owned by the
   Makefile, CI workflow, and exact source/test owners.
