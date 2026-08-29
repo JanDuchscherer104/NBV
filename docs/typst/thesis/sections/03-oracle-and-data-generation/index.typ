@@ -9,7 +9,7 @@ separates logged, selected-causal, and privileged information; then constructs
 target tasks and finite actions; and finally defines the intervention outcome
 and the immutable evidence needed to audit it. By the end, every value query has
 an explicit information boundary, action support, transition meaning, and
-measurement contract for the Method chapter to inherit.
+outcome definition for the Method chapter to inherit.
 
 #include "03-01-state-and-visibility.typ"
 

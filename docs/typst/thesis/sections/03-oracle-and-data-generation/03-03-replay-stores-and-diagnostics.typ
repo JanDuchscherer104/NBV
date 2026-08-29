@@ -30,7 +30,7 @@ training, and bootstrap masks exclude them from their respective decisions.
 #figure(
   publication-table(
     columns: (0.8fr, 1.35fr),
-    header: ([*Evidence family*], [*Interpretation contract*]),
+    header: ([*Evidence family*], [*Scientific interpretation*]),
     rows: (
       [Sources and targets],
       [Manifest-backed task coverage; not proof of actor-visible target discovery.],
@@ -48,7 +48,7 @@ training, and bootstrap masks exclude them from their respective decisions.
       [State metrics aggregate state then scene then cohort; failed roots and zero-valid configured family/state pairs remain in denominators. Projection is framing, oracle opportunity is headroom, and jitter is QC—not visibility or policy performance.],
     ),
   ),
-  caption: [Interpretation contract for rollout-store audits. Numeric values are rendered from the resolved report bundle in the experiment and reproducibility sections.],
+  caption: [Scientific interpretation of replay evidence. Numeric values are rendered from the resolved report bundle in the experiment and reproducibility sections.],
 ) <tab:current-rollout-store-audit>
 
 Selected-depth persistence stores only the depth raster and calibration for the
@@ -61,8 +61,8 @@ depth is not an independently scored endpoint artifact.
 
 Likewise, rollout rows summarize final cumulative selected-chain metrics; they do not preserve every rejected branch or a policy-neutral endpoint reconstruction. These limitations must be resolved by matched endpoint re-evaluation before confirmatory policy comparison.
 
-The evidence contract is complete only when missingness remains explicit.
-Reporting therefore retains target-task coverage, candidate validity and failure
+Missingness is part of the evidence rather than an ordinary zero. Reporting
+therefore retains target-task coverage, candidate validity and failure
 reasons, family survival and selection, selected-history sanity, gain
 distributions, source-role counts, and runtime or storage exclusions. Exact
 schema columns, joins, compression, chunking, hashes, and execution commands
