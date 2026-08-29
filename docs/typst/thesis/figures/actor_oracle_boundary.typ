@@ -78,7 +78,7 @@
     identity and evaluation support
   ], tint: oracle, width: 42mm, name: <assets>),
   block((4.9, 2.95), [Candidate renders], [
-    all-candidate depth / point sets \
+    hard-valid candidate depth / points \
     target endpoint error
   ], tint: oracle, width: 42mm, name: <renders>),
   block((4.9, 4.75), [Oracle targets], [
