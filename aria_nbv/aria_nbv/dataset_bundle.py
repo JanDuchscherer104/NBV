@@ -25,13 +25,13 @@ import msgspec
 import numpy as np
 
 from .data_handling.identifiers import compact_ase_atek_sample_id
-from .data_handling.qh_data.batching import QhObjectiveProfile
-from .data_handling.qh_data.views import (
+from .data_handling.qh_contracts import (
     QhExperimentProfile,
     QhRootEvlProfile,
     QhSelectedObservationProtocol,
     validate_experiment_profile,
 )
+from .data_handling.qh_data.batching import QhObjectiveProfile
 from .data_handling.vin_store.format import VinOfflineIndexRecord, VinOfflineManifest
 from .data_handling.vin_store.store import OFFLINE_DATASET_VERSION, VinOfflineStoreConfig, VinOfflineStoreReader
 from .data_handling.vin_store.target_inventory import inspect_target_inventory
@@ -70,7 +70,8 @@ AuthoritativeFieldStatus = Literal[
 
 JsonScalar: TypeAlias = None | bool | int | float | str
 
-_MAX_AUTHORITATIVE_JSON_BYTES = 1_048_576
+_MAX_SMALL_SIDECAR_JSON_BYTES = 1_048_576
+_REGULAR_FILE_READ_CHUNK_BYTES = 1_048_576
 _ROOT_AUTHORITATIVE_FIELDS = (("manifest.json", "version", "int"),)
 _ROLLOUT_AUTHORITATIVE_FIELDS = (
     ("manifest.json", "manifest_version", "str"),
@@ -390,7 +391,11 @@ def _parse_authoritative_fields(
     return tuple(rows)
 
 
-def _read_bounded_regular_file(path: Path) -> tuple[AuthoritativeFieldStatus, bytes | None]:
+def _read_bounded_regular_file(
+    path: Path,
+    *,
+    max_bytes: int = _MAX_SMALL_SIDECAR_JSON_BYTES,
+) -> tuple[AuthoritativeFieldStatus, bytes | None]:
     """Read one bounded regular file without blocking on special entries."""
 
     descriptor: int | None = None
@@ -399,7 +404,7 @@ def _read_bounded_regular_file(path: Path) -> tuple[AuthoritativeFieldStatus, by
         if not stat.S_ISREG(os.fstat(descriptor).st_mode):
             return "unreadable", None
         chunks: list[bytes] = []
-        remaining = _MAX_AUTHORITATIVE_JSON_BYTES + 1
+        remaining = max_bytes + 1
         while remaining:
             chunk = os.read(descriptor, remaining)
             if not chunk:
@@ -414,13 +419,53 @@ def _read_bounded_regular_file(path: Path) -> tuple[AuthoritativeFieldStatus, by
         if descriptor is not None:
             os.close(descriptor)
     payload = b"".join(chunks)
-    if len(payload) > _MAX_AUTHORITATIVE_JSON_BYTES:
+    if len(payload) > max_bytes:
         return "oversized", None
     return "present", payload
 
 
-def _read_bounded_json_object(path: Path) -> tuple[AuthoritativeFieldStatus, Mapping[str, Any] | None]:
-    status, payload = _read_bounded_regular_file(path)
+def _read_regular_file(path: Path) -> tuple[AuthoritativeFieldStatus, bytes | None]:
+    """Read a regular file in chunks without blocking on special entries."""
+
+    descriptor: int | None = None
+    try:
+        descriptor = os.open(path, os.O_RDONLY | os.O_NONBLOCK)
+        if not stat.S_ISREG(os.fstat(descriptor).st_mode):
+            return "unreadable", None
+        chunks: list[bytes] = []
+        while chunk := os.read(descriptor, _REGULAR_FILE_READ_CHUNK_BYTES):
+            chunks.append(chunk)
+    except FileNotFoundError:
+        return "missing_file", None
+    except OSError:
+        return "unreadable", None
+    finally:
+        if descriptor is not None:
+            os.close(descriptor)
+    return "present", b"".join(chunks)
+
+
+def _read_json_object(path: Path) -> tuple[AuthoritativeFieldStatus, Mapping[str, Any] | None]:
+    """Read a regular JSON object without imposing a production-size cap."""
+
+    status, payload = _read_regular_file(path)
+    if payload is None:
+        return status, None
+    try:
+        decoded = json.loads(payload)
+    except (UnicodeDecodeError, json.JSONDecodeError, RecursionError):
+        return "invalid_json", None
+    if not isinstance(decoded, Mapping):
+        return "invalid_json", None
+    return "present", cast(Mapping[str, Any], decoded)
+
+
+def _read_bounded_json_object(
+    path: Path,
+    *,
+    max_bytes: int = _MAX_SMALL_SIDECAR_JSON_BYTES,
+) -> tuple[AuthoritativeFieldStatus, Mapping[str, Any] | None]:
+    status, payload = _read_bounded_regular_file(path, max_bytes=max_bytes)
     if payload is None:
         return status, None
     try:
@@ -854,7 +899,7 @@ def build_qh_corpus_readiness(
     Trainer, writer, or mutable store handle.
     """
 
-    loader_settings = {
+    loader_settings: dict[str, int | bool | str] = {
         "batch_size": batch_size,
         "num_workers": 0,
         "pin_memory": False,
@@ -926,8 +971,14 @@ def _qh_promotion_blockers(selection: DatasetBundleSelection) -> tuple[str, ...]
 def _rollout_promotion_blocker(store: Path) -> str | None:
     """Return one fail-closed trust error for an advertised promoted store."""
 
-    if not _promotion_marker_present(store):
+    _manifest_status, manifest = _read_json_object(store / "manifest.json")
+    if manifest is None and not any(_lstat_exists(store / name) for name in ("_SUCCESS.json", "_owner.json")):
         return None
+    if manifest is not None and not _promotion_advertised(store, manifest):
+        return None
+    missing = _missing_promotion_markers(store)
+    if missing:
+        return f"Promoted rollout {store.name} has incomplete promotion markers: {', '.join(missing)}."
     try:
         reader = RolloutZarrStoreReader(store)
         manifest_facts = build_manifest_facts(reader)
@@ -948,12 +999,12 @@ def _rollout_promotion_blocker(store: Path) -> str | None:
 def _bounded_promotion_marker_blocker(store: Path, manifest: Mapping[str, Any]) -> str | None:
     """Validate bounded marker documents without opening Zarr arrays."""
 
-    markers = tuple(store / name for name in ("_SUCCESS.json", "_owner.json"))
-    present = tuple(_lstat_exists(path) for path in markers)
-    if not any(present):
+    if not _promotion_advertised(store, manifest):
         return None
-    if not all(present):
-        return f"Promoted rollout {store.name} has an incomplete promotion marker pair."
+    missing = _missing_promotion_markers(store)
+    if missing:
+        return f"Promoted rollout {store.name} has incomplete promotion markers: {', '.join(missing)}."
+    markers = tuple(store / name for name in ("_SUCCESS.json", "_owner.json"))
     payloads: list[dict[str, Any]] = []
     for path in markers:
         status, payload = _read_bounded_json_object(path)
@@ -968,10 +1019,18 @@ def _bounded_promotion_marker_blocker(store: Path, manifest: Mapping[str, Any]) 
     return None if error is None else f"Promoted rollout {store.name} {error}."
 
 
-def _promotion_marker_present(store: Path) -> bool:
-    """Treat broken marker symlinks as advertised, not as absent V0 metadata."""
+def _promotion_advertised(store: Path, manifest: Mapping[str, Any]) -> bool:
+    """Treat typed shard ownership or either marker as promotion advertisement."""
 
-    return any(_lstat_exists(store / marker) for marker in ("_SUCCESS.json", "_owner.json"))
+    generation = manifest.get("generation")
+    typed_shard = isinstance(generation, Mapping) and isinstance(generation.get("shard"), Mapping)
+    return typed_shard or any(_lstat_exists(store / marker) for marker in ("_SUCCESS.json", "_owner.json"))
+
+
+def _missing_promotion_markers(store: Path) -> tuple[str, ...]:
+    """Return missing promotion sidecars without following potentially broken aliases."""
+
+    return tuple(name for name in ("_SUCCESS.json", "_owner.json") if not _lstat_exists(store / name))
 
 
 def _lstat_exists(path: Path) -> bool:
@@ -1477,8 +1536,8 @@ def scan_root_gt_obb_target_opportunities(root_store: Path | str) -> dict[str, A
     """
 
     store = Path(root_store).expanduser().resolve()
-    manifest_status, manifest_bytes = _read_bounded_regular_file(store / "manifest.json")
-    index_status, index_bytes = _read_bounded_regular_file(store / "sample_index.jsonl")
+    manifest_status, manifest_bytes = _read_regular_file(store / "manifest.json")
+    index_status, index_bytes = _read_regular_file(store / "sample_index.jsonl")
     try:
         if manifest_bytes is None:
             raise OSError(f"manifest.json is {manifest_status.replace('_', ' ')}")
@@ -1565,8 +1624,8 @@ def _root_summary(
     *,
     findings: list[DatasetBundleFinding],
 ) -> tuple[dict[str, Any], tuple[VinOfflineIndexRecord, ...]]:
-    manifest_status, manifest_bytes = _read_bounded_regular_file(store / "manifest.json")
-    index_status, index_bytes = _read_bounded_regular_file(store / "sample_index.jsonl")
+    manifest_status, manifest_bytes = _read_regular_file(store / "manifest.json")
+    index_status, index_bytes = _read_regular_file(store / "sample_index.jsonl")
     try:
         if manifest_bytes is None:
             raise OSError(f"manifest.json is {manifest_status.replace('_', ' ')}")
@@ -1659,7 +1718,7 @@ def _validate_root_records(
         )
     for split in sorted({record.split for record in records}):
         split_path = store / "splits" / f"{split}.npy"
-        split_status, split_bytes = _read_bounded_regular_file(split_path)
+        split_status, split_bytes = _read_regular_file(split_path)
         try:
             if split_bytes is None:
                 raise OSError(f"split is {split_status.replace('_', ' ')}")
@@ -1698,7 +1757,7 @@ def _rollout_summary(
     blockers_before = sum(
         finding.severity == "blocking" and finding.store_path == store.as_posix() for finding in findings
     )
-    manifest_status, manifest_bytes = _read_bounded_regular_file(store / "manifest.json")
+    manifest_status, manifest_bytes = _read_regular_file(store / "manifest.json")
     try:
         if manifest_bytes is None:
             raise OSError(f"manifest.json is {manifest_status.replace('_', ' ')}")

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import signal
 from dataclasses import replace
 from hashlib import sha256
 from pathlib import Path
@@ -271,7 +272,7 @@ def test_dataset_bundle_generation_oversized_authority_is_deterministic(tmp_path
     root = tmp_path / "root"
     root.mkdir()
     manifest = root / "manifest.json"
-    manifest.write_bytes(b"{" + b" " * dataset_bundle._MAX_AUTHORITATIVE_JSON_BYTES + b"}")
+    manifest.write_bytes(b"{" + b" " * dataset_bundle._MAX_SMALL_SIDECAR_JSON_BYTES + b"}")
 
     _selection, first = capture_dataset_bundle_generation(root, ())
     _selection, repeated = capture_dataset_bundle_generation(root, ())
@@ -876,13 +877,47 @@ def test_public_bundle_summary_reports_fifo_metadata_as_blocked_visible_evidence
     fifo_path.unlink()
     os.mkfifo(fifo_path)
 
-    evidence = build_dataset_bundle_summary(DatasetBundleSelection(root, (rollout,)))
+    previous_handler = signal.getsignal(signal.SIGALRM)
+
+    def _deadline(_signum: int, _frame: object) -> None:
+        raise TimeoutError("FIFO public summary exceeded its two-second deadline")
+
+    signal.signal(signal.SIGALRM, _deadline)
+    signal.setitimer(signal.ITIMER_REAL, 2)
+    try:
+        evidence = build_dataset_bundle_summary(DatasetBundleSelection(root, (rollout,)))
+    finally:
+        signal.setitimer(signal.ITIMER_REAL, 0)
+        signal.signal(signal.SIGALRM, previous_handler)
 
     assert evidence.verdict == "Blocked"
     assert any(finding.code == expected_code for finding in evidence.findings)
     if fifo_entry == "rollout_manifest":
         assert evidence.rollouts[0]["included_in_training_totals"] is False
         assert evidence.rollouts[0]["path"] == rollout.as_posix()
+
+
+def test_lightweight_summary_accepts_large_regular_production_payloads(tmp_path: Path) -> None:
+    """Production payloads scale past the retired 16 MiB summary cap."""
+
+    root, source_hash = _write_root_store(tmp_path)
+    rollout = _write_rollout_store(tmp_path, name="large-summary.zarr", source_hash=source_hash)
+    padding = b"\n" * (16 * dataset_bundle._MAX_SMALL_SIDECAR_JSON_BYTES + 1)
+    root_manifest_path = root / "manifest.json"
+    root_manifest_path.write_bytes(root_manifest_path.read_bytes() + padding)
+    index_path = root / "sample_index.jsonl"
+    index_path.write_bytes(index_path.read_bytes() + padding)
+    split_path = root / "splits" / "train.npy"
+    split_path.write_bytes(split_path.read_bytes() + b"\0" * len(padding))
+    manifest_path = rollout / "manifest.json"
+    manifest_path.write_bytes(manifest_path.read_bytes() + padding)
+
+    evidence = build_dataset_bundle_summary(DatasetBundleSelection(root, (rollout,)))
+
+    assert evidence.root["sample_count"] == 2
+    assert evidence.root["split_counts"].to_jsonable() == {"train": 1, "val": 1}
+    assert evidence.rollouts[0]["included_in_training_totals"] is True
+    assert evidence.aggregate["rollout_count"] == 3
 
 
 def test_lightweight_bundle_aggregates_compatible_rollouts_without_duplicating_root(tmp_path: Path) -> None:
@@ -978,13 +1013,44 @@ def test_malformed_promotion_marker_pair_is_visible_but_excluded(tmp_path: Path)
     assert any(finding.code == "rollout_promotion_invalid" for finding in evidence.findings)
 
 
+@pytest.mark.parametrize("present_marker", [None, "_SUCCESS.json", "_owner.json"])
+def test_typed_shard_advertisement_requires_both_promotion_markers(
+    present_marker: str | None,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """Typed shard ownership is promotion advertisement even without a sidecar."""
+
+    root, source_hash = _write_root_store(tmp_path)
+    rollout = _write_rollout_store(tmp_path, name="advertised.zarr", source_hash=source_hash)
+    manifest_path = rollout / "manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["generation"]["shard"] = {"shard_id": "advertised"}
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+    if present_marker is not None:
+        (rollout / present_marker).write_text("{}", encoding="utf-8")
+
+    evidence = build_dataset_bundle_summary(DatasetBundleSelection(root, (rollout,)))
+
+    assert evidence.rollouts[0]["included_in_training_totals"] is False
+    assert any(finding.code == "rollout_promotion_invalid" for finding in evidence.findings)
+    monkeypatch.setattr(
+        dataset_bundle,
+        "_build_qh_data_module",
+        lambda *_args, **_kwargs: pytest.fail("promotion rejection must precede Q_H construction"),
+    )
+    readiness = build_qh_corpus_readiness(DatasetBundleSelection(root, (rollout,)), contract=_QH_READINESS_CONTRACT)
+    assert readiness.verdict == "Blocked"
+    assert any("promotion" in blocker.lower() for blocker in readiness.blockers)
+
+
 def test_oversized_promotion_marker_is_bounded_visible_and_excluded(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
     root, source_hash = _write_root_store(tmp_path)
     rollout = _write_rollout_store(tmp_path, name="oversized-promotion.zarr", source_hash=source_hash)
-    (rollout / "_SUCCESS.json").write_bytes(b"{" + b" " * dataset_bundle._MAX_AUTHORITATIVE_JSON_BYTES + b"}")
+    (rollout / "_SUCCESS.json").write_bytes(b"{" + b" " * dataset_bundle._MAX_SMALL_SIDECAR_JSON_BYTES + b"}")
     (rollout / "_owner.json").write_text("{}", encoding="utf-8")
     original_read_text = Path.read_text
 

@@ -21,6 +21,7 @@ from ...configs import PathConfig
 from ...dataset_bundle import (
     DatasetBundleEvidence,
     DatasetBundleGeneration,
+    DatasetBundleGenerationChangedError,
     DatasetBundleSelection,
     DatasetBundleSummaryRequest,
     QhBatchPreview,
@@ -114,7 +115,7 @@ def _retained_deep_statistics(state: Any, identity: str) -> dict[str, Any] | Non
     return state[1] if isinstance(state[1], dict) else None
 
 
-@st.cache_data(show_spinner="Inspecting manifests and indexes…", max_entries=32)  # type: ignore[untyped-decorator]
+@st.cache_data(show_spinner="Inspecting manifests and indexes…", max_entries=32)
 def _cached_bundle_summary_inner(
     request: DatasetBundleSummaryRequest,
 ) -> DatasetBundleEvidence:
@@ -127,12 +128,12 @@ def _cached_bundle_summary(request: DatasetBundleSummaryRequest) -> DatasetBundl
     """Return summary evidence only while its request generation stays current."""
 
     assert_dataset_bundle_generation_current(request.generation)
-    result = cast(DatasetBundleEvidence, _cached_bundle_summary_inner(request))
+    result = _cached_bundle_summary_inner(request)
     assert_dataset_bundle_generation_current(request.generation)
     return result
 
 
-@st.cache_data(show_spinner="Scanning rollout arrays and target identities…", max_entries=16)  # type: ignore[untyped-decorator]
+@st.cache_data(show_spinner="Scanning rollout arrays and target identities…", max_entries=16)
 def _cached_deep_statistics_inner(
     root_store: str,
     rollout_stores: tuple[str, ...],
@@ -155,12 +156,12 @@ def _cached_deep_statistics(
     """Return cached deep evidence only while its generation stays current."""
 
     assert_dataset_bundle_generation_current(generation)
-    result = cast(dict[str, Any], _cached_deep_statistics_inner(root_store, rollout_stores, generation))
+    result = _cached_deep_statistics_inner(root_store, rollout_stores, generation)
     assert_dataset_bundle_generation_current(generation)
     return result
 
 
-@st.cache_data(show_spinner="Constructing Q_H datasets and DataModule…", max_entries=8)  # type: ignore[untyped-decorator]
+@st.cache_data(show_spinner="Constructing Q_H datasets and DataModule…", max_entries=8)
 def _cached_qh_readiness_inner(
     root_store: str,
     rollout_stores: tuple[str, ...],
@@ -190,15 +191,12 @@ def _cached_qh_readiness(
     """Return cached Q_H readiness only while its generation stays current."""
 
     assert_dataset_bundle_generation_current(generation)
-    result = cast(
-        QhCorpusReadiness,
-        _cached_qh_readiness_inner(root_store, rollout_stores, generation, batch_size, seed, contract),
-    )
+    result = _cached_qh_readiness_inner(root_store, rollout_stores, generation, batch_size, seed, contract)
     assert_dataset_bundle_generation_current(generation)
     return result
 
 
-@st.cache_data(show_spinner="Reading one Q_H chain and collating one batch…", max_entries=8)  # type: ignore[untyped-decorator]
+@st.cache_data(show_spinner="Reading one Q_H chain and collating one batch…", max_entries=8)
 def _cached_qh_preview_inner(
     root_store: str,
     rollout_stores: tuple[str, ...],
@@ -234,18 +232,15 @@ def _cached_qh_preview(
     """Return a cached Q_H preview only while its generation stays current."""
 
     assert_dataset_bundle_generation_current(generation)
-    result = cast(
-        QhBatchPreview,
-        _cached_qh_preview_inner(
-            root_store,
-            rollout_stores,
-            generation,
-            stage,
-            chain_index,
-            batch_size,
-            seed,
-            contract,
-        ),
+    result = _cached_qh_preview_inner(
+        root_store,
+        rollout_stores,
+        generation,
+        stage,
+        chain_index,
+        batch_size,
+        seed,
+        contract,
     )
     assert_dataset_bundle_generation_current(generation)
     return result
@@ -274,8 +269,11 @@ def _clear_training_dataset_results() -> None:
 
 
 def _render_acquisition_failure(label: str, exc: Exception, *, action: str) -> None:
-    """Render one concise section-local acquisition diagnostic."""
+    """Render expected acquisition failures concisely and retain unexpected diagnostics."""
 
+    if not isinstance(exc, (DatasetBundleGenerationChangedError, OSError, ValueError)):
+        st.exception(exc)
+        return
     detail = str(exc).strip().splitlines()[0] if str(exc).strip() else "No diagnostic detail was provided."
     if len(detail) > 240:
         detail = f"{detail[:237]}..."

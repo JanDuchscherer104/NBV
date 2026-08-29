@@ -316,7 +316,7 @@ def test_initial_summary_failure_is_contained_and_actionable(
         app.session_state[key] = ("stale-generation", "stale-sentinel")
 
     def _fail(_request: DatasetBundleSummaryRequest) -> Any:
-        raise RuntimeError("summary-sentinel")
+        raise ValueError("summary-sentinel")
 
     monkeypatch.setattr(training_dataset, "_cached_bundle_summary", _fail)
 
@@ -343,7 +343,7 @@ def test_validation_failure_is_section_local_and_drops_retained_evidence(
 
     def _fail_validation(request: DatasetBundleSummaryRequest) -> Any:
         if request.validate_rollouts:
-            raise RuntimeError("validation-sentinel")
+            raise ValueError("validation-sentinel")
         return cached_summary(request)
 
     monkeypatch.setattr(training_dataset, "_cached_bundle_summary", _fail_validation)
@@ -389,7 +389,7 @@ def test_dispatched_section_failure_drops_stale_evidence(
         app.session_state[training_dataset._QH_PREVIEW_STATE_KEY] = ("stale-generation", "stale-preview")
 
     def _fail(*_args: object, **_kwargs: object) -> Any:
-        raise RuntimeError("section-sentinel")
+        raise ValueError("section-sentinel")
 
     monkeypatch.setattr(training_dataset, cached_name, _fail)
     button = next(element for element in app.button if element.label == button_label)
@@ -427,7 +427,7 @@ def test_qh_preview_failure_drops_stale_preview(
     app.session_state[training_dataset._QH_PREVIEW_STATE_KEY] = ("stale-generation", "stale-preview")
 
     def _fail_preview(*_args: object, **_kwargs: object) -> Any:
-        raise RuntimeError("preview-sentinel")
+        raise ValueError("preview-sentinel")
 
     monkeypatch.setattr(training_dataset, "_cached_qh_preview", _fail_preview)
     preview = next(button for button in app.button if button.label == "Preview one chain and batch")
@@ -437,6 +437,24 @@ def test_qh_preview_failure_drops_stale_preview(
     assert any("Q_H preview failed" in error.value for error in app.error)
     assert any("preview-sentinel" in error.value for error in app.error)
     assert training_dataset._QH_PREVIEW_STATE_KEY not in str(app.session_state)
+
+
+def test_unexpected_acquisition_failure_retains_exception_type_in_app_diagnostics(
+    monkeypatch: pytest.MonkeyPatch,
+    isolated_path_config: PathConfig,
+    tmp_path: Path,
+) -> None:
+    _write_root_store(isolated_path_config.offline_cache_dir)
+
+    def _fail(_request: DatasetBundleSummaryRequest) -> Any:
+        raise RuntimeError("unexpected-summary-sentinel")
+
+    monkeypatch.setattr(training_dataset, "_cached_bundle_summary", _fail)
+    app = _app(tmp_path).run()
+
+    assert len(app.exception) == 1
+    assert app.exception[0].value == "unexpected-summary-sentinel"
+    assert "RuntimeError" in "\n".join(app.exception[0].stack_trace)
 
 
 @pytest.mark.parametrize("acquisition", ["summary", "validation", "deep", "readiness", "preview"])  # type: ignore[untyped-decorator]
