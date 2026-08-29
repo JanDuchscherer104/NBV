@@ -103,6 +103,47 @@ def test_prepared_mesh_query_reuses_materialized_triangles(monkeypatch: pytest.M
     assert all(triangles is query.triangles for triangles in observed_triangles)
 
 
+def test_prepared_mesh_query_rematerializes_grad_connected_triangles(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    verts = torch.tensor(
+        [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]],
+        dtype=torch.float32,
+        requires_grad=True,
+    )
+    faces = torch.tensor([[0, 1, 2]], dtype=torch.int64)
+    points = torch.tensor([[0.25, 0.25, 1.0]], dtype=torch.float32)
+    observed_triangles: list[torch.Tensor] = []
+
+    def fake_point_face_distance(
+        _points: torch.Tensor,
+        _points_first_idx: torch.Tensor,
+        triangles: torch.Tensor,
+        _triangles_first_idx: torch.Tensor,
+        _max_points: int,
+        _min_triangle_area: float,
+    ) -> torch.Tensor:
+        observed_triangles.append(triangles)
+        return triangles.square().sum().reshape(1)
+
+    monkeypatch.setattr(
+        "pytorch3d.loss.point_mesh_distance.point_face_distance",
+        fake_point_face_distance,
+    )
+    query = geometry.PreparedMeshQuery(verts, faces, device="cpu", dtype=torch.float32)
+
+    query.point_distance(points).sum().backward()
+    assert verts.grad is not None
+    verts.grad.zero_()
+    query.point_distance(points).sum().backward()
+
+    assert query.triangles is None
+    assert len(observed_triangles) == 2
+    assert observed_triangles[0] is not observed_triangles[1]
+    assert verts.grad is not None
+    assert torch.count_nonzero(verts.grad) > 0
+
+
 def test_prepared_mesh_query_rejects_mutated_source_tensors() -> None:
     verts = torch.tensor(
         [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]],

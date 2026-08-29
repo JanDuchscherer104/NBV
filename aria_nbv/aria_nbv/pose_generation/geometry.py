@@ -223,23 +223,30 @@ class PreparedMeshQuery:
             return _devices_match(self._device, device)
         return bool(self._materialized_device == _resolved_device(device))
 
-    def _materialize_pytorch3d(self) -> None:
-        """Materialize PyTorch3D tensors once, leaving CPU-only queries cheap."""
+    def _materialize_pytorch3d(
+        self,
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        """Return PyTorch3D tensors, caching only graph-free mesh state."""
 
         if self.triangles is not None:
-            return
+            assert self.points_first_idx is not None
+            assert self.triangles_first_idx is not None
+            return self.triangles, self.points_first_idx, self.triangles_first_idx
         target_device = _resolved_device(self._device)
         verts = self._source_verts.to(device=target_device, dtype=self._dtype)
         faces = self._source_faces.to(device=target_device, dtype=torch.int64)
         triangles = verts[faces]
         points_first_idx = torch.zeros(1, device=target_device, dtype=torch.int64)
         triangles_first_idx = torch.zeros(1, device=target_device, dtype=torch.int64)
+        if getattr(self._source_verts, "requires_grad", False):
+            return triangles, points_first_idx, triangles_first_idx
         self.verts = verts
         self.faces = faces
         self.triangles = triangles
         self.points_first_idx = points_first_idx
         self.triangles_first_idx = triangles_first_idx
         self._materialized_device = target_device
+        return triangles, points_first_idx, triangles_first_idx
 
     def point_distance(self, points: torch.Tensor) -> torch.Tensor:
         """Return point-to-mesh distances for matching device/dtype points.
@@ -265,15 +272,12 @@ class PreparedMeshQuery:
                 "PreparedMeshQuery points must match the prepared mesh device and dtype "
                 f"({expected_device}, {self._dtype}); got ({points.device}, {points.dtype})."
             )
-        self._materialize_pytorch3d()
-        assert self.triangles is not None
-        assert self.points_first_idx is not None
-        assert self.triangles_first_idx is not None
+        triangles, points_first_idx, triangles_first_idx = self._materialize_pytorch3d()
         dist_sq = point_face_distance(
             points,
-            self.points_first_idx,
-            self.triangles,
-            self.triangles_first_idx,
+            points_first_idx,
+            triangles,
+            triangles_first_idx,
             points.shape[0],
             _DEFAULT_MIN_TRIANGLE_AREA,
         )
