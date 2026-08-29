@@ -58,6 +58,35 @@ def _is_tabs_open_guard(node: ast.If) -> int | None:
     return value.slice.value if isinstance(value.slice.value, int) else None
 
 
+def _call_name(node: ast.Call) -> str | None:
+    parts: list[str] = []
+    target: ast.expr = node.func
+    while isinstance(target, ast.Attribute):
+        parts.append(target.attr)
+        target = target.value
+    if not isinstance(target, ast.Name):
+        return None
+    parts.append(target.id)
+    return ".".join(reversed(parts))
+
+
+def _call_names(nodes: list[ast.stmt]) -> list[str]:
+    return [
+        name for root in nodes for node in ast.walk(root) if isinstance(node, ast.Call) if (name := _call_name(node))
+    ]
+
+
+def _is_build_corpus_summary_guard(node: ast.If) -> bool:
+    test = node.test
+    return (
+        isinstance(test, ast.Call)
+        and _call_name(test) == "st.button"
+        and bool(test.args)
+        and isinstance(test.args[0], ast.Constant)
+        and test.args[0].value == "Build corpus summary"
+    )
+
+
 def test_stored_rollout_workspaces_keep_explicit_dynamic_dispatch() -> None:
     """MUST-UI-01: every stored-rollout workspace remains dynamically gated."""
 
@@ -87,29 +116,45 @@ def test_stored_rollout_workspaces_keep_explicit_dynamic_dispatch() -> None:
     assert keywords["key"].id == "_SECTION_KEY"
     assert isinstance(keywords["on_change"], ast.Constant)
     assert keywords["on_change"].value == "rerun"
-    assert {
-        index for node in ast.walk(tree) if isinstance(node, ast.If) if (index := _is_tabs_open_guard(node)) is not None
-    } == set(range(len(_stored_rollouts_page._SECTIONS)))
+    indexed_guards = [
+        (index, node)
+        for node in ast.walk(tree)
+        if isinstance(node, ast.If)
+        if (index := _is_tabs_open_guard(node)) is not None
+    ]
+    assert sorted(index for index, _node in indexed_guards) == list(range(len(_stored_rollouts_page._SECTIONS)))
+    guards = dict(indexed_guards)
+
+    expected_calls = {
+        0: {"overview._render_corpus_overview", "overview._render_trust_and_topology"},
+        1: {"overview._render_corpus_evidence"},
+        2: {"overview._render_corpus_admission", "validity_support._render_targets_and_support"},
+        3: {"overview._render_corpus_failures", "failure_triage._render_failure_triage"},
+        4: {
+            "reconstruction._render_scientific_evidence",
+            "inspect_rerun._render_inspect_export_rerun",
+            "overview._render_corpus_details",
+        },
+    }
+    all_calls = _call_names(tree.body)
+    for index, expected in expected_calls.items():
+        guarded_calls = _call_names(guards[index].body)
+        for call in expected:
+            assert all_calls.count(call) == 1
+            assert guarded_calls.count(call) == 1
 
 
 def test_corpus_summary_remains_behind_named_user_dispatch() -> None:
     """MUST-UI-01: complete-corpus reduction keeps its named button boundary."""
 
     tree = ast.parse(inspect.getsource(_stored_rollouts_page.render_stored_rollouts_page))
-    button_labels = {
-        node.args[0].value
-        for node in ast.walk(tree)
-        if isinstance(node, ast.Call)
-        and isinstance(node.func, ast.Attribute)
-        and isinstance(node.func.value, ast.Name)
-        and node.func.value.id == "st"
-        and node.func.attr == "button"
-        and node.args
-        and isinstance(node.args[0], ast.Constant)
-        and isinstance(node.args[0].value, str)
-    }
+    guards = [node for node in ast.walk(tree) if isinstance(node, ast.If) and _is_build_corpus_summary_guard(node)]
 
-    assert "Build corpus summary" in button_labels
+    assert len(guards) == 1
+    all_calls = _call_names(tree.body)
+    guarded_calls = _call_names(guards[0].body)
+    assert all_calls.count("session._cached_corpus_summary") == 1
+    assert guarded_calls.count("session._cached_corpus_summary") == 1
 
 
 def test_contract_overview_label_is_compact_and_keeps_exact_identity() -> None:
