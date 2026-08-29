@@ -13,7 +13,7 @@ touched_owner_paths:
   - docs/typst/thesis/main.pdf
 codex_thread: codex://threads/01a04e7a-ee77-7950-909c-61d1e1cb45b4
 repo_object_format: sha1
-repo_head: e196d5e7388d4610b983a5d323f9e020e86382bc
+repo_head: 2dd26d02c1438a2d068bcb1841a09d71777866fd
 repo_branch: "codex/issue-186-slam-theory"
 worktree_kind: linked
 ---
@@ -32,14 +32,14 @@ Screened the 669-page public release at revision `c9d50ef410bf1a280b33a70854592f
 - The scientific review found no Handbook-derived claim escalation, actor/oracle leakage, estimand drift, mathematical inconsistency, or unsupported result.
 
 ## Commits
-- [5ed2aaf7fc50776fe2d4efcd9cfbf5c58720e3c7](https://github.com/JanDuchscherer104/ARIA-NBV/commit/5ed2aaf7fc50776fe2d4efcd9cfbf5c58720e3c7) — source registration, chapter citations, and theoretical Introduction framing
-- [f17759884d1f06658c2036c8f37291e4408f7744](https://github.com/JanDuchscherer104/ARIA-NBV/commit/f17759884d1f06658c2036c8f37291e4408f7744) — regenerated 121-page thesis PDF after current-main integration, prose repair, and normalized-vector notation
+- [243cc2e50d7757bd793248d53ae3423020be2a5b](https://github.com/JanDuchscherer104/ARIA-NBV/commit/243cc2e50d7757bd793248d53ae3423020be2a5b) — source registration, chapter citations, and theoretical Introduction framing
+- [2dd26d02c1438a2d068bcb1841a09d71777866fd](https://github.com/JanDuchscherer104/ARIA-NBV/commit/2dd26d02c1438a2d068bcb1841a09d71777866fd) — regenerated 126-page thesis PDF after scientific-review repair, current-main integration, prose repair, and normalized-vector notation
 
 ## Verification
 - Literature manifest parsing resolved all 53 rows; both Handbook citation keys join the registered repository identity.
 - `make thesis-literature-provenance typst-authoring-contract thesis-marker-contract thesis-pdf-ci`: passed with 31 provenance and 21 authoring tests.
 - The full docs verification command passed with 57 glossary terms, 110 symbols, 122 equations, 50 API-doc tests, and a complete Quarto render.
-- Poppler review of the Introduction, all regression owners, and the preserved current-main development pages found no clipping, overlap, broken table, unreadable figure, or damaged hierarchy in the final 121-page PDF.
+- Poppler review of the Introduction, all regression owners, and the preserved current-main development pages found no clipping, overlap, broken table, unreadable figure, or damaged hierarchy in the final 126-page PDF.
 
 ## Canonical Owner Impact
 The public source registry, bibliography, active Introduction, and tracked PDF contain the accepted additions. The source-audited research packet and scientific-review findings remain in ignored OMX artifacts; no further canonical update is required.
