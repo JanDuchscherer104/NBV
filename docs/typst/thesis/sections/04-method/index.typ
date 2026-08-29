@@ -15,8 +15,9 @@ hard mask is applied.
 The thesis-core configuration uses the `S0-pose` state, H0 mean-pooled pose
 history, A1 candidate-to-state cross-attention, and direct continuous Huber
 regression. A0, an independent-row MLP with the same inputs and decoder, is the
-matched interaction control. Both are executable contracts, not empirical
-results. Richer selected-depth state, ordered history, ordinal decoding, and
+matched interaction control. Both execute the same value task; their held-out
+comparison remains pending. Richer selected-depth state, ordered history,
+ordinal decoding, and
 candidate-set interaction remain developmental alternatives because none has
 yet passed a frozen comparative evaluation.
 
