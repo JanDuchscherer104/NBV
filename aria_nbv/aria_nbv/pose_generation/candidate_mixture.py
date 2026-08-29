@@ -550,7 +550,7 @@ class CandidateMixtureViewGenerator:
                 dtype=reference_pose.t.dtype,
                 mesh=gt_mesh,
             )
-            self._mesh_query = mesh_query
+            self._mesh_query = mesh_query if mesh_query.is_persistently_reusable else None
 
         pair_base = 0
 

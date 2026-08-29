@@ -154,10 +154,10 @@ class CandidateContext:
     """Oracle ASE mesh in world-frame metres, used only for candidate validity."""
 
     mesh_verts: torch.Tensor
-    """World-frame mesh vertices ``Tensor[\"V 3\", float]`` in metres."""
+    """Source-device world-frame mesh vertices ``Tensor[\"V 3\", float]`` in metres."""
 
     mesh_faces: torch.Tensor
-    """Triangle vertex indices ``Tensor[\"F 3\", int64]`` into `mesh_verts`."""
+    """Source-device triangle indices ``Tensor[\"F 3\", int64]`` into `mesh_verts`."""
 
     occupancy_extent: torch.Tensor
     """World bounds ``Tensor[\"6\", float]`` ordered xmin/xmax/ymin/ymax/zmin/zmax."""

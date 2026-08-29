@@ -689,7 +689,7 @@ class CandidateViewGenerator:
                     dtype=centers_world.dtype,
                     mesh=gt_mesh,
                 )
-                self._mesh_query = mesh_query
+                self._mesh_query = mesh_query if mesh_query.is_persistently_reusable else None
         else:
             mesh_query = None
 
@@ -698,8 +698,8 @@ class CandidateViewGenerator:
             reference_pose=reference_pose,
             sampling_pose=sampling_pose,
             gt_mesh=gt_mesh,
-            mesh_verts=mesh_verts.to(device),
-            mesh_faces=mesh_faces.to(device),
+            mesh_verts=mesh_verts,
+            mesh_faces=mesh_faces,
             occupancy_extent=occupancy_extent.to(device),
             camera_calib_template=camera_calib_template.to(device),
             shell_poses=shell_poses,

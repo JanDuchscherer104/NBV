@@ -21,7 +21,7 @@ import trimesh  # type: ignore[import-untyped]
 
 from ..utils import Console
 from ..utils.frames import world_up_tensor
-from .geometry import point_mesh_distance
+from .geometry import bounded_ray_intersects_any, point_mesh_distance
 from .types import CandidateContext, CollisionBackend
 
 if TYPE_CHECKING:
@@ -234,10 +234,10 @@ class PathCollisionRule(RuleBase):
                 from trimesh.ray.ray_pyembree import RayMeshIntersector  # type: ignore
 
                 ray_engine = RayMeshIntersector(ctx.gt_mesh)
-            intersects = ray_engine.intersects_any(
+            intersects = bounded_ray_intersects_any(
+                ray_engine,
                 origins_np,
                 dirs_np,
-                multiple_hits=False,
                 max_distance=max_dist,
             )
         if backend == CollisionBackend.PYEMBREE and not self._pyembree_available:

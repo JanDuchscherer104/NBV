@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import sys
 from types import SimpleNamespace
 from typing import Any, cast
 
@@ -12,12 +13,8 @@ import torch
 from aria_nbv.pose_generation import geometry
 
 
-class _FakeDevice:
-    type = "cuda"
-
-
 class _FakeTensor:
-    device = _FakeDevice()
+    device = torch.device("cuda:0")
     dtype = torch.float32
     shape = (1, 3)
 
@@ -37,6 +34,7 @@ class _FakeTensor:
 
 class _TorchProxy:
     Tensor = torch.Tensor
+    device = torch.device
     int64 = torch.int64
 
     @staticmethod
@@ -101,6 +99,7 @@ def test_prepared_mesh_query_reuses_materialized_triangles(monkeypatch: pytest.M
 
     assert torch.equal(first, second)
     assert len(observed_triangles) == 2
+    assert query.triangles is not None
     assert all(triangles is query.triangles for triangles in observed_triangles)
 
 
@@ -129,33 +128,69 @@ def test_prepared_mesh_query_resolves_unindexed_cuda_for_reuse(
     query._source_verts_version = verts._version
     query._source_faces_version = faces._version
     query._source_mesh = None
-    query.verts = cast(Any, SimpleNamespace(device=torch.device("cuda:2"), dtype=torch.float32))
+    query._device = torch.device("cuda")
+    query._dtype = torch.float32
+    query._materialized_device = torch.device("cuda:2")
     monkeypatch.setattr(torch.cuda, "current_device", lambda: 2)
 
     assert query.matches(verts, faces, device="cuda", dtype=torch.float32, mesh=None)
 
 
+def test_prepared_mesh_query_rejects_unindexed_cuda_after_device_switch(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    verts = torch.zeros((3, 3), dtype=torch.float32)
+    faces = torch.zeros((1, 3), dtype=torch.int64)
+    query = object.__new__(geometry.PreparedMeshQuery)
+    query._source_verts = verts
+    query._source_faces = faces
+    query._source_verts_version = verts._version
+    query._source_faces_version = faces._version
+    query._source_mesh = None
+    query._device = torch.device("cuda")
+    query._dtype = torch.float32
+    query._materialized_device = torch.device("cuda:0")
+    monkeypatch.setattr(torch.cuda, "current_device", lambda: 1)
+
+    assert not query.matches(verts, faces, device="cuda", dtype=torch.float32, mesh=None)
+    replacement = geometry.PreparedMeshQuery.acquire(
+        query,
+        verts,
+        faces,
+        device="cuda",
+        dtype=torch.float32,
+    )
+    assert replacement is not query
+    assert replacement._materialized_device is None
+
+
 def test_prepared_mesh_query_ray_adapter_forwards_bounds_and_reuses_engine() -> None:
     class FakeRayIntersector:
         def __init__(self) -> None:
-            self.calls: list[tuple[np.ndarray, np.ndarray, bool, np.ndarray]] = []
+            self.calls: list[tuple[np.ndarray, np.ndarray, bool]] = []
 
-        def intersects_any(
+        def intersects_location(
             self,
             ray_origins: np.ndarray,
             ray_directions: np.ndarray,
             *,
             multiple_hits: bool,
-            max_distance: np.ndarray,
-        ) -> np.ndarray:
-            self.calls.append((ray_origins, ray_directions, multiple_hits, max_distance))
-            return np.array([0, 1], dtype=np.int64)
+        ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+            self.calls.append((ray_origins, ray_directions, multiple_hits))
+            return (
+                np.array([[2.0, 0.0, 0.0], [0.5, 0.0, 0.0]], dtype=np.float32),
+                np.array([0, 1], dtype=np.int64),
+                np.array([0, 0], dtype=np.int64),
+            )
 
     ray = FakeRayIntersector()
     mesh = cast(Any, SimpleNamespace(ray=ray))
     verts = torch.zeros((3, 3), dtype=torch.float32)
     faces = torch.zeros((1, 3), dtype=torch.int64)
-    query = geometry.PreparedMeshQuery(verts, faces, device="cpu", dtype=torch.float32, mesh=mesh)
+    query = geometry.PreparedMeshQuery(verts, faces, device="cuda", dtype=torch.float32, mesh=mesh)
+    assert query.verts is None
+    assert query.faces is None
+    assert query.triangles is None
     origins = np.zeros((2, 3), dtype=np.float32)
     directions = np.ones((2, 3), dtype=np.float32)
     max_distance = np.array([1.0, 2.0], dtype=np.float32)
@@ -177,9 +212,85 @@ def test_prepared_mesh_query_ray_adapter_forwards_bounds_and_reuses_engine() -> 
     assert ray.calls[0][0] is origins
     assert ray.calls[0][1] is directions
     assert ray.calls[0][2] is False
-    assert ray.calls[0][3] is max_distance
     assert first.dtype == second.dtype == np.bool_
     assert first.tolist() == second.tolist() == [False, True]
+    assert query.verts is None
+    assert query.faces is None
+    assert query.triangles is None
+
+
+def test_prepared_mesh_query_uses_pyembree_location_api(monkeypatch: pytest.MonkeyPatch) -> None:
+    class FakePyembreeIntersector:
+        def __init__(self, _mesh: object) -> None:
+            pass
+
+        def intersects_location(
+            self,
+            ray_origins: np.ndarray,
+            ray_directions: np.ndarray,
+            *,
+            multiple_hits: bool,
+        ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+            assert multiple_hits is False
+            return (
+                ray_origins + ray_directions * 0.5,
+                np.arange(ray_origins.shape[0], dtype=np.int64),
+                np.zeros(ray_origins.shape[0], dtype=np.int64),
+            )
+
+    module = SimpleNamespace(RayMeshIntersector=FakePyembreeIntersector)
+    monkeypatch.setitem(sys.modules, "trimesh.ray.ray_pyembree", module)
+    mesh = cast(Any, SimpleNamespace())
+    query = geometry.PreparedMeshQuery(
+        torch.zeros((3, 3)),
+        torch.zeros((1, 3), dtype=torch.int64),
+        device="cuda",
+        dtype=torch.float32,
+        mesh=mesh,
+    )
+
+    intersections = query.intersects_any(
+        np.zeros((1, 3), dtype=np.float32),
+        np.array([[1.0, 0.0, 0.0]], dtype=np.float32),
+        max_distance=np.array([1.0], dtype=np.float32),
+        use_pyembree=True,
+    )
+
+    assert intersections.tolist() == [True]
+    assert query.triangles is None
+
+
+def test_prepared_mesh_query_bounds_real_trimesh_ray_to_endpoint() -> None:
+    import trimesh
+
+    mesh = trimesh.creation.box(extents=(1.0, 1.0, 1.0))
+    mesh.apply_translation((10.0, 0.0, 0.0))
+    query = geometry.PreparedMeshQuery(
+        torch.from_numpy(mesh.vertices).to(torch.float32),
+        torch.from_numpy(mesh.faces).to(torch.int64),
+        device="cuda",
+        dtype=torch.float32,
+        mesh=mesh,
+    )
+    origins = np.zeros((1, 3), dtype=np.float32)
+    directions = np.array([[1.0, 0.0, 0.0]], dtype=np.float32)
+
+    before_endpoint = query.intersects_any(
+        origins,
+        directions,
+        max_distance=np.array([1.0], dtype=np.float32),
+        use_pyembree=False,
+    )
+    through_mesh = query.intersects_any(
+        origins,
+        directions,
+        max_distance=np.array([11.0], dtype=np.float32),
+        use_pyembree=False,
+    )
+
+    assert before_endpoint.tolist() == [False]
+    assert through_mesh.tolist() == [True]
+    assert query.triangles is None
 
 
 def test_prepared_mesh_query_accepts_inference_tensors_without_reusing_them(

@@ -32,14 +32,13 @@ class _ProximityQuery(Protocol):
 
 
 class _RayIntersector(Protocol):
-    def intersects_any(
+    def intersects_location(
         self,
         ray_origins: NDArray[np.floating[Any]],
         ray_directions: NDArray[np.floating[Any]],
         *,
         multiple_hits: bool,
-        max_distance: NDArray[np.floating[Any]],
-    ) -> NDArray[np.bool_]: ...
+    ) -> tuple[NDArray[np.floating[Any]], NDArray[np.int64], NDArray[np.int64]]: ...
 
 
 def _tensor_version(tensor: torch.Tensor) -> int | None:
@@ -60,15 +59,48 @@ def _resolved_device(device: torch.device | str) -> torch.device:
     return resolved
 
 
+def _devices_match(left: torch.device, right: torch.device | str) -> bool:
+    """Compare requested devices without resolving identical lazy CUDA requests."""
+
+    requested = torch.device(right)
+    if left == requested:
+        return True
+    return bool(left.type == requested.type == "cuda" and _resolved_device(left) == _resolved_device(requested))
+
+
+def bounded_ray_intersects_any(
+    engine: _RayIntersector,
+    origins: NDArray[np.floating[Any]],
+    directions: NDArray[np.floating[Any]],
+    *,
+    max_distance: NDArray[np.floating[Any]],
+) -> NDArray[np.bool_]:
+    """Return first-hit intersections bounded by each ray segment length."""
+
+    locations, ray_indices, _triangle_indices = engine.intersects_location(
+        origins,
+        directions,
+        multiple_hits=False,
+    )
+    intersections = np.zeros(origins.shape[0], dtype=np.bool_)
+    if ray_indices.size == 0:
+        return intersections
+    hit_distances = np.linalg.norm(locations - origins[ray_indices], axis=1)
+    bounds = max_distance[ray_indices]
+    tolerance = np.finfo(np.float32).eps * np.maximum(1.0, np.abs(bounds)) * 8.0
+    intersections[ray_indices[hit_distances <= bounds + tolerance]] = True
+    return intersections
+
+
 class PreparedMeshQuery:
     """Prepared point-distance and CPU query state for one immutable mesh.
 
-    The query owns device/dtype-normalized mesh tensors and materializes the
-    PyTorch3D triangle table once. Optional Trimesh proximity and ray adapters
-    are initialized lazily and then reused by every pruning rule sharing this
-    query. :meth:`acquire` rejects reuse after source mutation. Inference-mode
-    tensors remain valid for one query but are deliberately not reused because
-    Torch does not expose their mutation counters.
+    The query materializes device/dtype-normalized PyTorch3D tensors only when
+    point-distance evaluation needs them. Optional Trimesh proximity and ray
+    adapters are also initialized lazily and then reused by every pruning rule
+    sharing this query. :meth:`acquire` rejects reuse after source mutation.
+    Inference-mode tensors remain valid for one query but are deliberately not
+    reused because Torch does not expose their mutation counters.
 
     Args:
         verts ``Tensor["V 3", float]``: World-frame vertices in metres.
@@ -87,17 +119,19 @@ class PreparedMeshQuery:
         dtype: torch.dtype,
         mesh: "trimesh.Trimesh | None" = None,
     ) -> None:
-        target_device = device
         self._source_verts = verts
         self._source_faces = faces
         self._source_verts_version = _tensor_version(verts)
         self._source_faces_version = _tensor_version(faces)
         self._source_mesh = mesh
-        self.verts = verts.to(device=target_device, dtype=dtype)
-        self.faces = faces.to(device=target_device, dtype=torch.int64)
-        self.triangles = self.verts[self.faces]
-        self.points_first_idx = torch.zeros(1, device=target_device, dtype=torch.int64)
-        self.triangles_first_idx = torch.zeros(1, device=target_device, dtype=torch.int64)
+        self._device = torch.device(device)
+        self._dtype = dtype
+        self._materialized_device: torch.device | None = None
+        self.verts: torch.Tensor | None = None
+        self.faces: torch.Tensor | None = None
+        self.triangles: torch.Tensor | None = None
+        self.points_first_idx: torch.Tensor | None = None
+        self.triangles_first_idx: torch.Tensor | None = None
         self.mesh = mesh
         self._proximity_query: _ProximityQuery | None = None
         self._ray_engines: dict[bool, _RayIntersector] = {}
@@ -148,6 +182,12 @@ class PreparedMeshQuery:
             )
         )
 
+    @property
+    def is_persistently_reusable(self) -> bool:
+        """Return whether source mutation counters permit cross-request reuse."""
+
+        return self._source_verts_version is not None and self._source_faces_version is not None
+
     def matches_request(
         self,
         verts: torch.Tensor,
@@ -172,9 +212,34 @@ class PreparedMeshQuery:
             and verts_version == self._source_verts_version
             and faces_version == self._source_faces_version
             and mesh is self._source_mesh
-            and self.verts.device == _resolved_device(device)
-            and self.verts.dtype == dtype
+            and self._matches_device(device)
+            and self._dtype == dtype
         )
+
+    def _matches_device(self, device: torch.device | str) -> bool:
+        """Match the lazy request or the concrete device owning prepared tensors."""
+
+        if self._materialized_device is None:
+            return _devices_match(self._device, device)
+        return bool(self._materialized_device == _resolved_device(device))
+
+    def _materialize_pytorch3d(self) -> None:
+        """Materialize PyTorch3D tensors once, leaving CPU-only queries cheap."""
+
+        if self.triangles is not None:
+            return
+        target_device = _resolved_device(self._device)
+        verts = self._source_verts.to(device=target_device, dtype=self._dtype)
+        faces = self._source_faces.to(device=target_device, dtype=torch.int64)
+        triangles = verts[faces]
+        points_first_idx = torch.zeros(1, device=target_device, dtype=torch.int64)
+        triangles_first_idx = torch.zeros(1, device=target_device, dtype=torch.int64)
+        self.verts = verts
+        self.faces = faces
+        self.triangles = triangles
+        self.points_first_idx = points_first_idx
+        self.triangles_first_idx = triangles_first_idx
+        self._materialized_device = target_device
 
     def point_distance(self, points: torch.Tensor) -> torch.Tensor:
         """Return point-to-mesh distances for matching device/dtype points.
@@ -194,11 +259,16 @@ class PreparedMeshQuery:
             point_face_distance,
         )
 
-        if points.device != self.verts.device or points.dtype != self.verts.dtype:
+        expected_device = self._materialized_device or _resolved_device(self._device)
+        if points.device != expected_device or points.dtype != self._dtype:
             raise ValueError(
                 "PreparedMeshQuery points must match the prepared mesh device and dtype "
-                f"({self.verts.device}, {self.verts.dtype}); got ({points.device}, {points.dtype})."
+                f"({expected_device}, {self._dtype}); got ({points.device}, {points.dtype})."
             )
+        self._materialize_pytorch3d()
+        assert self.triangles is not None
+        assert self.points_first_idx is not None
+        assert self.triangles_first_idx is not None
         dist_sq = point_face_distance(
             points,
             self.points_first_idx,
@@ -246,13 +316,12 @@ class PreparedMeshQuery:
             else:
                 engine = cast(_RayIntersector, self.mesh.ray)
             self._ray_engines[use_pyembree] = engine
-        intersections = engine.intersects_any(
+        return bounded_ray_intersects_any(
+            engine,
             origins,
             directions,
-            multiple_hits=False,
             max_distance=max_distance,
         )
-        return np.asarray(intersections, dtype=np.bool_)
 
 
 def point_mesh_distance(points: torch.Tensor, verts: torch.Tensor, faces: torch.Tensor) -> torch.Tensor:
@@ -273,4 +342,4 @@ def point_mesh_distance(points: torch.Tensor, verts: torch.Tensor, faces: torch.
     return prepared.point_distance(points).to(device=device, dtype=dtype)
 
 
-__all__ = ["PreparedMeshQuery", "point_mesh_distance"]
+__all__ = ["bounded_ray_intersects_any", "PreparedMeshQuery", "point_mesh_distance"]
