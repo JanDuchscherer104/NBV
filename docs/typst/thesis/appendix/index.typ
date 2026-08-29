@@ -64,6 +64,14 @@
 
 The report bundle is the single numerical interface between validated rollout artifacts and this manuscript. Its schema version, evidence status, store manifests, typed parameter rows, failure records, and sidecar hashes preserve provenance without duplicating analysis logic in Typst. The document loader rejects schema or status mismatches before any table is rendered. Compact labels and digest prefixes are used below; complete store identifiers, paths, and hashes remain in the machine-readable bundle.
 
+The implementation anchors behind that interface are the immutable `vin_offline/`
+source store, the task-specific `rollouts.zarr/` replay store, and the derived
+`q_h/` training cache. Their exact schemas, normalized joins, chunking, codecs,
+receipt versions, and execution commands remain manifest-owned reproducibility
+metadata rather than scientific entities in Chapter 3. A reported row is
+admissible only when the bundle resolves these identities and preserves source
+role, missingness, and failure records.
+
 #figure(
   publication-table(
     columns: (1.1fr, 1fr, 1.1fr, 0.7fr),
