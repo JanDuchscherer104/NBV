@@ -316,6 +316,7 @@ graphify-maintain: ## 🕸️ Maintain and admit the current worktree's Graphify
 
 ci-impact-self-test: ## 🧭 Verify path-to-CI-family routing and fail-closed behavior
 	@$(GIT_ENV_CLEAN) $(PYTHON_INTERPRETER) scripts/tests/test_ci_impact.py
+	@$(GIT_ENV_CLEAN) $(PYTHON_INTERPRETER) scripts/tests/test_git_env_contract.py
 
 api-docs-self-test: ## 📚 Exercise Quartodoc stale-alias recovery with a fake builder
 	@./scripts/tests/test_quarto_generate_api_docs.sh
