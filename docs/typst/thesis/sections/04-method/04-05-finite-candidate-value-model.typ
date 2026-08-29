@@ -68,8 +68,8 @@ zero in executable tensors denotes padding and is never a learned query.
 Dense labels train $h=1$ for every hard-valid candidate. For $h>1$, only the
 factual selected action has a successor observation, so recursive supervision
 is necessarily narrower. A bundle records realized support by horizon and
-rejects any requested horizon that lacks its frozen training and promotion
-contract. A wide syntactic interface is not evidence of wide learned
+rejects any requested horizon that lacks frozen training and evaluation
+evidence. A wide syntactic interface is not evidence of wide learned
 capability.
 
 === Direct continuous objective
@@ -117,7 +117,7 @@ finite-support two-step target is computable exactly:
 
 #eqs.rl.qh_exact_q2_target
 
-This makes horizon two the first non-myopic falsification test. A unit contract
+This makes horizon two the first non-myopic falsification test. A unit test
 can inject exact $Q_1$ values and prove that the tensor path implements the
 equation. A frozen population test instead measures learned recursion error,
 
@@ -128,12 +128,13 @@ state encoding, masks, successor linkage, and recursive target construction
 together. It is therefore model evidence rather than another implementation
 test.
 
-The receipt must census the complete eligible held-out chain population before
-selecting rows. Chains that terminate or lose support before $h=2$ remain in
-the denominator with zero exact rows. Scene- and target-stratified coverage,
-error, uncertainty, numeric tolerance, candidate width, generator, recipe, and
-behavior policy are frozen before inspection. Low error on a small supported
-subset cannot promote a longer horizon when minimum support or coverage fails.
+The held-out evaluation begins with the complete eligible chain population
+rather than only rows on which an exact target is available. Chains that
+terminate or lose support before $h=2$ remain in the denominator with zero exact
+rows. Scene- and target-stratified coverage, error, uncertainty, numeric
+tolerance, candidate width, generator, recipe, and behavior policy are frozen
+before inspection. Low error on a small supported subset cannot justify a
+longer horizon when minimum support or coverage fails.
 
 Exact $Q_2$ is necessary but not sufficient: policy claims additionally require
 positive equal-budget oracle headroom and held-out endpoint recovery.

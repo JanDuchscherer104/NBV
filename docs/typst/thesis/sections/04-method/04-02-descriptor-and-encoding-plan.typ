@@ -92,6 +92,6 @@ inherits the `S0-pose` sufficiency limitation identified above.
 The maximum horizon $H_"max"$ binds data, model, and checkpoint. Remaining
 budget records the factual state; $h$ selects a requested return within
 $1 <= h <= b_t <= H_"max"$. A syntactically valid query still fails closed if
-its horizon lacks manifest-bound training and promotion support. The public
+its horizon lacks manifest-bound training and evaluation support. The public
 interface scores one scalar horizon at a time and preserves candidate order in
 its $[B,S,N_q]$ output.
