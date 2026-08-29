@@ -17,11 +17,12 @@ one adapted sample or replay row never makes those layers equally observable.
 // - @EFM3D-straub2024 -> docs/literature/tex-src/arXiv-EFM3D/method.tex:1-42 (logged modalities, voxel lifting, and GT-supervised heads)
 
 #figure(
+  alt: "Two separated information-flow lanes. Logged evidence, target context, selected-view history, and protocol-legal candidate features feed the actor state and Q_H scorer, which emits a raw value for every row. A separate authoritative hard mask gates selection, supervised loss, and bootstrap support without changing raw Q_H. Privileged scene assets produce counterfactual renders and oracle targets in a separate offline lane. Predictions and targets meet only after the forward pass at a training-and-evaluation comparison node; no oracle render or label enters the actor state or scorer. Reason codes branch from the hard mask to an audit-only note.",
   align(center, image(
     "../../figures/actor_oracle_boundary.pdf",
     width: 100%,
   )),
-  caption: [Actor and oracle boundary. Legal #symb.rl.qh inputs are calibrated logged image evidence, poses, semi-dense geometry with uncertainty and observation support, frozen @egocentric-voxel-lifting:short features or predictions, an explicitly sourced target instruction, selected-view history, remaining budget, candidates, and masks. Reason codes remain audit evidence rather than scorer inputs. @ground-truth:short depth, segmentation, boxes, meshes, target crops, counterfactual renders, labels, and endpoint evaluation remain privileged.],
+  caption: [Actor and oracle boundary. Logged evidence, target context, and protocol-legal candidate features feed the mask-independent #symb.rl.qh scorer. The authoritative hard mask instead gates selection, supervised rows, and bootstrap support. @ground-truth:short assets generate renders and oracle targets that meet predictions only after the forward pass, in loss and metrics. Reason codes remain audit evidence rather than embeddings or low rewards.],
 ) <fig:qh-actor-oracle-contract>
 
 The visibility boundary is protocol-relative and temporal. A dense render for an unselected candidate at the current decision step is oracle evidence. A render from an already selected action may enter a later state only under an explicitly named source protocol: privileged mesh-rendered depth, a declared sensor simulation, or an actor-visible observation. The same array shape can therefore denote different information, and source role must remain explicit.
