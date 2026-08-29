@@ -585,6 +585,15 @@ def _owner_payload(
     output_tmp: Path,
     output_final: Path,
 ) -> dict[str, Any]:
+    """Build the compact owner marker for one promoted shard.
+
+    The rollout-store manifest is the canonical owner of the complete
+    :class:`RolloutShardEntry`, including its potentially large row list. The
+    marker repeats only the fields needed for cheap promotion checks so valid
+    ``rows_per_shard`` choices cannot turn this control-plane document into a
+    second, unbounded shard manifest.
+    """
+
     return {
         "sidecar_kind": "rollout_shard_owner",
         "shard_id": shard_entry.shard_id,
@@ -605,7 +614,6 @@ def _owner_payload(
             "candidates": result.num_candidates,
         },
         "runtime": collect_runtime_provenance(),
-        "shard_entry": shard_entry.to_jsonable(),
         "campaign_binding": None
         if shard_entry.campaign_binding is None
         else shard_entry.campaign_binding.to_jsonable(),
