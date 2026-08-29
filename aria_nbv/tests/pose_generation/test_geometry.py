@@ -16,6 +16,7 @@ from aria_nbv.pose_generation import geometry
 class _FakeTensor:
     device = torch.device("cuda:0")
     dtype = torch.float32
+    requires_grad = False
     shape = (1, 3)
 
     def __init__(self) -> None:
@@ -36,6 +37,14 @@ class _TorchProxy:
     Tensor = torch.Tensor
     device = torch.device
     int64 = torch.int64
+
+    @staticmethod
+    def is_grad_enabled() -> bool:
+        return False
+
+    @staticmethod
+    def is_inference_mode_enabled() -> bool:
+        return False
 
     @staticmethod
     def zeros(*_args: object, **_kwargs: object) -> _FakeTensor:
@@ -103,7 +112,50 @@ def test_prepared_mesh_query_reuses_materialized_triangles(monkeypatch: pytest.M
     assert all(triangles is query.triangles for triangles in observed_triangles)
 
 
-def test_prepared_mesh_query_rematerializes_grad_connected_triangles(
+def test_prepared_mesh_query_rematerializes_autograd_triangles(monkeypatch: pytest.MonkeyPatch) -> None:
+    verts = torch.tensor(
+        [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]],
+        dtype=torch.float64,
+        requires_grad=True,
+    )
+    faces = torch.tensor([[0, 1, 2]], dtype=torch.int64)
+    points = torch.tensor([[0.25, 0.25, 1.0]], dtype=torch.float32)
+    observed_triangles: list[torch.Tensor] = []
+
+    def fake_point_face_distance(
+        _points: torch.Tensor,
+        _points_first_idx: torch.Tensor,
+        triangles: torch.Tensor,
+        _triangles_first_idx: torch.Tensor,
+        max_points: int,
+        _min_triangle_area: float,
+    ) -> torch.Tensor:
+        observed_triangles.append(triangles)
+        return triangles.square().sum().expand(max_points)
+
+    monkeypatch.setattr(
+        "pytorch3d.loss.point_mesh_distance.point_face_distance",
+        fake_point_face_distance,
+    )
+
+    query = geometry.PreparedMeshQuery(verts, faces, device="cpu", dtype=torch.float32)
+    first = query.point_distance(points)
+    first.sum().backward()
+    first_grad = verts.grad.detach().clone()
+    verts.grad = None
+
+    second = query.point_distance(points)
+    second.sum().backward()
+
+    assert torch.equal(first, second)
+    assert torch.equal(verts.grad, first_grad)
+    assert len(observed_triangles) == 2
+    assert observed_triangles[0] is not observed_triangles[1]
+    assert query.verts is None
+    assert query.triangles is None
+
+
+def test_prepared_mesh_query_reuses_inference_triangles_for_grad_source(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     verts = torch.tensor(
@@ -116,7 +168,7 @@ def test_prepared_mesh_query_rematerializes_grad_connected_triangles(
     observed_triangles: list[torch.Tensor] = []
 
     def fake_point_face_distance(
-        _points: torch.Tensor,
+        points: torch.Tensor,
         _points_first_idx: torch.Tensor,
         triangles: torch.Tensor,
         _triangles_first_idx: torch.Tensor,
@@ -124,24 +176,61 @@ def test_prepared_mesh_query_rematerializes_grad_connected_triangles(
         _min_triangle_area: float,
     ) -> torch.Tensor:
         observed_triangles.append(triangles)
-        return triangles.square().sum().reshape(1)
+        return torch.ones(points.shape[0], dtype=points.dtype, device=points.device)
 
     monkeypatch.setattr(
         "pytorch3d.loss.point_mesh_distance.point_face_distance",
         fake_point_face_distance,
     )
     query = geometry.PreparedMeshQuery(verts, faces, device="cpu", dtype=torch.float32)
+    with torch.inference_mode():
+        query.point_distance(points)
+        query.point_distance(points)
 
-    query.point_distance(points).sum().backward()
-    assert verts.grad is not None
-    verts.grad.zero_()
-    query.point_distance(points).sum().backward()
-
-    assert query.triangles is None
     assert len(observed_triangles) == 2
-    assert observed_triangles[0] is not observed_triangles[1]
-    assert verts.grad is not None
-    assert torch.count_nonzero(verts.grad) > 0
+    assert observed_triangles[0] is observed_triangles[1]
+    assert observed_triangles[0].is_inference()
+    assert query.triangles is observed_triangles[0]
+
+
+def test_prepared_mesh_query_rebuilds_inference_cache_for_autograd(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    verts = torch.tensor(
+        [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]],
+        dtype=torch.float32,
+    )
+    faces = torch.tensor([[0, 1, 2]], dtype=torch.int64)
+    inference_points = torch.tensor([[0.25, 0.25, 1.0]], dtype=torch.float32)
+    grad_points = inference_points.detach().clone().requires_grad_()
+    observed_bundles: list[tuple[torch.Tensor, torch.Tensor, torch.Tensor]] = []
+
+    def fake_point_face_distance(
+        points: torch.Tensor,
+        points_first_idx: torch.Tensor,
+        triangles: torch.Tensor,
+        triangles_first_idx: torch.Tensor,
+        _max_points: int,
+        _min_triangle_area: float,
+    ) -> torch.Tensor:
+        observed_bundles.append((triangles, points_first_idx, triangles_first_idx))
+        return points.square().sum(dim=1) + triangles.square().sum() * 0.0
+
+    monkeypatch.setattr(
+        "pytorch3d.loss.point_mesh_distance.point_face_distance",
+        fake_point_face_distance,
+    )
+
+    query = geometry.PreparedMeshQuery(verts, faces, device="cpu", dtype=torch.float32)
+    with torch.inference_mode():
+        query.point_distance(inference_points)
+    query.point_distance(grad_points).sum().backward()
+
+    assert len(observed_bundles) == 2
+    assert all(tensor.is_inference() for tensor in observed_bundles[0])
+    assert all(not tensor.is_inference() for tensor in observed_bundles[1])
+    assert grad_points.grad is not None
+    assert query.triangles is observed_bundles[1][0]
 
 
 def test_prepared_mesh_query_rejects_mutated_source_tensors() -> None:

@@ -401,6 +401,54 @@ def test_single_generator_does_not_retain_inference_query() -> None:
     assert generator._mesh_query is None
 
 
+def test_single_generator_rebuilds_p3d_cache_after_inference(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    observed_triangles: list[torch.Tensor] = []
+
+    def fake_point_face_distance(
+        points: torch.Tensor,
+        _points_first_idx: torch.Tensor,
+        triangles: torch.Tensor,
+        _triangles_first_idx: torch.Tensor,
+        _max_points: int,
+        _min_triangle_area: float,
+    ) -> torch.Tensor:
+        observed_triangles.append(triangles)
+        return torch.ones(points.shape[0], dtype=points.dtype, device=points.device)
+
+    monkeypatch.setattr(
+        "pytorch3d.loss.point_mesh_distance.point_face_distance",
+        fake_point_face_distance,
+    )
+    cfg = _base_cfg().model_copy(update={"min_distance_to_mesh": 0.1, "num_samples": 1})
+    generator = CandidateViewGenerator(cfg)
+    mesh, verts, faces = _mesh_triplet(cfg.device)
+    kwargs = {
+        "reference_pose": _identity_pose(device=cfg.device),
+        "gt_mesh": mesh,
+        "mesh_verts": verts,
+        "mesh_faces": faces,
+        "camera_calib_template": _dummy_camera(cfg.device),
+        "occupancy_extent": torch.tensor(
+            [-10.0, 10.0, -10.0, 10.0, -10.0, 10.0],
+            dtype=torch.float32,
+            device=cfg.device,
+        ),
+    }
+
+    with torch.inference_mode():
+        generator.generate(**kwargs)
+    retained_query = generator._mesh_query
+    generator.generate(**kwargs)
+
+    assert retained_query is not None
+    assert generator._mesh_query is retained_query
+    assert len(observed_triangles) == 2
+    assert observed_triangles[0].is_inference()
+    assert not observed_triangles[1].is_inference()
+
+
 def test_paired_seed_is_derived_from_resolved_component_seed_for_direct_and_replay(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

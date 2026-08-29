@@ -132,6 +132,7 @@ class PreparedMeshQuery:
         self.triangles: torch.Tensor | None = None
         self.points_first_idx: torch.Tensor | None = None
         self.triangles_first_idx: torch.Tensor | None = None
+        self._pytorch3d_cache_inference: bool | None = None
         self.mesh = mesh
         self._proximity_query: _ProximityQuery | None = None
         self._ray_engines: dict[bool, _RayIntersector] = {}
@@ -223,30 +224,39 @@ class PreparedMeshQuery:
             return _devices_match(self._device, device)
         return bool(self._materialized_device == _resolved_device(device))
 
-    def _materialize_pytorch3d(
-        self,
-    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        """Return PyTorch3D tensors, caching only graph-free mesh state."""
+    def _clear_pytorch3d_cache(self) -> None:
+        """Discard a prepared bundle that cannot cross execution modes safely."""
 
-        if self.triangles is not None:
-            assert self.points_first_idx is not None
-            assert self.triangles_first_idx is not None
-            return self.triangles, self.points_first_idx, self.triangles_first_idx
-        target_device = _resolved_device(self._device)
-        verts = self._source_verts.to(device=target_device, dtype=self._dtype)
-        faces = self._source_faces.to(device=target_device, dtype=torch.int64)
-        triangles = verts[faces]
-        points_first_idx = torch.zeros(1, device=target_device, dtype=torch.int64)
-        triangles_first_idx = torch.zeros(1, device=target_device, dtype=torch.int64)
-        if getattr(self._source_verts, "requires_grad", False):
-            return triangles, points_first_idx, triangles_first_idx
-        self.verts = verts
-        self.faces = faces
-        self.triangles = triangles
-        self.points_first_idx = points_first_idx
-        self.triangles_first_idx = triangles_first_idx
-        self._materialized_device = target_device
-        return triangles, points_first_idx, triangles_first_idx
+        self.verts = None
+        self.faces = None
+        self.triangles = None
+        self.points_first_idx = None
+        self.triangles_first_idx = None
+        self._materialized_device = None
+        self._pytorch3d_cache_inference = None
+
+    def _materialize_pytorch3d(self) -> torch.Tensor:
+        """Return triangles while caching only autograd-safe prepared tensors."""
+
+        target_device = self._materialized_device or _resolved_device(self._device)
+        inference_mode = torch.is_inference_mode_enabled()
+        if self._pytorch3d_cache_inference and not inference_mode:
+            self._clear_pytorch3d_cache()
+        if self.faces is None:
+            self.faces = self._source_faces.to(device=target_device, dtype=torch.int64)
+            self.points_first_idx = torch.zeros(1, device=target_device, dtype=torch.int64)
+            self.triangles_first_idx = torch.zeros(1, device=target_device, dtype=torch.int64)
+            self._materialized_device = target_device
+
+        if torch.is_grad_enabled() and self._source_verts.requires_grad:
+            verts = self._source_verts.to(device=target_device, dtype=self._dtype)
+            return verts[self.faces]
+
+        if self.triangles is None:
+            self.verts = self._source_verts.to(device=target_device, dtype=self._dtype)
+            self.triangles = self.verts[self.faces]
+            self._pytorch3d_cache_inference = inference_mode
+        return self.triangles
 
     def point_distance(self, points: torch.Tensor) -> torch.Tensor:
         """Return point-to-mesh distances for matching device/dtype points.
@@ -272,12 +282,14 @@ class PreparedMeshQuery:
                 "PreparedMeshQuery points must match the prepared mesh device and dtype "
                 f"({expected_device}, {self._dtype}); got ({points.device}, {points.dtype})."
             )
-        triangles, points_first_idx, triangles_first_idx = self._materialize_pytorch3d()
+        triangles = self._materialize_pytorch3d()
+        assert self.points_first_idx is not None
+        assert self.triangles_first_idx is not None
         dist_sq = point_face_distance(
             points,
-            points_first_idx,
+            self.points_first_idx,
             triangles,
-            triangles_first_idx,
+            self.triangles_first_idx,
             points.shape[0],
             _DEFAULT_MIN_TRIANGLE_AREA,
         )
