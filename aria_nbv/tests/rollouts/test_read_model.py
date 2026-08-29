@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import numpy as np
+import pytest
 import zarr
 
 from aria_nbv.rollouts import RolloutZarrStoreReader
@@ -142,6 +143,28 @@ def test_candidate_shell_index_caches_empty_candidate_table(tmp_path) -> None:
         "candidates/candidate_row_id": 1,
         "candidates/step_row_id": 1,
         "candidates/shell_index": 1,
+    }
+
+
+def test_candidate_shell_index_is_deeply_immutable(tmp_path) -> None:
+    """Public index access cannot corrupt a reader-local cached projection."""
+
+    reader = _reader(tmp_path)
+    index = reader.candidate_shell_index()
+    expected_ids = index.candidate_ids.copy()
+    expected_positions = {step_id: positions.copy() for step_id, positions in index.positions_by_step.items()}
+
+    with pytest.raises(ValueError):
+        index.candidate_ids[0] = -1
+    with pytest.raises(ValueError):
+        next(iter(index.positions_by_step.values()))[0] = -1
+    with pytest.raises(TypeError):
+        index.positions_by_step[0] = np.empty(0, dtype=np.int64)  # type: ignore[index]
+
+    repeated = reader.candidate_shell_index()
+    assert np.array_equal(repeated.candidate_ids, expected_ids)
+    assert {step_id: positions.tolist() for step_id, positions in repeated.positions_by_step.items()} == {
+        step_id: positions.tolist() for step_id, positions in expected_positions.items()
     }
 
 

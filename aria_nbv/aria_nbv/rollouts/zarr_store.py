@@ -21,9 +21,10 @@ scene scores or low-quality invalid rows.
 from __future__ import annotations
 
 import json
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from pathlib import Path
+from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, Literal, Protocol, cast
 
 import numpy as np
@@ -553,7 +554,7 @@ class _CandidateShellIndex:
     """Reader-local candidate ids and shell-ordered positions grouped by step."""
 
     candidate_ids: np.ndarray
-    positions_by_step: dict[int, np.ndarray]
+    positions_by_step: Mapping[int, np.ndarray]
 
 
 class RolloutZarrStoreReader:
@@ -587,7 +588,11 @@ class RolloutZarrStoreReader:
                     "Candidate shell index requires aligned candidate_row_id, step_row_id, and shell_index arrays."
                 )
             if candidate_ids.size == 0:
-                self._candidate_shell_index = _CandidateShellIndex(candidate_ids=candidate_ids, positions_by_step={})
+                candidate_ids.setflags(write=False)
+                self._candidate_shell_index = _CandidateShellIndex(
+                    candidate_ids=candidate_ids,
+                    positions_by_step=MappingProxyType({}),
+                )
                 return self._candidate_shell_index
             order = np.lexsort((candidate_ids, shell_indices, step_ids))
             ordered_steps = step_ids[order]
@@ -596,7 +601,13 @@ class RolloutZarrStoreReader:
             positions = {
                 int(ordered_steps[start]): order[start:stop] for start, stop in zip(boundaries, stops, strict=True)
             }
-            self._candidate_shell_index = _CandidateShellIndex(candidate_ids=candidate_ids, positions_by_step=positions)
+            candidate_ids.setflags(write=False)
+            for position_array in positions.values():
+                position_array.setflags(write=False)
+            self._candidate_shell_index = _CandidateShellIndex(
+                candidate_ids=candidate_ids,
+                positions_by_step=MappingProxyType(positions),
+            )
         return self._candidate_shell_index
 
     def array(self, path: str) -> np.ndarray:
