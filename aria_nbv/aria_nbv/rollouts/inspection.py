@@ -5025,13 +5025,16 @@ def root_relative_candidate_rows(
     step_rollout_ids = reader.array("steps/rollout_row_id").astype(np.int64, copy=False).reshape(-1)
     step_indices = reader.array("steps/step_index").astype(np.int64, copy=False).reshape(-1)
     shell_index = reader.candidate_shell_index()
+    step_positions_by_rollout: dict[int, list[int]] = {}
+    for step_position, current_rollout_id in enumerate(step_rollout_ids.tolist()):
+        step_positions_by_rollout.setdefault(int(current_rollout_id), []).append(step_position)
     candidate_positions: list[np.ndarray] = []
     candidate_step_positions: list[np.ndarray] = []
     candidate_rollout_positions: list[np.ndarray] = []
     for rollout_position, current_rollout_id in enumerate(rollout_ids.tolist()):
         if rollout_row_id is not None and current_rollout_id != int(rollout_row_id):
             continue
-        step_positions = np.flatnonzero(step_rollout_ids == current_rollout_id)
+        step_positions = np.asarray(step_positions_by_rollout.get(int(current_rollout_id), []), dtype=np.int64)
         step_positions = step_positions[np.argsort(step_indices[step_positions], kind="stable")]
         for step_position in step_positions.tolist():
             current_step_id = int(step_ids[step_position])

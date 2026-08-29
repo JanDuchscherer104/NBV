@@ -3756,6 +3756,30 @@ def test_root_relative_candidate_rows_preserve_shell_order_without_materializing
     assert root_relative_candidate_rows(reader, step_row_id=int(expected_all[-1]["step_row_id"])) == expected_step
 
 
+def test_root_relative_candidate_rows_groups_step_positions_once(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    result = write_rollout_zarr_store(
+        tmp_path / "rollouts.zarr",
+        build_rollout_records(horizon=2, num_samples=6, seed=63),
+    )
+    reader = RolloutZarrStoreReader(result.store_dir)
+
+    import aria_nbv.rollouts.inspection as inspection
+
+    original_flatnonzero = inspection.np.flatnonzero
+    step_rollout_ids = reader.array("steps/rollout_row_id")
+
+    def reject_rollout_rescans(values: np.ndarray) -> np.ndarray:
+        if values.dtype == np.bool_ and values.shape == step_rollout_ids.shape:
+            raise AssertionError("root-relative projection must group step positions once")
+        return original_flatnonzero(values)
+
+    monkeypatch.setattr(inspection.np, "flatnonzero", reject_rollout_rescans)
+
+    assert root_relative_candidate_rows(reader)
+
+
 def test_root_relative_candidate_rows_select_candidate_payload_rows(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
