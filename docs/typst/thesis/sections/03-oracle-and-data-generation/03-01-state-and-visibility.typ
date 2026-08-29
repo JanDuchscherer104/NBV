@@ -4,25 +4,28 @@
 
 == Information Boundary
 
-The learned component predicts finite-horizon values for a hard-masked candidate
-table, but its inputs come from only one layer of a larger information lattice.
-The experiment distinguishes logged observations, evidence caused by selected
-actions, and privileged counterfactual quantities. ASE contributes both
-sensor-like streams and ground truth; EFM3D transforms only the logged subset
-into local 3D evidence @ProjectAria-ASE-2025 @EFM3D-straub2024. Co-location in
-one adapted sample or replay row never makes those layers equally observable.
+The learned component emits raw finite-horizon predictions for materialized
+candidates; separate masks govern selection and value supervision. Pre-forward
+inputs are protocol-admitted, not automatically deployable: `v0_gt_input`
+supplies a ground-truth-derived target control, whereas `v1_observed` requires
+observation-derived provenance. The experiment thus separates logged evidence,
+selected-action evidence, privileged control input, and offline counterfactual
+labels. ASE contributes both sensor-like streams and ground truth; EFM3D
+transforms only the logged subset into local 3D evidence
+@ProjectAria-ASE-2025 @EFM3D-straub2024. Co-location in one replay row never
+makes those layers equally observable.
 
 // evidence:
 // - @ProjectAria-ASE-2025 -> docs/contents/ase_dataset.qmd:216-225,257-260 (sensor-like streams and privileged GT products)
 // - @EFM3D-straub2024 -> docs/literature/tex-src/arXiv-EFM3D/method.tex:1-42 (logged modalities, voxel lifting, and GT-supervised heads)
 
 #figure(
-  alt: "Two separated information-flow lanes. Logged evidence, target context, selected-view history, and protocol-legal candidate features feed the actor state and Q_H scorer, which emits a raw value for every row. A separate authoritative hard mask gates selection, supervised loss, and bootstrap support without changing raw Q_H. Privileged scene assets produce counterfactual renders and oracle targets in a separate offline lane. Predictions and targets meet only after the forward pass at a training-and-evaluation comparison node; no oracle render or label enters the actor state or scorer. Reason codes branch from the hard mask to an audit-only note.",
+  alt: "A provenance-explicit decision-time lane and a privileged offline lane meet only at named boundaries. Logged evidence can supply an observed v1 target, while a dashed edge marks the current v0 ground-truth descriptor as a non-deployable pre-forward control. Protocol-legal candidate features feed the Q_H scorer, which emits a raw conditional value and feasibility logit for every materialized row. The hard action mask gates policy selection and supplies feasibility targets without changing raw Q_H. Separately, Q-label support is a subset of action support and gates value loss and successor backup. Privileged assets produce hard-valid candidate renders and oracle value targets; renders and value labels meet predictions only after the forward pass. Reason codes remain audit-only evidence.",
   align(center, image(
     "../../figures/actor_oracle_boundary.pdf",
     width: 100%,
   )),
-  caption: [Actor and oracle boundary. Logged evidence, target context, and protocol-legal candidate features feed the mask-independent #symb.rl.qh scorer. The authoritative hard mask instead gates selection, supervised rows, and bootstrap support. @ground-truth:short assets generate renders and oracle targets that meet predictions only after the forward pass, in loss and metrics. Reason codes remain audit evidence rather than embeddings or low rewards.],
+  caption: [Actor and oracle boundary. `v0` admits privileged @ground-truth:short target input; `v1` requires an actor-visible descriptor. Raw row predictions are mask-independent: #symb.rl.action_mask gates selection and feasibility supervision, while nested #symb.rl.q_label_mask support gates value loss and successor backup. Oracle renders and value targets enter only downstream.],
 ) <fig:qh-actor-oracle-contract>
 
 The visibility boundary is protocol-relative and temporal. A dense render for an unselected candidate at the current decision step is oracle evidence. A render from an already selected action may enter a later state only under an explicitly named source protocol: privileged mesh-rendered depth, a declared sensor simulation, or an actor-visible observation. The same array shape can therefore denote different information, and source role must remain explicit.
@@ -137,7 +140,16 @@ never changes its information role.
 
 Visibility answers whether a modality contains evidence for a spatial element from a particular view; feasibility answers whether an action is admissible; utility answers how beneficial an admissible action is for the target. These concepts must not be collapsed. A target can be weakly visible from a geometrically valid candidate, a candidate can lie outside EVL support while remaining physically reachable, and an oracle render can fail even though the candidate pose itself is feasible.
 
-Invalidity is a constraint rather than a reward value. Geometry-invalid candidates receive a hard action mask and a persisted candidate reason code before policy selection, stochastic normalization, loss construction, and bootstrap maximization. A geometrically feasible candidate may still have low or negative target gain. Failure of the separate oracle evaluation does not create a candidate reason code: depending on the configured recipe, the affected row or table is skipped, or its oracle-label validity and Q-training eligibility are cleared and the oracle failure is reported separately. Oracle-derived feasibility must be distinguished from a deployable validity estimate when a policy moves from privileged target tasks to an actor-visible target protocol.
+Invalidity is a constraint rather than a reward value. Geometry-invalid
+candidates receive a hard action mask and reason code before policy selection,
+stochastic normalization, and feasibility supervision. Value learning uses a
+separate label mask nested within action support: selected-row loss and
+next-state backup both require label support. A feasible candidate may still
+have low or negative target gain. Oracle-evaluation failure creates no candidate
+reason code; the configured recipe instead skips the row or table, or clears
+oracle-label validity and Q-training eligibility while reporting the failure
+separately. Oracle-derived feasibility must remain distinct from deployable
+validity when moving to an actor-visible target protocol.
 
 Actor visibility is consequently an end-to-end property of the decision
 protocol. It includes how the target instruction is obtained, how candidate
