@@ -159,6 +159,43 @@ def test_dataset_bundle_generation_missing_and_invalid_authority_is_deterministi
     assert invalid.generation_digest != first.generation_digest
 
 
+def test_dataset_bundle_generation_unreadable_authority_is_deterministic(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "root"
+    root.mkdir()
+    manifest = root / "manifest.json"
+    manifest.write_text('{"version":10}', encoding="utf-8")
+    original_open = Path.open
+
+    def _unreadable(path: Path, *args: Any, **kwargs: Any) -> Any:
+        if path == manifest:
+            raise OSError("permission denied")
+        return original_open(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "open", _unreadable)
+
+    _selection, first = capture_dataset_bundle_generation(root, ())
+    _selection, repeated = capture_dataset_bundle_generation(root, ())
+
+    assert repeated == first
+    assert first.root.authoritative_fields[0].status == "unreadable"
+
+
+def test_dataset_bundle_generation_oversized_authority_is_deterministic(tmp_path: Path) -> None:
+    root = tmp_path / "root"
+    root.mkdir()
+    manifest = root / "manifest.json"
+    manifest.write_bytes(b"{" + b" " * dataset_bundle._MAX_AUTHORITATIVE_JSON_BYTES + b"}")
+
+    _selection, first = capture_dataset_bundle_generation(root, ())
+    _selection, repeated = capture_dataset_bundle_generation(root, ())
+
+    assert repeated == first
+    assert first.root.authoritative_fields[0].status == "oversized"
+
+
 def test_dataset_bundle_generation_detects_same_path_atomic_replacement(tmp_path: Path) -> None:
     root = tmp_path / "root"
     root.mkdir()
@@ -246,6 +283,24 @@ def test_dataset_bundle_request_rejects_selection_generation_mismatch(tmp_path: 
                 generation=generation,
             )
         )
+
+
+def test_dataset_bundle_inspection_rejects_stale_generation_before_domain_call(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    root, _source_hash = _write_root_store(tmp_path)
+    selection, generation = capture_dataset_bundle_generation(root, ())
+    manifest = root / "manifest.json"
+    manifest.write_bytes(manifest.read_bytes() + b"\n")
+
+    def _unexpected(_request: DatasetBundleSummaryRequest) -> Any:
+        pytest.fail("bundle summary domain function ran for a stale generation")
+
+    monkeypatch.setattr(dataset_bundle, "_build_dataset_bundle_summary_unchecked", _unexpected)
+
+    with pytest.raises(DatasetBundleGenerationChangedError):
+        inspect_dataset_bundle(DatasetBundleSummaryRequest(selection=selection, generation=generation))
 
 
 def test_dataset_bundle_acquisition_rejects_mid_read_generation_change(

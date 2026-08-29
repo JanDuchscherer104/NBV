@@ -4,11 +4,12 @@
 
 from __future__ import annotations
 
+import inspect
 import json
 from collections.abc import Generator, Iterable
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any, cast
+from typing import Any, cast, get_type_hints
 
 import numpy as np
 import pytest
@@ -42,6 +43,7 @@ from aria_nbv.data_handling.vin_store.store import OFFLINE_DATASET_VERSION
 from aria_nbv.dataset_bundle import (
     DatasetBundleGenerationChangedError,
     DatasetBundleSelection,
+    DatasetBundleSummaryRequest,
     QhBatchPreview,
     QhCorpusReadiness,
     build_dataset_bundle_summary,
@@ -232,6 +234,103 @@ def test_initial_render_never_dispatches_deep_or_qh_acquisition(
     assert calls == {"deep": 0, "qh": 0, "preview": 0}
 
 
+def test_cached_bundle_summary_accepts_one_complete_request() -> None:
+    signature = inspect.signature(training_dataset._cached_bundle_summary)
+
+    assert tuple(signature.parameters) == ("request",)
+    assert get_type_hints(training_dataset._cached_bundle_summary)["request"] is DatasetBundleSummaryRequest
+
+
+def test_initial_summary_failure_is_contained_and_actionable(
+    monkeypatch: pytest.MonkeyPatch,
+    isolated_path_config: PathConfig,
+    tmp_path: Path,
+) -> None:
+    _write_root_store(isolated_path_config.offline_cache_dir)
+
+    def _fail(_request: DatasetBundleSummaryRequest) -> Any:
+        raise RuntimeError("summary-sentinel")
+
+    monkeypatch.setattr(training_dataset, "_cached_bundle_summary", _fail)
+
+    app = _app(tmp_path).run()
+
+    assert not app.exception
+    assert any("Bundle summary failed" in error.value for error in app.error)
+    assert any("summary-sentinel" in error.value for error in app.error)
+
+
+def test_validation_failure_is_section_local_and_drops_retained_evidence(
+    monkeypatch: pytest.MonkeyPatch,
+    isolated_path_config: PathConfig,
+    tmp_path: Path,
+) -> None:
+    _write_root_store(isolated_path_config.offline_cache_dir)
+    app = _app(tmp_path).run()
+    validate = next(button for button in app.button if button.label == "Validate bundle")
+    app = validate.click().run()
+    assert training_dataset._VALIDATED_STATE_KEY in str(app.session_state)
+
+    cached_summary = training_dataset._cached_bundle_summary
+
+    def _fail_validation(request: DatasetBundleSummaryRequest) -> Any:
+        if request.validate_rollouts:
+            raise RuntimeError("validation-sentinel")
+        return cached_summary(request)
+
+    monkeypatch.setattr(training_dataset, "_cached_bundle_summary", _fail_validation)
+    validate = next(button for button in app.button if button.label == "Validate bundle")
+    app = validate.click().run()
+
+    assert not app.exception
+    assert any("Bundle validation failed" in error.value for error in app.error)
+    assert any("validation-sentinel" in error.value for error in app.error)
+    assert training_dataset._VALIDATED_STATE_KEY not in str(app.session_state)
+
+
+@pytest.mark.parametrize(
+    ("button_label", "cached_name", "state_key", "diagnostic"),
+    [
+        (
+            "Preflight Q_H corpus",
+            "_cached_qh_readiness",
+            training_dataset._QH_READINESS_STATE_KEY,
+            "Q_H corpus preflight failed",
+        ),
+        (
+            "Deep statistics / target scan",
+            "_cached_deep_statistics",
+            training_dataset._DEEP_STATE_KEY,
+            "Deep statistics scan failed",
+        ),
+    ],
+)  # type: ignore[untyped-decorator]
+def test_dispatched_section_failure_drops_stale_evidence(
+    button_label: str,
+    cached_name: str,
+    state_key: str,
+    diagnostic: str,
+    monkeypatch: pytest.MonkeyPatch,
+    isolated_path_config: PathConfig,
+    tmp_path: Path,
+) -> None:
+    _write_root_store(isolated_path_config.offline_cache_dir)
+    app = _app(tmp_path).run()
+    app.session_state[state_key] = ("stale-generation", "stale-sentinel")
+
+    def _fail(*_args: object, **_kwargs: object) -> Any:
+        raise RuntimeError("section-sentinel")
+
+    monkeypatch.setattr(training_dataset, cached_name, _fail)
+    button = next(element for element in app.button if element.label == button_label)
+    app = button.click().run()
+
+    assert not app.exception
+    assert any(diagnostic in error.value for error in app.error)
+    assert any("section-sentinel" in error.value for error in app.error)
+    assert state_key not in str(app.session_state)
+
+
 @pytest.mark.parametrize("acquisition", ["deep", "readiness", "preview"])  # type: ignore[untyped-decorator]
 def test_explicit_acquisition_rejects_replacement_under_stale_generation(
     acquisition: str,
@@ -261,6 +360,33 @@ def test_explicit_acquisition_rejects_replacement_under_stale_generation(
             _cached_qh_preview(root_arg, (), generation, "train", 0, 1, 0, training_dataset._QH_READINESS_CONTRACT)
 
 
+@pytest.mark.parametrize("acquisition", ["deep", "readiness", "preview"])  # type: ignore[untyped-decorator]
+def test_cached_acquisition_rejects_stale_generation_before_domain_call(
+    acquisition: str,
+    monkeypatch: pytest.MonkeyPatch,
+    isolated_path_config: PathConfig,
+) -> None:
+    root, _source_hash = _write_root_store(isolated_path_config.offline_cache_dir)
+    _selection, generation = capture_dataset_bundle_generation(root, ())
+    manifest = root / "manifest.json"
+    manifest.write_bytes(manifest.read_bytes() + b"\n")
+
+    def _unexpected(*_args: object, **_kwargs: object) -> Any:
+        pytest.fail(f"{acquisition} domain function ran for a stale generation")
+
+    root_arg = root.as_posix()
+    with pytest.raises(DatasetBundleGenerationChangedError):
+        if acquisition == "deep":
+            monkeypatch.setattr(training_dataset, "compute_dataset_bundle_deep_statistics", _unexpected)
+            _cached_deep_statistics(root_arg, (), generation)
+        elif acquisition == "readiness":
+            monkeypatch.setattr(training_dataset, "build_qh_corpus_readiness", _unexpected)
+            _cached_qh_readiness(root_arg, (), generation, 1, 0, training_dataset._QH_READINESS_CONTRACT)
+        else:
+            monkeypatch.setattr(training_dataset, "preview_qh_batch", _unexpected)
+            _cached_qh_preview(root_arg, (), generation, "train", 0, 1, 0, training_dataset._QH_READINESS_CONTRACT)
+
+
 def test_blocked_store_remains_selected_but_is_excluded_from_totals(
     isolated_path_config: PathConfig,
     tmp_path: Path,
@@ -286,6 +412,29 @@ def test_blocked_store_remains_selected_but_is_excluded_from_totals(
     assert "Root/source binding hashes, paths, and raw findings" in "\n".join(item.label for item in app.expander)
     assert "Root/source binding identifiers are available" in visible
     assert "source_manifest_hash_mismatch" in visible
+
+
+def test_malformed_promotion_marker_remains_visible_and_contributes_no_totals(
+    isolated_path_config: PathConfig,
+    tmp_path: Path,
+) -> None:
+    _root, source_hash = _write_root_store(isolated_path_config.offline_cache_dir)
+    rollout = _write_rollout_store(isolated_path_config.offline_cache_dir, source_hash)
+    for name in ("_SUCCESS.json", "_owner.json"):
+        (rollout / name).write_text("{}", encoding="utf-8")
+    app = _app(tmp_path).run()
+    app.multiselect[0].set_value([rollout.as_posix()])
+    app = app.run()
+
+    assert not app.exception
+    metrics = _metrics(app)
+    assert metrics["Compatible rollout stores"] == "0 / 1"
+    assert metrics["Rollouts"] == "0"
+    assert metrics["Rollout steps"] == "0"
+    assert metrics["Candidates"] == "0"
+    visible = "\n".join(item.value for item in [*app.markdown, *app.caption, *app.error, *app.success])
+    assert rollout.name in visible
+    assert "rollout_promotion_invalid" in visible
 
 
 def test_compatible_store_attribution_shows_root_and_source_bindings(

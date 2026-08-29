@@ -192,6 +192,12 @@ def _clear_training_dataset_caches() -> None:
     _cached_deep_statistics.clear()
     _cached_qh_readiness.clear()
     _cached_qh_preview.clear()
+    _clear_training_dataset_results()
+
+
+def _clear_training_dataset_results() -> None:
+    """Drop every selection-bound result retained by this page."""
+
     for key in (
         _VALIDATED_STATE_KEY,
         _DEEP_STATE_KEY,
@@ -199,6 +205,15 @@ def _clear_training_dataset_caches() -> None:
         _QH_PREVIEW_STATE_KEY,
     ):
         st.session_state.pop(key, None)
+
+
+def _render_acquisition_failure(label: str, exc: Exception, *, action: str) -> None:
+    """Render one concise section-local acquisition diagnostic."""
+
+    detail = str(exc).strip().splitlines()[0] if str(exc).strip() else "No diagnostic detail was provided."
+    if len(detail) > 240:
+        detail = f"{detail[:237]}..."
+    st.error(f"{label} failed. {action} Detail: {detail}")
 
 
 def _clear_qh_results_for_control_change() -> None:
@@ -712,26 +727,42 @@ def render_training_dataset_page() -> None:  # pragma: no cover - Streamlit UI
     identity = generation.generation_digest
     root_text = selection.root_store.as_posix()
     rollout_texts = tuple(path.as_posix() for path in selection.rollout_stores)
-    light = _cached_bundle_summary(
-        DatasetBundleSummaryRequest(
-            selection=selection,
-            generation=generation,
-            validate_rollouts=False,
+    try:
+        light = _cached_bundle_summary(
+            DatasetBundleSummaryRequest(
+                selection=selection,
+                generation=generation,
+                validate_rollouts=False,
+            )
         )
-    )
+    except Exception as exc:
+        _clear_training_dataset_results()
+        _render_acquisition_failure(
+            "Bundle summary",
+            exc,
+            action="Refresh the rollout caches, then reselect the root and rollout stores.",
+        )
+        return
 
     validate = st.button("Validate bundle", type="primary", width="stretch")
     if validate:
-        st.session_state[_VALIDATED_STATE_KEY] = (
-            identity,
-            _cached_bundle_summary(
+        st.session_state.pop(_VALIDATED_STATE_KEY, None)
+        try:
+            validated = _cached_bundle_summary(
                 DatasetBundleSummaryRequest(
                     selection=selection,
                     generation=generation,
                     validate_rollouts=True,
                 )
-            ),
-        )
+            )
+        except Exception as exc:
+            _render_acquisition_failure(
+                "Bundle validation",
+                exc,
+                action="Refresh the rollout caches and run validation again.",
+            )
+        else:
+            st.session_state[_VALIDATED_STATE_KEY] = (identity, validated)
     validated_state = st.session_state.get(_VALIDATED_STATE_KEY)
     retained_evidence = _retained_bundle_evidence(validated_state, identity)
     if validated_state is not None and retained_evidence is None:
@@ -816,17 +847,27 @@ def render_training_dataset_page() -> None:  # pragma: no cover - Streamlit UI
         qh_state = st.session_state.get(_QH_READINESS_STATE_KEY)
         qh_readiness = _qh_readiness_for_identity(qh_state, readiness_identity)
         if controls[2].button("Preflight Q_H corpus", type="primary", width="stretch"):
-            qh_readiness = _cached_qh_readiness(
-                root_text,
-                rollout_texts,
-                generation,
-                batch_size,
-                seed,
-                _QH_READINESS_CONTRACT,
-            )
-            st.session_state[_QH_READINESS_STATE_KEY] = (readiness_identity, qh_readiness)
+            st.session_state.pop(_QH_READINESS_STATE_KEY, None)
             st.session_state.pop(_QH_PREVIEW_STATE_KEY, None)
+            qh_readiness = None
             qh_preview = None
+            try:
+                qh_readiness = _cached_qh_readiness(
+                    root_text,
+                    rollout_texts,
+                    generation,
+                    batch_size,
+                    seed,
+                    _QH_READINESS_CONTRACT,
+                )
+            except Exception as exc:
+                _render_acquisition_failure(
+                    "Q_H corpus preflight",
+                    exc,
+                    action="Verify the selected stores and loader controls, then run the preflight again.",
+                )
+            else:
+                st.session_state[_QH_READINESS_STATE_KEY] = (readiness_identity, qh_readiness)
         if qh_readiness is None:
             st.info("Run the preflight to prove stage admission, joins, DataModule construction, and factual counts.")
         else:
@@ -880,6 +921,8 @@ def render_training_dataset_page() -> None:  # pragma: no cover - Streamlit UI
                 preview_state = st.session_state.get(_QH_PREVIEW_STATE_KEY)
                 qh_preview = _qh_preview_for_identity(preview_state, preview_identity)
                 if preview_controls[2].button("Preview one chain and batch", width="stretch"):
+                    st.session_state.pop(_QH_PREVIEW_STATE_KEY, None)
+                    qh_preview = None
                     try:
                         qh_preview = _cached_qh_preview(
                             root_text,
@@ -892,7 +935,11 @@ def render_training_dataset_page() -> None:  # pragma: no cover - Streamlit UI
                             _QH_READINESS_CONTRACT,
                         )
                     except Exception as exc:
-                        st.error(f"Q_H preview failed: {type(exc).__name__}: {exc}")
+                        _render_acquisition_failure(
+                            "Q_H preview",
+                            exc,
+                            action="Verify the selected stage and chain index, then run the preview again.",
+                        )
                     else:
                         st.session_state[_QH_PREVIEW_STATE_KEY] = (preview_identity, qh_preview)
             if qh_preview is not None:
@@ -913,8 +960,18 @@ def render_training_dataset_page() -> None:  # pragma: no cover - Streamlit UI
                 )
     with details_tab:
         if st.button("Deep statistics / target scan", width="stretch"):
-            deep = _cached_deep_statistics(root_text, rollout_texts, generation)
-            st.session_state[_DEEP_STATE_KEY] = (identity, deep)
+            st.session_state.pop(_DEEP_STATE_KEY, None)
+            deep = None
+            try:
+                deep = _cached_deep_statistics(root_text, rollout_texts, generation)
+            except Exception as exc:
+                _render_acquisition_failure(
+                    "Deep statistics scan",
+                    exc,
+                    action="Refresh the rollout caches, verify the selected stores, and run the scan again.",
+                )
+            else:
+                st.session_state[_DEEP_STATE_KEY] = (identity, deep)
         if deep is None:
             st.info("Run the deep scan to materialize target and candidate denominators.")
         root_target_scan = deep.get("root_gt_obb_target_opportunities", {}) if deep is not None else {}
