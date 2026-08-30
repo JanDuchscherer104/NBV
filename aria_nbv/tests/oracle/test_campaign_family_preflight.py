@@ -88,7 +88,7 @@ def test_phase_a_adapter_stops_before_oracle_scoring(monkeypatch: pytest.MonkeyP
         selected_source_manifest_rows=lambda _manifest: (source_row,),
         model_dump_jsonable=lambda: {"candidate_mixture": "fixture"},
     )
-    manifest = SimpleNamespace(source_manifest_hash="a" * 64)
+    manifest = SimpleNamespace(source_manifest_hash="a" * 16)
     record = CandidateBenchmark(
         state_key="source:sample/target:target",
         scene_key="scene",
@@ -113,6 +113,7 @@ def test_phase_a_adapter_stops_before_oracle_scoring(monkeypatch: pytest.MonkeyP
     )
 
     assert evidence.source_row_count == evidence.scene_count == evidence.target_state_count == 1
+    assert evidence.source_store_manifest_hash == "a" * 16
     assert evidence.preflight.go
     assert evidence.preflight.flat_gain.available is False
     assert evidence.to_payload()["broad_generation_admitted"] is False

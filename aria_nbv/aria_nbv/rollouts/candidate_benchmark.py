@@ -305,7 +305,14 @@ class CandidateFamilyPreflight:
 
 @dataclass(frozen=True, slots=True)
 class CandidateFamilyPhaseAEvidence:
-    """Immutable no-label Phase-A benchmark and canonical gate result."""
+    """Immutable no-label Phase-A benchmark and canonical gate result.
+
+    ``source_manifest_sha256`` binds the reviewed manifest file bytes, while
+    ``source_store_manifest_hash`` preserves the VIN store's native canonical
+    manifest identity. Current stores use the repository's 16-hex stable
+    msgspec hash; older compatible evidence may carry a 64-hex identity. These
+    two provenance domains are intentionally not re-hashed into one another.
+    """
 
     source_manifest_sha256: str
     source_store_manifest_hash: str
@@ -319,9 +326,11 @@ class CandidateFamilyPhaseAEvidence:
     preflight: CandidateFamilyPreflight
 
     def __post_init__(self) -> None:
-        for name in ("source_manifest_sha256", "source_store_manifest_hash", "writer_config_sha256"):
+        for name in ("source_manifest_sha256", "writer_config_sha256"):
             if not re.fullmatch(r"[0-9a-f]{64}", getattr(self, name)):
                 raise ValueError(f"{name} must be a SHA-256 identity")
+        if not re.fullmatch(r"(?:[0-9a-f]{16}|[0-9a-f]{64})", self.source_store_manifest_hash):
+            raise ValueError("source_store_manifest_hash must preserve the canonical store-manifest identity")
         if self.source_row_count < 1 or self.scene_count < 1 or self.target_state_count < 0:
             raise ValueError("Phase-A evidence counts are invalid")
         if self.preflight.flat_gain.available or self.preflight.flat_gain.denominator != 0:
@@ -821,8 +830,8 @@ def benchmarks_from_reader(
             selected = sum(int(row.get("compact_valid_index", -1)) >= 0 for row in rows)
             invalid_rows = [row for row in rows if not bool(row.get("actor_action"))]
             first_failures: dict[str, int] = {}
-            for row in invalid_rows:
-                reason = str(row.get("invalid_reason") or "unknown")
+            for invalid_row in invalid_rows:
+                reason = str(invalid_row.get("invalid_reason") or "unknown")
                 first_failures[reason] = first_failures.get(reason, 0) + 1
             first_failure = (
                 min(first_failures, key=lambda reason: (-first_failures[reason], reason)) if first_failures else None
