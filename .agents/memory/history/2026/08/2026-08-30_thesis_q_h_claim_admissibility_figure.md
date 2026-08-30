@@ -7,9 +7,11 @@ topics: [thesis, typst, figures, q-h, scientific-review]
 confidence: high
 canonical_updates_needed: []
 touched_owner_paths:
+  - Makefile
   - docs/typst/thesis/experiment_data.typ
   - docs/typst/thesis/figures/qh_learning_evidence_loop.typ
   - docs/typst/thesis/sections/01-research-questions.typ
+  - docs/typst/thesis/sections/03-oracle-and-data-generation/03-02-target-task-and-rri-labels.typ
   - docs/typst/thesis/sections/05-experimental-design/index.typ
   - docs/typst/thesis/sections/05-experimental-design/05-01-objectives-and-hypotheses.typ
   - docs/typst/thesis/sections/05-experimental-design/05-02-learning-objective-and-replay-evidence.typ
@@ -20,10 +22,11 @@ touched_owner_paths:
   - docs/typst/thesis/tests/evidence_gate_state.typ
   - docs/typst/thesis/tests/learning_gate_evidence_contract.typ
   - docs/typst/thesis/tests/recovery_evidence_contract.typ
+  - docs/typst/thesis/tests/results_full_profile_render.typ
   - scripts/tests/test_typst_report_data_contract.py
 codex_thread: codex://threads/01a04fd9-0c7c-7813-a9c5-dc49f2f867a6
 repo_object_format: sha1
-repo_head: e28bc6234b319de39ea5637068df601ff46d9895
+repo_head: fa2f1699a9bd4828585976ed95a12d77c8be8b53
 repo_branch: "codex/thesis-figure-qh-evidence-gates"
 worktree_kind: linked
 ---
@@ -107,6 +110,22 @@ reviews until zero P0--P2 findings remained.
   literal point-estimate and lower-bound comparison. The RQ, design, Results,
   Discussion, and Conclusion now distinguish a subthreshold magnitude from an
   interval that does not establish a positive mean effect.
+- The closing contract audit repaired the same Boolean-identity gap for
+  candidate support, actor-$Q_1$, learned-versus-exact $Q_2$, and endpoint
+  recovery. Each decision now equals every declared conjunct; adversarial
+  fixtures fail when any point threshold, interval bound, calibration bound,
+  selected-chain receipt, support stratum, unit, or rowwise tolerance fails.
+- Candidate-support P05 is now a scene-balanced estimand: actor-valid counts are
+  averaged over attempted roots within each scene and nearest-rank P05 is taken
+  across those scene means. Failed-root rate is the macro-average of per-scene
+  failure fractions. Because the current writer lacks passing-root counts, the
+  thesis blocks confirmatory admission until an immutable per-attempt sidecar
+  provides scene/root identity, valid count, threshold, and outcome.
+- The 44-row confirmatory Results surface is split into bounded foundation,
+  policy, exact-$Q_2$, and resource tables. A layout-only fixture imports the
+  canonical fact contracts, asserts exact units and value kinds, exercises all
+  production family specifications, and fails unless the render remains exactly
+  two A4 pages.
 
 ## Commits
 
@@ -119,6 +138,7 @@ reviews until zero P0--P2 findings remained.
 - https://github.com/JanDuchscherer104/ARIA-NBV/commit/b09b32fd5d71ba1d58ac3a635095565f4563eb82
 - https://github.com/JanDuchscherer104/ARIA-NBV/commit/56122614724bd73787cd816483dd51f67b4ef15f
 - https://github.com/JanDuchscherer104/ARIA-NBV/commit/e28bc6234b319de39ea5637068df601ff46d9895
+- https://github.com/JanDuchscherer104/ARIA-NBV/commit/fa2f1699a9bd4828585976ed95a12d77c8be8b53
 
 ## Verification
 
@@ -141,6 +161,25 @@ threshold, wrong rule/unit/aggregation, and malformed-decision cases. Two fresh
 independent reviews approved the exact candidate with zero P0--P2, and rendered
 A4 pages 35, 94--95, 99, and 102 were visually inspected without layout or
 semantic regression.
+The closing repair passed `make thesis-results-full-profile-render`,
+`make thesis-report-data-contract`, `make thesis-pdf-ci`,
+`make typst-authoring-contract`, `make thesis-marker-contract`,
+`make thesis-pdf`, `make check-agent-memory`, and `git diff --check`. The
+full-profile fixture is exactly two A4 pages and was visually inspected in
+color and grayscale; the 129-page thesis Results and support pages were also
+inspected at final size. The focused Q_H behavior suite passed all 632 tests
+when the shared environment was bound to the current worktree source; the one
+initial provenance failure came from the shared interpreter importing the main
+checkout and passed after setting the current-worktree `PYTHONPATH`. Two fresh
+independent exact-candidate reviews reported zero P0--P2 findings. Exact final
+artifacts before the debrief update were: tracked-diff
+`c94c85bc78e004e1a5557edd426fefa471d0cfa9951942472f405a54c137ddbb`,
+layout fixture
+`c20debe9fcf16e4c2b6d25738ddf5687b4fb33327eeee27efdbaabfaaf8d07a4`,
+layout PDF
+`5a68563a452a5c39f1fc60787ffcc65b9f88c944a2becf865d28c71930e215e1`,
+and thesis PDF
+`f90910e241796be5fa4f3a11e7ba127fb7bcaf7be63751b68c64d6742776fea5`.
 
 ## Canonical Owner Impact
 
