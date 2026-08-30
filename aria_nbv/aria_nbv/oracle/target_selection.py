@@ -2,10 +2,11 @@ r"""Oracle target-task sampling for ARIA-NBV.
 
 `OracleTargetTaskSampler` builds the data-generation target-task pool from
 oracle GT OBBs. It is the source for rollout labels and target-conditioned
-supervision. First-pass task admission is intentionally limited to finite,
-positive GT OBB geometry. Confidence is retained for audit but does not gate
-task admission. Persistence-only compatibility columns are encoded by the
-rollout writer rather than carried by this domain DTO.
+supervision. First-pass task admission requires a finite serialized GT OBB
+payload and finite, positive extents. No confidence threshold is applied, but
+a non-finite confidence fails this full-payload gate. Persistence-only
+compatibility columns are encoded by the rollout writer rather than carried by
+this domain DTO.
 """
 
 from __future__ import annotations
@@ -197,7 +198,7 @@ class TargetTaskIdentityStatus(StrEnum):
     """Task-admission status for oracle target-task rows."""
 
     MATCHED = "matched"
-    """The GT target has finite positive geometry and is admitted."""
+    """The serialized GT OBB is finite, has positive extents, and is admitted."""
 
     AMBIGUOUS = "ambiguous_identity"
     """Legacy persisted status retained for reason-code decoding."""
@@ -206,7 +207,7 @@ class TargetTaskIdentityStatus(StrEnum):
     """Legacy persisted status retained for reason-code decoding."""
 
     INVALID_GEOMETRY = "invalid_geometry"
-    """The target OBB has non-finite or non-positive geometry."""
+    """The target OBB fails the serialized-payload or positive-extents gate."""
 
 
 class OracleTargetTaskSelectionPolicy(StrEnum):
@@ -222,10 +223,11 @@ class OracleTargetTask:
 
     The sampler creates these rows from GT OBBs, not from actor-visible target
     discovery. `identity_status` records the first-pass task-pool gate: the
-    source GT OBB must have finite positive geometry. `descriptor` composes the
-    actor-safe semantic and geometric instruction. Privileged identity and
-    confidence stay on the task. Persistence-only compatibility values are
-    added later by the rollout writer and do not belong to this contract.
+    source GT OBB must have a finite serialized payload and finite, positive
+    extents. `descriptor` composes the actor-safe semantic and geometric
+    instruction. Privileged identity and confidence stay on the task.
+    Persistence-only compatibility values are added later by the rollout
+    writer and do not belong to this contract.
     """
 
     source_index: int
@@ -244,10 +246,10 @@ class OracleTargetTask:
     """Instance identifier carried by the GT OBB."""
 
     confidence: float
-    """GT OBB confidence retained for audit; it does not gate task eligibility."""
+    """GT OBB confidence retained without a threshold; non-finite values fail payload validity."""
 
     identity_status: str
-    """Serialized `TargetTaskIdentityStatus` produced by the geometry gate."""
+    """Serialized `TargetTaskIdentityStatus` produced by the full-payload gate."""
 
     selected_rank: int | None = None
     """Zero-based rank in the seeded capped sample, or ``None`` when unselected."""
@@ -267,7 +269,7 @@ class OracleTargetTaskSamplingResult:
     """All non-padded GT OBB rows interpreted as candidate target tasks."""
 
     selected_rows: tuple[OracleTargetTask, ...]
-    """Uniformly sampled geometry-valid rows with sampling audit fields populated."""
+    """Uniformly sampled full-payload-valid rows with sampling audit fields populated."""
 
     max_targets_per_sample: int
     """Configured upper bound on selected target tasks per snippet."""
@@ -328,7 +330,7 @@ class OracleTargetTaskSamplerConfig(TargetConfig["OracleTargetTaskSampler"]):
         return OracleTargetTaskSampler
 
     max_targets_per_sample: int = Field(default=3, ge=1)
-    """Maximum geometry-valid GT target tasks sampled per snippet."""
+    """Maximum full-payload-valid GT target tasks sampled per snippet."""
 
     seed: int | None = 0
     """Seed for uniform capped sampling without replacement."""
@@ -357,9 +359,9 @@ class OracleTargetTaskSampler:
                 task source.
 
         Returns:
-            Full GT target-task table, geometry-valid pool, and capped seeded
-            sample. Confidence is retained for audit and does not filter
-            first-pass target-task eligibility.
+            Full GT target-task table, full-payload-valid pool, and capped seeded
+            sample. No confidence threshold is applied; non-finite fields in
+            the serialized OBB payload fail the full-payload eligibility gate.
         """
 
         from ..data_handling.vin_store.dataset import VinOfflineSample

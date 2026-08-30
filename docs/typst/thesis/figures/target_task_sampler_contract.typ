@@ -44,44 +44,46 @@
   content((19.55, 6.55), text(size: 8pt, weight: "bold", fill: muted)[actor evidence not read], anchor: "east")
   line((.42, 6.20), (19.55, 6.20), stroke: .48pt + rule)
 
-  // One sparse population rail: construct, classify, sample, persist.
-  heading(.42, [Latest GT slice], [last nonempty · padded])
+  // One sparse population rail after latest-slice selection and padding removal.
+  heading(.42, [Source rows], [latest · unpadded])
   dot(.62, 3.70, [$e_0$])
-  dot(1.34, 3.70, [$e_1$])
-  dot(2.06, 3.70, [$e_2$])
-  rect((2.78, 3.58), (3.18, 3.82), fill: white, stroke: (paint: muted, thickness: .55pt, dash: "dashed"))
-  content((2.98, 3.36), text(size: 7.1pt, fill: muted)[padding], anchor: "north")
+  dot(1.40, 3.70, [$e_1$])
+  dot(2.18, 3.70, [$e_2$])
 
-  heading(4.20, [Source rows], [all non-padding OBBs])
-  dot(4.42, 3.70, [$e_0$])
-  dot(5.26, 3.70, [$e_1$])
-  dot(6.10, 3.70, [$e_2$])
+  heading(4.08, [Set status], [finite + extents $> 0$], tint: eligible)
+  dot(4.30, 3.70, [$e_0$], role: "eligible")
+  dot(5.08, 3.70, [$e_1$], role: "invalid")
+  dot(5.86, 3.70, [$e_2$], role: "eligible")
 
-  heading(7.82, [Validated rows], [`rows` $= cal(R)_s^"geom"$], tint: eligible)
-  dot(8.04, 3.70, [$e_0$], role: "eligible")
-  dot(8.92, 3.70, [$e_1$], role: "eligible")
-  dot(9.80, 3.70, [$e_2$], role: "eligible")
+  heading(7.72, [Append `rows`], [descriptor built], tint: eligible)
+  dot(7.94, 3.70, [$e_0$], role: "eligible")
+  dot(8.72, 3.70, [$e_1$], role: "invalid")
+  dot(9.50, 3.70, [$e_2$], role: "eligible")
 
-  heading(11.32, [Seeded cap], [uniform draw], tint: selected)
-  content((12.44, 3.78), text(size: 8.1pt, weight: "bold")[$pi_"seed"$], anchor: "center")
-  content((12.44, 3.32), text(size: 8pt)[$K' = min(K, abs(cal(R)_s^"geom"))$], anchor: "center")
+  heading(11.34, [Seeded cap], [matched only], tint: selected)
+  content((12.48, 3.78), text(size: 8.1pt, weight: "bold")[$pi_"seed"$], anchor: "center")
+  content((12.48, 3.32), text(size: 8pt)[$K' = min(K, abs("matched rows"))$], anchor: "center")
 
-  heading(15.02, [Emit selected rows], [`selected_rows` + provenance], tint: selected)
-  dot(15.24, 3.70, [$e_2$], role: "selected")
-  content((16.12, 3.70), text(size: 7.8pt)[rank 0], anchor: "west")
+  heading(15.08, [Emit selected rows], [rank + provenance], tint: selected)
+  dot(15.30, 3.70, [$e_2$], role: "selected")
+  content((16.18, 3.70), text(size: 7.8pt)[rank 0], anchor: "west")
 
-  rail-arrow(3.34, 3.98)
-  rail-arrow(6.55, 7.60)
-  content((7.08, 4.08), text(size: 7.4pt)[all $g(e)=1$], anchor: "south")
-  rail-arrow(10.30, 11.08)
-  rail-arrow(13.65, 14.78)
+  rail-arrow(2.78, 3.82)
+  rail-arrow(6.34, 7.46)
+  content((6.90, 4.08), text(size: 7.25pt)[descriptor succeeds], anchor: "south")
+  rail-arrow(10.06, 11.10)
+  content((10.58, 4.08), text(size: 7.25pt, fill: eligible)[○ matched only], anchor: "south")
+  rail-arrow(13.70, 14.84)
 
-  // Invalid geometry is fail-fast: descriptor validation raises before append.
-  line((7.08, 3.45), (7.08, 2.24), stroke: (paint: invalid, thickness: .70pt, dash: "dashed"), mark: (end: ">", scale: .48))
-  content((7.08, 1.98), align(center, text(size: 7.45pt, fill: invalid)[any $g(e)=0$\
-  descriptor raises before result]), anchor: "north")
+  // Status is computed first; descriptor-invalid geometry then aborts before append.
+  line((6.90, 3.45), (6.90, 1.92), stroke: (paint: invalid, thickness: .70pt, dash: "dashed"), mark: (end: ">", scale: .48))
+  content((6.90, 1.68), align(center, text(size: 7.35pt, fill: invalid)[descriptor fails\
+  raise before append]), anchor: "north")
 
-  // The exact admission predicate is the only secondary annotation.
+  // A descriptor-constructible auxiliary failure remains in rows but cannot reach the cap.
+  line((8.72, 3.47), (8.72, 2.72), stroke: (paint: invalid, thickness: .70pt, dash: "dashed"), mark: (end: ">", scale: .46))
+  content((8.92, 2.50), text(size: 7.05pt, fill: invalid)[$times$ auxiliary-invalid: retained; excluded from cap], anchor: "west")
+
+  // Sparse edge-case note keeps the slice fallback explicit.
   content((.42, .82), text(size: 7.45pt, fill: muted)[all-padding block $arrow.r$ no task rows], anchor: "west")
-  content((10.05, .82), text(size: 7.8pt)[$g(e) = op("finite")(bold(B)_e) and op("finite")(bold(l)_e) and min(bold(l)_e) > 0$], anchor: "west")
 })

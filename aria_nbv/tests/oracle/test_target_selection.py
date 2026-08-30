@@ -199,6 +199,17 @@ def test_oracle_target_task_sampler_keeps_duplicate_gt_geometry_as_distinct_task
     assert "num_ambiguous_identity" not in result.diagnostic_summary()
 
 
+def test_oracle_target_task_sampler_retains_nonfinite_auxiliary_payload_as_invalid() -> None:
+    sample = _sample(gt_obbs=_obb_block([[0.0, 0.0, 0.0]], probs=[float("nan")]))
+
+    result = _oracle_sampler(max_targets_per_sample=1).sample(sample)
+
+    assert len(result.rows) == 1
+    assert result.rows[0].identity_status == TargetTaskIdentityStatus.INVALID_GEOMETRY.value
+    assert result.selected_rows == ()
+    assert result.diagnostic_summary()["num_invalid_geometry"] == 1
+
+
 def test_oracle_target_task_contains_only_domain_fields() -> None:
     sample = _sample(
         gt_obbs=_obb_block([[0.0, 0.0, 0.0]], probs=[0.05], box_size=0.0),
