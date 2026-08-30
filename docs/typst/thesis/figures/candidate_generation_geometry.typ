@@ -15,7 +15,6 @@
 #let bypass-color = rgb("#18836d")
 #let invalid-color = rgb("#a93e4c")
 #let selected-color = rgb("#f2c14e")
-#let history-rows = data.at("provenance").at("calibrated_outline").at("history_rows")
 
 // The raster is a fixed crop of the original 1500 x 920 projection. Every
 // vector point remains in the original normalized panel coordinates and is
@@ -131,7 +130,7 @@
         (paint: history-frustum-color, thickness: 1.02pt, dash: "dashed"),
       )
     }
-    for row in history-rows {
+    for row in panel.at("history_rows") {
       circle(
         map-point(panel.at("history_path").at(row)),
         radius: .038,

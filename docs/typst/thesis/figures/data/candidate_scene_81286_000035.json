@@ -1339,7 +1339,11 @@
       ]
     ],
     "valid_frusta": [],
-    "invalid_frusta": []
+    "invalid_frusta": [],
+    "history_rows": [
+      0,
+      10
+    ]
   },
   "top": {
     "background": "candidate_scene_81286_000035_top.png",

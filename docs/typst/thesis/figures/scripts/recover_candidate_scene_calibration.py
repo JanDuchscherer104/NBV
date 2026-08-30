@@ -248,6 +248,7 @@ def _recover(
     oblique["background"] = oblique_background
     output["top"]["background"] = top_background
     oblique["history_path"] = _project(rgb_history[:, 9:12])
+    oblique["history_rows"] = list(HISTORY_ROWS)
     oblique["history_frusta"] = [
         _project_segments(
             _calibrated_frustum_segments(rgb_history[row], camera, depth_m=0.08)

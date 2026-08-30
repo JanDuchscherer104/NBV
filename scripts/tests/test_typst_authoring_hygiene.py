@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import argparse
 from dataclasses import dataclass
+import json
 from pathlib import Path
 import re
 import sys
@@ -494,6 +495,29 @@ def scan_paths(paths: list[Path]) -> list[Violation]:
 
 
 class HygieneTests(unittest.TestCase):
+    def test_candidate_scene_history_rows_use_shared_panel_contract(self) -> None:
+        figure_root = THESIS_ROOT / "figures"
+        figure = (figure_root / "candidate_generation_geometry.typ").read_text(
+            encoding="utf-8"
+        )
+        exporter = (
+            figure_root / "scripts/export_candidate_scene_geometry.py"
+        ).read_text(encoding="utf-8")
+        recovery = (
+            figure_root / "scripts/recover_candidate_scene_calibration.py"
+        ).read_text(encoding="utf-8")
+        payload = json.loads(
+            (figure_root / "data/candidate_scene_81286_000035.json").read_text(
+                encoding="utf-8"
+            )
+        )
+
+        self.assertEqual(payload["oblique"]["history_rows"], [0, 10])
+        self.assertIn('panel.at("history_rows")', figure)
+        self.assertNotIn('.at("calibrated_outline").at("history_rows")', figure)
+        self.assertIn('"history_rows": list(HISTORY_ROWS)', exporter)
+        self.assertIn('oblique["history_rows"] = list(HISTORY_ROWS)', recovery)
+
     def test_raw_display_is_blocking(self) -> None:
         path = ROOT / "docs/typst/thesis/sections/fixture.typ"
         self.assertTrue(scan_text(path, "$$\nx = 1\n$$"))

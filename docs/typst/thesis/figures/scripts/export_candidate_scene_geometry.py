@@ -451,6 +451,7 @@ def _panel_payload(
             0
         ],
         "history_path": projection.points(history_centres),
+        "history_rows": list(HISTORY_ROWS),
         "root_center": projection.points(root_pose[None, 9:12])[0],
         "root_frustum": [],
         "selected_path": projection.points(
