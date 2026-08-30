@@ -183,7 +183,13 @@ def _rotation_distance_deg(first: np.ndarray, second: np.ndarray) -> float:
 
 
 def _recover(
-    baseline: dict[str, Any], *, raw_shard: Path, baseline_path: Path
+    baseline: dict[str, Any],
+    *,
+    raw_shard: Path,
+    baseline_path: Path,
+    oblique_raster: Path,
+    oblique_crop: Path,
+    oblique_background: str,
 ) -> dict[str, Any]:
     output = copy.deepcopy(baseline)
     original_oblique = baseline["oblique"]
@@ -216,7 +222,7 @@ def _recover(
     np.testing.assert_allclose(physical_sampling_translation, 0.013734805, atol=1e-5)
     np.testing.assert_allclose(physical_sampling_rotation, 92.544884, atol=2e-4)
 
-    oblique["background"] = "candidate_scene_81286_000035_oblique_crop.png"
+    oblique["background"] = oblique_background
     oblique["history_path"] = _project(rgb_history[:, 9:12])
     oblique["history_frusta"] = [
         _project_segments(
@@ -293,12 +299,8 @@ def _recover(
         },
         "input_sha256": {
             "generic_baseline_json": _sha256(baseline_path),
-            "oblique_raster": _sha256(
-                baseline_path.parent / "candidate_scene_81286_000035_oblique.png"
-            ),
-            "oblique_crop": _sha256(
-                baseline_path.parent / "candidate_scene_81286_000035_oblique_crop.png"
-            ),
+            "oblique_raster": _sha256(oblique_raster),
+            "oblique_crop": _sha256(oblique_crop),
             "raw_shard": _sha256(raw_shard),
         },
     }
@@ -341,14 +343,25 @@ def main() -> None:
     args = parser.parse_args()
     baseline_path = args.baseline.expanduser().resolve()
     raw_shard = args.raw_shard.expanduser().resolve()
+    output_path = args.output.expanduser().resolve()
     oblique_raster = args.oblique_raster.expanduser().resolve()
     crop_output = args.crop_output.expanduser().resolve()
+    output_path.parent.mkdir(parents=True, exist_ok=True)
     crop_output.parent.mkdir(parents=True, exist_ok=True)
     _crop_oblique_raster(oblique_raster, crop_output)
     baseline: dict[str, Any] = json.loads(baseline_path.read_text(encoding="utf-8"))
-    output = _recover(baseline, raw_shard=raw_shard, baseline_path=baseline_path)
-    args.output.write_text(json.dumps(output, indent=2) + "\n", encoding="utf-8")
-    print(f"wrote {args.output}")
+    output = _recover(
+        baseline,
+        raw_shard=raw_shard,
+        baseline_path=baseline_path,
+        oblique_raster=oblique_raster,
+        oblique_crop=crop_output,
+        oblique_background=Path(
+            os.path.relpath(crop_output, start=output_path.parent)
+        ).as_posix(),
+    )
+    output_path.write_text(json.dumps(output, indent=2) + "\n", encoding="utf-8")
+    print(f"wrote {output_path}")
 
 
 if __name__ == "__main__":
