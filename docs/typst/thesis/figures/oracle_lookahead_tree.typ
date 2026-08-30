@@ -1,105 +1,157 @@
-#import "@preview/fletcher:0.5.8" as fletcher: diagram, edge, node
+#import "@preview/cetz:0.5.2"
 
-#set page(width: auto, height: auto, margin: 4mm, fill: white)
-#set text(font: "New Computer Modern", size: 10.2pt)
+#set page(width: 160mm, height: 72mm, margin: 0mm, fill: white)
+#set text(font: "New Computer Modern", size: 8.4pt, fill: rgb("#17202a"))
 
-#let ink = rgb("#1f2937")
-#let muted = rgb("#64748b")
-#let state = rgb("#2563eb")
-#let valid = rgb("#16a34a")
-#let invalid = rgb("#dc2626")
-#let beam = rgb("#7c3aed")
-#let selected = rgb("#b45309")
-#let oracle = rgb("#991b1b")
+#let ink = rgb("#17202a")
+#let muted = rgb("#687380")
+#let guide = rgb("#d4dbe2")
+#let retained = rgb("#17748c")
+#let ranked = rgb("#b95b08")
+#let invalid = rgb("#a43a43")
+#let pruned = rgb("#7d8995")
 
-#let block(pos, title, body, tint: state, width: 32mm) = node(
-  pos,
-  align(center)[
-    #text(weight: "bold")[#title] \
-    #text(size: 7.8pt, fill: ink)[#body]
-  ],
-  width: width,
-  fill: tint.lighten(82%),
-  stroke: .75pt + tint.darken(8%),
-  corner-radius: 4pt,
-)
+#let temporal-guide(x, label) = {
+  import cetz.draw: *
+  line(
+    (x, .91),
+    (x, 4.48),
+    stroke: (paint: guide, thickness: .48pt, dash: "dashed"),
+  )
+  content(
+    (x, 4.57),
+    text(size: 8.2pt, fill: muted)[#label],
+    anchor: "south",
+  )
+}
 
-#let note(pos, body, tint: muted, width: 34mm) = node(
-  pos,
-  align(center)[#text(size: 7.0pt, fill: tint.darken(10%))[#body]],
-  width: width,
-  fill: tint.lighten(90%),
-  stroke: .52pt + tint.lighten(28%),
-  corner-radius: 3pt,
-)
+#let path-node(point, role: "retained") = {
+  import cetz.draw: *
+  if role == "root" {
+    circle(point, radius: .105, fill: ink, stroke: white + .5pt)
+  } else if role == "ranked" {
+    circle(point, radius: .13, fill: ranked, stroke: white + .55pt)
+  } else {
+    circle(point, radius: .12, fill: white, stroke: retained + 1.1pt)
+  }
+}
 
-#let transition(from, to, action, tint: muted, dash: none, thickness: .85pt) = edge(
-  from,
-  to,
-  "-|>",
-  label: text(size: 7pt, fill: tint.darken(8%))[#action],
-  label-fill: white,
-  stroke: thickness + tint,
-  dash: dash,
-)
+#cetz.canvas(length: 14.3mm, padding: .05, {
+  import cetz.draw: *
 
-#diagram(
-  spacing: 8pt,
-  cell-size: (18mm, 13mm),
-  edge-stroke: .82pt + muted,
-  edge-corner-radius: 5pt,
-  mark-scale: 72%,
+  temporal-guide(1.0, [$t$])
+  temporal-guide(4.8, [$t+1$])
+  temporal-guide(8.7, [$t+2$])
 
-  block((2.6, 0), [root state], [
-    $s_t$, target $e$ \
-    valid rows $cal(A)_t$
-  ], tint: state, width: 32mm),
+  // The neutral prefix is factual history; all branches begin at its terminal
+  // root. It is deliberately not assigned an oracle score.
+  bezier(
+    (.05, 2.12),
+    (1.0, 2.46),
+    (.32, 2.20),
+    (.72, 2.38),
+    stroke: (paint: ink, thickness: 2.05pt, cap: "round"),
+  )
+  content((.08, 2.02), text(size: 8pt, weight: "bold")[factual prefix], anchor: "north-west")
 
-  block((0.55, 1.75), [successor state], [
-    $s_(t+1)^((1))$ \
-    regenerated table
-  ], tint: valid, width: 34mm),
-  block((2.6, 1.75), [successor state], [
-    $s_(t+1)^((2))$ \
-    regenerated table
-  ], tint: selected, width: 34mm),
-  block((4.65, 1.75), [legal, not retained], [
-    $s_(t+1)^((3))$ \
-    outside beam $B=2$
-  ], tint: muted, width: 36mm),
+  // Two complete retained paths share one factual root. The thinner path wins
+  // the immediate ordering; the thicker path ranks first under the scoped
+  // two-step return while both complete paths remain retained.
+  bezier(
+    (1.0, 2.46),
+    (4.8, 3.76),
+    (2.25, 2.77),
+    (3.48, 3.63),
+    stroke: (paint: retained, thickness: 1.35pt, cap: "round"),
+    name: "tau-1-first",
+  )
+  bezier(
+    (4.8, 3.76),
+    (8.7, 3.41),
+    (6.05, 3.97),
+    (7.55, 3.72),
+    stroke: (paint: retained, thickness: 1.35pt, cap: "round"),
+    name: "tau-1-second",
+  )
+  bezier(
+    (1.0, 2.46),
+    (4.8, 2.42),
+    (2.25, 2.18),
+    (3.52, 2.24),
+    stroke: (paint: ranked, thickness: 2.25pt, cap: "round"),
+    name: "tau-2-first",
+  )
+  bezier(
+    (4.8, 2.42),
+    (8.7, 2.63),
+    (6.05, 2.19),
+    (7.55, 2.34),
+    stroke: (paint: ranked, thickness: 2.25pt, cap: "round"),
+    name: "tau-2-second",
+  )
 
-  block((0.55, 3.55), [depth-$2$ leaf], [
-    return $G_1^((2))$ \
-    terminal or horizon
-  ], tint: valid, width: 34mm),
-  block((2.6, 3.55), [depth-$2$ leaf], [
-    return $G_2^((2))$ \
-    terminal or horizon
-  ], tint: selected, width: 34mm),
+  // Invalid rows terminate before the next time plane; they are never drawn as
+  // low-valued successor leaves.
+  line(
+    (1.0, 2.46),
+    (2.02, 3.75),
+    stroke: (paint: invalid, thickness: .85pt, dash: "dotted"),
+  )
+  line((1.88, 3.63), (2.16, 3.87), stroke: invalid + 1.1pt)
+  line((1.88, 3.87), (2.16, 3.63), stroke: invalid + 1.1pt)
+  content(
+    (2.23, 3.75),
+    text(size: 8pt, fill: invalid)[invalid row: no child],
+    anchor: "west",
+  )
 
-  note((4.9, .25), [
-    $q_(t,4): m_(t,4)=0$ \
-    invalid row; no child
-  ], tint: invalid, width: 35mm),
-  note((4.85, 3.55), [
-    constructed symbolic topology \
-    no measured reward is implied
-  ], tint: beam, width: 40mm),
+  // A legal root row outside the branch factor remains in the full candidate
+  // shell but does not become a trajectory. A later expanded trajectory can be
+  // removed by the beam. Distinct end marks keep these controls separate.
+  line(
+    (1.0, 2.46),
+    (2.13, 1.42),
+    stroke: (paint: pruned, thickness: .85pt, dash: "dashed"),
+  )
+  line((2.03, 1.34), (2.23, 1.50), stroke: pruned + 1pt)
+  line(
+    (4.8, 2.42),
+    (6.13, 1.46),
+    stroke: (paint: pruned, thickness: .85pt, dash: "dashed"),
+  )
+  line((5.98, 1.34), (6.18, 1.50), stroke: pruned + 1pt)
+  line((6.08, 1.42), (6.28, 1.58), stroke: pruned + 1pt)
+  content(
+    (2.28, 1.35),
+    text(size: 7.8pt, fill: pruned)[valid row; not expanded \ stored in full shell],
+    anchor: "west",
+  )
+  content(
+    (6.34, 1.43),
+    text(size: 7.8pt, fill: pruned)[expanded path; beam-pruned],
+    anchor: "west",
+  )
 
-  block((.55, 4.8), [one-step greedy], [
-    $r_(t,1) > r_(t,2)$ \
-    selects first action $q_(t,1)$
-  ], tint: valid, width: 38mm),
-  block((2.75, 4.8), [bounded lookahead], [
-    $G_2^((2)) > G_1^((2))$ \
-    selects first action $q_(t,2)$
-  ], tint: selected, width: 42mm),
+  path-node((1.0, 2.46), role: "root")
+  path-node((4.8, 3.76))
+  path-node((8.7, 3.41))
+  path-node((4.8, 2.42), role: "ranked")
+  path-node((8.7, 2.63), role: "ranked")
+  circle((8.7, 2.63), radius: .27, fill: none, stroke: ink + 1.15pt)
 
-  transition((2.6, 0), (.55, 1.75), [$q_(t,1), r_(t,1)$], tint: valid),
-  transition((2.6, 0), (2.6, 1.75), [$q_(t,2), r_(t,2)$], tint: selected, thickness: 1.35pt),
-  transition((2.6, 0), (4.65, 1.75), [$q_(t,3), r_(t,3)$], dash: "dashed"),
-  transition((.55, 1.75), (.55, 3.55), [$q'_(1), r'_(1)$], tint: valid),
-  transition((2.6, 1.75), (2.6, 3.55), [$q'_(2), r'_(2)$], tint: selected, thickness: 1.35pt),
-  edge((.55, 3.55), (.55, 4.8), "--|>", stroke: .7pt + valid),
-  edge((2.6, 3.55), (2.75, 4.8), "-|>", stroke: 1.1pt + selected),
-)
+  content((.80, 2.53), text(size: 8.2pt, weight: "bold")[$s_t$], anchor: "east")
+  content((2.65, 3.29), text(size: 8.1pt, fill: retained, weight: "bold")[$i_1$], anchor: "south")
+  content((2.65, 2.20), text(size: 8.1pt, fill: ranked, weight: "bold")[$i_2$], anchor: "north")
+  content((8.94, 3.41), text(size: 8.2pt, fill: retained, weight: "bold")[$tau_1$], anchor: "west")
+  content((9.02, 2.63), text(size: 8.2pt, weight: "bold")[$tau_2$], anchor: "west")
+
+  // Symbolic ordering only: no numeric rewards and no learned-policy claim.
+  content(
+    (4.85, .20),
+    text(size: 8.2pt)[
+      one-step: $r_t^e(i_1) > r_t^e(i_2)$ $arrow.r$ $i_1$ \
+      $h=2$, $gamma=1$: $G_(t,e)^((2))(tau_2) > G_(t,e)^((2))(tau_1)$ $arrow.r$ $tau_2$ ranks first (root action $i_2$)
+    ],
+    anchor: "south",
+  )
+})
