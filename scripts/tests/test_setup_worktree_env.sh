@@ -2,7 +2,7 @@
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-SANDBOX="$(mktemp -d "${TMPDIR:-/tmp}/aria-worktree-env.XXXXXX")"
+SANDBOX="$(cd "$(mktemp -d "${TMPDIR:-/tmp}/aria-worktree-env.XXXXXX")" && pwd -P)"
 trap 'rm -rf "${SANDBOX}"' EXIT
 
 SHARED_ROOT="${SANDBOX}/shared"
@@ -211,15 +211,42 @@ grep -Fq "ARIA_NBV_SHARED_ROOT must identify the parent worktree" \
 
 snapshot_tree() {
   local root="$1"
-  find "${root}" -mindepth 1 -printf '%P %y\n' | LC_ALL=C sort
-  find "${root}" -type f -print0 | LC_ALL=C sort -z | xargs -0 -r sha256sum
+  python3 - "${root}" <<'PY'
+import hashlib
+import os
+import sys
+from pathlib import Path
+
+root = Path(sys.argv[1])
+entries: list[str] = []
+digests: list[str] = []
+for path in root.rglob("*"):
+    relative = path.relative_to(root).as_posix()
+    if path.is_symlink():
+        kind = "l"
+    elif path.is_dir():
+        kind = "d"
+    elif path.is_file():
+        kind = "f"
+        digest = hashlib.sha256(path.read_bytes()).hexdigest()
+        digests.append(f"{digest}  {path}")
+    else:
+        kind = "?"
+    entries.append(f"{relative} {kind}")
+print("\n".join(sorted(entries)))
+if entries and digests:
+    print()
+print("\n".join(sorted(digests)))
+PY
 }
 
 # The public Codex boundary rejects malformed mode declarations before it ranks
 # a parent or can mutate the destination, and reports one actionable line.
 mode_before="$(snapshot_tree "${STALE_CHILD_ROOT}")"
-if ARIA_NBV_GRAPHIFY_MODES="deep,standard" \
-  run_codex_setup "${STALE_CHILD_ROOT}" "${SHARED_ROOT}" \
+if CODEX_WORKTREE_PATH="${STALE_CHILD_ROOT}" \
+  CODEX_SOURCE_WORKSPACE_PATH="${SHARED_ROOT}" \
+  ARIA_NBV_GRAPHIFY_MODES="deep,standard" \
+  PATH="${FAKE_BIN}:${PATH}" bash -c "${CODEX_SETUP_SCRIPT}" \
   >"${SANDBOX}/bad-mode.out" 2>"${SANDBOX}/bad-mode.err"; then
   echo "Codex setup unexpectedly accepted a reordered Graphify mode list" >&2
   exit 1
@@ -325,7 +352,8 @@ rmdir "${SHARED_ROOT}/.data/graphify-semantic-cache/semantic" \
 run_setup "${WORKTREE_ROOT}"
 [[ -d "${SHARED_ROOT}/.data/graphify-semantic-cache/semantic" ]]
 [[ -d "${SHARED_ROOT}/.data/graphify-semantic-cache/semantic-deep" ]]
-grep -Fqx -- "--root ${WORKTREE_ROOT}" "${SANDBOX}/reconcile.log"
+grep -Fqx -- "--usable --quiet" "${SANDBOX}/freshness.log"
+[[ ! -e "${SANDBOX}/reconcile.log" ]]
 [[ -d "${WORKTREE_ROOT}/.data" ]]
 [[ -L "${WORKTREE_ROOT}/.data/ase_efm" ]]
 [[ -L "${WORKTREE_ROOT}/.data/offline_cache" ]]

@@ -4,13 +4,12 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
 import subprocess
 import sys
 import tempfile
 import unittest
+from pathlib import Path
 from unittest import mock
-
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts"))
@@ -367,6 +366,27 @@ class ReconcileGraphifyWorktreeTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "Graphify modes"):
             reconcile.configured_modes("deep,standard")
 
+    def test_projection_tree_drift_alone_does_not_force_projection_rebuild(self) -> None:
+        with mock.patch.object(
+            reconcile.freshness,
+            "projection_owner_changes",
+            return_value=["projection source tree differs from HEAD"],
+        ):
+            self.assertEqual(reconcile.projection_rebuild_reasons(Path.cwd()), [])
+
+        with mock.patch.object(
+            reconcile.freshness,
+            "projection_owner_changes",
+            return_value=[
+                "projection source tree differs from HEAD",
+                "projection owner digest changed: docs/contents/setup.qmd",
+            ],
+        ):
+            self.assertEqual(
+                reconcile.projection_rebuild_reasons(Path.cwd()),
+                ["projection owner digest changed: docs/contents/setup.qmd"],
+            )
+
     def test_rejects_a_marker_that_differs_from_the_cli_interpreter(self) -> None:
         with tempfile.TemporaryDirectory(prefix="aria-reconcile-") as temporary:
             root = Path(temporary)
@@ -409,7 +429,7 @@ class ReconcileGraphifyWorktreeTests(unittest.TestCase):
 
             def mutate_then_fail(command: list[str], **_: object) -> subprocess.CompletedProcess[str]:
                 if command[0] == str(cli):
-                    graph.write_text("{\"mutated\": true}\n", encoding="utf-8")
+                    graph.write_text('{"mutated": true}\n', encoding="utf-8")
                     raise subprocess.CalledProcessError(1, command)
                 index.write_text("# mutated\n", encoding="utf-8")
                 return subprocess.CompletedProcess(command, 0, "", "")

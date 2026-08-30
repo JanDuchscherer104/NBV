@@ -7,7 +7,7 @@ set -euo pipefail
 # bindings would make topology queries target the committing child instead.
 unset GIT_DIR GIT_WORK_TREE
 
-repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
 
 git_dir_for_worktree() {
   local worktree="$1" marker gitdir
@@ -144,6 +144,10 @@ maintain_graphify() {
       --canonical-cache-root "$primary/.data/graphify-semantic-cache" \
       >/dev/null 2>&1 || \
       fail "linked worktree Graphify seed is invalid; rerun Codex worktree setup"
+  fi
+  if python3 -I "$repo_root/scripts/check_graphify_freshness.py" \
+    --usable --quiet >/dev/null 2>&1; then
+    return
   fi
   if ! python3 "$repo_root/scripts/reconcile_graphify_worktree.py" \
     --root "$repo_root" >/dev/null 2>&1; then

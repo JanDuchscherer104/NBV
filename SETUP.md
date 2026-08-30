@@ -64,29 +64,12 @@ PY
 ```
 
 Torch CUDA availability is not sufficient for the rollout/oracle renderer.
-PyTorch3D is compiled locally and must pass its own CUDA rasterization smoke:
+PyTorch3D is compiled locally and must pass its own CUDA rasterization smoke.
+The project backend preflight runs that smoke and records the result:
 
 ```sh
 cd aria_nbv
-uv run python - <<'PY'
-import torch
-from pytorch3d.renderer import FoVPerspectiveCameras, MeshRasterizer, RasterizationSettings
-from pytorch3d.structures import Meshes
-
-if not torch.cuda.is_available():
-    raise SystemExit("Torch CUDA is unavailable.")
-
-device = torch.device("cuda")
-verts = torch.tensor([[-0.5, -0.5, 2.0], [0.5, -0.5, 2.0], [0.0, 0.5, 2.0]], device=device)
-faces = torch.tensor([[0, 1, 2]], dtype=torch.int64, device=device)
-mesh = Meshes(verts=[verts], faces=[faces])
-rasterizer = MeshRasterizer(
-    cameras=FoVPerspectiveCameras(device=device),
-    raster_settings=RasterizationSettings(image_size=8, blur_radius=0.0, faces_per_pixel=1),
-)
-rasterizer(mesh)
-print("pytorch3d_cuda_rasterization_ok")
-PY
+PYTORCH3D_BACKEND=cuda uv run nbv-pytorch3d-backend
 ```
 
 ### CPU and GPU expectations
@@ -103,17 +86,20 @@ will fall back to CPU when CUDA is unavailable, but a CPU fallback is a
 debugging convenience, not a performance target.
 
 Use the `aria-nbv` mamba environment as the CUDA build-toolchain context and
-the repo `.venv` as the `uv` runtime. If PyTorch3D reports `Not compiled with
-GPU support`, rebuild it from the activated toolchain environment:
+the repo `.venv` as the `uv` runtime. Run the admission helper after `uv sync`;
+it derives the exact Git source from `uv.lock`, rebuilds only PyTorch3D when
+needed, and proves a real CUDA rasterization before succeeding:
 
 ```sh
-cd aria_nbv
 mamba activate aria-nbv
-export CUDA_HOME="$CONDA_PREFIX"
-export FORCE_CUDA=1
-export TORCH_CUDA_ARCH_LIST="8.6"
-uv sync --all-extras --reinstall-package pytorch3d --no-build-isolation-package pytorch3d --no-cache
+cd aria_nbv
+uv sync --locked --extra dev
+cd ..
+python3 scripts/setup_pytorch3d_cuda.py --cuda-home "$CONDA_PREFIX"
 ```
+
+Run the helper again after any later `uv sync` that replaces PyTorch3D. It
+leaves all locked transitive dependencies untouched.
 
 ### Optional xFormers
 
@@ -143,6 +129,51 @@ OPENPOINTS_BUILD_EMD=1 uv sync --all-extras
 If extension builds cannot find `nvcc`, set `CUDA_HOME` or
 `OPENPOINTS_TORCH_CUDA_ARCH_LIST` for the local machine.
 
+### Apple Silicon geometry lane
+
+Linux remains the default production lane and resolves PyTorch3D from the
+pinned upstream CUDA-capable provider. On Darwin arm64, the package resolves
+PyTorch3D from the pinned Mojo-enabled fork:
+
+```sh
+cd aria_nbv
+uv sync --locked --extra dev
+PYTORCH3D_BACKEND=mojo uv run nbv-pytorch3d-backend
+```
+
+`PYTORCH3D_BACKEND=auto` prefers CUDA when available, otherwise the
+Mojo-enabled provider on Apple Silicon, otherwise CPU. Forced `cuda` and
+`mojo` modes fail early when the requested provider cannot run; they do not
+silently fall back. The `nbv-pytorch3d-backend` command prints the resolved
+backend, Torch version, PyTorch3D source URL/SHA, platform, device, and
+provider counters as JSON for experiment artifacts.
+
+This Mac lane is intended for smaller deterministic agentic experiments and
+overnight research loops. Full-scale CUDA generation, training, and OpenPoints
+extension workloads remain Linux/Ubuntu responsibilities.
+
+On macOS, Python ignores `.pth` files carrying the filesystem `hidden` flag.
+If a console entry point cannot import `aria_nbv` although `uv run python` can,
+repair the local environment metadata and resync it:
+
+```sh
+chflags -R nohidden .venv
+uv sync --locked --extra dev
+```
+
+After pulling the `real-data-smoke` family, validate the complete public
+geometry path and create one disposable immutable VIN store:
+
+```sh
+cd aria_nbv
+PYTORCH3D_BACKEND=mojo uv run pytest -q \
+  tests/integration/test_oracle_rri_labeler_real_data.py::test_oracle_rri_labeler_runs_real_data
+PYTORCH3D_BACKEND=mojo uv run nbv-build-offline \
+  --config-path ../.configs/build_vin_offline_macos_smoke.toml --dry-run
+PYTORCH3D_BACKEND=mojo uv run nbv-build-offline \
+  --config-path ../.configs/build_vin_offline_macos_smoke.toml
+```
+
 ## 3. Dataset and cache layout
 
 ARIA-NBV expects paths to be rooted at the repository by default:
@@ -164,6 +195,28 @@ Relative immutable-store names such as `vin_offline` resolve under
 `PathConfig().offline_cache_dir`, whose default is `.data/offline_cache`.
 Use copied local TOML configs with absolute paths when a machine needs a
 different data mount.
+
+To exchange allowlisted ignored artifacts with `ssh ubuntu
+~/repos/ARIA-NBV`, use the guarded helper (dry-run by default):
+
+```sh
+python3 scripts/sync_ubuntu_artifacts.py graphify-cache pull
+python3 scripts/sync_ubuntu_artifacts.py graphify-cache pull --apply
+python3 scripts/sync_ubuntu_artifacts.py real-data-smoke pull --apply
+python3 scripts/sync_ubuntu_artifacts.py research-snapshot pull --apply
+```
+
+Only the content-addressed Graphify semantic cache supports pull and push, and
+both directions are union-only. The real-data family pulls three immutable
+scene-81283 files used by the Mac integration suite. Research material is
+pulled into `.agents/work/remote/ubuntu/<remote-commit>/`; it never overwrites
+local `.agents/work`, `.omx`, literature owners, or generated Graphify state.
+Generated `graphify-input` and `graphify-out` remain revision-local; only their
+content-addressed semantic cache crosses hosts. Code, skills, durable agent
+memory, reviewed plans/specs, and tracked literature move through Git and PRs.
+Virtual environments, `.env`, OMX runtime state, Codex databases, credentials,
+and the dirty Ubuntu checkout are never mirrored. No family uses deletion or
+in-place mutation.
 
 ## 4. ASE access and model weights
 

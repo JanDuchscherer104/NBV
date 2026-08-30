@@ -135,7 +135,7 @@ class CandidateDepthRendererConfig(TargetConfig["CandidateDepthRenderer"]):
     is_debug: bool = False
     """Enable detailed debug logging."""
 
-    _resolve_device = field_validator("device", mode="before")(BaseConfig._resolve_device)
+    _resolve_device = field_validator("device", mode="before")(BaseConfig._resolve_geometry_device)
 
     @model_validator(mode="after")
     def _validate_output_size(self) -> "CandidateDepthRendererConfig":

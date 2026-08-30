@@ -586,10 +586,11 @@ def test_qh_bundle_rejects_recorded_identity_mutation(tmp_path, mutation: str, m
 
 def test_qh_bundle_dependencies_bind_exact_pytorch3d_vcs_identity() -> None:
     dependencies = qh_experiment_module._bundle_dependencies()  # noqa: SLF001
+    expected_url, expected_commit = qh_experiment_module.expected_pytorch3d_identity()
 
     assert dependencies["pytorch3d"] == "0.7.9"
-    assert dependencies["pytorch3d_vcs_url"] == "https://github.com/facebookresearch/pytorch3d.git"
-    assert dependencies["pytorch3d_vcs_commit"] == "b6a77ad7aaf41ed90fca80ce6a2bac3c462a7881"
+    assert dependencies["pytorch3d_vcs_url"] == expected_url
+    assert dependencies["pytorch3d_vcs_commit"] == expected_commit
 
 
 def test_qh_bundle_dependencies_reject_moving_pytorch3d_runtime(
