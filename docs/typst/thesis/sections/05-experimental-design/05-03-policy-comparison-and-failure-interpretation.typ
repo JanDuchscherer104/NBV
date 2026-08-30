@@ -44,19 +44,19 @@ headroom denominator passes the meaningful-effect gate.
 
 #figure(
   publication-table(
-    text-size: 7.7pt,
-    columns: (0.72fr, 1.08fr, 1.32fr, 1.28fr),
-    header: ([*Non-passing prerequisite*], [*Admitted interpretation*], [*Not implied*], [*Next discriminating evidence*]),
+    text-size: 7.3pt,
+    columns: (0.62fr, 0.9fr, 1.08fr, 1.6fr),
+    header: ([*Prerequisite*], [*If evidence is unavailable*], [*If its decision does not pass*], [*Boundary and next discriminating evidence*]),
     rows: (
-      [measurement], [the oracle outcome is not stable enough for comparison], [anything about planning, learning, or support], [repair and repeat the frozen metric protocol],
-      [population / action support], [the requested estimand lacks an adequate study or action population], [zero utility or policy failure], [report exclusions, family survival, horizon coverage, and resource failures],
-      [oracle headroom], [no meaningful non-myopic structure was detected in the frozen setup], [universal myopia or model inadequacy], [change support or horizon only in a separately declared study],
-      [actor-visible $Q_1$], [the available actor information does not recover immediate target value], [a specifically long-horizon failure], [audit target matching, leakage, calibration, and state support],
-      [learned / exact $Q_2$], [the first learned recursion is unsupported or inaccurate], [endpoint planning value or a need for more architecture], [separate coverage, $Q_1$ error, successor linkage, and bootstrap error],
-      [endpoint recovery], [the admitted learned policy does not recover prespecified headroom], [which mechanism failed], [stratify by support, target observability, replay coverage, and state aliasing],
+      [measurement], [metric validity is unresolved], [the oracle outcome is not stable enough for comparison], [Neither state implies planning, learning, or support behavior; complete or repair and repeat the frozen metric protocol.],
+      [population / action support], [the study and action population is unresolved], [the requested estimand lacks adequate population support], [Neither state implies zero utility or policy failure; report exclusions, family survival, horizon coverage, and resource failures.],
+      [oracle headroom], [non-myopic headroom is unresolved], [no meaningful non-myopic structure was detected in the frozen setup], [Neither state implies universal myopia or model inadequacy; complete the paired estimate, or change support or horizon only in a separately declared study.],
+      [actor-visible $Q_1$], [immediate-value recovery is unresolved], [the available actor information does not recover immediate target value], [Neither state establishes a specifically long-horizon failure; complete or audit target matching, leakage, calibration, and state support.],
+      [learned / exact $Q_2$], [recursive agreement is unresolved], [the first learned recursion is unsupported or inaccurate], [Neither state establishes endpoint planning value or a need for more architecture; separate coverage, $Q_1$ error, linkage, and bootstrap error.],
+      [endpoint recovery], [endpoint recovery is unresolved], [the admitted learned policy does not recover prespecified headroom], [Neither state identifies the failed mechanism; complete or stratify by support, observability, replay coverage, and state aliasing.],
     ),
   ),
-  caption: [Failure-attribution matrix. A failed or unresolved prerequisite blocks dependent claims; measurements on an independent lane remain diagnostics rather than counterevidence.],
+  caption: [Failure-attribution matrix. Unavailable evidence and an observed non-pass both block dependent claims, but only the latter supports a negative gate result. Measurements on an independent lane remain diagnostics rather than counterevidence.],
 ) <tab:thesis-failure-attribution>
 
 #validation_todo(
