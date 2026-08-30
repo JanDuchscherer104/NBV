@@ -115,6 +115,7 @@
   report-stores-decision-passed(thesis_data, "policy.q_recovery.passed"),
   prerequisites-passed: headroom-state.claim_admissible and q2-state.claim_admissible,
 )
+#let recovery-ratio-reportable = recovery-state.evidence_available and headroom-state.claim_admissible
 #let resource-available = confirmatory-evidence and report-stores-have-facts(thesis_data, resource-facts)
 
 The loaded report declares evidence class #emph(thesis_evidence_status). Schema
@@ -187,7 +188,7 @@ nor suppresses independently measured evidence on the other lane.
       (label: [Learned/exact agreement gate], key: "q2.exact.passed", denominator-key: "q2.exact.n_independent_units"),
     )))
   }
-  if recovery-state.evidence_available {
+  if recovery-ratio-reportable {
     families.push((label: [Endpoint recovery], metrics: (
       (label: [Recovered headroom], key: "policy.q_recovery.fraction", low-key: "policy.q_recovery.ci_low", high-key: "policy.q_recovery.ci_high", denominator-key: "policy.q_recovery.n_scenes", digits: 3),
       (label: [Recovery gate], key: "policy.q_recovery.passed", denominator-key: "policy.q_recovery.n_scenes"),
@@ -328,12 +329,17 @@ nor suppresses independently measured evidence on the other lane.
 
 == Endpoint Recovery
 
-#if recovery-state.evidence_available [
+#if recovery-ratio-reportable [
   The recovered-headroom fraction, paired scene interval, denominator, and
   recovery decision are available. The endpoint claim is
   #if recovery-state.claim_admissible [admissible because both the oracle-
   headroom and learned-value lanes pass.] else [blocked by at least one lane or
   the recovery decision; the recorded endpoint observations remain auditable.]
+] else if recovery-state.evidence_available [
+  Matched endpoint observations and their recovery decision remain auditable,
+  but the recovered-headroom ratio is not reported because its meaningful-
+  headroom denominator is not admissible. The endpoint claim is blocked without
+  erasing those underlying observations.
 ] else [
   The thesis has no complete matched endpoint-recovery estimate and decision.
   Endpoint recovery additionally requires passed oracle-headroom and learned-
