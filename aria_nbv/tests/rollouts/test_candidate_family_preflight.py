@@ -127,6 +127,18 @@ def test_preflight_figures_encode_applicability_and_all_three_stages() -> None:
     assert {trace.name for trace in funnel.data} == {"attempted", "valid", "selected"}
 
 
+def test_preflight_funnel_supports_full_hundred_state_phase_a_population() -> None:
+    result = reduce_candidate_family_preflight(
+        tuple(_record(state=f"state-{index:03d}") for index in range(100)),
+        _config(),
+    )
+
+    heatmap, funnel = candidate_family_preflight_figures(result)
+
+    assert len(heatmap.data[0].y) == 100
+    assert len(funnel.data) == 300
+
+
 def test_sampling_result_reducer_preserves_full_shell_reasons_and_margins() -> None:
     shell_poses = PoseTW.from_Rt(
         torch.eye(3).repeat(3, 1, 1),

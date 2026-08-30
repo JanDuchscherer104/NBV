@@ -530,6 +530,7 @@ def candidate_family_preflight_figures(result: CandidateFamilyPreflight) -> tupl
         y="count",
         color="stage",
         facet_row="state" if funnel_rows else None,
+        facet_row_spacing=(min(0.03, 0.8 / (len(states) - 1)) if funnel_rows and len(states) > 1 else None),
         barmode="group",
         title="Applicable family attempted → valid → selected funnels",
     )
