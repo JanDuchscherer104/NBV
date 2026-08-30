@@ -9,6 +9,7 @@ canonical_updates_needed: []
 touched_owner_paths:
   - docs/typst/thesis/experiment_data.typ
   - docs/typst/thesis/figures/qh_learning_evidence_loop.typ
+  - docs/typst/thesis/sections/01-research-questions.typ
   - docs/typst/thesis/sections/05-experimental-design/index.typ
   - docs/typst/thesis/sections/05-experimental-design/05-01-objectives-and-hypotheses.typ
   - docs/typst/thesis/sections/05-experimental-design/05-02-learning-objective-and-replay-evidence.typ
@@ -22,7 +23,7 @@ touched_owner_paths:
   - scripts/tests/test_typst_report_data_contract.py
 codex_thread: codex://threads/01a04fd9-0c7c-7813-a9c5-dc49f2f867a6
 repo_object_format: sha1
-repo_head: 56122614724bd73787cd816483dd51f67b4ef15f
+repo_head: e28bc6234b319de39ea5637068df601ff46d9895
 repo_branch: "codex/thesis-figure-qh-evidence-gates"
 worktree_kind: linked
 ---
@@ -99,6 +100,13 @@ reviews until zero P0--P2 findings remained.
 - Analysis provenance now resolves to exactly one complete confirmatory
   sidecar row with a valid identifier, digest, format, and name/path identity;
   empty, unknown, malformed, or duplicate bindings fail closed.
+- The final exact-head P1 showed that a structurally valid sidecar could still
+  assert headroom passage independently of its effect and interval. Headroom
+  now records a positive manifest-frozen minimum and the rule identity
+  `effect_gte_minimum_and_ci_low_gt_zero_v1`; its decision must equal the
+  literal point-estimate and lower-bound comparison. The RQ, design, Results,
+  Discussion, and Conclusion now distinguish a subthreshold magnitude from an
+  interval that does not establish a positive mean effect.
 
 ## Commits
 
@@ -110,6 +118,7 @@ reviews until zero P0--P2 findings remained.
 - https://github.com/JanDuchscherer104/ARIA-NBV/commit/1190e5e7bc4863f46221edee20a693198a23a9ae
 - https://github.com/JanDuchscherer104/ARIA-NBV/commit/b09b32fd5d71ba1d58ac3a635095565f4563eb82
 - https://github.com/JanDuchscherer104/ARIA-NBV/commit/56122614724bd73787cd816483dd51f67b4ef15f
+- https://github.com/JanDuchscherer104/ARIA-NBV/commit/e28bc6234b319de39ea5637068df601ff46d9895
 
 ## Verification
 
@@ -126,6 +135,12 @@ The final admission-contract candidate additionally passed adversarial
 population, repeatability, support, Q1, Q2, sidecar-uniqueness, and decision-
 identity mutations. Two independent reviews approved it with zero P0--P2, and
 the focused Q_H model/certification suite passed all 72 tests.
+The subsequent headroom-decision repair passed threshold equality, zero lower-
+bound, measured non-pass, contradictory boolean, nonpositive/mistyped/missing
+threshold, wrong rule/unit/aggregation, and malformed-decision cases. Two fresh
+independent reviews approved the exact candidate with zero P0--P2, and rendered
+A4 pages 35, 94--95, 99, and 102 were visually inspected without layout or
+semantic regression.
 
 ## Canonical Owner Impact
 
