@@ -33,9 +33,15 @@
 )
 
 #let paired-interval-method = "scene_clustered_percentile_bootstrap_95"
+#let recovery-interval-method = "paired_scene_joint_ratio_bootstrap_95_v1"
 #let recovery-ratio-definition = "ratio_of_paired_scene_mean_differences"
+#let q1-pairwise-chance = 0.5
 #let repeatability-decision-rule = "max_abs_diff_lte_tolerance_v1"
 #let headroom-decision-rule = "effect_gte_minimum_and_ci_low_gt_zero_v1"
+#let candidate-support-decision-rule = "p05_support_gte_minimum_and_failed_root_rate_lte_maximum_v1"
+#let q1-decision-rule = "ranking_gte_minimum_and_ci_low_gt_chance_and_calibration_mae_lte_maximum_v1"
+#let q2-decision-rule = "all_units_support_and_rowwise_abs_plus_relative_tolerance_v1"
+#let recovery-decision-rule = "fraction_gte_minimum_and_ci_low_gt_zero_v1"
 #let derived-identity-abs-tolerance = 1e-10
 #let endpoint-evidence-facts = (
   "policy.endpoint_gain.oracle_one_step.mean",
@@ -95,6 +101,8 @@
   "policy.q_recovery.interval_method",
   "policy.q_recovery.n_scenes",
   "policy.q_recovery.cohort_sha256",
+  "policy.q_recovery.minimum_fraction",
+  "policy.q_recovery.rule",
   "policy.q_recovery.passed",
 )
 #let recovery-evidence-contract = (
@@ -105,6 +113,8 @@
   (key: "policy.q_recovery.interval_method", aggregation: "analysis_identity", unit: "identity", value_kind: "string"),
   (key: "policy.q_recovery.n_scenes", aggregation: "count", unit: "count", value_kind: "integer"),
   (key: "policy.q_recovery.cohort_sha256", aggregation: "cohort_binding_sha256", unit: "sha256", value_kind: "string"),
+  (key: "policy.q_recovery.minimum_fraction", aggregation: "analysis_threshold", unit: "fraction", value_kind: "number", minimum: 0, maximum: 1),
+  (key: "policy.q_recovery.rule", aggregation: "analysis_identity", unit: "identity", value_kind: "string"),
   (key: "policy.q_recovery.passed", aggregation: "paired_scene_decision", unit: "bool", value_kind: "boolean"),
 )
 #let population-evidence-facts = (
@@ -134,41 +144,81 @@
 #let candidate-support-evidence-facts = (
   "candidate-support.actor-valid-fraction",
   "candidate-support.valid-support-p05",
+  "candidate-support.failed-root-rate",
   "candidate-support.configured-family-zero-rate",
   "candidate-support.target-side-balance",
   "candidate-support.circular-orbit-span",
+  "candidate-support.valid-support-p05.minimum",
+  "candidate-support.failed-root-rate.maximum",
+  "candidate-support.gate.rule",
   "candidate-support.gate.passed",
 )
 #let candidate-support-evidence-contract = (
   (key: "candidate-support.actor-valid-fraction", aggregation: "state_then_scene_macro", unit: "fraction", value_kind: "number", minimum: 0, maximum: 1),
   (key: "candidate-support.valid-support-p05", aggregation: "state_then_scene_p05", unit: "count", value_kind: "number", minimum: 0),
+  (key: "candidate-support.failed-root-rate", aggregation: "state_then_scene_macro", unit: "fraction", value_kind: "number", minimum: 0, maximum: 1),
   (key: "candidate-support.configured-family-zero-rate", aggregation: "state_then_scene_macro", unit: "fraction", value_kind: "number", minimum: 0, maximum: 1),
   (key: "candidate-support.target-side-balance", aggregation: "state_then_scene_macro", unit: "fraction", value_kind: "number", minimum: 0, maximum: 1),
   (key: "candidate-support.circular-orbit-span", aggregation: "state_then_scene_macro", unit: "deg", value_kind: "number", minimum: 0, maximum: 360),
+  (key: "candidate-support.valid-support-p05.minimum", aggregation: "analysis_threshold", unit: "count", value_kind: "number", minimum: 0),
+  (key: "candidate-support.failed-root-rate.maximum", aggregation: "analysis_threshold", unit: "fraction", value_kind: "number", minimum: 0, maximum: 1),
+  (key: "candidate-support.gate.rule", aggregation: "analysis_identity", unit: "identity", value_kind: "string"),
   (key: "candidate-support.gate.passed", aggregation: "state_then_scene_decision", unit: "bool", value_kind: "boolean"),
 )
 #let q1-evidence-facts = (
   "q1.ranking.pairwise_accuracy",
+  "q1.ranking.pairwise_accuracy.ci_low",
+  "q1.ranking.pairwise_accuracy.ci_high",
+  "q1.ranking.interval_method",
   "q1.calibration.mae",
   "q1.population.n_scenes",
+  "q1.ranking.chance",
+  "q1.ranking.pairwise_accuracy.minimum",
+  "q1.calibration.mae.maximum",
+  "q1.gate.rule",
   "q1.gate.passed",
 )
 #let q1-evidence-contract = (
   (key: "q1.ranking.pairwise_accuracy", aggregation: "state_then_scene_macro", unit: "fraction", value_kind: "number", minimum: 0, maximum: 1),
-  (key: "q1.calibration.mae", aggregation: "state_then_scene_macro", unit: "fraction", value_kind: "number", minimum: 0),
+  (key: "q1.ranking.pairwise_accuracy.ci_low", aggregation: "scene_clustered_interval", unit: "fraction", value_kind: "number", minimum: 0, maximum: 1),
+  (key: "q1.ranking.pairwise_accuracy.ci_high", aggregation: "scene_clustered_interval", unit: "fraction", value_kind: "number", minimum: 0, maximum: 1),
+  (key: "q1.ranking.interval_method", aggregation: "analysis_identity", unit: "identity", value_kind: "string"),
+  (key: "q1.calibration.mae", aggregation: "state_then_scene_macro", unit: "root_normalized_return", value_kind: "number", minimum: 0),
   (key: "q1.population.n_scenes", aggregation: "count", unit: "count", value_kind: "integer", minimum: 1),
+  (key: "q1.ranking.chance", aggregation: "analysis_threshold", unit: "fraction", value_kind: "number", minimum: 0, maximum: 1),
+  (key: "q1.ranking.pairwise_accuracy.minimum", aggregation: "analysis_threshold", unit: "fraction", value_kind: "number", minimum: 0, maximum: 1),
+  (key: "q1.calibration.mae.maximum", aggregation: "analysis_threshold", unit: "root_normalized_return", value_kind: "number", minimum: 0),
+  (key: "q1.gate.rule", aggregation: "analysis_identity", unit: "identity", value_kind: "string"),
   (key: "q1.gate.passed", aggregation: "state_then_scene_decision", unit: "bool", value_kind: "boolean"),
 )
 #let q2-evidence-facts = (
   "q2.exact.mae",
   "q2.exact.coverage",
+  "q2.exact.minimum_support_stratum_rows",
+  "q2.exact.minimum_rows_per_independent_unit",
+  "q2.exact.maximum_tolerance_excess",
   "q2.exact.n_independent_units",
+  "q2.exact.coverage.minimum",
+  "q2.exact.minimum_independent_units",
+  "q2.exact.minimum_rows_per_independent_unit.required",
+  "q2.exact.absolute_tolerance",
+  "q2.exact.relative_tolerance",
+  "q2.exact.rule",
   "q2.exact.passed",
 )
 #let q2-evidence-contract = (
-  (key: "q2.exact.mae", aggregation: "independent_unit_macro", unit: "fraction", value_kind: "number", minimum: 0),
-  (key: "q2.exact.coverage", aggregation: "independent_unit_fraction", unit: "fraction", value_kind: "number", minimum: 0, maximum: 1),
+  (key: "q2.exact.mae", aggregation: "independent_unit_macro", unit: "root_normalized_return", value_kind: "number", minimum: 0),
+  (key: "q2.exact.coverage", aggregation: "selected_chain_fraction", unit: "fraction", value_kind: "number", minimum: 0, maximum: 1),
+  (key: "q2.exact.minimum_support_stratum_rows", aggregation: "support_stratum_minimum", unit: "count", value_kind: "integer", minimum: 0),
+  (key: "q2.exact.minimum_rows_per_independent_unit", aggregation: "independent_unit_minimum", unit: "count", value_kind: "integer", minimum: 0),
+  (key: "q2.exact.maximum_tolerance_excess", aggregation: "exact_row_maximum", unit: "root_normalized_return", value_kind: "number"),
   (key: "q2.exact.n_independent_units", aggregation: "count", unit: "count", value_kind: "integer", minimum: 1),
+  (key: "q2.exact.coverage.minimum", aggregation: "analysis_threshold", unit: "fraction", value_kind: "number", minimum: 0, maximum: 1),
+  (key: "q2.exact.minimum_independent_units", aggregation: "analysis_threshold", unit: "count", value_kind: "integer", minimum: 5),
+  (key: "q2.exact.minimum_rows_per_independent_unit.required", aggregation: "analysis_threshold", unit: "count", value_kind: "integer", minimum: 1),
+  (key: "q2.exact.absolute_tolerance", aggregation: "analysis_threshold", unit: "root_normalized_return", value_kind: "number", minimum: 0),
+  (key: "q2.exact.relative_tolerance", aggregation: "analysis_threshold", unit: "dimensionless", value_kind: "number", minimum: 0),
+  (key: "q2.exact.rule", aggregation: "analysis_identity", unit: "identity", value_kind: "string"),
   (key: "q2.exact.passed", aggregation: "all_units_v1", unit: "bool", value_kind: "boolean"),
 )
 
@@ -490,6 +540,17 @@
   }
 }
 
+#let report-store-boolean-value(report, store-id, key) = {
+  let matches = report.tables.facts.rows.filter(
+    row => row.store_id == store-id and row.key == key,
+  )
+  if matches.len() == 1 and type(matches.first().value) == bool {
+    matches.first().value
+  } else {
+    none
+  }
+}
+
 #let report-store-headroom-identity-valid(
   report,
   store-id,
@@ -614,12 +675,25 @@
 }
 
 #let report-store-candidate-support-evidence-valid(report, store-id) = {
+  let support-p05 = report-store-number-value(report, store-id, "candidate-support.valid-support-p05")
+  let failed-root-rate = report-store-number-value(report, store-id, "candidate-support.failed-root-rate")
+  let support-minimum = report-store-number-value(report, store-id, "candidate-support.valid-support-p05.minimum")
+  let failed-root-maximum = report-store-number-value(report, store-id, "candidate-support.failed-root-rate.maximum")
+  let passed = report-store-boolean-value(report, store-id, "candidate-support.gate.passed")
   report-store-gated-family-valid(
     report,
     store-id,
     candidate-support-evidence-facts,
     candidate-support-evidence-contract,
     "study.population.scenes",
+  ) and report-store-fact-values-match(
+    report,
+    store-id,
+    ((key: "candidate-support.gate.rule", value: candidate-support-decision-rule),),
+  ) and (support-p05, failed-root-rate, support-minimum, failed-root-maximum).all(
+    value => value != none,
+  ) and support-minimum > 0 and failed-root-maximum < 1 and passed != none and passed == (
+    support-p05 >= support-minimum and failed-root-rate <= failed-root-maximum
   )
 }
 
@@ -661,22 +735,73 @@
 }
 
 #let report-store-q1-evidence-valid(report, store-id) = {
+  let ranking = report-store-number-value(report, store-id, "q1.ranking.pairwise_accuracy")
+  let ranking-ci-low = report-store-number-value(report, store-id, "q1.ranking.pairwise_accuracy.ci_low")
+  let calibration = report-store-number-value(report, store-id, "q1.calibration.mae")
+  let ranking-minimum = report-store-number-value(report, store-id, "q1.ranking.pairwise_accuracy.minimum")
+  let calibration-maximum = report-store-number-value(report, store-id, "q1.calibration.mae.maximum")
+  let passed = report-store-boolean-value(report, store-id, "q1.gate.passed")
   report-store-gated-family-valid(
     report,
     store-id,
     q1-evidence-facts,
     q1-evidence-contract,
     "q1.population.n_scenes",
+  ) and report-store-fact-values-match(
+    report,
+    store-id,
+    (
+      (key: "q1.ranking.interval_method", value: paired-interval-method),
+      (key: "q1.ranking.chance", value: q1-pairwise-chance),
+      (key: "q1.gate.rule", value: q1-decision-rule),
+    ),
+  ) and report-store-interval-is-ordered(
+    report,
+    store-id,
+    "q1.ranking.pairwise_accuracy.ci_low",
+    "q1.ranking.pairwise_accuracy.ci_high",
+  ) and (ranking, ranking-ci-low, calibration, ranking-minimum, calibration-maximum).all(
+    value => value != none,
+  ) and ranking-minimum > q1-pairwise-chance and calibration-maximum > 0 and passed != none and passed == (
+    ranking >= ranking-minimum and ranking-ci-low > q1-pairwise-chance and calibration <= calibration-maximum
   )
 }
 
 #let report-store-q2-evidence-valid(report, store-id) = {
+  let coverage = report-store-number-value(report, store-id, "q2.exact.coverage")
+  let minimum-support-rows = report-store-number-value(report, store-id, "q2.exact.minimum_support_stratum_rows")
+  let minimum-unit-rows = report-store-number-value(report, store-id, "q2.exact.minimum_rows_per_independent_unit")
+  let maximum-tolerance-excess = report-store-number-value(report, store-id, "q2.exact.maximum_tolerance_excess")
+  let independent-units = report-store-number-value(report, store-id, "q2.exact.n_independent_units")
+  let coverage-minimum = report-store-number-value(report, store-id, "q2.exact.coverage.minimum")
+  let independent-units-minimum = report-store-number-value(report, store-id, "q2.exact.minimum_independent_units")
+  let unit-rows-minimum = report-store-number-value(report, store-id, "q2.exact.minimum_rows_per_independent_unit.required")
+  let passed = report-store-boolean-value(report, store-id, "q2.exact.passed")
   report-store-gated-family-valid(
     report,
     store-id,
     q2-evidence-facts,
     q2-evidence-contract,
     "q2.exact.n_independent_units",
+  ) and report-store-fact-values-match(
+    report,
+    store-id,
+    ((key: "q2.exact.rule", value: q2-decision-rule),),
+  ) and (
+    coverage,
+    minimum-support-rows,
+    minimum-unit-rows,
+    maximum-tolerance-excess,
+    independent-units,
+    coverage-minimum,
+    independent-units-minimum,
+    unit-rows-minimum,
+  ).all(value => value != none) and coverage-minimum > 0 and independent-units-minimum >= 5 and unit-rows-minimum >= 1 and passed != none and passed == (
+    coverage >= coverage-minimum and
+    minimum-support-rows >= 1 and
+    independent-units >= independent-units-minimum and
+    minimum-unit-rows >= unit-rows-minimum and
+    maximum-tolerance-excess <= 0
   )
 }
 
@@ -736,6 +861,10 @@
 }
 
 #let report-store-recovery-evidence-valid(report, store-id, expected-n) = {
+  let fraction = report-store-number-value(report, store-id, "policy.q_recovery.fraction")
+  let ci-low = report-store-number-value(report, store-id, "policy.q_recovery.ci_low")
+  let minimum-fraction = report-store-number-value(report, store-id, "policy.q_recovery.minimum_fraction")
+  let passed = report-store-boolean-value(report, store-id, "policy.q_recovery.passed")
   report-store-analysis-family-valid(
     report,
     store-id,
@@ -744,11 +873,14 @@
     expected-n,
     expected-values: (
       (key: "policy.q_recovery.ratio_definition", value: recovery-ratio-definition),
-      (key: "policy.q_recovery.interval_method", value: paired-interval-method),
+      (key: "policy.q_recovery.interval_method", value: recovery-interval-method),
+      (key: "policy.q_recovery.rule", value: recovery-decision-rule),
     ),
     interval-pairs: ((low: "policy.q_recovery.ci_low", high: "policy.q_recovery.ci_high"),),
     digest-keys: ("policy.q_recovery.cohort_sha256",),
     required-source-fragment: "|sidecar:",
+  ) and (fraction, ci-low, minimum-fraction).all(value => value != none) and minimum-fraction > 0 and passed != none and passed == (
+    fraction >= minimum-fraction and ci-low > 0
   )
 }
 

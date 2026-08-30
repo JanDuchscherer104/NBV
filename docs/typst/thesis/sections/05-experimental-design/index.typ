@@ -1,7 +1,7 @@
 = Experimental Design <sec:thesis-experimental-design>
 
 The experiment is a claim-admissibility graph rather than one aggregate model
-score. Repeatable measurement and adequate population/action support are shared
+score. Repeatable measurement and minimum factual population/action support are shared
 foundations. From them, one lane tests whether the finite setup exposes oracle
 headroom, while a second tests actor-visible one-step value and learned-versus-
 exact two-step agreement. Endpoint recovery is interpretable only where both

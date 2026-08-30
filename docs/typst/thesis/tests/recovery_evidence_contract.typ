@@ -1,4 +1,4 @@
-#import "../experiment_data.typ": conditional-ratio-gate-state, evidence-gate-state, endpoint-evidence-facts, headroom-evidence-facts, recovery-evidence-facts, headroom-decision-rule, paired-interval-method, recovery-ratio-definition, report-store-endpoint-evidence-valid, report-store-headroom-evidence-valid, report-store-recovery-evidence-valid, report-store-headroom-identity-valid, report-store-recovery-identity-valid, report-store-fact, report-store-facts-share-source, report-store-facts-share-value, report-stores-have-facts
+#import "../experiment_data.typ": conditional-ratio-gate-state, evidence-gate-state, endpoint-evidence-facts, headroom-evidence-facts, recovery-evidence-facts, headroom-decision-rule, paired-interval-method, recovery-decision-rule, recovery-interval-method, recovery-ratio-definition, report-store-endpoint-evidence-valid, report-store-headroom-evidence-valid, report-store-recovery-evidence-valid, report-store-headroom-identity-valid, report-store-recovery-identity-valid, report-store-fact, report-store-facts-share-source, report-store-facts-share-value, report-stores-have-facts
 
 #let sidecar-a = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 #let sidecar-b = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
@@ -64,8 +64,11 @@
   metric-unit: "fraction",
   ci-low: 0.4,
   ci-high: 0.8,
-  interval-method: paired-interval-method,
+  interval-method: recovery-interval-method,
   ratio-aggregation: "paired_scene_ratio_of_mean_differences",
+  minimum-fraction: 0.5,
+  rule: recovery-decision-rule,
+  passed: true,
 ) = (
   fact("policy.q_recovery.fraction", metric-value, metric-unit, row-n, ratio-aggregation, source: source),
   fact("policy.q_recovery.ci_low", ci-low, metric-unit, row-n, ratio-aggregation, source: ci-source),
@@ -74,7 +77,9 @@
   fact("policy.q_recovery.interval_method", interval-method, "identity", row-n, "analysis_identity", source: source),
   fact("policy.q_recovery.n_scenes", 5, "count", row-n, "count", source: source),
   fact("policy.q_recovery.cohort_sha256", cohort, "sha256", row-n, "cohort_binding_sha256", source: source),
-  fact("policy.q_recovery.passed", true, "bool", row-n, "paired_scene_decision", source: source),
+  fact("policy.q_recovery.minimum_fraction", minimum-fraction, "fraction", row-n, "analysis_threshold", source: source),
+  fact("policy.q_recovery.rule", rule, "identity", row-n, "analysis_identity", source: source),
+  fact("policy.q_recovery.passed", passed, "bool", row-n, "paired_scene_decision", source: source),
 )
 #let report(rows, sidecar-rows: sidecars) = (
   tables: (
@@ -90,6 +95,51 @@
 #assert(endpoint-valid)
 #assert(headroom-valid)
 #assert(recovery-valid)
+#assert(report-store-recovery-evidence-valid(
+  report(recovery-rows(metric-value: 0.5, ci-low: 0.2)),
+  "store-a",
+  5,
+))
+#assert(report-store-recovery-evidence-valid(
+  report(recovery-rows(metric-value: 0.4, ci-low: 0.2, passed: false)),
+  "store-a",
+  5,
+))
+#assert(report-store-recovery-evidence-valid(
+  report(recovery-rows(ci-low: 0, passed: false)),
+  "store-a",
+  5,
+))
+#assert(not report-store-recovery-evidence-valid(
+  report(recovery-rows(metric-value: 0.4, ci-low: 0.2)),
+  "store-a",
+  5,
+))
+#assert(not report-store-recovery-evidence-valid(
+  report(recovery-rows(ci-low: 0)),
+  "store-a",
+  5,
+))
+#assert(not report-store-recovery-evidence-valid(
+  report(recovery-rows(passed: false)),
+  "store-a",
+  5,
+))
+#assert(not report-store-recovery-evidence-valid(
+  report(recovery-rows(minimum-fraction: 0)),
+  "store-a",
+  5,
+))
+#assert(not report-store-recovery-evidence-valid(
+  report(recovery-rows(minimum-fraction: 1.1)),
+  "store-a",
+  5,
+))
+#assert(not report-store-recovery-evidence-valid(
+  report(recovery-rows(rule: "unfrozen_recovery_rule")),
+  "store-a",
+  5,
+))
 #assert(report-store-headroom-identity-valid(accepted, "store-a"))
 #assert(report-store-recovery-identity-valid(accepted, "store-a"))
 #assert(report-store-headroom-evidence-valid(

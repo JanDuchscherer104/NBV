@@ -324,12 +324,19 @@ annotated as uncapped spherical support and are not represented by a bounded box
   caption: [Candidate-generation diagnostics and their aggregation populations. Every state-level quantity is reduced before scene and cohort aggregation.],
 ) <tab:candidate-support-metric-contract>
 
-For confirmatory admission, these support metrics and their boolean decision
-form one scene-population family. Every row uses the same positive
-`study.population.scenes` denominator and immutable sidecar source; fraction
-metrics remain in $[0,1]$, support counts are nonnegative, and circular span is
-bounded by a full revolution. Missing or malformed rows make the support gate
-unresolved rather than negative.
+Confirmatory admission uses one scene cohort and immutable sidecar. Within each
+scene it averages actor-valid counts across attempted roots, then takes the
+nearest-rank empirical P05 across scene means (the $ceil(0.05 n)$-th ordered
+scene value). Failed-root rate macro-averages the per-scene fractions below
+`min_valid_root_candidates`. The frozen rule admits minimum factual support only
+when P05 reaches its minimum and failed-root rate does not exceed its maximum.
+Actor-valid fraction, family-zero rate, side balance, and orbit span remain
+diagnostic; passage does not imply diverse proposal geometry. Missing, malformed,
+or contradictory rows leave the gate unresolved.
+
+The writer retains rejection outcomes but not passing-root counts. Admission
+therefore awaits an immutable per-attempt sidecar of scene and root identity,
+valid count, threshold, and outcome.
 
 === Rollout Branch Sampling and Dataset Impact
 

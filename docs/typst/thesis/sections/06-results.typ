@@ -18,10 +18,6 @@
   required-role: report-settings.required-role,
 )
 #let all-stores-valid = thesis_data.tables.stores.rows.len() > 0 and thesis_data.tables.stores.rows.all(store => store.validation_ok == true)
-#let fact-value(store-id, key, digits: none) = {
-  let row = report-store-fact(thesis_data, store-id, key)
-  format-report-value(row.value, digits: digits, unit: row.unit)
-}
 #let evidence-status(state) = if state.evidence_available [available] else [not available]
 #let gate-status(state) = if not state.evidence_available {
   [not decided]
@@ -160,94 +156,121 @@ nor suppresses independently measured evidence on the other lane.
     header: ([*Gate / RQ*], [*Evidence*], [*Decision*], [*Claim*], [*Interpretation if admissible*], [*Blocking condition*]),
     rows: (
       [measurement / RQ1], [#evidence-status(measurement-state)], [#gate-status(measurement-state)], [#claim-status(measurement-state)], [metric comparisons are stable under the frozen protocol], [absent repeats, identity mismatch, or tolerance non-pass],
-      [population/action / RQ4], [#evidence-status(support-state)], [#gate-status(support-state)], [#claim-status(support-state)], [the held-out task and finite-action population is supported], [missing denominators, exclusions, family survival, or feasibility],
+      [population/action / RQ4], [#evidence-status(support-state)], [#gate-status(support-state)], [#claim-status(support-state)], [the held-out population meets its minimum lower-tail action-support rule], [missing denominators, insufficient lower-tail support, or excessive failed roots],
       [headroom / RQ2a], [#evidence-status(headroom-state)], [#gate-status(headroom-state)], [#claim-status(headroom-state)], [the frozen setup exposes meaningful non-myopic endpoint headroom], [a shared foundation or meaningful-effect rule does not pass],
-      [actor $Q_1$ / RQ3], [#evidence-status(q1-state)], [#gate-status(q1-state)], [#claim-status(q1-state)], [actor-visible evidence recovers immediate target value], [a shared foundation, actor protocol, matching, leakage, ranking, or calibration rule does not pass],
-      [learned/exact $Q_2$ / RQ2], [#evidence-status(q2-state)], [#gate-status(q2-state)], [#claim-status(q2-state)], [the first learned recursive prediction agrees on complete exact support], [the $Q_1$ claim, complete support, or recursion tolerance does not pass],
-      [endpoint recovery / RQ2b], [#evidence-status(recovery-state)], [#gate-status(recovery-state)], [#claim-status(recovery-state)], [the learned policy recovers the prespecified fraction of headroom], [headroom, the learned-value lane, or the recovery rule does not pass],
+      [actor $Q_1$ / RQ3], [#evidence-status(q1-state)], [#gate-status(q1-state)], [#claim-status(q1-state)], [the ranking point estimate reaches its threshold, its interval is above chance, and calibration meets its maximum], [a shared foundation, actor protocol, matching, leakage, ranking, uncertainty, or calibration rule does not pass],
+      [learned/exact $Q_2$ / RQ2], [#evidence-status(q2-state)], [#gate-status(q2-state)], [#claim-status(q2-state)], [selected-chain coverage and every admitted row, support stratum, and unit pass the exact-$Q_2$ receipt], [the $Q_1$ claim, selected-chain coverage, exact support, or rowwise tolerance rule does not pass],
+      [endpoint recovery / RQ2b], [#evidence-status(recovery-state)], [#gate-status(recovery-state)], [#claim-status(recovery-state)], [the recovery point estimate reaches its threshold and its interval supports positive mean recovery], [headroom, the learned-value lane, or the recovery rule does not pass],
     ),
   ),
   caption: [Evidence state, gate decision, and claim admissibility by inferential stage. Available evidence remains reported after a non-pass; only claims whose prerequisites pass are admitted.],
 ) <tab:thesis-result-availability>
 
+#let population-summary-family = (band: "foundations", label: [Population], metrics: (
+  (label: [Scenes], key: "study.population.scenes"),
+  (label: [Targets], key: "study.population.targets"),
+  (label: [Exclusions], key: "study.population.exclusions"),
+))
+#let measurement-summary-family = (band: "foundations", label: [Measurement], metrics: (
+  (label: [Maximum repeat discrepancy], key: "oracle.metric.repeatability.max_abs_diff", denominator-key: "oracle.metric.repeatability.n_repeats", digits: 5),
+  (label: [Declared repeatability tolerance], key: "oracle.metric.repeatability.tolerance", digits: 5),
+  (label: [Repeatability gate], key: "oracle.metric.repeatability.passed"),
+))
+#let support-summary-family = (band: "foundations", label: [Candidate support], metrics: (
+  (label: [Actor-valid fraction], key: "candidate-support.actor-valid-fraction", digits: 3),
+  (label: [P05 valid support], key: "candidate-support.valid-support-p05", digits: 1),
+  (label: [P05 support minimum], key: "candidate-support.valid-support-p05.minimum", digits: 1),
+  (label: [Failed-root rate], key: "candidate-support.failed-root-rate", digits: 3),
+  (label: [Failed-root maximum], key: "candidate-support.failed-root-rate.maximum", digits: 3),
+  (label: [Configured-family zero rate], key: "candidate-support.configured-family-zero-rate", digits: 3),
+  (label: [Target-side balance], key: "candidate-support.target-side-balance", digits: 3),
+  (label: [Circular orbit span], key: "candidate-support.circular-orbit-span", digits: 2),
+  (label: [Support gate], key: "candidate-support.gate.passed", denominator-key: "study.population.scenes"),
+))
+#let endpoint-summary-family = (band: "policy", label: [Matched endpoints], metrics: (
+  (label: [Oracle one-step gain], key: "policy.endpoint_gain.oracle_one_step.mean", low-key: "policy.endpoint_gain.oracle_one_step.ci_low", high-key: "policy.endpoint_gain.oracle_one_step.ci_high", denominator-key: "policy.endpoint_gain.n_scenes", digits: 3),
+  (label: [Oracle lookahead gain], key: "policy.endpoint_gain.oracle_lookahead.mean", low-key: "policy.endpoint_gain.oracle_lookahead.ci_low", high-key: "policy.endpoint_gain.oracle_lookahead.ci_high", denominator-key: "policy.endpoint_gain.n_scenes", digits: 3),
+  (label: [Learned-$Q$ gain], key: "policy.endpoint_gain.learned_q.mean", low-key: "policy.endpoint_gain.learned_q.ci_low", high-key: "policy.endpoint_gain.learned_q.ci_high", denominator-key: "policy.endpoint_gain.n_scenes", digits: 3),
+))
+#let headroom-summary-family = (band: "policy", label: [Oracle headroom], metrics: (
+  (label: [Paired endpoint effect], key: "policy.paired_scene_endpoint.effect", low-key: "policy.paired_scene_endpoint.ci_low", high-key: "policy.paired_scene_endpoint.ci_high", denominator-key: "policy.paired_scene_endpoint.n_scenes", digits: 3),
+  (label: [Declared minimum effect], key: "headroom_gate.minimum_effect", denominator-key: "policy.paired_scene_endpoint.n_scenes", digits: 3),
+  (label: [Meaningful-headroom gate], key: "headroom_gate.passed", denominator-key: "policy.paired_scene_endpoint.n_scenes"),
+))
+#let q1-summary-family = (band: "policy", label: [Actor Q1], metrics: (
+  (label: [Pairwise ranking], key: "q1.ranking.pairwise_accuracy", low-key: "q1.ranking.pairwise_accuracy.ci_low", high-key: "q1.ranking.pairwise_accuracy.ci_high", denominator-key: "q1.population.n_scenes", digits: 3),
+  (label: [Ranking minimum], key: "q1.ranking.pairwise_accuracy.minimum", denominator-key: "q1.population.n_scenes", digits: 3),
+  (label: [Calibration MAE], key: "q1.calibration.mae", denominator-key: "q1.population.n_scenes", digits: 4),
+  (label: [Calibration maximum], key: "q1.calibration.mae.maximum", denominator-key: "q1.population.n_scenes", digits: 4),
+  (label: [Actor-Q1 gate], key: "q1.gate.passed", denominator-key: "q1.population.n_scenes"),
+))
+#let q2-summary-family = (band: "q2", label: [Learned / exact $Q_2$ agreement], metrics: (
+  (label: [Recursive MAE], key: "q2.exact.mae", denominator-key: "q2.exact.n_independent_units", digits: 4),
+  (label: [Selected-chain coverage], key: "q2.exact.coverage", denominator-key: "q2.exact.n_independent_units", digits: 3),
+  (label: [Coverage minimum], key: "q2.exact.coverage.minimum", denominator-key: "q2.exact.n_independent_units", digits: 3),
+  (label: [Minimum support-stratum rows], key: "q2.exact.minimum_support_stratum_rows", denominator-key: "q2.exact.n_independent_units"),
+  (label: [Independent units], key: "q2.exact.n_independent_units"),
+  (label: [Required independent units], key: "q2.exact.minimum_independent_units", denominator-key: "q2.exact.n_independent_units"),
+  (label: [Minimum rows per unit], key: "q2.exact.minimum_rows_per_independent_unit", denominator-key: "q2.exact.n_independent_units"),
+  (label: [Required rows per unit], key: "q2.exact.minimum_rows_per_independent_unit.required", denominator-key: "q2.exact.n_independent_units"),
+  (label: [Absolute tolerance], key: "q2.exact.absolute_tolerance", denominator-key: "q2.exact.n_independent_units", digits: 5),
+  (label: [Relative tolerance], key: "q2.exact.relative_tolerance", denominator-key: "q2.exact.n_independent_units", digits: 5),
+  (label: [Maximum tolerance excess], key: "q2.exact.maximum_tolerance_excess", denominator-key: "q2.exact.n_independent_units", digits: 5),
+  (label: [Learned/exact agreement gate], key: "q2.exact.passed", denominator-key: "q2.exact.n_independent_units"),
+))
+#let recovery-summary-family = (band: "policy", label: [Endpoint recovery], metrics: (
+  (label: [Recovered headroom], key: "policy.q_recovery.fraction", low-key: "policy.q_recovery.ci_low", high-key: "policy.q_recovery.ci_high", denominator-key: "policy.q_recovery.n_scenes", digits: 3),
+  (label: [Required recovery fraction], key: "policy.q_recovery.minimum_fraction", denominator-key: "policy.q_recovery.n_scenes", digits: 3),
+  (label: [Recovery gate], key: "policy.q_recovery.passed", denominator-key: "policy.q_recovery.n_scenes"),
+))
+#let resources-summary-family = (band: "resources", label: [Resources], metrics: (
+  (label: [Wall time], key: "runtime.wall_time_s", digits: 1),
+  (label: [Peak GPU memory], key: "runtime.peak_gpu_bytes"),
+  (label: [Storage], key: "storage.total_bytes"),
+))
+
+#let all-result-summary-families = (
+  population-summary-family,
+  measurement-summary-family,
+  support-summary-family,
+  endpoint-summary-family,
+  headroom-summary-family,
+  q1-summary-family,
+  q2-summary-family,
+  recovery-summary-family,
+  resources-summary-family,
+)
+
 #let result-summary-families = {
   let families = ()
-  if population-evidence-available {
-    families.push((label: [Population], metrics: (
-      (label: [Scenes], key: "study.population.scenes"),
-      (label: [Targets], key: "study.population.targets"),
-      (label: [Exclusions], key: "study.population.exclusions"),
-    )))
-  }
-  if measurement-state.evidence_available {
-    families.push((label: [Measurement], metrics: (
-      (label: [Maximum repeat discrepancy], key: "oracle.metric.repeatability.max_abs_diff", denominator-key: "oracle.metric.repeatability.n_repeats", digits: 5),
-      (label: [Declared repeatability tolerance], key: "oracle.metric.repeatability.tolerance", digits: 5),
-      (label: [Repeatability gate], key: "oracle.metric.repeatability.passed"),
-    )))
-  }
-  if support-state.evidence_available {
-    families.push((label: [Candidate support], metrics: (
-      (label: [Actor-valid fraction], key: "candidate-support.actor-valid-fraction", digits: 3),
-      (label: [P05 valid support], key: "candidate-support.valid-support-p05", digits: 1),
-      (label: [Configured-family zero rate], key: "candidate-support.configured-family-zero-rate", digits: 3),
-      (label: [Target-side balance], key: "candidate-support.target-side-balance", digits: 3),
-      (label: [Circular orbit span], key: "candidate-support.circular-orbit-span", digits: 2),
-      (label: [Support gate], key: "candidate-support.gate.passed", denominator-key: "study.population.scenes"),
-    )))
-  }
-  if endpoint-evidence-available {
-    families.push((label: [Matched endpoints], metrics: (
-      (label: [Oracle one-step gain], key: "policy.endpoint_gain.oracle_one_step.mean", low-key: "policy.endpoint_gain.oracle_one_step.ci_low", high-key: "policy.endpoint_gain.oracle_one_step.ci_high", denominator-key: "policy.endpoint_gain.n_scenes", digits: 3),
-      (label: [Oracle lookahead gain], key: "policy.endpoint_gain.oracle_lookahead.mean", low-key: "policy.endpoint_gain.oracle_lookahead.ci_low", high-key: "policy.endpoint_gain.oracle_lookahead.ci_high", denominator-key: "policy.endpoint_gain.n_scenes", digits: 3),
-      (label: [Learned-$Q$ gain], key: "policy.endpoint_gain.learned_q.mean", low-key: "policy.endpoint_gain.learned_q.ci_low", high-key: "policy.endpoint_gain.learned_q.ci_high", denominator-key: "policy.endpoint_gain.n_scenes", digits: 3),
-    )))
-  }
-  if headroom-state.evidence_available {
-    families.push((label: [Oracle headroom], metrics: (
-      (label: [Paired endpoint effect], key: "policy.paired_scene_endpoint.effect", low-key: "policy.paired_scene_endpoint.ci_low", high-key: "policy.paired_scene_endpoint.ci_high", denominator-key: "policy.paired_scene_endpoint.n_scenes", digits: 3),
-      (label: [Declared minimum effect], key: "headroom_gate.minimum_effect", denominator-key: "policy.paired_scene_endpoint.n_scenes", digits: 3),
-      (label: [Meaningful-headroom gate], key: "headroom_gate.passed", denominator-key: "policy.paired_scene_endpoint.n_scenes"),
-    )))
-  }
-  if q1-state.evidence_available {
-    families.push((label: [Actor Q1], metrics: (
-      (label: [Pairwise ranking], key: "q1.ranking.pairwise_accuracy", denominator-key: "q1.population.n_scenes", digits: 3),
-      (label: [Calibration MAE], key: "q1.calibration.mae", denominator-key: "q1.population.n_scenes", digits: 4),
-      (label: [Actor-Q1 gate], key: "q1.gate.passed", denominator-key: "q1.population.n_scenes"),
-    )))
-  }
-  if q2-state.evidence_available {
-    families.push((label: [Learned / exact $Q_2$ agreement], metrics: (
-      (label: [Recursive MAE], key: "q2.exact.mae", denominator-key: "q2.exact.n_independent_units", digits: 4),
-      (label: [Complete-support coverage], key: "q2.exact.coverage", denominator-key: "q2.exact.n_independent_units", digits: 3),
-      (label: [Learned/exact agreement gate], key: "q2.exact.passed", denominator-key: "q2.exact.n_independent_units"),
-    )))
-  }
-  if recovery-ratio-reportable {
-    families.push((label: [Endpoint recovery], metrics: (
-      (label: [Recovered headroom], key: "policy.q_recovery.fraction", low-key: "policy.q_recovery.ci_low", high-key: "policy.q_recovery.ci_high", denominator-key: "policy.q_recovery.n_scenes", digits: 3),
-      (label: [Recovery gate], key: "policy.q_recovery.passed", denominator-key: "policy.q_recovery.n_scenes"),
-    )))
-  }
-  if resource-available {
-    families.push((label: [Resources], metrics: (
-      (label: [Wall time], key: "runtime.wall_time_s", digits: 1),
-      (label: [Peak GPU memory], key: "runtime.peak_gpu_bytes"),
-      (label: [Storage], key: "storage.total_bytes"),
-    )))
-  }
+  if population-evidence-available { families.push(population-summary-family) }
+  if measurement-state.evidence_available { families.push(measurement-summary-family) }
+  if support-state.evidence_available { families.push(support-summary-family) }
+  if endpoint-evidence-available { families.push(endpoint-summary-family) }
+  if headroom-state.evidence_available { families.push(headroom-summary-family) }
+  if q1-state.evidence_available { families.push(q1-summary-family) }
+  if q2-state.evidence_available { families.push(q2-summary-family) }
+  if recovery-ratio-reportable { families.push(recovery-summary-family) }
+  if resource-available { families.push(resources-summary-family) }
   families
 }
 
-#let result-summary-rows = {
+#let result-unit-label(unit) = if unit == none or unit == "dimensionless" {
+  [—]
+} else if unit == "root_normalized_return" {
+  [norm. return]
+} else {
+  [#unit]
+}
+
+#let result-summary-rows-for(report, families) = {
   let rows = ()
-  let profile-span = result-summary-families.fold(0, (total, family) => total + family.metrics.len())
-  for store in thesis_data.tables.stores.rows {
+  let profile-span = families.fold(0, (total, family) => total + family.metrics.len())
+  for store in report.tables.stores.rows {
     let store-id = store.store_id
-    let label = short-store-label(thesis_data, store-id)
+    let label = short-store-label(report, store-id)
     let first-profile-row = true
-    for family in result-summary-families {
+    for family in families {
       let first-family-row = true
       for metric in family.metrics {
         if first-profile-row {
@@ -262,30 +285,79 @@ nor suppresses independently measured evidence on the other lane.
         let low-key = metric.at("low-key", default: none)
         let high-key = metric.at("high-key", default: none)
         let denominator-key = metric.at("denominator-key", default: none)
-        let fact = report-store-fact(thesis_data, store-id, metric.key)
+        let fact = report-store-fact(report, store-id, metric.key)
         rows.push(metric.label)
         rows.push([#format-report-value(fact.value, digits: digits)])
-        rows.push(if low-key == none { [—] } else { [#fact-value(store-id, low-key, digits: digits)] })
-        rows.push(if high-key == none { [—] } else { [#fact-value(store-id, high-key, digits: digits)] })
-        rows.push(if fact.unit == none { [—] } else { [#fact.unit] })
-        rows.push(if denominator-key == none { [#format-report-value(fact.n)] } else { [#fact-value(store-id, denominator-key)] })
+        rows.push(if low-key == none { [—] } else {
+          let low = report-store-fact(report, store-id, low-key)
+          [#format-report-value(low.value, digits: digits)]
+        })
+        rows.push(if high-key == none { [—] } else {
+          let high = report-store-fact(report, store-id, high-key)
+          [#format-report-value(high.value, digits: digits)]
+        })
+        rows.push(result-unit-label(fact.unit))
+        rows.push(if denominator-key == none { [#format-report-value(fact.n)] } else {
+          let denominator = report-store-fact(report, store-id, denominator-key)
+          [#format-report-value(denominator.value)]
+        })
       }
     }
   }
   rows
 }
 
-#if result-summary-rows.len() > 0 [
+#let result-summary-table(rows) = publication-table(
+  columns: (0.72fr, 0.95fr, 1.05fr, 0.62fr, 0.62fr, 0.62fr, 0.55fr, 0.5fr),
+  align: (left, left, left, right, right, right, left, right),
+  text-size: 7.2pt,
+  header: ([*Profile*], [*Gate*], [*Measure*], [*Estimate*], [*CI low*], [*CI high*], [*Unit*], [*$n$*]),
+  rows: rows,
+)
+
+#let foundation-summary-rows = result-summary-rows-for(
+  thesis_data,
+  result-summary-families.filter(family => family.band == "foundations"),
+)
+#let policy-summary-rows = result-summary-rows-for(
+  thesis_data,
+  result-summary-families.filter(family => family.band == "policy"),
+)
+#let q2-summary-rows = result-summary-rows-for(
+  thesis_data,
+  result-summary-families.filter(family => family.band == "q2"),
+)
+#let resource-summary-rows = result-summary-rows-for(
+  thesis_data,
+  result-summary-families.filter(family => family.band == "resources"),
+)
+
+#if foundation-summary-rows.len() > 0 [
   #figure(
-    publication-table(
-      columns: (0.72fr, 0.95fr, 1.05fr, 0.62fr, 0.62fr, 0.62fr, 0.55fr, 0.5fr),
-      align: (left, left, left, right, right, right, left, right),
-      text-size: 7.2pt,
-      header: ([*Profile*], [*Gate*], [*Measure*], [*Estimate*], [*CI low*], [*CI high*], [*Unit*], [*$n$*]),
-      rows: result-summary-rows,
-    ),
-    caption: [Available confirmatory values by profile and gate. Neutral rows are grouped without aggregation across profiles.],
+    result-summary-table(foundation-summary-rows),
+    caption: [Available confirmatory population, measurement, and candidate-support values by profile.],
   ) <tab:thesis-confirmatory-values>
+]
+
+#if policy-summary-rows.len() > 0 [
+  #figure(
+    result-summary-table(policy-summary-rows),
+    caption: [Available confirmatory endpoint, headroom, actor-$Q_1$, and recovery values by profile.],
+  ) <tab:thesis-confirmatory-policy-values>
+]
+
+#if q2-summary-rows.len() > 0 [
+  #figure(
+    result-summary-table(q2-summary-rows),
+    caption: [Available confirmatory exact-$Q_2$ agreement values and frozen thresholds by profile.],
+  )
+]
+
+#if resource-summary-rows.len() > 0 [
+  #figure(
+    result-summary-table(resource-summary-rows),
+    caption: [Observed resource values by completed profile.],
+  )
 ]
 
 == Measurement Validity
@@ -298,27 +370,26 @@ nor suppresses independently measured evidence on the other lane.
   the metric.] else [does not pass; the observed result remains auditable, but
   dependent claims are blocked.]
 ] else [
-  The loaded evidence does not contain the confirmatory repeatability statistic
-  and decision for the frozen target-specific endpoint metric. Dependent claims
-  are therefore blocked; separately recorded diagnostics are not converted to
-  zero or erased.
+  No confirmatory repeatability statistic and decision are loaded for the
+  frozen endpoint metric. Dependent claims are blocked without converting
+  separate diagnostics to zero.
 ]
 
 == Population and Action Support
 
 #if support-state.evidence_available [
   The report supplies scene, target, and exclusion denominators together with
-  actor-valid fraction, lower-tail valid support, configured-family zero rate,
-  target-side balance, and circular orbit span. These state--scene summaries
-  delimit the action population; they are not paired policy effects. The
-  prespecified support decision #if support-state.gate_passed [passes.] else [is
-  a non-pass, so claims requiring adequate held-out task and action support are
-  blocked.]
+  actor-valid fraction, lower-tail valid support, failed-root rate, configured-
+  family zero rate, target-side balance, and circular orbit span. These state--
+  scene summaries delimit the action population; they are not paired policy
+  effects. The rule-checked minimum factual-support decision
+  #if support-state.gate_passed [passes.] else [is a non-pass, so dependent
+  claims are blocked.] Family survival and target-relative diversity remain
+  diagnostics rather than being promoted by this minimum-support gate.
 ] else [
-  No validated held-out bundle currently supplies both the study population,
-  complete candidate-support denominators, and their prespecified support
-  decision. Training-source reachability and renderer failures remain
-  feasibility observations only.
+  No held-out bundle supplies the study population, complete candidate-support
+  denominators, and prespecified support decision. Training-source reachability
+  and renderer failures remain feasibility observations.
 ]
 
 == Oracle Headroom
@@ -326,21 +397,22 @@ nor suppresses independently measured evidence on the other lane.
 #if headroom-state.evidence_available [
   The paired scene endpoint effect, interval, denominator, declared minimum
   effect, and rule-checked meaningful-headroom decision are available in
-  @tab:thesis-confirmatory-values. The headroom claim is
+  @tab:thesis-confirmatory-policy-values. The headroom claim is
   #if headroom-state.claim_admissible [admissible under the passed shared
   foundations.] else [blocked by a non-passing shared foundation or headroom
   decision; its measured effect remains reported.]
 ] else [
-  No complete paired held-out endpoint estimate and meaningful-headroom
-  decision are available. This absence does not determine actor-visible
-  one-step or recursive prediction accuracy on the separate learned-value lane.
+  No paired held-out endpoint estimate and meaningful-headroom decision are
+  available; this does not determine accuracy on the separate learned-value
+  lane.
 ]
 
 == Actor-Visible One-Step Value
 
 #if q1-state.evidence_available [
-  Held-out actor-visible ranking, calibration, scene denominators, and their
-  decision are available. The actor-$Q_1$ claim is
+  Held-out actor-visible ranking with its interval, calibration, declared
+  thresholds, scene denominators, and their rule-checked decision are available.
+  The actor-$Q_1$ claim is
   #if q1-state.claim_admissible [admissible under the passed target, state,
   measurement, and support protocols.] else [blocked by a shared foundation or
   the actor-$Q_1$ decision; the measurements remain reportable independently of
@@ -352,9 +424,11 @@ nor suppresses independently measured evidence on the other lane.
 == Learned-versus-Exact $Q_2$ Agreement
 
 #if q2-state.evidence_available [
-  Learned-versus-exact $Q_2$ error, complete-support coverage,
-  independent-unit count, and the frozen tolerance decision are available. The
-  recursive claim is #if q2-state.claim_admissible [admissible on the passed
+  Learned-versus-exact $Q_2$ error, selected-chain coverage, support-stratum and
+  per-unit minima, rowwise tolerance excess, independent-unit count, and the
+  frozen `all_units_v1` decision are available. Aggregate MAE remains diagnostic;
+  it cannot compensate for a failed row, stratum, or unit. The recursive claim
+  is #if q2-state.claim_admissible [admissible on the passed
   actor-$Q_1$ path.] else [blocked by its shared foundations, actor-$Q_1$, or
   exact-$Q_2$ decision.] Even an admitted result does not establish endpoint
   policy success.
@@ -366,23 +440,26 @@ nor suppresses independently measured evidence on the other lane.
 == Endpoint Recovery
 
 #if recovery-ratio-reportable [
-  The recovered-headroom fraction, paired scene interval, denominator, and
-  recovery decision are available. The endpoint claim is
+  The recovered-headroom point fraction, jointly bootstrapped paired-scene
+  interval, required fraction, denominator, and rule-checked recovery decision
+  are available. Passage means that the point estimate reaches the declared
+  fraction and the interval supports positive mean recovery; it does not claim
+  that the population recovery fraction exceeds that threshold. The endpoint
+  claim is
   #if recovery-state.claim_admissible [admissible because both the oracle-
   headroom and learned-value lanes pass.] else [blocked by at least one lane or
   the recovery decision; the recorded endpoint observations remain auditable.]
 ] else if endpoint-evidence-available [
   Matched per-policy endpoint estimates and intervals remain auditable in
-  @tab:thesis-confirmatory-values, but the recovered-headroom ratio and its
+  @tab:thesis-confirmatory-policy-values, but the recovered-headroom ratio and its
   decision are not reported because meaningful headroom is inadmissible or the
   frozen ratio, interval, denominator, cohort, and provenance contract is
   incomplete. The endpoint claim remains blocked without erasing those
   underlying aggregated per-policy estimates.
 ] else [
-  The thesis has no complete independently evaluated matched per-policy endpoint
-  estimates. The recovered-headroom ratio and decision are therefore unavailable.
-  Endpoint recovery additionally requires passed oracle-headroom and learned-
-  value lanes; a result on either lane alone cannot answer RQ2.
+  No complete independently evaluated matched per-policy endpoints are
+  available, so recovery is unavailable. It additionally requires passed
+  oracle-headroom and learned-value lanes; either lane alone cannot answer RQ2.
 ]
 
 == Resource Feasibility

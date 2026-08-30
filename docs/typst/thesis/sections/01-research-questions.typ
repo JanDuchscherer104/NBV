@@ -34,6 +34,13 @@ headroom claim: the point estimate may fall below the declared minimum, its
 interval may not establish a positive mean effect, or both. None establishes
 the universal absence of non-myopic advantage.
 
+Conditional on admitted headroom and learned-value evidence, endpoint recovery
+uses the same two-part interpretation: its point estimate must reach a positive,
+manifest-declared fraction no larger than one, while a paired joint-bootstrap
+interval must support positive mean recovery. This is a threshold on the point
+estimate, not a confidence claim that the population recovers at least that
+fraction.
+
 === Conditions for interpretation
 
 ==== RQ1 — Target-specific objective and endpoint outcome <ssec:rq1>
@@ -77,6 +84,12 @@ RQ4 measures candidate-family survival, invalidity, scene and target coverage,
 replay and horizon support, and resource cost. Scene-disjoint splits and
 scene-level aggregation prevent dense sampling from masquerading as population
 coverage.
+
+Its minimum factual-support gate is necessary but not sufficient for a positive
+answer: lower-tail valid count and failed-root frequency determine whether the
+other claim lanes have an operational action population. Candidate-family
+survival and target-relative side/orbit coverage remain separate diversity
+evidence and cannot be inferred from passage of that minimum gate.
 
 === Scope extensions
 

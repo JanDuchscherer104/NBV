@@ -64,10 +64,32 @@ then pass its frozen independent-unit, coverage, and tolerance rules; endpoint
 recovery is interpreted only if oracle headroom is already meaningful.
 
 The report contract preserves those populations explicitly. Pairwise accuracy
-is a unit-interval fraction and one-step calibration MAE is a nonnegative
-root-normalized-gain error, both reduced state first and then scene-macro. The
-exact-$Q_2$ receipt reports a nonnegative independent-unit-macro MAE and
-unit-interval population coverage. Each metric, count, and boolean decision
+is a unit-interval fraction with a scene-clustered 95% interval; one-step
+calibration MAE is a nonnegative root-normalized-return error. The frozen $Q_1$
+rule requires the point ranking to reach a declared threshold above chance, the
+interval lower bound to exceed chance $0.5$, and calibration MAE not to exceed
+its declared maximum. This supports point-estimated threshold attainment and
+evidence above chance, not the stronger claim that the population ranking
+exceeds the declared threshold.
+
+The exact-$Q_2$ receipt keeps aggregate MAE diagnostic. Promotion instead
+mirrors the executable `all_units_v1` contract: selected-chain coverage reaches
+its frozen minimum, every selected support stratum contains an exact factual
+row, the selected independent-unit count and minimum rows per unit meet their
+floors, and the maximum rowwise excess over the frozen absolute-plus-relative
+tolerance is nonpositive. Each metric, threshold, count, and boolean decision
 shares its declared positive population denominator and one immutable sidecar
-source; a malformed value, aggregation, unit, count, or provenance leaves the
-gate unresolved rather than producing a measured non-pass.
+source; a malformed value, aggregation, unit, count, provenance, rule identity,
+or contradictory boolean leaves the gate unresolved rather than producing a
+measured non-pass.
+
+For each exact row, the tolerance contract is
+
+$
+  #eqs.rl.qh_exact_q2_error
+$
+
+and the reported tolerance excess subtracts the right-hand allowance from the
+left-hand absolute error. Thus a maximum excess at or below zero proves that
+every admitted exact row satisfies the frozen absolute-plus-relative bound; it
+cannot be replaced by a pooled MAE.

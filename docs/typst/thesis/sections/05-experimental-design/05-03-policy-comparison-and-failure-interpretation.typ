@@ -55,6 +55,16 @@ the gate unavailable. The derived headroom effect and recovery point estimate
 must also reproduce the endpoint means within a fixed numeric serialization
 tolerance.
 
+The recovery gate analogously records a positive required fraction no larger
+than one and applies `fraction_gte_minimum_and_ci_low_gt_zero_v1`. Its point
+estimate must reach the frozen minimum and its interval must support positive
+mean recovery. The interval is obtained by jointly resampling paired scenes and
+recomputing numerator and denominator in every bootstrap replicate; unstable or
+nonpositive replicate denominators are handled by the frozen analysis rule, not
+silently discarded. This gate does not claim that the population recovery
+fraction exceeds the declared minimum; that stronger claim would require the
+interval lower bound itself to reach the minimum.
+
 #figure(
   publication-table(
     text-size: 7.3pt,

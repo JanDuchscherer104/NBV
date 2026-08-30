@@ -33,8 +33,8 @@ comparative estimand have distinct populations and cannot be substituted for
 one another.
 
 Minimum operational support is reported as a worst-case diagnostic; the fifth
-percentile of per-state valid support is the more stable lower-tail estimand,
-accompanied by actor-valid fraction, configured-family zero rate,
+percentile across scene-mean per-state valid support is the more stable
+lower-tail estimand, accompanied by actor-valid fraction, configured-family zero rate,
 target-side balance, and circular target-relative orbit span. Failed roots and
 zero-valid configured family/state pairs remain part of the denominator. The
 projection fraction, oracle opportunity, and jitter compliance are secondary
@@ -74,8 +74,10 @@ question to the prerequisites that make its answer admissible:
 1. *Measurement validity (RQ1):* freeze crop, render, fusion, and point--mesh
    metric identity; show repeatability within a declared tolerance.
 2. *Population and action support (part of RQ4):* establish scene-disjoint
-   target-task coverage, candidate-family survival, hard validity, and acquisition
-   feasibility with exact denominators and a prespecified support decision.
+   target-task coverage, lower-tail hard-valid support, and failed-root frequency
+   with exact denominators and a prespecified minimum factual-support decision;
+   family survival and target-relative diversity remain separately reported
+   diagnostics.
 3. *Oracle headroom (first half of RQ2):* use independent paired held-out
    endpoints to compare bounded lookahead with one-step oracle greedy under the
    same acquisition budget,
