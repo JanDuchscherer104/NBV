@@ -19,7 +19,7 @@ touched_owner_paths:
   - scripts/tests/test_typst_report_data_contract.py
 codex_thread: codex://threads/01a04fd9-0c7c-7813-a9c5-dc49f2f867a6
 repo_object_format: sha1
-repo_head: 1190e5e7bc4863f46221edee20a693198a23a9ae
+repo_head: b09b32fd5d71ba1d58ac3a635095565f4563eb82
 repo_branch: "codex/thesis-figure-qh-evidence-gates"
 worktree_kind: linked
 ---
@@ -78,6 +78,10 @@ reviews until zero P0--P2 findings remained.
   positive-integer/count-binding helper now binds all Q1 rows to the declared
   scene count and all Q2 rows to the declared independent-unit count; zero,
   string, and mismatched-row fixtures are rejected.
+- The next exact-head review found that derived point values could disagree
+  with the endpoint means that define them. The canonical owner now verifies
+  the headroom difference and recovered-headroom fraction numerically before
+  admission; inconsistent point-value fixtures are rejected.
 
 ## Commits
 
@@ -87,6 +91,7 @@ reviews until zero P0--P2 findings remained.
 - https://github.com/JanDuchscherer104/ARIA-NBV/commit/fb31b12cbc7fb92acb9f4f203395ced99d50407e
 - https://github.com/JanDuchscherer104/ARIA-NBV/commit/c8880786c7ea9456672a06188330102fa0b09a22
 - https://github.com/JanDuchscherer104/ARIA-NBV/commit/1190e5e7bc4863f46221edee20a693198a23a9ae
+- https://github.com/JanDuchscherer104/ARIA-NBV/commit/b09b32fd5d71ba1d58ac3a635095565f4563eb82
 
 ## Verification
 
@@ -97,6 +102,8 @@ page-size checks, and `git diff --check`. Exact standalone and embedded renders
 were inspected in color and grayscale. Independent exact-candidate scientific
 and visual reviews each approved with zero P0--P2 findings. After the recovery-
 contract repair, two fresh independent reviews again approved with zero P0--P2.
+The derived-identity repair received another independent exact-candidate
+approval with zero P0--P2.
 
 ## Canonical Owner Impact
 
