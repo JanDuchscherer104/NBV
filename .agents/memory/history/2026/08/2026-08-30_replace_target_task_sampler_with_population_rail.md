@@ -28,17 +28,20 @@ critiques, compiled the standalone figure and full thesis, and independently
 reviewed the exact rendered page before publication.
 
 ## Findings
-The sampler emits `selected_rows`; it does not persist final store rows. The
-replacement in `docs/typst/thesis/figures/target_task_sampler_contract.typ`
-therefore separates padded input, complete non-padding audit rows,
-geometry-eligible rows, seeded capped sampling, and emitted provenance. Invalid
-geometry remains visible but cannot enter the eligible set. The adjacent owner
-in `03-02-target-task-and-rri-labels.typ` now states that confidence, IoU,
-visibility, support, headroom, and utility do not gate this privileged GT-only
-sampling step.
+The sampler first selects the latest GT OBB slice containing a non-padding row;
+an all-padding block yields no task rows. It then emits `selected_rows`; it does
+not persist final store rows. The replacement in
+`docs/typst/thesis/figures/target_task_sampler_contract.typ` therefore
+separates slice selection, complete non-padding audit rows, the local
+geometry-eligible target-row set $cal(R)_s^"geom"$, seeded capped sampling, and
+emitted provenance. Invalid geometry remains visible but cannot enter the
+eligible set. The adjacent owner in `03-02-target-task-and-rri-labels.typ` now
+states that confidence, IoU, visibility, support, headroom, and utility do not
+gate this privileged GT-only sampling step.
 
 ## Commits
 - [1497d3b2cb114626432ae23affc959a9b51500f5](https://github.com/JanDuchscherer104/ARIA-NBV/commit/1497d3b2cb114626432ae23affc959a9b51500f5)
+- [ce3eeab0395a3937d5086840b4184257a1303ff4](https://github.com/JanDuchscherer104/ARIA-NBV/commit/ce3eeab0395a3937d5086840b4184257a1303ff4)
 
 ## Verification
 - PASS: 24 tests in `aria_nbv/tests/oracle/test_target_selection.py`.
