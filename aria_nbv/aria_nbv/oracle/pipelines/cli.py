@@ -205,6 +205,7 @@ def campaign_preflight(
         campaign.preflight(
             nested_configs=(writer_cfg,) if writer_cfg is not None else (),
             writer_config_path=getattr(campaign.config, "writer_config_path", None),
+            source_store_path=source_store,
         )
     except (RuntimeError, ValueError, OSError) as exc:
         raise typer.BadParameter(str(exc)) from None
@@ -884,6 +885,7 @@ def _internal_preflight(
     plan_path: Path | None = None,
     writer_config_path: Path | None = None,
     expected_scene_count: int | None = None,
+    source_store_path: Path | None = None,
 ) -> int:
     """Run one named repository-owned preflight subprocess mode."""
     if stage == "cuda-rasterizer-preflight":
@@ -930,7 +932,13 @@ def _internal_preflight(
                     raise RuntimeError(
                         f"source-target preflight requires {expected_scene_count} scenes; found {scene_count}"
                     )
-            source_store = Path(writer_cfg.source.store.store_dir).expanduser().resolve()
+            source_store = (
+                Path(writer_cfg.source.store.store_dir).expanduser().resolve()
+                if source_store_path is None
+                else source_store_path.expanduser().resolve()
+            )
+            if source_store_path is not None and source_store.name != Path(manifest.source_store_dir).name:
+                raise RuntimeError("source-target preflight source store does not match the reviewed manifest")
             if not source_store.exists():
                 raise RuntimeError("source-target preflight source store is missing")
             if plan_path is not None:
@@ -970,12 +978,16 @@ if __name__ == "__main__":
             if "--expected-scene-count" in sys.argv
             else None
         )
+        source_store_arg = (
+            Path(sys.argv[sys.argv.index("--source-store-path") + 1]) if "--source-store-path" in sys.argv else None
+        )
         raise SystemExit(
             _internal_preflight(
                 stage,
                 plan_path=plan_arg,
                 writer_config_path=writer_arg,
                 expected_scene_count=expected_arg,
+                source_store_path=source_store_arg,
             )
         )
     else:

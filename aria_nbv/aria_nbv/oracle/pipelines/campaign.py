@@ -1631,6 +1631,7 @@ class CudaRolloutCampaign:
         nested_configs: Iterable[Any] = (),
         plan_path: Path | None = None,
         writer_config_path: Path | None = None,
+        source_store_path: Path | None = None,
     ) -> Any:
         # This gate intentionally runs before plan/status/evidence writes in
         # production entry points.  Nested writer and renderer configs are
@@ -1683,6 +1684,8 @@ class CudaRolloutCampaign:
                 stage_argv.extend(("--plan-path", str(plan_path)))
             if writer_config_path is not None:
                 stage_argv.extend(("--writer-config-path", str(writer_config_path)))
+            if source_store_path is not None:
+                stage_argv.extend(("--source-store-path", str(source_store_path)))
             stage_argv.extend(("--expected-scene-count", str(self.config.expected_scene_count)))
             self.run_preflight_stage(
                 tuple(stage_argv),
