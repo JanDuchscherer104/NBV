@@ -199,7 +199,7 @@ class CandidateFamilyPreflightConfig:
 
     The resolved root threshold is ``max(12, ceil(0.25 * query_width))``.
     Family floors are independent: every applicable family must contribute at
-    least one selected row across the audited population, while applicable
+    least one selected row in each factual state, while applicable
     non-forward target-aware families must contribute at least three selected
     rows in total. ``flat_gain_tolerance`` is applied to the exact finite,
     oracle-labelled target-root-gain range; it never infers reward from
@@ -630,7 +630,7 @@ def benchmarks_from_reader(
             rows = family_rows.get(family, [])
             applicable = True if family in configured_families else None
             valid = sum(bool(row.get("actor_action")) for row in rows)
-            selected = sum(bool(row.get("selected")) for row in rows)
+            selected = sum(int(row.get("compact_valid_index", -1)) >= 0 for row in rows)
             invalid_rows = [row for row in rows if not bool(row.get("actor_action"))]
             first_failures: dict[str, int] = {}
             for row in invalid_rows:
@@ -839,18 +839,20 @@ def reduce_candidate_family_preflight(
     """Evaluate root support, family floors, and direct label variation once.
 
     Root support is evaluated per factual state against the resolved threshold.
-    Family floors aggregate selected rows across the audited population because
-    one factual rollout state selects at most one action. Forward rows remain
-    excluded from the target-aware total. Unknown applicability is retained and
+    Here ``selected`` means retained in the final valid action shell
+    (``compact_valid_index >= 0``), not the one policy-chosen transition row.
+    Family floors therefore apply to each state/family cell. Forward rows remain
+    excluded from the per-state target-aware total. Unknown applicability is retained and
     blocks only when the supplied policy requires deployable provenance.
     """
 
     records = tuple(sorted(records, key=lambda record: (record.scene_key, record.state_key)))
     cells: list[tuple[str, CandidateFamilyCounts]] = []
     blockers: list[CandidatePreflightBlocker] = []
-    by_family: dict[str, list[CandidateFamilyCounts]] = {family: [] for family in config.configured_families}
     for record in records:
         family_by_name = {family.family: family for family in record.families}
+        target_selected = 0
+        any_target_applicable = False
         for family_name in config.configured_families:
             cell = family_by_name.get(
                 family_name,
@@ -861,7 +863,6 @@ def reduce_candidate_family_preflight(
                 ),
             )
             cells.append((record.state_key, cell))
-            by_family[family_name].append(cell)
             if cell.support_failure is not None:
                 blockers.append(
                     CandidatePreflightBlocker(
@@ -871,6 +872,28 @@ def reduce_candidate_family_preflight(
                         family_name,
                     )
                 )
+            if config.require_known_applicability and cell.applicable is None:
+                blockers.append(
+                    CandidatePreflightBlocker(
+                        CandidateSupportFailure.UNKNOWN_FAMILY_APPLICABILITY,
+                        "applicability is missing from the audited state",
+                        record.state_key,
+                        family_name,
+                    )
+                )
+            if cell.applicable is True and cell.selected < config.min_selected_per_applicable_family:
+                blockers.append(
+                    CandidatePreflightBlocker(
+                        CandidateSupportFailure.FAMILY_COLLAPSE,
+                        f"selected={cell.selected} < family_floor={config.min_selected_per_applicable_family}",
+                        record.state_key,
+                        family_name,
+                    )
+                )
+            if family_name in set(config.target_aware_families) - {config.forward_family}:
+                if cell.applicable is True:
+                    any_target_applicable = True
+                    target_selected += cell.selected
         valid_total = sum(family.valid for family in record.families if family.applicable is not False)
         if valid_total < config.resolved_min_valid:
             blockers.append(
@@ -880,49 +903,14 @@ def reduce_candidate_family_preflight(
                     state_key=record.state_key,
                 )
             )
-
-    for family_name, family_cells in by_family.items():
-        applicability = {cell.applicable for cell in family_cells}
-        if config.require_known_applicability and None in applicability:
+        if any_target_applicable and target_selected < config.min_selected_target_aware_total:
             blockers.append(
                 CandidatePreflightBlocker(
-                    CandidateSupportFailure.UNKNOWN_FAMILY_APPLICABILITY,
-                    "applicability is missing from at least one audited state",
-                    family=family_name,
+                    CandidateSupportFailure.LOW_TARGET_FAMILY_SUPPORT,
+                    f"selected={target_selected} < target_family_floor={config.min_selected_target_aware_total}",
+                    state_key=record.state_key,
                 )
             )
-        applicable_cells = [cell for cell in family_cells if cell.applicable is True]
-        selected = sum(cell.selected for cell in applicable_cells)
-        if applicable_cells and selected < config.min_selected_per_applicable_family:
-            blockers.append(
-                CandidatePreflightBlocker(
-                    CandidateSupportFailure.FAMILY_COLLAPSE,
-                    f"selected={selected} < family_floor={config.min_selected_per_applicable_family}",
-                    family=family_name,
-                )
-            )
-
-    target_families = set(config.target_aware_families) - {config.forward_family}
-    target_selected = sum(
-        cell.selected
-        for family_name, family_cells in by_family.items()
-        if family_name in target_families
-        for cell in family_cells
-        if cell.applicable is True
-    )
-    any_target_applicable = any(
-        cell.applicable is True
-        for family_name, family_cells in by_family.items()
-        if family_name in target_families
-        for cell in family_cells
-    )
-    if any_target_applicable and target_selected < config.min_selected_target_aware_total:
-        blockers.append(
-            CandidatePreflightBlocker(
-                CandidateSupportFailure.LOW_TARGET_FAMILY_SUPPORT,
-                f"selected={target_selected} < target_family_floor={config.min_selected_target_aware_total}",
-            )
-        )
 
     label_values = [
         point.target_root_gain

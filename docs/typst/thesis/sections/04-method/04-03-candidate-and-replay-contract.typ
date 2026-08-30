@@ -64,14 +64,15 @@ consume the reader and do not recompute scientific quantities.
 The candidate-family preflight separates two estimands. Per factual state, the
 root-support floor is $max(12, ceil(0.25 N_q))$; thus $14$ hard-valid rows fail
 and $15$ pass for $N_q=60$. Independently, the versioned diagnostic family
-floor requires at least one selected row from every applicable family across
-the audited population and at least three selected rows in total from
+floor requires at least one final-shell row from every applicable family in
+each audited state and at least three final-shell rows in total from
 applicable non-forward target-aware families. Forward-local selections cannot
 satisfy the second requirement. Inapplicable family/state cells remain
 explicit and do not fail the gate, whereas missing legacy applicability is an
 unknown provenance state and fails closed for deployment. These rules diagnose
 proposal support; they do not assign low utility to invalid or absent
-candidates.
+candidates. Here selection means admission into the compact valid action shell,
+not the single action later chosen by the rollout policy.
 
 Reward variation is label-conditional. When finite target-root-gain labels
 exist under one manifest-bound oracle contract, the preflight compares their
