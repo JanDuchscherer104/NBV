@@ -17,6 +17,7 @@ import tempfile
 import zipfile
 from collections.abc import Collection, Iterable, Mapping
 from dataclasses import asdict, dataclass, field
+from enum import StrEnum
 from pathlib import Path
 from types import MappingProxyType
 from typing import Any, Literal, cast
@@ -26,6 +27,9 @@ import pandas as pd
 
 SCHEMA_ID = "aria-nbv-candidate-benchmark-v1"
 CANDIDATE_SUPPORT_METRICS_REVISION = 1
+FAMILY_PREFLIGHT_SCHEMA_ID = "aria-nbv-candidate-family-preflight-v1"
+FAMILY_SUPPORT_FLOOR_REVISION = "family-support-floor-v1"
+FLAT_GAIN_REVISION = "flat-gain-range-v1"
 MANIFEST_NAME = "manifest.json"
 DATA_NAME = "candidates.parquet"
 MULTI_STORE_BINDING_ALGORITHM = "sha256-canonical-json-v1"
@@ -75,6 +79,26 @@ def _mapping_field(value: Any) -> Mapping[str, Any]:
     return value
 
 
+def _family_payload(value: "CandidateFamilyCounts", *, parquet: bool = False) -> dict[str, Any]:
+    """Serialize one frozen cell without deepcopying its mapping proxy."""
+
+    return {
+        "family": value.family,
+        "applicable": value.applicable,
+        "attempted": value.attempted,
+        "valid": value.valid,
+        "selected": value.selected,
+        "denominator": value.denominator,
+        "reason": value.reason,
+        "invalid_reason_bitsets": list(value.invalid_reason_bitsets),
+        "first_failure": value.first_failure,
+        "margins": _json_field(value.margins) if parquet else dict(value.margins),
+        "refill_rounds": value.refill_rounds,
+        "fallback_used": value.fallback_used,
+        "support_failure": value.support_failure,
+    }
+
+
 def _optional_text(value: Any) -> str | None:
     """Preserve missing lineage while normalizing present values to text."""
 
@@ -120,7 +144,12 @@ def aggregate_store_content_sha256(store_seals: Mapping[str, str]) -> str:
 
 @dataclass(frozen=True, slots=True)
 class CandidateFamilyCounts:
-    """Counts for one family, preserving applicability and denominators."""
+    """One factual state/family cell without fabricating missing provenance.
+
+    ``applicable=None`` denotes an unknown legacy state, not false. Diagnostic
+    fields summarize only values persisted for the cell; absent margins,
+    refill state, fallback state, or support failure remain ``None``.
+    """
 
     family: str
     applicable: bool | None
@@ -129,6 +158,12 @@ class CandidateFamilyCounts:
     selected: int = 0
     denominator: int = 0
     reason: str | None = None
+    invalid_reason_bitsets: tuple[int, ...] = ()
+    first_failure: str | None = None
+    margins: Mapping[str, float] = field(default_factory=dict)
+    refill_rounds: int | None = None
+    fallback_used: bool | None = None
+    support_failure: str | None = None
 
     def __post_init__(self) -> None:
         for name in ("attempted", "valid", "selected", "denominator"):
@@ -140,6 +175,128 @@ class CandidateFamilyCounts:
             raise ValueError("family applicability must be bool or None")
         if self.denominator < self.attempted:
             raise ValueError("family denominator must be at least attempted")
+        if any(reason < 0 for reason in self.invalid_reason_bitsets):
+            raise ValueError("invalid-reason bitsets must be non-negative")
+        if self.refill_rounds is not None and self.refill_rounds < 0:
+            raise ValueError("refill_rounds must be non-negative when present")
+        object.__setattr__(self, "margins", dict(self.margins))
+
+
+class CandidateSupportFailure(StrEnum):
+    """Machine-readable failure reasons kept distinct by the preflight gate."""
+
+    LOW_ROOT_SUPPORT = "low_root_support"
+    FAMILY_COLLAPSE = "family_collapse"
+    LOW_TARGET_FAMILY_SUPPORT = "low_target_family_support"
+    UNKNOWN_FAMILY_APPLICABILITY = "unknown_family_applicability"
+    RECORDED_SUPPORT_FAILURE = "recorded_support_failure"
+    FLAT_GAIN = "flat_gain"
+
+
+@dataclass(frozen=True, slots=True)
+class CandidateFamilyPreflightConfig:
+    """Versioned family-support and label-variation policy.
+
+    The resolved root threshold is ``max(12, ceil(0.25 * query_width))``.
+    Family floors are independent: every applicable family must contribute at
+    least one selected row across the audited population, while applicable
+    non-forward target-aware families must contribute at least three selected
+    rows in total. ``flat_gain_tolerance`` is applied to the exact finite,
+    oracle-labelled target-root-gain range; it never infers reward from
+    geometry.
+    """
+
+    query_width: int
+    configured_families: tuple[str, ...]
+    target_aware_families: tuple[str, ...] = ("target_bearing_local", "lateral_target_bypass")
+    forward_family: str = "forward_local"
+    min_selected_per_applicable_family: int = 1
+    min_selected_target_aware_total: int = 3
+    flat_gain_tolerance: float = 1.0e-4
+    require_known_applicability: bool = True
+    audit_strata_count: int = 10
+    family_floor_revision: str = FAMILY_SUPPORT_FLOOR_REVISION
+    flat_gain_revision: str = FLAT_GAIN_REVISION
+
+    def __post_init__(self) -> None:
+        if self.query_width <= 0:
+            raise ValueError("query_width must be positive")
+        if not self.configured_families or len(set(self.configured_families)) != len(self.configured_families):
+            raise ValueError("configured_families must be non-empty and unique")
+        if self.min_selected_per_applicable_family < 0 or self.min_selected_target_aware_total < 0:
+            raise ValueError("family support floors must be non-negative")
+        if not math.isfinite(self.flat_gain_tolerance) or self.flat_gain_tolerance < 0:
+            raise ValueError("flat_gain_tolerance must be finite and non-negative")
+        if self.audit_strata_count <= 0:
+            raise ValueError("audit_strata_count must be positive")
+
+    @property
+    def resolved_min_valid(self) -> int:
+        """Return the persisted root-support threshold for this query width."""
+
+        return max(12, math.ceil(0.25 * self.query_width))
+
+    @property
+    def config_sha256(self) -> str:
+        """Bind every gate decision to the exact versioned policy."""
+
+        return sha256_bytes(canonical_json_bytes(asdict(self)))
+
+
+@dataclass(frozen=True, slots=True)
+class FlatGainOutcome:
+    """Oracle-label variation result with an exact label-support denominator."""
+
+    available: bool
+    passed: bool | None
+    denominator: int
+    tolerance: float
+    observed_range: float | None
+    revision: str
+    reason: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class CandidatePreflightBlocker:
+    """One deterministic go/no-go blocker, optionally scoped to state/family."""
+
+    code: CandidateSupportFailure
+    detail: str
+    state_key: str | None = None
+    family: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class CandidateFamilyPreflight:
+    """Canonical presentation-free Phase-A family-support decision."""
+
+    go: bool
+    schema_id: str
+    config_sha256: str
+    query_width: int
+    resolved_min_valid: int
+    cells: tuple[tuple[str, CandidateFamilyCounts], ...]
+    blockers: tuple[CandidatePreflightBlocker, ...]
+    flat_gain: FlatGainOutcome
+    audit_strata: Mapping[str, tuple[str, ...]]
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "audit_strata", MappingProxyType(dict(self.audit_strata)))
+
+    def to_payload(self) -> dict[str, Any]:
+        """Serialize the single canonical decision for CLI, campaign, and UI."""
+
+        return {
+            "schema_id": self.schema_id,
+            "go": self.go,
+            "config_sha256": self.config_sha256,
+            "query_width": self.query_width,
+            "resolved_min_valid": self.resolved_min_valid,
+            "cells": [{"state_key": state_key, **_canonical(_family_payload(cell))} for state_key, cell in self.cells],
+            "blockers": [{**asdict(blocker), "code": blocker.code.value} for blocker in self.blockers],
+            "flat_gain": asdict(self.flat_gain),
+            "audit_strata": {name: list(scenes) for name, scenes in self.audit_strata.items()},
+        }
 
 
 @dataclass(frozen=True, slots=True)
@@ -200,11 +357,21 @@ class CandidatePoint:
     view_jitter_elevation_limit_deg: float | None = None
     """Configured non-negative pitch cap in degrees for a bounded row."""
 
+    oracle_label: bool = False
+    """Whether direct continuous target-root gain is a valid oracle label."""
+
+    target_root_gain: float | None = None
+    """Direct continuous target-root gain when ``oracle_label`` is true."""
+
     def __post_init__(self) -> None:
         if not self.family or not self.position or not self.state_key:
             raise ValueError("candidate point family, position, and state_key are required")
         if not isinstance(self.actor_valid, bool) or not isinstance(self.selected, bool):
             raise ValueError("candidate point statuses must be bool")
+        if not isinstance(self.oracle_label, bool):
+            raise ValueError("oracle_label must be bool")
+        if self.target_root_gain is not None and not math.isfinite(self.target_root_gain):
+            raise ValueError("target_root_gain must be finite when present")
         if len(self.xyz) != 3 or not all(math.isfinite(float(value)) for value in self.xyz):
             raise ValueError("candidate point xyz must be a finite 3-vector")
         if self.target_relative_xyz is not None and (
@@ -279,7 +446,7 @@ class CandidateBenchmark:
         return {
             "scene_key": self.scene_key,
             "state_key": self.state_key,
-            "families": [asdict(family) for family in self.families],
+            "families": [_family_payload(family, parquet=True) for family in self.families],
             "geometry": _json_field(self.geometry),
             "diversity": _json_field(self.diversity),
             "timings_ms": _json_field(self.timings_ms),
@@ -332,7 +499,16 @@ def reduce_candidate_records(records: list[Mapping[str, Any]]) -> tuple[Candidat
     result = []
     keys: set[tuple[str, str]] = set()
     for record in records:
-        families = tuple(CandidateFamilyCounts(**family) for family in record.get("families", ()))
+        families = tuple(
+            CandidateFamilyCounts(
+                **{
+                    **family,
+                    "invalid_reason_bitsets": tuple(int(value) for value in family.get("invalid_reason_bitsets", ())),
+                    "margins": _mapping_field(family.get("margins", {})),
+                }
+            )
+            for family in record.get("families", ())
+        )
         dto = CandidateBenchmark(
             state_key=str(record["state_key"]),
             scene_key=str(record["scene_key"]),
@@ -388,6 +564,7 @@ def benchmarks_from_reader(
     from .inspection import candidate_audit_rows, proposal_support_geometry
 
     grouped: dict[tuple[str, str], dict[str, list[Mapping[str, Any]]]] = {}
+    configured_families = _configured_family_names(reader)
     if candidate_limit is not None and candidate_limit <= 0:
         raise ValueError("candidate_limit must be positive")
     requested_rollout_ids = None
@@ -448,13 +625,49 @@ def benchmarks_from_reader(
             lineage["proposal_support_unavailable_reason"] = ",".join(
                 issue_codes or ("candidate_geometry_unavailable",)
             )
-        for family, rows in sorted(family_rows.items()):
-            applicable = None
+        state_family_names = sorted(set(family_rows) | set(configured_families))
+        for family in state_family_names:
+            rows = family_rows.get(family, [])
+            applicable = True if family in configured_families else None
             valid = sum(bool(row.get("actor_action")) for row in rows)
             selected = sum(bool(row.get("selected")) for row in rows)
+            invalid_rows = [row for row in rows if not bool(row.get("actor_action"))]
+            first_failures: dict[str, int] = {}
+            for row in invalid_rows:
+                reason = str(row.get("invalid_reason") or "unknown")
+                first_failures[reason] = first_failures.get(reason, 0) + 1
+            first_failure = (
+                min(first_failures, key=lambda reason: (-first_failures[reason], reason)) if first_failures else None
+            )
+            margins = {
+                name: min(values)
+                for name in (
+                    "free_space_margin_m",
+                    "mesh_distance_m",
+                    "path_min_clearance_m",
+                    "target_pixel_margin_px",
+                )
+                if (
+                    values := [_finite_value(row.get(name)) for row in rows if _finite_value(row.get(name)) is not None]
+                )
+            }
             families.append(
                 CandidateFamilyCounts(
-                    family, applicable, len(rows), valid, selected, len(rows), "unavailable_in_legacy_store"
+                    family=family,
+                    applicable=applicable,
+                    attempted=len(rows),
+                    valid=valid,
+                    selected=selected,
+                    denominator=len(rows),
+                    reason=None if applicable is not None else "unavailable_in_legacy_store",
+                    invalid_reason_bitsets=tuple(
+                        sorted({int(row.get("invalid_reason_bitset") or 0) for row in invalid_rows})
+                    ),
+                    first_failure=first_failure,
+                    margins=margins,
+                    refill_rounds=_consistent_optional_int(rows, "refill_rounds"),
+                    fallback_used=_consistent_optional_bool(rows, "fallback_used"),
+                    support_failure=_consistent_optional_text(rows, "support_failure"),
                 )
             )
             for family_row in rows:
@@ -481,16 +694,18 @@ def benchmarks_from_reader(
                         )
                 points.append(
                     CandidatePoint(
-                        candidate_id,
-                        coordinates[-1],
-                        family,
-                        str(family_row["position"]),
-                        bool(family_row.get("actor_action")),
-                        bool(family_row.get("selected")),
-                        state,
-                        _optional_text(family_row.get("candidate_config")),
-                        _optional_text(family_row.get("rollout_config")),
-                        _optional_text(family_row.get("branch_schedule")),
+                        candidate_id=candidate_id,
+                        xyz=coordinates[-1],
+                        family=family,
+                        position=str(family_row["position"]),
+                        actor_valid=bool(family_row.get("actor_action")),
+                        selected=bool(family_row.get("selected")),
+                        state_key=state,
+                        oracle_label=bool(family_row.get("oracle_label")),
+                        target_root_gain=_finite_value(family_row.get("target_root_gain")),
+                        candidate_config=_optional_text(family_row.get("candidate_config")),
+                        rollout_config=_optional_text(family_row.get("rollout_config")),
+                        branch_schedule=_optional_text(family_row.get("branch_schedule")),
                         target_relative_xyz=target_relative,
                         view_direction_xyz=(
                             None
@@ -538,6 +753,45 @@ def benchmarks_from_reader(
     return tuple(result)
 
 
+def _configured_family_names(reader: Any) -> tuple[str, ...]:
+    """Read configured family identity without guessing legacy provenance."""
+
+    try:
+        manifest = reader.manifest().get("manifest", {})
+    except (AttributeError, TypeError):
+        return ()
+    generation = manifest.get("generation", {}) if isinstance(manifest, Mapping) else {}
+    writer = generation.get("writer_config", {}) if isinstance(generation, Mapping) else {}
+    mixture = writer.get("candidate_mixture", {}) if isinstance(writer, Mapping) else {}
+    components = mixture.get("components", ()) if isinstance(mixture, Mapping) else ()
+    names = []
+    for component in components if isinstance(components, Collection) else ():
+        if isinstance(component, Mapping):
+            name = component.get("name") or component.get("family") or component.get("position")
+        elif isinstance(component, (list, tuple)) and component:
+            name = component[0]
+        else:
+            name = None
+        if name is not None:
+            names.append(str(name))
+    return tuple(dict.fromkeys(names))
+
+
+def _consistent_optional_int(rows: Iterable[Mapping[str, Any]], name: str) -> int | None:
+    values = {int(row[name]) for row in rows if row.get(name) is not None}
+    return next(iter(values)) if len(values) == 1 else None
+
+
+def _consistent_optional_bool(rows: Iterable[Mapping[str, Any]], name: str) -> bool | None:
+    values = {bool(row[name]) for row in rows if row.get(name) is not None}
+    return next(iter(values)) if len(values) == 1 else None
+
+
+def _consistent_optional_text(rows: Iterable[Mapping[str, Any]], name: str) -> str | None:
+    values = {str(row[name]) for row in rows if row.get(name) is not None}
+    return next(iter(values)) if len(values) == 1 else None
+
+
 def _legacy_coordinate(row: Mapping[str, Any]) -> tuple[float, float, float]:
     """Normalize an audit-only row for backward-compatible bundles."""
 
@@ -567,6 +821,178 @@ def _finite_value(value: Any) -> float | None:
     except (TypeError, ValueError):
         return None
     return result if math.isfinite(result) else None
+
+
+def reduce_candidate_family_preflight(
+    records: Iterable[CandidateBenchmark],
+    config: CandidateFamilyPreflightConfig,
+) -> CandidateFamilyPreflight:
+    """Evaluate root support, family floors, and direct label variation once.
+
+    Root support is evaluated per factual state against the resolved threshold.
+    Family floors aggregate selected rows across the audited population because
+    one factual rollout state selects at most one action. Forward rows remain
+    excluded from the target-aware total. Unknown applicability is retained and
+    blocks only when the supplied policy requires deployable provenance.
+    """
+
+    records = tuple(sorted(records, key=lambda record: (record.scene_key, record.state_key)))
+    cells: list[tuple[str, CandidateFamilyCounts]] = []
+    blockers: list[CandidatePreflightBlocker] = []
+    by_family: dict[str, list[CandidateFamilyCounts]] = {family: [] for family in config.configured_families}
+    for record in records:
+        family_by_name = {family.family: family for family in record.families}
+        for family_name in config.configured_families:
+            cell = family_by_name.get(
+                family_name,
+                CandidateFamilyCounts(
+                    family=family_name,
+                    applicable=None,
+                    reason="family_missing_from_state_provenance",
+                ),
+            )
+            cells.append((record.state_key, cell))
+            by_family[family_name].append(cell)
+            if cell.support_failure is not None:
+                blockers.append(
+                    CandidatePreflightBlocker(
+                        CandidateSupportFailure.RECORDED_SUPPORT_FAILURE,
+                        cell.support_failure,
+                        record.state_key,
+                        family_name,
+                    )
+                )
+        valid_total = sum(family.valid for family in record.families if family.applicable is not False)
+        if valid_total < config.resolved_min_valid:
+            blockers.append(
+                CandidatePreflightBlocker(
+                    CandidateSupportFailure.LOW_ROOT_SUPPORT,
+                    f"valid={valid_total} < min_valid={config.resolved_min_valid}",
+                    state_key=record.state_key,
+                )
+            )
+
+    for family_name, family_cells in by_family.items():
+        applicability = {cell.applicable for cell in family_cells}
+        if config.require_known_applicability and None in applicability:
+            blockers.append(
+                CandidatePreflightBlocker(
+                    CandidateSupportFailure.UNKNOWN_FAMILY_APPLICABILITY,
+                    "applicability is missing from at least one audited state",
+                    family=family_name,
+                )
+            )
+        applicable_cells = [cell for cell in family_cells if cell.applicable is True]
+        selected = sum(cell.selected for cell in applicable_cells)
+        if applicable_cells and selected < config.min_selected_per_applicable_family:
+            blockers.append(
+                CandidatePreflightBlocker(
+                    CandidateSupportFailure.FAMILY_COLLAPSE,
+                    f"selected={selected} < family_floor={config.min_selected_per_applicable_family}",
+                    family=family_name,
+                )
+            )
+
+    target_families = set(config.target_aware_families) - {config.forward_family}
+    target_selected = sum(
+        cell.selected
+        for family_name, family_cells in by_family.items()
+        if family_name in target_families
+        for cell in family_cells
+        if cell.applicable is True
+    )
+    any_target_applicable = any(
+        cell.applicable is True
+        for family_name, family_cells in by_family.items()
+        if family_name in target_families
+        for cell in family_cells
+    )
+    if any_target_applicable and target_selected < config.min_selected_target_aware_total:
+        blockers.append(
+            CandidatePreflightBlocker(
+                CandidateSupportFailure.LOW_TARGET_FAMILY_SUPPORT,
+                f"selected={target_selected} < target_family_floor={config.min_selected_target_aware_total}",
+            )
+        )
+
+    label_values = [
+        point.target_root_gain
+        for record in records
+        for point in record.points
+        if point.oracle_label and point.target_root_gain is not None
+    ]
+    if label_values:
+        observed_range = max(label_values) - min(label_values)
+        flat_gain = FlatGainOutcome(
+            available=True,
+            passed=observed_range > config.flat_gain_tolerance,
+            denominator=len(label_values),
+            tolerance=config.flat_gain_tolerance,
+            observed_range=observed_range,
+            revision=config.flat_gain_revision,
+        )
+        if flat_gain.passed is False:
+            blockers.append(
+                CandidatePreflightBlocker(
+                    CandidateSupportFailure.FLAT_GAIN,
+                    f"label_range={observed_range:.12g} <= tolerance={config.flat_gain_tolerance:.12g}",
+                )
+            )
+    else:
+        flat_gain = FlatGainOutcome(
+            available=False,
+            passed=None,
+            denominator=0,
+            tolerance=config.flat_gain_tolerance,
+            observed_range=None,
+            revision=config.flat_gain_revision,
+            reason="no_valid_target_labels",
+        )
+
+    scenes = sorted({record.scene_key for record in records})
+    audit_strata: dict[str, tuple[str, ...]] = {}
+    stratum_count = min(config.audit_strata_count, len(scenes))
+    for index in range(stratum_count):
+        audit_strata[f"audit-stratum-{index:02d}"] = tuple(scenes[index::stratum_count])
+    ordered_blockers = tuple(
+        sorted(blockers, key=lambda item: (item.code.value, item.state_key or "", item.family or "", item.detail))
+    )
+    return CandidateFamilyPreflight(
+        go=not ordered_blockers,
+        schema_id=FAMILY_PREFLIGHT_SCHEMA_ID,
+        config_sha256=config.config_sha256,
+        query_width=config.query_width,
+        resolved_min_valid=config.resolved_min_valid,
+        cells=tuple(cells),
+        blockers=ordered_blockers,
+        flat_gain=flat_gain,
+        audit_strata=audit_strata,
+    )
+
+
+def candidate_family_preflight_from_reader(
+    reader: Any,
+    *,
+    require_known_applicability: bool,
+    flat_gain_tolerance: float = 1.0e-4,
+) -> CandidateFamilyPreflight:
+    """Build the complete store gate through the canonical benchmark reducer."""
+
+    records = benchmarks_from_reader(reader, candidate_limit=None)
+    configured = _configured_family_names(reader)
+    if not configured:
+        configured = tuple(sorted({family.family for record in records for family in record.families}))
+    query_width = max(
+        (sum(family.denominator for family in record.families) for record in records),
+        default=1,
+    )
+    config = CandidateFamilyPreflightConfig(
+        query_width=query_width,
+        configured_families=configured or ("unknown",),
+        flat_gain_tolerance=flat_gain_tolerance,
+        require_known_applicability=require_known_applicability,
+    )
+    return reduce_candidate_family_preflight(records, config)
 
 
 def circular_minimum_covering_span_deg(angles_deg: Iterable[float]) -> float | None:
@@ -1097,15 +1523,22 @@ __all__ = [
     "CandidateBenchmark",
     "CandidateBenchmarkBundle",
     "CandidateBenchmarkSource",
+    "CandidateFamilyPreflight",
+    "CandidateFamilyPreflightConfig",
     "CandidateFamilyCounts",
+    "CandidatePreflightBlocker",
     "CandidatePoint",
+    "CandidateSupportFailure",
+    "FlatGainOutcome",
     "candidate_support_metrics",
+    "candidate_family_preflight_from_reader",
     "canonical_json_bytes",
     "circular_minimum_covering_span_deg",
     "read_bundle",
     "benchmarks_from_reader",
     "read_bundle_bytes",
     "reduce_candidate_records",
+    "reduce_candidate_family_preflight",
     "serialize_bundle_bytes",
     "sha256_bytes",
     "target_relative_orbit_span_deg",
