@@ -42,7 +42,10 @@ comparison family, meaningful headroom, and learned-control gap-closure
 threshold before learned-policy outcomes are inspected. The gap-closure ratio
 is reported only after oracle headroom passes the meaningful-effect gate, but
 its denominator remains the actor-visible learned-myopic-to-oracle-lookahead
-endpoint gap rather than oracle headroom above oracle greedy.
+endpoint gap rather than oracle headroom above oracle greedy. That denominator
+must exceed the predeclared positive tolerance $tau_"gap"$; otherwise the
+analysis reports the raw paired policy effects and marks learned gap closure as
+not estimable.
 
 #figure(
   publication-table(
