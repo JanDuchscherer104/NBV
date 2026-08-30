@@ -75,7 +75,7 @@ not evidence of actor-visible matching.
 
 === Candidate View Generation
 
-Candidate generation turns one oracle instruction into a finite action table. Every quantitative choice---source population, target cap, shell size, family weights, motion limits, pruning thresholds, rollout recipes, renderer settings, and retention policy---belongs to the resolved run manifest and report bundle. This chapter defines semantics only; it does not designate one mutable configuration profile as canonical.
+Candidate generation turns one oracle instruction into a finite action table. Every quantitative choice---source population, target cap, shell size, family weights, motion limits, pruning thresholds, rollout recipes, renderer settings, and retention policy---belongs to the resolved run manifest and report bundle. The equations in this subsection instantiate the frozen `realistic_core_60` intervention profile: $N_q=60$ rows split 24/24/12 across the forward-local, target-bearing-local, and lateral-target-bypass families; $kappa=8$; the $[0.25,1.1]$ metre radius interval; the displayed family coefficients and motion limits; and the $N_"valid" >= op("max")(12, op("ceil")(0.25 N_q))$ root-support gate. These values are neither universal candidate semantics nor library defaults. A run's resolved manifest remains authoritative, and another profile defines a different intervention that must be reported and analysed separately.
 
 At rollout step $t$, candidate generation constructs a full shell
 
@@ -85,13 +85,21 @@ $
 
 with a fixed provenance component $k(i)$ per row. The core mixture contains forward-local, target-bearing, and lateral-bypass motion; the diversity challenger may additionally allocate mass to local refinement and revisit/backtrack components. The resolved manifest, rather than prose, determines which components and counts apply to a run.
 
-For each row, the raw direction is sampled in the reference rig frame. The realistic profile uses the forward-biased Power Spherical distribution from the current implementation @PowerSpherical-deCao2020:
+#figure(
+  align(center, image(
+    "../../figures/candidate_generation_geometry.pdf",
+    width: 100%,
+  )),
+  caption: [One pinned finite-candidate decision state from ASE scene 81286, sample `ASE_81286_Atek_000035`, rollout row 73, and step row 121. Panel A uses a 35-degree vertical-FOV perspective view to place logged camera history, root state, target OBB, selected path, and a deterministically thinned set of wire frusta in the real scene. Panel B uses a 7.8-metre-wide orthographic bird's-eye view and retains all 60 candidate centres: 25 rows are admissible, 35 are hard-rejected by the clearance rule, and oracle-greedy selects shell 47. Dense scene geometry is z-buffered; OBBs, paths, centres, and camera glyphs remain vector overlays. Full eye, look-at, up, clipping, and resolution parameters are recorded in the figure JSON. The example fixes action support and validity for inspection; it is not a policy-performance result.],
+) <fig:candidate-generation-geometry>
+
+For each row, the raw direction is sampled in the reference rig frame. The frozen `realistic_core_60` profile uses the forward-biased Power Spherical distribution from the current implementation @PowerSpherical-deCao2020:
 
 $
   #eqs.action.power_spherical_forward
 $
 
-The draw is mapped into configured azimuth and elevation caps without rejection. With $psi = op("atan2")(u_x, u_z)$ and $u_y = sin theta$, the cap transform is
+Sampler construction or sampling failure aborts generation with the resolved strategy, device, and concentration in the error; the implementation does not silently substitute another distribution. This preserves the intervention identity asserted by the manifest. A successful draw is mapped into configured azimuth and elevation caps without rejection. With $psi = op("atan2")(u_x, u_z)$ and $u_y = sin theta$, the cap transform is
 
 $
   #eqs.action.angle_cap_transform
@@ -102,14 +110,6 @@ $
 $
 
 The sampler draws a capped direction in the reference rig frame and reinterprets it as egocentric forward motion, target-bearing motion, lateral bypass, local refinement, or backtracking according to component provenance. Target-looking families orient their optical axis toward the oracle instruction. In this chapter that point is privileged; calling the generator target-conditioned does not make the point actor-visible.
-
-#figure(
-  align(center, image(
-    "../../figures/candidate_generation_geometry.pdf",
-    width: 100%,
-  )),
-  caption: [One pinned finite-candidate decision state from ASE scene 81286, sample `ASE_81286_Atek_000035`, rollout row 73, and step row 121. Panel A uses a 35-degree vertical-FOV perspective view to place logged camera history, root state, target OBB, selected path, and a deterministically thinned set of wire frusta in the real scene. Panel B uses a 7.8-metre-wide orthographic bird's-eye view and retains all 60 candidate centres: 25 rows are admissible, 35 are hard-rejected by the clearance rule, and oracle-greedy selects shell 47. Dense scene geometry is z-buffered; OBBs, paths, centres, and camera glyphs remain vector overlays. Full eye, look-at, up, clipping, and resolution parameters are recorded in the figure JSON. The example fixes action support and validity for inspection; it is not a policy-performance result.],
-) <fig:candidate-generation-geometry>
 
 The three core position families then reinterpret this capped direction. The
 shared normalization operator is
