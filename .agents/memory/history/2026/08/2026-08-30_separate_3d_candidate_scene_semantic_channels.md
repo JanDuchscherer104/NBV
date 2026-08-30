@@ -14,9 +14,10 @@ touched_owner_paths:
   - docs/typst/thesis/figures/scripts/recover_candidate_scene_calibration.py
   - docs/typst/thesis/sections/03-oracle-and-data-generation/03-02-target-task-and-rri-labels.typ
   - docs/typst/thesis/main.pdf
+  - scripts/tests/test_typst_authoring_hygiene.py
 codex_thread: codex://threads/01a04fd9-0c7c-7813-a9c5-dc49f2f867a6
 repo_object_format: sha1
-repo_head: f9c1f3c8f9036e7ce17a6e25b46a3e3b69682562
+repo_head: 82cec7838e5e6b34434143ba1ef32481daf79bce
 repo_branch: "codex/thesis-figure-candidate-3d-semantic-palette"
 worktree_kind: linked
 ---
@@ -44,13 +45,19 @@ review until both approved the exact candidate.
   exact coordinates and makes their frame distinction visible.
 - Generator-owned prose now self-identifies the selected candidate pose in the
   primary exporter, recovery generator, and regenerated pinned JSON.
+- Exact-head GitHub review found that historical-frustum row indices lived only
+  in recovery provenance. Both export paths now emit the indices in the shared
+  oblique-panel payload, and the CeTZ consumer reads that portable contract.
 - No mesh, OBB, camera, candidate, validity, count, or family geometry changed.
 
 ## Commits
 - [f9c1f3c8f9036e7ce17a6e25b46a3e3b69682562](https://github.com/JanDuchscherer104/ARIA-NBV/commit/f9c1f3c8f9036e7ce17a6e25b46a3e3b69682562) — separate semantic channels, preserve frame-distinct near-coincident poses, clarify generated provenance, and rebuild the rendered figure and thesis.
+- [82cec7838e5e6b34434143ba1ef32481daf79bce](https://github.com/JanDuchscherer104/ARIA-NBV/commit/82cec7838e5e6b34434143ba1ef32481daf79bce) — move historical-frustum row indices into the shared panel contract and add its authoring regression test.
 
 ## Verification
 - Ruff format/check and Python compilation passed for both geometry generators.
+- The authoring hygiene suite passes 22 tests, including the primary/recovery
+  exporter portability contract for historical-frustum row indices.
 - Recovery regeneration from the pinned primary-worktree raw shard was
   byte-stable across two runs.
 - `make thesis-pdf`, `make thesis-pdf-ci`,
