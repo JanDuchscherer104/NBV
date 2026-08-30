@@ -943,7 +943,7 @@ return {
     ["model.qh_input_contract"] = {
       tex = "\\mathcal{I}_{t,e}=(\\boldsymbol{\\Phi}_t^{\\mathrm{scene}},\\boldsymbol{T}_{r\\leftarrow e},\\boldsymbol{a}_e,\\{\\boldsymbol{T}_{r\\leftarrow c_i},\\boldsymbol{T}_{c_t\\leftarrow c_i},\\boldsymbol{T}_{c_i\\leftarrow e},m_{t,i}^{\\mathrm{cand}}\\}_{i=1}^{N_q},\\{\\boldsymbol{T}_{c_t\\leftarrow c_j}\\}_{j<t},b_t,h)",
       typst = "#eqs.model.qh_input_contract",
-      description = "Actor-visible selected-scorer input contract before learned projection.",
+      description = "Prediction-side selected-scorer input contract before learned projection.",
       thesis_list = false,
     },
     ["model.qh_s1_selected_surface"] = {
