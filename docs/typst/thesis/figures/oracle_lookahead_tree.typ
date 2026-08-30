@@ -116,18 +116,18 @@
   line((2.03, 1.34), (2.23, 1.50), stroke: pruned + 1pt)
   line(
     (4.8, 2.42),
-    (6.13, 1.46),
+    (8.70, 1.46),
     stroke: (paint: pruned, thickness: .85pt, dash: "dashed"),
   )
-  line((5.98, 1.34), (6.18, 1.50), stroke: pruned + 1pt)
-  line((6.08, 1.42), (6.28, 1.58), stroke: pruned + 1pt)
+  line((8.55, 1.34), (8.75, 1.50), stroke: pruned + 1pt)
+  line((8.65, 1.42), (8.85, 1.58), stroke: pruned + 1pt)
   content(
     (2.28, 1.35),
     text(size: 7.8pt, fill: pruned)[valid row; not expanded \ stored in full shell],
     anchor: "west",
   )
   content(
-    (6.34, 1.43),
+    (6.18, 1.18),
     text(size: 7.8pt, fill: pruned)[expanded path; beam-pruned],
     anchor: "west",
   )
