@@ -13,13 +13,13 @@ support, non-myopic headroom, learned value accuracy, or endpoint improvement.
 
 The current evidence supports a narrow implementation conclusion. ARIA-NBV has an executable finite-candidate path that keeps oracle gains, meshes, associations, and candidate renders outside the scorer graph, applies invalidity as a hard decision constraint, evaluates target-specific reconstruction change offline, and exposes the resulting store through one typed reporting seam. The selected experiment still conditions on privileged `v0_gt_input` target geometry; the actor-visible `v1_observed` path is implemented but not frozen or evaluated. This establishes that the proposed experiment can be represented and audited; it does not establish deployability or that one candidate family, rollout policy, representation, or learned model performs better than another.
 
-The evidence chain in @fig:qh-learning-evidence-loop makes this distinction
-constructive. The first unresolved gate owns the current interpretation. Here,
-repeatability and the held-out population are not established, so headroom,
-actor-visible $Q_1$, exact $Q_2$, and endpoint recovery remain unavailable—not
-negative. Treating them as zeros would collapse missing evidence into measured
-failure and could make a pipeline limitation appear to answer the scientific
-question.
+The evidence graph in @fig:qh-learning-evidence-loop makes this distinction
+constructive. Each claim is interpreted at its earliest failed prerequisite or
+prerequisites. Here, repeatability and the held-out population are not
+established, so headroom, actor-visible $Q_1$, exact $Q_2$, and endpoint recovery
+remain unavailable—not negative. Treating them as zeros would collapse missing
+evidence into measured failure and could make a pipeline limitation appear to
+answer the scientific question.
 
 == Interpreting future outcomes
 

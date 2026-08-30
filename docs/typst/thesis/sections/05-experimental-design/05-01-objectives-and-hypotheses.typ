@@ -68,8 +68,10 @@ reportable branches; they meet again only when endpoint recovery is interpreted:
 2. *Population and action support (part of RQ4):* establish scene-disjoint
    target-task coverage, candidate-family survival, hard validity, and acquisition
    feasibility with exact denominators.
-3. *Actor-visible protocol (RQ3):* audit target matching, the complete
-   actor-input identity, and actor--oracle leakage without using policy headroom.
+3. *Actor-visible protocol (RQ3):* bind target-matching failures to the attempted
+   matching population and audit the complete actor-input identity and
+   actor--oracle leakage over the held-out scene population, without using policy
+   headroom.
 4. *Oracle headroom (first half of RQ2):* compare bounded lookahead with
    one-step oracle greedy under the same acquisition budget,
 
@@ -78,10 +80,11 @@ reportable branches; they meet again only when endpoint recovery is interpreted:
    $
 
 5. *Actor-visible $Q_1$ (RQ3 and RQ4):* under the admitted protocol, evaluate
-   target-conditioned one-step ranking, scene-clustered uncertainty,
-   calibration, and dense-label replay coverage.
+   target-conditioned one-step ranking and calibration with scene-clustered
+   uncertainty, plus dense-label replay coverage.
 6. *Exact $Q_2$ (RQ2 and RQ4):* measure held-out two-step error, factual-successor
-   coverage, and horizon support against the finite-support target.
+   coverage, and horizon support against the finite-support target under one
+   receipt-bound independent-unit contract.
 7. *Endpoint gap closure (second half of RQ2):* only after meaningful headroom
    and admitted learned-value prerequisites, estimate the prespecified
    learned-myopic-to-oracle-lookahead gap-closure fraction
