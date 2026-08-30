@@ -176,8 +176,17 @@
   })
 }
 
-#let report-stores-decision-passed(report, key) = {
+#let report-stores-have-boolean-fact(report, key) = {
   report-stores-have-facts(report, (key,)) and report.tables.stores.rows.all(store => {
+    let matches = report.tables.facts.rows.filter(
+      row => row.store_id == store.store_id and row.key == key,
+    )
+    type(matches.first().value) == bool
+  })
+}
+
+#let report-stores-decision-passed(report, key) = {
+  report-stores-have-boolean-fact(report, key) and report.tables.stores.rows.all(store => {
     let matches = report.tables.facts.rows.filter(
       row => row.store_id == store.store_id and row.key == key,
     )

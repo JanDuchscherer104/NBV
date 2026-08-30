@@ -1,4 +1,4 @@
-#import "../experiment_data.typ": evidence-gate-state, report-stores-decision-passed, report-stores-have-facts
+#import "../experiment_data.typ": evidence-gate-state, report-stores-decision-passed, report-stores-have-facts, report-stores-have-boolean-fact
 
 #let report = (
   tables: (
@@ -21,6 +21,20 @@
   not report-stores-decision-passed(report, "gate.passed"),
   message: "present false must not pass the gate",
 )
+
+#let malformed-report = (
+  tables: (
+    stores: (rows: ((store_id: "store-a"),)),
+    facts: (rows: (
+      (store_id: "store-a", key: "gate.string", value: "false", n: 1),
+      (store_id: "store-a", key: "gate.integer", value: 1, n: 1),
+    )),
+  ),
+)
+#assert(not report-stores-have-boolean-fact(malformed-report, "gate.string"))
+#assert(not report-stores-have-boolean-fact(malformed-report, "gate.integer"))
+#assert(not report-stores-decision-passed(malformed-report, "gate.string"))
+#assert(not report-stores-decision-passed(malformed-report, "gate.integer"))
 
 #let failed = evidence-gate-state(true, false)
 #assert(failed.evidence_available)
