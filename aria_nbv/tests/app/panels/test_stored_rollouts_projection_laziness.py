@@ -254,6 +254,7 @@ def test_refresh_rollout_caches_is_page_local(monkeypatch: pytest.MonkeyPatch) -
 
     state = {
         session.CORPUS_SUMMARY_STATE_KEY: object(),
+        session.CANDIDATE_BENCHMARK_STATE_KEY: object(),
         "training_dataset:test-sentinel": object(),
         "unrelated:test-sentinel": object(),
     }
@@ -270,6 +271,7 @@ def test_refresh_rollout_caches_is_page_local(monkeypatch: pytest.MonkeyPatch) -
     session.clear_rollout_page_caches()
 
     assert session.CORPUS_SUMMARY_STATE_KEY not in state
+    assert session.CANDIDATE_BENCHMARK_STATE_KEY not in state
     assert "training_dataset:test-sentinel" in state
     assert "unrelated:test-sentinel" in state
     assert "training_dataset" not in inspect.getsource(session.clear_rollout_page_caches)
@@ -863,12 +865,21 @@ def test_candidate_benchmark_display_is_bounded_export_is_complete_and_identity_
     )
     monkeypatch.setattr(
         session,
-        "benchmarks_from_reader",
-        benchmarks_from_reader,
+        "_cached_candidate_benchmark_records_cached",
+        lambda _path, state_key, candidate_limit, **_kwargs: benchmarks_from_reader(
+            reader,
+            state_key=state_key,
+            candidate_limit=candidate_limit,
+        ),
     )
-    monkeypatch.setattr(session, "benchmark_binding_from_reader", lambda *_args: {"binding": "fixture"})
-    monkeypatch.setattr(session, "serialize_bundle_bytes", lambda *_args, **_kwargs: b"bundle")
-    monkeypatch.setattr(session, "read_bundle_bytes", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        session,
+        "_cached_candidate_benchmark_export_cached",
+        lambda _path, state_key, **_kwargs: (
+            benchmarks_from_reader(reader, state_key=state_key, candidate_limit=None),
+            b"bundle",
+        )[1],
+    )
 
     handle.candidate_benchmark_records(state_key="rollout:1/step:2", candidate_limit=7)
     handle.candidate_benchmark_export(state_key="rollout:1/step:2")
@@ -877,7 +888,40 @@ def test_candidate_benchmark_display_is_bounded_export_is_complete_and_identity_
         {"state_key": "rollout:1/step:2", "candidate_limit": 7},
         {"state_key": "rollout:1/step:2", "candidate_limit": None},
     ]
-    assert len(identity_checks) >= 5
+    assert len(identity_checks) == 4
+
+
+def test_candidate_benchmark_cache_keys_separate_display_limit_from_complete_export(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[tuple[str, tuple[Any, ...], dict[str, Any]]] = []
+    handle = session.StoredRolloutSession(Path("/selected.zarr"), "identity", object(), object(), {}, None)
+    monkeypatch.setattr(handle, "_assert_current_identity", lambda: "identity")
+    monkeypatch.setattr(
+        session,
+        "_cached_candidate_benchmark_records_cached",
+        lambda *args, **kwargs: _record(calls, ("display", args, kwargs), ()),
+    )
+    monkeypatch.setattr(
+        session,
+        "_cached_candidate_benchmark_export_cached",
+        lambda *args, **kwargs: _record(calls, ("export", args, kwargs), b"bundle"),
+    )
+
+    handle.build_candidate_benchmark(state_key="rollout:1/step:2", candidate_limit=7)
+
+    assert calls == [
+        (
+            "display",
+            ("/selected.zarr", "rollout:1/step:2", 7),
+            {"store_identity": "identity"},
+        ),
+        (
+            "export",
+            ("/selected.zarr", "rollout:1/step:2"),
+            {"store_identity": "identity"},
+        ),
+    ]
 
 
 def test_cached_proposal_geometry_preserves_zero_limit(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -923,6 +967,8 @@ def test_stored_rollout_session_clear_invalidates_every_matrix_owner_once(monkey
         "_cached_masks",
         "_cached_candidates",
         "_cached_candidate_population_cached",
+        "_cached_candidate_benchmark_records_cached",
+        "_cached_candidate_benchmark_export_cached",
         "_cached_q_h",
         "_cached_tree",
         "_cached_root_geometry",

@@ -14,7 +14,6 @@ import plotly.graph_objects as go
 import streamlit as st
 from plotly.subplots import make_subplots
 
-from ....rollouts.candidate_support_plotting import candidate_support_figures
 from ....rollouts.inspection import (
     CANDIDATE_GROUP_FIELDS,
     candidate_selection_pooled_summary_rows,
@@ -530,83 +529,6 @@ def _render_candidate_population_evidence(session_handle: Any) -> None:
             "This bounded, order-invariant sample is display-only; aggregates above use the complete population."
         )
         st.dataframe(sample_rows, hide_index=True, width="stretch")
-
-
-def _candidate_benchmark_figures(
-    records: tuple[Any, ...], *, show_view_directions: bool = False
-) -> tuple[go.Figure, ...]:
-    """Build deterministic funnel, support, jitter, and resource views from DTOs."""
-
-    titles = (
-        "Candidate family attempted → valid → selected funnel",
-        "Candidate family survival",
-        "Candidate support (target-normalized ground plane)",
-        "Candidate support (target-normalized 3D)",
-        "Candidate view jitter (bounded boxes and uncapped spherical support)",
-        "Candidate benchmark resource and timing summary",
-    )
-    if not records:
-        figures = []
-        for title in titles[:5]:
-            figure = go.Figure()
-            figure.update_layout(title=title)
-            figure.add_annotation(
-                text="No matching benchmark candidates", x=0.5, y=0.5, xref="paper", yref="paper", showarrow=False
-            )
-            figures.append(figure)
-        resources = go.Figure()
-        resources.update_layout(title=titles[5])
-        resources.add_annotation(
-            text="unavailable: no persisted timing/resource facts",
-            x=0.5,
-            y=0.5,
-            xref="paper",
-            yref="paper",
-            showarrow=False,
-        )
-        return (*figures, resources)
-
-    family_counts = np.asarray(
-        [(family.attempted, family.valid, family.selected) for record in records for family in record.families],
-        dtype=np.int64,
-    )
-    totals = family_counts.sum(axis=0) if len(family_counts) else np.zeros(3, dtype=np.int64)
-    funnel_rows = pd.DataFrame({"stage": ("attempted", "actor-valid", "selected"), "count": totals})
-    funnel = px.bar(funnel_rows, x="stage", y="count", title="Candidate family attempted → valid → selected funnel")
-    for trace in funnel.data:
-        trace.name = trace.name or "candidate funnel"
-    plane, support, survival, jitter = candidate_support_figures(
-        records,
-        show_view_directions=show_view_directions,
-    )
-    survival.update_layout(title="Candidate family survival")
-    plane.update_layout(title="Candidate support (target-normalized ground plane)")
-    support.update_layout(title="Candidate support (target-normalized 3D)")
-    jitter.update_layout(title="Candidate view jitter (bounded boxes and uncapped spherical support)")
-    resources = go.Figure()
-    timings = [record.timings_ms.get("total_ms") for record in records if record.timings_ms.get("total_ms") is not None]
-    memory = [
-        record.resources.get("gpu_memory_mb") for record in records if record.resources.get("gpu_memory_mb") is not None
-    ]
-    if timings or memory:
-        resources.add_trace(
-            go.Bar(
-                x=["runtime_ms", "GPU_memory_mb"],
-                y=[sum(timings) if timings else None, sum(memory) if memory else None],
-                name="resource summary",
-            )
-        )
-    else:
-        resources.add_annotation(
-            text="unavailable: no persisted timing/resource facts",
-            x=0.5,
-            y=0.5,
-            xref="paper",
-            yref="paper",
-            showarrow=False,
-        )
-    resources.update_layout(title="Candidate benchmark resource and timing summary")
-    return funnel, survival, plane, support, jitter, resources
 
 
 def _candidate_evidence_roles(population: dict[str, Any]) -> dict[str, EvidenceRole]:

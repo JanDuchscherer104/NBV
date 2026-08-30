@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
 from streamlit.testing.v1 import AppTest
 from typer.testing import CliRunner
 
+from aria_nbv.app.panels._stored_rollouts.session import CandidateBenchmarkBuildResult
 from aria_nbv.rollouts.candidate_benchmark import (
     BINDING_KEYS,
     SCHEMA_ID,
@@ -61,25 +63,28 @@ def _record() -> CandidateBenchmark:
 class FakeSession:
     """Deterministic persisted-session substitute used inside AppTest."""
 
+    store_identity = "fixture-store"
+
     def __init__(self) -> None:
         import streamlit as st
 
         st.session_state.setdefault("benchmark_records_calls", [])
         st.session_state.setdefault("benchmark_export_calls", [])
 
-    def candidate_benchmark_records(self, **kwargs: Any) -> tuple[CandidateBenchmark, ...]:
+    def build_candidate_benchmark(self, **kwargs: Any) -> CandidateBenchmarkBuildResult:
         import streamlit as st
 
         st.session_state["benchmark_records_calls"].append(kwargs)
-        return (_record(),)
-
-    def candidate_benchmark_export(self, **kwargs: Any) -> bytes:
-        import streamlit as st
-
-        st.session_state["benchmark_export_calls"].append(kwargs)
         payload = serialize_bundle_bytes((_record(),), provenance=_binding())
+        st.session_state["benchmark_export_calls"].append({"state_key": kwargs["state_key"]})
         st.session_state["benchmark_export_hash"] = sha256_bytes(payload)
-        return payload
+        return CandidateBenchmarkBuildResult(
+            store_identity=self.store_identity,
+            state_key=kwargs["state_key"],
+            candidate_limit=kwargs["candidate_limit"],
+            records=(_record(),),
+            bundle_bytes=payload,
+        )
 
 
 def _app(tmp_path: Path) -> AppTest:
@@ -92,7 +97,7 @@ def _app(tmp_path: Path) -> AppTest:
     return AppTest.from_file(str(script), default_timeout=30)
 
 
-def test_candidate_benchmark_card_is_lazy_and_renders_real_plots_and_download(tmp_path: Path) -> None:
+def test_candidate_benchmark_card_requires_build_and_reuses_retained_result_on_unrelated_rerun(tmp_path: Path) -> None:
     app = _app(tmp_path).run()
     assert not app.exception
     assert app.session_state["benchmark_records_calls"] == []
@@ -100,13 +105,9 @@ def test_candidate_benchmark_card_is_lazy_and_renders_real_plots_and_download(tm
     assert not app.get("download_button")
     assert not app.get("plotly_chart")
 
-    app.toggle[0].set_value(True)
-    app = app.run()
-    assert not app.exception
-    app.session_state["benchmark_records_calls"] = []
-    app.session_state["benchmark_export_calls"] = []
     app.text_input[0].set_value("state-1")
     app.number_input[0].set_value(123)
+    next(button for button in app.button if button.label == "Build candidate benchmark").click()
     app = app.run()
     assert not app.exception
     assert app.session_state["benchmark_records_calls"] == [{"state_key": "state-1", "candidate_limit": 123}]
@@ -125,6 +126,32 @@ def test_candidate_benchmark_card_is_lazy_and_renders_real_plots_and_download(tm
     payload = serialize_bundle_bytes((_record(),), provenance=_binding())
     assert app.session_state["benchmark_export_hash"] == sha256_bytes(payload)
     assert read_bundle_bytes(payload, expected_binding=_binding()).records[0].state_key == "state-1"
+
+    app.session_state["benchmark_records_calls"] = []
+    app.session_state["benchmark_export_calls"] = []
+    app.toggle[0].set_value(True)
+    app = app.run()
+    assert not app.exception
+    assert app.session_state["benchmark_records_calls"] == []
+    assert app.session_state["benchmark_export_calls"] == []
+    assert len(app.get("plotly_chart")) == 6
+
+
+def test_candidate_benchmark_card_rejects_retained_result_after_identity_replacement(tmp_path: Path) -> None:
+    app = _app(tmp_path).run()
+    next(button for button in app.button if button.label == "Build candidate benchmark").click()
+    app = app.run()
+    assert len(app.get("plotly_chart")) == 6
+
+    app.session_state["candidate_benchmark_build_result"] = replace(
+        app.session_state["candidate_benchmark_build_result"],
+        store_identity="stale",
+    )
+    app = app.run()
+
+    assert not app.exception
+    assert not app.get("plotly_chart")
+    assert not app.get("download_button")
 
 
 def test_cli_requires_binding_and_attaches_validated_candidate_bundle(tmp_path: Path) -> None:

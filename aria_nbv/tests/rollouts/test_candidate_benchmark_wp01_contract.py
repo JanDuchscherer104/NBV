@@ -739,15 +739,18 @@ def test_benchmark_panel_dispatches_only_after_toggle_and_propagates_state_and_l
             return None
 
     fake_st = SimpleNamespace(
+        session_state={},
         subheader=lambda *_a, **_k: None,
         number_input=lambda label, **kwargs: 17 if label == "Candidate plot row limit" else 123,
-        toggle=lambda label, **kwargs: (
-            next(benchmark_dispatch) if label == "Build immutable candidate benchmark card" else False
-        ),
+        toggle=lambda *_a, **_k: False,
+        form=lambda *_a, **_k: Expander(),
+        form_submit_button=lambda *_a, **_k: next(benchmark_dispatch),
         text_input=lambda *_a, **_k: "state-1",
         download_button=lambda *args, **_kwargs: calls.append(("download", args)),
         markdown=lambda *_a, **_k: None,
         caption=lambda *_a, **_k: None,
+        info=lambda *_a, **_k: None,
+        error=lambda *_a, **_k: None,
         warning=lambda *_a, **_k: None,
         dataframe=lambda *_a, **_k: None,
         expander=lambda *_a, **_k: Expander(),
@@ -763,19 +766,24 @@ def test_benchmark_panel_dispatches_only_after_toggle_and_propagates_state_and_l
     monkeypatch.setattr(validity_support, "_render_bounded_candidate_geometry", lambda *_a, **_k: None)
 
     class Session:
+        store_identity = "fixture-store"
+
         def targets(self) -> list[Any]:
             return []
 
         def masks(self) -> list[Any]:
             return []
 
-        def candidate_benchmark_records(self, **kwargs: Any) -> tuple[CandidateBenchmark, ...]:
+        def build_candidate_benchmark(self, **kwargs: Any) -> Any:
             calls.append(("records", kwargs))
-            return fake_records
-
-        def candidate_benchmark_export(self, **kwargs: Any) -> bytes:
-            calls.append(("export", kwargs))
-            return serialize_bundle_bytes(fake_records, provenance=_binding())
+            calls.append(("export", {"state_key": kwargs["state_key"]}))
+            return validity_support.CandidateBenchmarkBuildResult(
+                self.store_identity,
+                kwargs["state_key"],
+                kwargs["candidate_limit"],
+                fake_records,
+                serialize_bundle_bytes(fake_records, provenance=_binding()),
+            )
 
     validity_support._render_targets_and_support(Session())
     assert not any(kind in {"records", "export"} for kind, _ in calls)

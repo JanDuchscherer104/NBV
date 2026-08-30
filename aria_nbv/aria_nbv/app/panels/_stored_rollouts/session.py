@@ -5,7 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 from collections.abc import Callable
-from dataclasses import asdict
+from dataclasses import asdict, dataclass
 from functools import wraps
 from pathlib import Path
 from typing import Any, Literal, cast
@@ -17,9 +17,11 @@ from ....configs import PathConfig
 from ....dataset_topology import build_dataset_topology
 from ....rollouts import RolloutZarrStoreReader
 from ....rollouts.candidate_benchmark import (
+    CandidateBenchmark,
     benchmark_binding_from_reader,
     benchmarks_from_reader,
     read_bundle_bytes,
+    reduce_candidate_records,
     serialize_bundle_bytes,
 )
 from ....rollouts.inspection import (
@@ -62,6 +64,27 @@ from ....rollouts.reporting import (
 )
 
 CORPUS_SUMMARY_STATE_KEY = "stored_rollouts_corpus_summary"
+CANDIDATE_BENCHMARK_STATE_KEY = "candidate_benchmark_build_result"
+
+
+@dataclass(frozen=True, slots=True)
+class CandidateBenchmarkBuildResult:
+    """Identity-bound result of one explicit candidate benchmark build.
+
+    Attributes:
+        store_identity: Replacement-sensitive selected-store identity.
+        state_key: Optional factual state restriction applied to both products.
+        candidate_limit: Positive display-only row limit.
+        records: Bounded immutable records used to construct interactive figures.
+        bundle_bytes: Complete deterministic benchmark export for ``state_key``;
+            this population is never truncated by ``candidate_limit``.
+    """
+
+    store_identity: str
+    state_key: str | None
+    candidate_limit: int
+    records: tuple[CandidateBenchmark, ...]
+    bundle_bytes: bytes
 
 
 @st.cache_resource(show_spinner=False)
@@ -106,6 +129,38 @@ def _cached_candidate_population_cached(store_path: str, store_identity: str, sa
 
     reader, _, _ = _cached_store_bundle_cached(store_path, store_identity=store_identity)
     return candidate_population_evidence(reader, sample_size=sample_size)
+
+
+@st.cache_data(show_spinner="Building bounded candidate benchmark display…", max_entries=32)
+def _cached_candidate_benchmark_records_cached(
+    store_path: str,
+    state_key: str | None,
+    candidate_limit: int,
+    *,
+    store_identity: str = "",
+) -> tuple[dict[str, Any], ...]:
+    """Cache serializable display records by identity, state, and row limit."""
+
+    reader, _, _ = _cached_store_bundle_cached(store_path, store_identity=store_identity)
+    records = benchmarks_from_reader(reader, state_key=state_key, candidate_limit=candidate_limit)
+    return tuple(record.to_record() for record in records)
+
+
+@st.cache_data(show_spinner="Building complete candidate benchmark export…", max_entries=32)
+def _cached_candidate_benchmark_export_cached(
+    store_path: str,
+    state_key: str | None,
+    *,
+    store_identity: str = "",
+) -> bytes:
+    """Cache a complete export by validated identity and optional state only."""
+
+    reader, _, manifest = _cached_store_bundle_cached(store_path, store_identity=store_identity)
+    binding = benchmark_binding_from_reader(reader, manifest)
+    records = benchmarks_from_reader(reader, state_key=state_key, candidate_limit=None)
+    payload = serialize_bundle_bytes(records, provenance=binding)
+    read_bundle_bytes(payload, expected_binding=binding)
+    return payload
 
 
 def _store_projection_identity(store_path: str) -> str:
@@ -202,24 +257,49 @@ class StoredRolloutSession:
 
     def candidate_benchmark_records(
         self, *, state_key: str | None = None, candidate_limit: int | None = 500
-    ) -> tuple[Any, ...]:
+    ) -> tuple[CandidateBenchmark, ...]:
         """Build immutable benchmark facts through the canonical inspection reader."""
 
-        result = benchmarks_from_reader(self.reader, state_key=state_key, candidate_limit=candidate_limit)
+        if candidate_limit is None:
+            result = benchmarks_from_reader(self.reader, state_key=state_key, candidate_limit=None)
+            self._assert_current_identity()
+            return result
+        rows = _cached_candidate_benchmark_records_cached(
+            self._projection_path(),
+            state_key,
+            candidate_limit,
+            store_identity=self.store_identity,
+        )
+        result = reduce_candidate_records(list(rows))
         self._assert_current_identity()
         return result
 
     def candidate_benchmark_export(self, *, state_key: str | None = None) -> bytes:
         """Export one deterministic benchmark bundle from validated facts."""
 
-        manifest = self.manifest_payload
-        binding = benchmark_binding_from_reader(self.reader, manifest)
-        payload = serialize_bundle_bytes(
-            self.candidate_benchmark_records(state_key=state_key, candidate_limit=None),
-            provenance=binding,
+        payload = _cached_candidate_benchmark_export_cached(
+            self._projection_path(),
+            state_key,
+            store_identity=self.store_identity,
         )
-        read_bundle_bytes(payload, expected_binding=binding)
+        self._assert_current_identity()
         return payload
+
+    def build_candidate_benchmark(
+        self,
+        *,
+        state_key: str | None = None,
+        candidate_limit: int = 500,
+    ) -> CandidateBenchmarkBuildResult:
+        """Build bounded display facts and a complete export under one identity."""
+
+        if candidate_limit <= 0:
+            raise ValueError("candidate_limit must be positive")
+        identity = self._assert_current_identity()
+        records = self.candidate_benchmark_records(state_key=state_key, candidate_limit=candidate_limit)
+        bundle_bytes = self.candidate_benchmark_export(state_key=state_key)
+        self._assert_current_identity()
+        return CandidateBenchmarkBuildResult(identity, state_key, candidate_limit, records, bundle_bytes)
 
     def invariants(self) -> Any:
         return _cached_invariants(self._projection_path(), store_identity=self.store_identity)
@@ -747,6 +827,8 @@ def _clear_stored_rollout_caches() -> None:
         _cached_masks,
         _cached_candidates,
         _cached_candidate_population_cached,
+        _cached_candidate_benchmark_records_cached,
+        _cached_candidate_benchmark_export_cached,
         _cached_q_h,
         _cached_tree,
         _cached_root_geometry,
@@ -763,6 +845,7 @@ def _clear_stored_rollout_caches() -> None:
     _cached_store_bundle_cached.clear()
     _cached_corpus_summary.clear()
     st.session_state.pop(CORPUS_SUMMARY_STATE_KEY, None)
+    st.session_state.pop(CANDIDATE_BENCHMARK_STATE_KEY, None)
 
 
 def clear_rollout_page_caches() -> None:
