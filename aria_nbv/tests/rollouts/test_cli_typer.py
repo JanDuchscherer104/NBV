@@ -169,8 +169,9 @@ def test_internal_preflight_uses_current_writer_store_for_foreign_manifest_path(
     )
 
 
+@pytest.mark.parametrize(("go", "expected_exit_code"), ((True, 0), (False, 2)))
 def test_campaign_preflight_writes_same_phase_a_evidence_payload(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, go: bool, expected_exit_code: int
 ) -> None:
     class _Copyable(SimpleNamespace):
         def model_copy(self, *, update: dict[str, Any]) -> "_Copyable":
@@ -184,11 +185,11 @@ def test_campaign_preflight_writes_same_phase_a_evidence_payload(
     captured: dict[str, Any] = {}
 
     class _Evidence:
-        preflight = SimpleNamespace(go=True)
+        preflight = SimpleNamespace(go=go)
 
         @staticmethod
         def to_payload() -> dict[str, Any]:
-            return {"artifact_sha256": "a" * 64, "preflight": {"go": True}}
+            return {"artifact_sha256": "a" * 64, "preflight": {"go": go}}
 
     campaign = SimpleNamespace(
         config=SimpleNamespace(writer_config_path=tmp_path / "writer.toml"),
@@ -219,12 +220,14 @@ def test_campaign_preflight_writes_same_phase_a_evidence_payload(
         ],
     )
 
-    assert result.exit_code == 0
+    assert result.exit_code == expected_exit_code
     assert json.loads(output_path.read_text(encoding="utf-8")) == _Evidence.to_payload()
     assert captured["writer"].source.store.store_dir == source_store.resolve()
     assert captured["manifest"] is manifest
     assert len(captured["source_manifest_sha256"]) == 64
-    assert "candidate family Phase-A go=true" in result.output
+    assert f"candidate family Phase-A go={str(go).lower()}" in result.output
+    if not go:
+        assert "candidate family Phase-A gate blocked broad generation" in result.output
 
 
 def test_build_rollouts_rejects_partial_shard_arguments(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

@@ -241,7 +241,7 @@ def campaign_preflight(
             f"path={family_phase_a_output.expanduser().resolve()}"
         )
         if not evidence.preflight.go:
-            raise typer.Exit(2)
+            raise typer.BadParameter("candidate family Phase-A gate blocked broad generation")
     typer.echo("cuda preflight passed")
 
 

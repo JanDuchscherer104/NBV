@@ -1037,6 +1037,11 @@ class CudaRolloutCampaign:
         from ..target_selection import OracleTargetTaskSampler
         from .rollout_dataset import RolloutDatasetWriter
 
+        implementation_revision = subprocess.check_output(
+            ["git", "rev-parse", "HEAD"],
+            text=True,
+            cwd=Path(__file__).resolve().parents[4],
+        ).strip()
         phase_source = writer_config.source
         if hasattr(phase_source, "model_copy"):
             phase_source = phase_source.model_copy(
@@ -1144,11 +1149,6 @@ class CudaRolloutCampaign:
             require_known_applicability=True,
         )
         preflight = reduce_candidate_family_preflight(records, config)
-        implementation_revision = subprocess.check_output(
-            ["git", "rev-parse", "HEAD"],
-            text=True,
-            cwd=Path(__file__).resolve().parents[4],
-        ).strip()
         return CandidateFamilyPhaseAEvidence(
             source_manifest_sha256=source_manifest_sha256,
             source_store_manifest_hash=str(source_manifest.source_manifest_hash),
