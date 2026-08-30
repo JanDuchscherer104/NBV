@@ -83,6 +83,12 @@ scientific, visual, and reproducibility verification.
 - Selected-pose provenance is data-driven: recovery discloses projection-based
   reconstruction, while the primary path identifies the stored
   `candidates/pose_world_cam` row.
+- Final hosted rereview found two remaining publication-integrity gaps: recovery
+  trusted an override baseline without binding it to the pinned geometry, and
+  the primary exporter could overwrite rasters before its last validations.
+  Recovery now pins the baseline before parsing; the primary path validates,
+  hashes, renders, and serializes all four artifacts in same-filesystem staging
+  before publishing them with per-file atomic replacement.
 - Semantic roles remain distinct in color and grayscale: neutral mesh, solid
   purple physical trajectory, teal dashed historical frusta, orange double-line
   OBB, family-shaped shell markers, and black/gold selection.
@@ -98,6 +104,7 @@ scientific, visual, and reproducibility verification.
 - https://github.com/JanDuchscherer104/ARIA-NBV/commit/e56a4dd7646ef582585305b475f249beaf5d3f65
 - https://github.com/JanDuchscherer104/ARIA-NBV/commit/5b2d5978ab7e38fa199a754a41e6af164a93072d
 - https://github.com/JanDuchscherer104/ARIA-NBV/commit/2c3fb23ea8c09695ad7abd7f3db322d3a3717929
+- https://github.com/JanDuchscherer104/ARIA-NBV/commit/1c013d7adf29fbb0c246189119d005c433cdbe86
 
 ## Verification
 
@@ -140,6 +147,13 @@ scientific, visual, and reproducibility verification.
 - tracked thesis: 122 A4 pages; final PDF SHA-256
   `93852f1a74a0e689713094a9e3b91e47c78d85bc6d9777fad9da4e7bb557208a`;
   page 58 passes exact-size color and direct-grayscale inspection.
+- baseline override gate: a byte-identical relocated baseline plus its pinned
+  top raster succeeds; a structurally valid but byte-edited baseline is rejected
+  before pre-existing JSON, crop, or top-raster sentinels change.
+- primary publication lifecycle: all semantic gates, source hashes, mesh loading,
+  renders, panel projections, and staged JSON serialization complete before any
+  publication path is replaced; independent scientific, verifier, and no-op
+  visual reviews report zero P0--P2.
 
 The original rollout Zarr remains unavailable locally, so the primary exporter
 cannot be executed end to end. The tracked recovery path and published caption
