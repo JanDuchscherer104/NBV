@@ -32,7 +32,12 @@ import torch
 from pydantic import Field
 
 from ..rendering.candidate_depth_renderer import CandidateDepthRendererConfig, CandidateDepths
-from ..rendering.candidate_pointclouds import CandidatePointClouds, build_candidate_pointclouds
+from ..rendering.candidate_pointclouds import (
+    CandidatePointClouds,
+    PreparedSampleGeometry,
+    build_candidate_pointclouds,
+    prepare_sample_geometry,
+)
 from ..rri_metrics.point_mesh import chamfer_point_mesh, chamfer_point_mesh_batched
 from ..rri_metrics.rri import RriResult, compute_rri
 from ..utils.base_config import TargetConfig
@@ -188,6 +193,7 @@ class _CandidateRriScoringEngine:
         self._prepared_rri = oracle.setup_target()
         self._root_eval: RootEvalPointCloud | None = None
         self._root_eval_token: tuple[float, ...] | None = None
+        self._sample_geometry: dict[tuple[torch.device, torch.dtype], PreparedSampleGeometry] = {}
 
     def render_candidate_points(self, candidates: CandidateSamplingResult) -> CandidatePointClouds:
         """Render and backproject one valid candidate table."""
@@ -202,7 +208,17 @@ class _CandidateRriScoringEngine:
     def backproject_candidate_points(self, depths: CandidateDepths) -> CandidatePointClouds:
         """Backproject rendered candidate depths into world-frame points."""
 
-        return build_candidate_pointclouds(self.sample, depths, stride=self.backprojection_stride)
+        key = (depths.depths.device, depths.depths.dtype)
+        prepared = self._sample_geometry.get(key)
+        if prepared is None:
+            prepared = prepare_sample_geometry(self.sample, device=key[0], dtype=key[1])
+            self._sample_geometry[key] = prepared
+        return build_candidate_pointclouds(
+            self.sample,
+            depths,
+            stride=self.backprojection_stride,
+            prepared_sample=prepared,
+        )
 
     def current_eval_points(
         self,

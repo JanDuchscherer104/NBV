@@ -40,7 +40,7 @@ class CandidatePointClouds:
     """Valid point counts ``Tensor[\"C\", int64]`` for each padded row."""
 
     semidense_points: Tensor
-    """Collapsed observed SLAM points ``Tensor[\"K 3\", float]`` in world metres."""
+    """Borrowed immutable collapsed SLAM points ``Tensor[\"K 3\", float]`` in world metres."""
 
     semidense_length: Tensor
     """Observed point count ``Tensor[\"1\", int64]`` for serialization symmetry."""
@@ -73,11 +73,49 @@ class CandidatePointClouds:
         return from_serializable(cls, payload, device=device)
 
 
+@dataclass(frozen=True, slots=True)
+class PreparedSampleGeometry:
+    """Device-local sample geometry reused across candidate batches."""
+
+    _source_sample: object
+    """Exact sample whose static geometry was prepared."""
+
+    semidense_points: Tensor
+    """Collapsed observed points ``Tensor["K 3", float]`` in world metres."""
+
+    semidense_length: Tensor
+    """Observed point count ``Tensor["1", int64]``."""
+
+    static_bounds: Tensor
+    """Snippet and semidense bounds ``Tensor["6", float]`` in world metres."""
+
+
+def prepare_sample_geometry(
+    sample: EfmSnippetView,
+    *,
+    device: torch.device,
+    dtype: torch.dtype,
+) -> PreparedSampleGeometry:
+    """Collapse and transfer sample-static geometry once for repeated renders."""
+
+    semidense = torch.as_tensor(sample.semidense.collapse_points(), device=device, dtype=dtype)
+    semidense_length = torch.tensor([semidense.shape[0]], device=device, dtype=torch.long)
+    snippet_bounds = sample.get_occupancy_extend().to(device=device, dtype=dtype)
+    static_bounds = _merge_point_bounds(snippet_bounds, semidense)
+    return PreparedSampleGeometry(
+        _source_sample=sample,
+        semidense_points=semidense,
+        semidense_length=semidense_length,
+        static_bounds=static_bounds,
+    )
+
+
 def build_candidate_pointclouds(
     sample: EfmSnippetView,
     batch: CandidateDepths,
     *,
     stride: int = 1,
+    prepared_sample: PreparedSampleGeometry | None = None,
 ) -> CandidatePointClouds:
     """Convert stacked depth maps into batched point clouds and fuse with SLAM."""
     depths = batch.depths
@@ -95,29 +133,29 @@ def build_candidate_pointclouds(
 
     device, dtype = padded.device, padded.dtype
 
-    semidense_pts = sample.semidense.collapse_points()
-    semidense_pts_t = torch.as_tensor(semidense_pts, device=device, dtype=dtype)
-    semidense_len = torch.tensor([semidense_pts_t.shape[0]], device=device, dtype=torch.long)
-
-    occupancy_bounds = _compute_bounds(sample.get_occupancy_extend(), padded, lengths, semidense_pts_t)
+    prepared = prepared_sample or prepare_sample_geometry(sample, device=device, dtype=dtype)
+    if prepared._source_sample is not sample:
+        raise ValueError("prepared_sample was created for a different sample.")
+    if prepared.semidense_points.device != device or prepared.semidense_points.dtype != dtype:
+        raise ValueError("prepared_sample must match the candidate point-cloud device and dtype.")
+    occupancy_bounds = _compute_bounds(prepared.static_bounds, padded, lengths)
 
     return CandidatePointClouds(
         points=padded,
         lengths=lengths,
-        semidense_points=semidense_pts_t,
-        semidense_length=semidense_len,
+        semidense_points=prepared.semidense_points,
+        semidense_length=prepared.semidense_length,
         occupancy_bounds=occupancy_bounds,
     )
 
 
 def _compute_bounds(
-    snippet_bounds: Tensor,
+    static_bounds: Tensor,
     padded: Tensor,
     lengths: Tensor,
-    semidense: Tensor,
 ) -> Tensor:
     """Combine snippet occupancy bounds with candidate and semi-dense extents."""
-    out = snippet_bounds.to(device=padded.device, dtype=padded.dtype)
+    out = static_bounds.to(device=padded.device, dtype=padded.dtype)
     x_min, x_max, y_min, y_max, z_min, z_max = out.unbind()
 
     if padded.numel() > 0 and padded.shape[1] > 0:
@@ -130,14 +168,24 @@ def _compute_bounds(
             y_min, y_max = torch.minimum(y_min, pmin[1]), torch.maximum(y_max, pmax[1])
             z_min, z_max = torch.minimum(z_min, pmin[2]), torch.maximum(z_max, pmax[2])
 
-    if semidense.numel() > 0:
-        smin = torch.amin(semidense, dim=0)
-        smax = torch.amax(semidense, dim=0)
-        x_min, x_max = torch.minimum(x_min, smin[0]), torch.maximum(x_max, smax[0])
-        y_min, y_max = torch.minimum(y_min, smin[1]), torch.maximum(y_max, smax[1])
-        z_min, z_max = torch.minimum(z_min, smin[2]), torch.maximum(z_max, smax[2])
-
     return torch.stack([x_min, x_max, y_min, y_max, z_min, z_max], dim=0)
 
 
-__all__ = ["CandidatePointClouds", "build_candidate_pointclouds"]
+def _merge_point_bounds(bounds: Tensor, points: Tensor) -> Tensor:
+    """Expand world bounds to include an unpadded point table."""
+
+    if points.numel() == 0:
+        return bounds
+    point_min = torch.amin(points, dim=0)
+    point_max = torch.amax(points, dim=0)
+    lower = torch.minimum(bounds[[0, 2, 4]], point_min)
+    upper = torch.maximum(bounds[[1, 3, 5]], point_max)
+    return torch.stack([lower[0], upper[0], lower[1], upper[1], lower[2], upper[2]])
+
+
+__all__ = [
+    "CandidatePointClouds",
+    "PreparedSampleGeometry",
+    "build_candidate_pointclouds",
+    "prepare_sample_geometry",
+]
