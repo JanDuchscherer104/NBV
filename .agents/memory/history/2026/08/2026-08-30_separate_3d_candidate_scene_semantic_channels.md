@@ -17,7 +17,7 @@ touched_owner_paths:
   - scripts/tests/test_typst_authoring_hygiene.py
 codex_thread: codex://threads/01a04fd9-0c7c-7813-a9c5-dc49f2f867a6
 repo_object_format: sha1
-repo_head: 82cec7838e5e6b34434143ba1ef32481daf79bce
+repo_head: 43c53c3468b7d9cb1a627cd8feac1d8a71e4fe4c
 repo_branch: "codex/thesis-figure-candidate-3d-semantic-palette"
 worktree_kind: linked
 ---
@@ -37,8 +37,12 @@ review until both approved the exact candidate.
 ## Findings
 - Nominally different purple and teal overlays still approached mesh edges and
   one another in grayscale. The accepted figure uses an arrowed magenta history
-  path, dark-blue dashed logged-camera frusta, black sampling root and selected
-  frustum, orange double OBB, and existing family shapes.
+  path, violet dashed logged-camera frusta, black sampling root and selected
+  frustum, orange double OBB, and existing family shapes. Violet avoids a false
+  identity with the blue forward-local candidate family.
+- The semantic legend now names the neutral GT mesh explicitly, distinguishes
+  the gold-backed selected shell and black route, and pairs the logged-frustum
+  color with dashed lines and hollow camera centres.
 - Exact review exposed that the current physical RGB endpoint and canonical
   sampling root project only 0.174 mm apart at final size. A larger hollow
   physical-pose ring drawn after a smaller filled root point preserves both
@@ -53,6 +57,7 @@ review until both approved the exact candidate.
 ## Commits
 - [f9c1f3c8f9036e7ce17a6e25b46a3e3b69682562](https://github.com/JanDuchscherer104/ARIA-NBV/commit/f9c1f3c8f9036e7ce17a6e25b46a3e3b69682562) — separate semantic channels, preserve frame-distinct near-coincident poses, clarify generated provenance, and rebuild the rendered figure and thesis.
 - [82cec7838e5e6b34434143ba1ef32481daf79bce](https://github.com/JanDuchscherer104/ARIA-NBV/commit/82cec7838e5e6b34434143ba1ef32481daf79bce) — move historical-frustum row indices into the shared panel contract and add its authoring regression test.
+- [43c53c3468b7d9cb1a627cd8feac1d8a71e4fe4c](https://github.com/JanDuchscherer104/ARIA-NBV/commit/43c53c3468b7d9cb1a627cd8feac1d8a71e4fe4c) — remove the cross-panel blue collision, strengthen dashed frusta at final size, and align the caption and legend with the rendered semantic roles.
 
 ## Verification
 - Ruff format/check and Python compilation passed for both geometry generators.
@@ -65,7 +70,8 @@ review until both approved the exact candidate.
   `git diff --check` passed. The figure is one 160 x 72.5 mm page; the thesis
   remains 123 A4 pages.
 - Exact final-size color/grayscale review and independent scientific review
-  both approved with zero P0--P2 findings.
+  both approved with zero P0--P2 findings. A fresh isolated compile pixel-
+  matched the tracked standalone render after the violet-frustum revision.
 
 ## Canonical Owner Impact
 The tracked CeTZ source owns semantic styling and glyph composition. The
