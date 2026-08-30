@@ -747,8 +747,8 @@ def main() -> None:
                 "position provenance (24/24/12 rows)."
             ),
             "candidate_pose_display": (
-                "The primary exporter reads this pose directly from the stored "
-                "candidates/pose_world_cam row."
+                "The primary exporter reads the selected candidate pose directly "
+                "from the stored candidates/pose_world_cam row."
             ),
             "render_backend": f"Open3D {o3d.__version__} offscreen z-buffer; CeTZ overlays remain vector",
             "view_contracts": {

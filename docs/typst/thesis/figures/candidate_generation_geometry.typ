@@ -7,14 +7,15 @@
 #let ink = rgb("#17202a")
 #let muted = rgb("#687380")
 #let hair = rgb("#cbd3dc")
-#let history-path-color = rgb("#66307c")
-#let history-frustum-color = rgb("#008c99")
+#let history-path-color = rgb("#aa3377")
+#let history-frustum-color = rgb("#0072b2")
 #let target-color = rgb("#a95f12")
 #let forward-color = rgb("#31689e")
 #let bearing-color = rgb("#c06b12")
 #let bypass-color = rgb("#18836d")
 #let invalid-color = rgb("#a93e4c")
 #let selected-color = rgb("#f2c14e")
+#let history-rows = data.at("provenance").at("calibrated_outline").at("history_rows")
 
 // The raster is a fixed crop of the original 1500 x 920 projection. Every
 // vector point remains in the original normalized panel coordinates and is
@@ -111,25 +112,33 @@
     // Both remain distinct from the neutral mesh and the sampling root.
     line(
       ..panel.at("history_path").map(map-point),
-      stroke: 2.05pt + white.transparentize(18%),
+      stroke: 2.20pt + white.transparentize(12%),
     )
     line(
       ..panel.at("history_path").map(map-point),
-      stroke: 1.18pt + history-path-color,
+      stroke: 1.24pt + history-path-color,
+      mark: (end: ">", scale: .52),
     )
     for pose in panel.at("history_frusta") {
       wire-segments(
         pose,
         map-point,
-        (paint: white.transparentize(18%), thickness: 1.28pt, dash: "dashed"),
+        (paint: white.transparentize(10%), thickness: 1.72pt, dash: "dashed"),
       )
       wire-segments(
         pose,
         map-point,
-        (paint: history-frustum-color, thickness: .64pt, dash: "dashed"),
+        (paint: history-frustum-color, thickness: 1.02pt, dash: "dashed"),
       )
     }
-
+    for row in history-rows {
+      circle(
+        map-point(panel.at("history_path").at(row)),
+        radius: .038,
+        fill: white,
+        stroke: .88pt + history-frustum-color,
+      )
+    }
     // Expand only the selected hypothetical view. The full shell remains in B.
     line(
       ..panel.at("selected_path").map(map-point),
@@ -140,12 +149,20 @@
       stroke: .58pt + ink,
       mark: (end: ">", scale: .65),
     )
-    wire-segments(panel.at("selected_frustum"), map-point, 1.18pt + ink)
+    wire-segments(panel.at("selected_frustum"), map-point, 1.98pt + white.transparentize(8%))
+    wire-segments(panel.at("selected_frustum"), map-point, 1.40pt + ink)
     family-marker(panel.at("candidates").at(47), map-point, selected: true)
 
     // The canonical sampling root is an anchor, not a physical RGB frustum.
     let root = map-point(panel.at("root_center"))
-    circle(root, radius: .05, fill: ink, stroke: .45pt + white)
+    let physical-rgb-end = map-point(panel.at("history_path").last())
+    circle(root, radius: .042, fill: ink, stroke: .40pt + white)
+    circle(
+      physical-rgb-end,
+      radius: .075,
+      fill: none,
+      stroke: .82pt + history-path-color,
+    )
     content(
       (root.at(0) + .18, root.at(1) - .16),
       anchor: "north-west",
@@ -262,10 +279,10 @@
     #grid(
       columns: (auto, 1fr),
       column-gutter: 1.0mm,
-      row-gutter: .35mm,
-      text(size: 7.5pt, fill: ink)[━], text(size: 6.6pt)[selected (black/gold)],
-      text(size: 7.5pt, fill: history-path-color)[━], text(size: 6.6pt)[physical RGB trajectory],
-      text(size: 7.5pt, fill: history-frustum-color)[┄], text(size: 6.6pt)[historical RGB frusta],
+      row-gutter: .28mm,
+      text(size: 7.5pt, fill: ink)[━], text(size: 6.6pt)[selected candidate + route],
+      text(size: 7.5pt, fill: history-path-color)[━▶], text(size: 6.6pt)[observed RGB trajectory],
+      text(size: 7.5pt, fill: history-frustum-color)[┄], text(size: 6.6pt)[logged RGB camera frusta],
       text(size: 7.5pt, fill: target-color)[▣], text(size: 6.6pt)[task GT OBB],
     )
   ],

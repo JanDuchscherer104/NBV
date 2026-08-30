@@ -75,7 +75,7 @@
     },
     "family_source": "reconstructed pinned configuration blocks from preserved shell order (shells 0--23 forward-local, 24--47 target-bearing-local, and 48--59 lateral-target-bypass); the original rollout position_id table is unavailable, so row-level stored family provenance is not independently re-decoded",
     "family_display": "Shapes reconstruct configured shell blocks (24/24/12); stored row-level family identities were unavailable to this recovery export.",
-    "candidate_pose_display": "Recovery reconstructs this pose from the preserved projection.",
+    "candidate_pose_display": "Recovery reconstructs the selected candidate pose from the preserved projection.",
     "calibrated_outline": {
       "owner": "efm3d.aria.CameraTW.unproject with its returned validity mask",
       "camera_model": "CameraModelType.FISHEYE624",

@@ -291,7 +291,7 @@ def _recover(
         "family identities were unavailable to this recovery export."
     )
     provenance["candidate_pose_display"] = (
-        "Recovery reconstructs this pose from the preserved projection."
+        "Recovery reconstructs the selected candidate pose from the preserved projection."
     )
     provenance["calibrated_outline"] = {
         "owner": "efm3d.aria.CameraTW.unproject with its returned validity mask",

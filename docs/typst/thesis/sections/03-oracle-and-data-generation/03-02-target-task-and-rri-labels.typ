@@ -120,9 +120,9 @@ finite table retains.
   align(center, image(
     "../../figures/candidate_generation_geometry.pdf",
     width: 100%,
-    alt: "A dominant oblique 3D view shows a neutral processed ground-truth room mesh, an orange selected task bounding box, a solid purple physical RGB trajectory with two teal dashed calibrated historical frusta, a separate sampling-root anchor, and the black-and-gold selected candidate frustum. A narrow bird's-eye audit shows all sixty candidate centers and validity decisions. " + candidate-pose-display + " " + candidate-family-display,
+    alt: "A dominant oblique 3D view shows a neutral processed ground-truth room mesh, an orange double-outline task bounding box, a solid magenta arrowed physical RGB trajectory ending at a hollow current-pose ring, two blue dashed calibrated historical frusta with hollow pose centers, a slightly offset black sampling-root point nested inside the larger endpoint ring, and the black-and-gold selected candidate frustum. A narrow bird's-eye audit shows all sixty candidate centers and validity decisions. " + candidate-pose-display + " " + candidate-family-display,
   )),
-  caption: [Scene grounding and support audit for one pinned ASE decision state. Panel A separates physical RGB history, the canonical sampling root, the selected oracle-task GT OBB, and the selected candidate view. #candidate-pose-display Panel B retains all 60 stored centers and validity decisions: 25 admissible, 35 hard-rejected, and shell 47 selected. #candidate-family-display Frusta approximate the calibrated Fisheye624 valid domain; the example fixes support and validity, not policy performance.],
+  caption: [Scene grounding and support audit for one pinned ASE decision state. In Panel A, the solid arrow ends at the hollow ring for the current physical RGB pose; the nested filled point is the near-coincident but frame-distinct canonical sampling root. Dashed wireframes mark two logged RGB cameras. #candidate-pose-display Panel B retains all 60 stored centers and validity decisions: 25 admissible, 35 hard-rejected, and shell 47 selected. #candidate-family-display Frusta approximate the calibrated Fisheye624 valid domain; the example fixes support and validity, not policy performance.],
 ) <fig:candidate-generation-geometry>
 
 The three core position families then reinterpret this capped direction. The
