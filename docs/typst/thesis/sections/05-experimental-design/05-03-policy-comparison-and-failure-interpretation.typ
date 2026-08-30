@@ -44,7 +44,9 @@ three per-policy endpoint estimates and intervals before deriving either
 contrast, and binds their scene count, cohort identity, aggregation, interval
 method, and provenance to both the headroom and recovery facts. Ratios and their
 decisions are reported only when this contract is complete and their headroom
-denominator passes the meaningful-effect gate.
+denominator passes the meaningful-effect gate. The derived headroom effect and
+recovery point estimate must also reproduce the endpoint means within a fixed
+numeric serialization tolerance.
 
 #figure(
   publication-table(

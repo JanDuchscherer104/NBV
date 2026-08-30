@@ -1,4 +1,4 @@
-#import "../experiment_data.typ": conditional-ratio-gate-state, evidence-gate-state, endpoint-evidence-facts, headroom-evidence-facts, recovery-evidence-facts, paired-interval-method, recovery-ratio-definition, report-store-endpoint-evidence-valid, report-store-headroom-evidence-valid, report-store-recovery-evidence-valid, report-store-fact, report-store-facts-share-source, report-store-facts-share-value, report-stores-have-facts
+#import "../experiment_data.typ": conditional-ratio-gate-state, evidence-gate-state, endpoint-evidence-facts, headroom-evidence-facts, recovery-evidence-facts, paired-interval-method, recovery-ratio-definition, report-store-endpoint-evidence-valid, report-store-headroom-evidence-valid, report-store-recovery-evidence-valid, report-store-headroom-identity-valid, report-store-recovery-identity-valid, report-store-fact, report-store-facts-share-source, report-store-facts-share-value, report-stores-have-facts
 
 #let source = "analysis/paired-policy.json|sidecar:fixture"
 #let cohort-a = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
@@ -27,8 +27,8 @@
   fact("policy.endpoint_gain.n_scenes", scene-value, "count", 5, "count", source: source),
   fact("policy.endpoint_gain.cohort_sha256", cohort, "sha256", 5, "cohort_binding_sha256", source: source),
 )
-#let headroom-rows(cohort: cohort-a, source: source) = (
-  fact("policy.paired_scene_endpoint.effect", 0.30, "fraction", 5, "paired_scene_mean_difference", source: source),
+#let headroom-rows(cohort: cohort-a, source: source, effect: 0.30) = (
+  fact("policy.paired_scene_endpoint.effect", effect, "fraction", 5, "paired_scene_mean_difference", source: source),
   fact("policy.paired_scene_endpoint.ci_low", 0.18, "fraction", 5, "paired_scene_mean_difference", source: source),
   fact("policy.paired_scene_endpoint.ci_high", 0.42, "fraction", 5, "paired_scene_mean_difference", source: source),
   fact("policy.paired_scene_endpoint.interval_method", paired-interval-method, "identity", 5, "analysis_identity", source: source),
@@ -70,6 +70,16 @@
 #assert(endpoint-valid)
 #assert(headroom-valid)
 #assert(recovery-valid)
+#assert(report-store-headroom-identity-valid(accepted, "store-a"))
+#assert(report-store-recovery-identity-valid(accepted, "store-a"))
+#assert(not report-store-headroom-identity-valid(
+  report(endpoint-rows() + headroom-rows(effect: 0.90)),
+  "store-a",
+))
+#assert(not report-store-recovery-identity-valid(
+  report(endpoint-rows() + recovery-rows(metric-value: 0.70)),
+  "store-a",
+))
 #assert(not report-store-endpoint-evidence-valid(
   report(endpoint-rows(scene-value: "5")),
   "store-a",

@@ -34,6 +34,7 @@
 
 #let paired-interval-method = "scene_clustered_percentile_bootstrap_95"
 #let recovery-ratio-definition = "ratio_of_paired_scene_mean_differences"
+#let derived-identity-abs-tolerance = 1e-10
 #let endpoint-evidence-facts = (
   "policy.endpoint_gain.oracle_one_step.mean",
   "policy.endpoint_gain.oracle_one_step.ci_low",
@@ -367,6 +368,78 @@
   matches.len() == 1 and {
     let value = matches.first().value
     type(value) == str and value.match(regex("^[0-9a-f]{64}$")) != none
+  }
+}
+
+#let report-store-number-value(report, store-id, key) = {
+  let matches = report.tables.facts.rows.filter(
+    row => row.store_id == store-id and row.key == key,
+  )
+  if matches.len() == 1 and report-value-matches-kind(
+    matches.first().value,
+    "number",
+  ) {
+    matches.first().value
+  } else {
+    none
+  }
+}
+
+#let report-store-headroom-identity-valid(
+  report,
+  store-id,
+  tolerance: derived-identity-abs-tolerance,
+) = {
+  let one-step = report-store-number-value(
+    report,
+    store-id,
+    "policy.endpoint_gain.oracle_one_step.mean",
+  )
+  let lookahead = report-store-number-value(
+    report,
+    store-id,
+    "policy.endpoint_gain.oracle_lookahead.mean",
+  )
+  let effect = report-store-number-value(
+    report,
+    store-id,
+    "policy.paired_scene_endpoint.effect",
+  )
+  (one-step, lookahead, effect).all(value => value != none) and calc.abs(
+    effect - (lookahead - one-step),
+  ) <= tolerance
+}
+
+#let report-store-recovery-identity-valid(
+  report,
+  store-id,
+  tolerance: derived-identity-abs-tolerance,
+) = {
+  let one-step = report-store-number-value(
+    report,
+    store-id,
+    "policy.endpoint_gain.oracle_one_step.mean",
+  )
+  let lookahead = report-store-number-value(
+    report,
+    store-id,
+    "policy.endpoint_gain.oracle_lookahead.mean",
+  )
+  let learned = report-store-number-value(
+    report,
+    store-id,
+    "policy.endpoint_gain.learned_q.mean",
+  )
+  let recovery = report-store-number-value(
+    report,
+    store-id,
+    "policy.q_recovery.fraction",
+  )
+  (one-step, lookahead, learned, recovery).all(value => value != none) and {
+    let denominator = lookahead - one-step
+    calc.abs(denominator) > tolerance and calc.abs(
+      recovery - (learned - one-step) / denominator,
+    ) <= tolerance
   }
 }
 

@@ -1,6 +1,6 @@
 = Results <sec:thesis-results>
 
-#import "../experiment_data.typ": thesis-report-settings, load-thesis-report, endpoint-evidence-facts, headroom-evidence-facts, recovery-evidence-facts, report-store-fact, report-store-facts-match-contract, report-store-endpoint-evidence-valid, report-store-headroom-evidence-valid, report-store-recovery-evidence-valid, report-store-facts-share-value, report-store-facts-share-source, report-store-count-binds-facts, report-stores-have-facts, report-stores-have-boolean-fact, report-stores-decision-passed, evidence-gate-state, conditional-ratio-gate-state, short-store-label, format-report-value
+#import "../experiment_data.typ": thesis-report-settings, load-thesis-report, endpoint-evidence-facts, headroom-evidence-facts, recovery-evidence-facts, report-store-fact, report-store-facts-match-contract, report-store-endpoint-evidence-valid, report-store-headroom-evidence-valid, report-store-recovery-evidence-valid, report-store-headroom-identity-valid, report-store-recovery-identity-valid, report-store-facts-share-value, report-store-facts-share-source, report-store-count-binds-facts, report-stores-have-facts, report-stores-have-boolean-fact, report-stores-decision-passed, evidence-gate-state, conditional-ratio-gate-state, short-store-label, format-report-value
 #import "../draft_markers.typ": validation_todo
 #import "../../shared/tables.typ": publication-table, index-cell
 
@@ -100,6 +100,9 @@
     thesis_data,
     store.store_id,
     endpoint-evidence-facts + headroom-evidence-facts,
+  ) and report-store-headroom-identity-valid(
+    thesis_data,
+    store.store_id,
   )
 })
 #let headroom-state = evidence-gate-state(
@@ -148,6 +151,9 @@
     thesis_data,
     store.store_id,
     endpoint-evidence-facts + headroom-evidence-facts + recovery-evidence-facts,
+  ) and report-store-recovery-identity-valid(
+    thesis_data,
+    store.store_id,
   )
 })
 #let recovery-evidence = conditional-ratio-gate-state(
