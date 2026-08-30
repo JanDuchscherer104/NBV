@@ -92,6 +92,43 @@
   report
 }
 
+#let report-stores-have-facts(report, keys, denominators: false) = {
+  report.tables.stores.rows.len() > 0 and report.tables.stores.rows.all(store => {
+    keys.all(key => {
+      let matches = report.tables.facts.rows.filter(
+        row => row.store_id == store.store_id and row.key == key,
+      )
+      matches.len() == 1 and matches.first().value != none and (
+        not denominators or (
+          matches.first().n != none and matches.first().n > 0
+        )
+      )
+    })
+  })
+}
+
+#let report-stores-decision-passed(report, key) = {
+  report-stores-have-facts(report, (key,)) and report.tables.stores.rows.all(store => {
+    let matches = report.tables.facts.rows.filter(
+      row => row.store_id == store.store_id and row.key == key,
+    )
+    matches.first().value == true
+  })
+}
+
+#let evidence-gate-state(
+  evidence-available,
+  decision-passed,
+  prerequisites-passed: true,
+) = {
+  let gate-passed = evidence-available and decision-passed
+  (
+    evidence_available: evidence-available,
+    gate_passed: gate-passed,
+    claim_admissible: prerequisites-passed and gate-passed,
+  )
+}
+
 #let report-fact(report, key) = {
   let matches = report.tables.facts.rows.filter(row => row.key == key)
   assert(matches.len() == 1, message: "expected one thesis report fact: " + key)

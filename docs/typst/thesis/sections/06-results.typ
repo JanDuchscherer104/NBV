@@ -1,13 +1,13 @@
 = Results <sec:thesis-results>
 
-#import "../experiment_data.typ": thesis-report-settings, load-thesis-report, report-store-fact, report-store-facts-match-contract, short-store-label, format-report-value
+#import "../experiment_data.typ": thesis-report-settings, load-thesis-report, report-store-fact, report-store-facts-match-contract, report-stores-have-facts, report-stores-decision-passed, evidence-gate-state, short-store-label, format-report-value
 #import "../draft_markers.typ": validation_todo
 #import "../../shared/tables.typ": publication-table, index-cell
 
 #validation_todo(
-  [Populate one result row per inferential stage from a confirmatory bundle: population, estimate, uncertainty, admitted conclusion, and blocking condition. Every value must resolve to its raw and derived artifact provenance.],
+  [Populate one result row per inferential stage from a confirmatory bundle: evidence availability, gate decision, claim admissibility, estimate, uncertainty, and blocking condition. Every value must resolve to its raw and derived artifact provenance.],
   source: [confirmatory report bundle, exact-Q2 receipt, and analysis manifest],
-  gate: [all six evidence gates resolve without fixture or pilot substitution],
+  gate: [both evidentiary lanes and their six gate decisions resolve without fixture or pilot substitution],
 )
 
 #let report-settings = thesis-report-settings()
@@ -18,15 +18,19 @@
   required-role: report-settings.required-role,
 )
 #let all-stores-valid = thesis_data.tables.stores.rows.len() > 0 and thesis_data.tables.stores.rows.all(store => store.validation_ok == true)
-#let stores-have-facts(keys, denominators: false) = thesis_data.tables.stores.rows.len() > 0 and thesis_data.tables.stores.rows.all(store => keys.all(key => {
-  let matches = thesis_data.tables.facts.rows.filter(row => row.store_id == store.store_id and row.key == key)
-  matches.len() == 1 and matches.first().value != none and (not denominators or (matches.first().n != none and matches.first().n > 0))
-}))
 #let fact-value(store-id, key, digits: none) = {
   let row = report-store-fact(thesis_data, store-id, key)
   format-report-value(row.value, digits: digits, unit: row.unit)
 }
-#let result-status(predicate) = if predicate [available] else [not available]
+#let evidence-status(state) = if state.evidence_available [available] else [not available]
+#let gate-status(state) = if not state.evidence_available {
+  [not decided]
+} else if state.gate_passed {
+  [passed]
+} else {
+  [non-pass]
+}
+#let claim-status(state) = if state.claim_admissible [admissible] else [blocked]
 
 #let population-facts = ("study.population.scenes", "study.population.targets", "study.population.exclusions")
 #let measurement-facts = ("oracle.metric.repeatability.max_abs_diff", "oracle.metric.repeatability.n_repeats", "oracle.metric.repeatability.passed")
@@ -36,6 +40,7 @@
   "candidate-support.configured-family-zero-rate",
   "candidate-support.target-side-balance",
   "candidate-support.circular-orbit-span",
+  "candidate-support.gate.passed",
 )
 #let candidate-support-contract = (
   (key: "candidate-support.actor-valid-fraction", aggregation: "state_then_scene_macro"),
@@ -52,15 +57,19 @@
   (key: "policy.paired_scene_endpoint.n_scenes", aggregation: "count"),
   (key: "headroom_gate.passed", aggregation: "paired_scene_decision"),
 )
-#let q1-facts = ("q1.ranking.pairwise_accuracy", "q1.calibration.mae", "q1.population.n_scenes")
+#let q1-facts = ("q1.ranking.pairwise_accuracy", "q1.calibration.mae", "q1.population.n_scenes", "q1.gate.passed")
 #let q2-facts = ("q2.exact.mae", "q2.exact.coverage", "q2.exact.n_independent_units", "q2.exact.passed")
 #let recovery-facts = ("policy.q_recovery.fraction", "policy.q_recovery.ci_low", "policy.q_recovery.ci_high", "policy.q_recovery.n_scenes", "policy.q_recovery.passed")
 #let resource-facts = ("runtime.wall_time_s", "runtime.peak_gpu_bytes", "storage.total_bytes")
 
 #let confirmatory-evidence = thesis_evidence_status == "confirmatory" and all-stores-valid
-#let population-available = confirmatory-evidence and stores-have-facts(population-facts, denominators: true)
-#let measurement-available = confirmatory-evidence and stores-have-facts(measurement-facts)
-#let support-available = population-available and stores-have-facts(candidate-support-facts, denominators: true) and thesis_data.tables.stores.rows.all(store => {
+#let population-evidence-available = confirmatory-evidence and report-stores-have-facts(thesis_data, population-facts, denominators: true)
+#let measurement-evidence-available = confirmatory-evidence and report-stores-have-facts(thesis_data, measurement-facts)
+#let measurement-state = evidence-gate-state(
+  measurement-evidence-available,
+  report-stores-decision-passed(thesis_data, "oracle.metric.repeatability.passed"),
+)
+#let support-evidence-available = population-evidence-available and report-stores-have-facts(thesis_data, candidate-support-facts, denominators: true) and thesis_data.tables.stores.rows.all(store => {
   let scene-count = report-store-fact(thesis_data, store.store_id, "study.population.scenes").value
   scene-count != none and scene-count > 0 and report-store-facts-match-contract(
     thesis_data,
@@ -69,7 +78,12 @@
     scene-count,
   )
 })
-#let headroom-available = measurement-available and support-available and stores-have-facts(headroom-facts) and thesis_data.tables.stores.rows.all(store => {
+#let support-state = evidence-gate-state(
+  support-evidence-available,
+  report-stores-decision-passed(thesis_data, "candidate-support.gate.passed"),
+)
+#let shared-foundations-pass = measurement-state.claim_admissible and support-state.claim_admissible
+#let headroom-evidence-available = confirmatory-evidence and report-stores-have-facts(thesis_data, headroom-facts) and thesis_data.tables.stores.rows.all(store => {
   let paired-scenes = report-store-fact(thesis_data, store.store_id, "policy.paired_scene_endpoint.n_scenes").value
   paired-scenes != none and paired-scenes > 0 and report-store-facts-match-contract(
     thesis_data,
@@ -78,78 +92,102 @@
     paired-scenes,
   )
 })
-#let q1-available = headroom-available and stores-have-facts(q1-facts)
-#let q2-available = q1-available and stores-have-facts(q2-facts)
-#let recovery-available = q2-available and stores-have-facts(recovery-facts)
-#let resource-available = confirmatory-evidence and stores-have-facts(resource-facts)
+#let headroom-state = evidence-gate-state(
+  headroom-evidence-available,
+  report-stores-decision-passed(thesis_data, "headroom_gate.passed"),
+  prerequisites-passed: shared-foundations-pass,
+)
+#let q1-evidence-available = confirmatory-evidence and report-stores-have-facts(thesis_data, q1-facts, denominators: true)
+#let q1-state = evidence-gate-state(
+  q1-evidence-available,
+  report-stores-decision-passed(thesis_data, "q1.gate.passed"),
+  prerequisites-passed: shared-foundations-pass,
+)
+#let q2-evidence-available = confirmatory-evidence and report-stores-have-facts(thesis_data, q2-facts, denominators: true)
+#let q2-state = evidence-gate-state(
+  q2-evidence-available,
+  report-stores-decision-passed(thesis_data, "q2.exact.passed"),
+  prerequisites-passed: q1-state.claim_admissible,
+)
+#let recovery-evidence-available = confirmatory-evidence and report-stores-have-facts(thesis_data, recovery-facts, denominators: true)
+#let recovery-state = evidence-gate-state(
+  recovery-evidence-available,
+  report-stores-decision-passed(thesis_data, "policy.q_recovery.passed"),
+  prerequisites-passed: headroom-state.claim_admissible and q2-state.claim_admissible,
+)
+#let resource-available = confirmatory-evidence and report-stores-have-facts(thesis_data, resource-facts)
 
 The loaded report declares evidence class #emph(thesis_evidence_status). Schema
 validity proves that provenance and missingness are readable; it cannot promote
-a development fixture, training pilot, or incomplete store. Availability is
-therefore cumulative: a downstream gate is reported only when every prerequisite
-and its own required facts are present.
+a development fixture, training pilot, or incomplete store. The report keeps
+three states separate: whether a gate's evidence is available, whether its
+predeclared decision passes, and whether all prerequisites make its scientific
+claim admissible. A measured non-pass remains reported. It neither becomes zero
+nor suppresses independently measured evidence on the other lane.
 
 #figure(
   publication-table(
     text-size: 7.1pt,
-    columns: (0.48fr, 0.92fr, 0.76fr, 0.78fr, 1.1fr, 1.16fr),
-    header: ([*Gate / RQ*], [*Population*], [*Estimate*], [*Uncertainty*], [*Admitted conclusion*], [*Blocking condition*]),
+    columns: (0.62fr, 0.62fr, 0.6fr, 0.65fr, 1.3fr, 1.42fr),
+    header: ([*Gate / RQ*], [*Evidence*], [*Decision*], [*Claim*], [*Interpretation if admissible*], [*Blocking condition*]),
     rows: (
-      [measurement / RQ1], [frozen repeated oracle evaluations], [repeatability statistic: #result-status(measurement-available)], [declared numeric tolerance], [metric comparison is admissible], [mismatched identity, absent repeats, or tolerance failure],
-      [population/action / RQ4], [held-out scenes, targets, and full candidate tables], [coverage and failures: #result-status(support-available)], [exact denominators and scene strata], [the population relevant to oracle headroom is described], [missing population, exclusions, or valid-action support],
-      [headroom / RQ2], [paired lookahead and one-step oracle scenes], [endpoint effect: #result-status(headroom-available)], [paired scene interval], [bounded setup contains meaningful non-myopic structure], [measurement/support failure or non-meaningful effect],
-      [actor $Q_1$ / RQ3], [held-out actor-visible candidate states], [ranking and calibration: #result-status(q1-available)], [scene-clustered interval], [actor information recovers immediate target value], [privileged input, matching failure, or inadequate calibration],
-      [exact $Q_2$ / RQ2], [eligible held-out factual successors], [error and coverage: #result-status(q2-available)], [independent-unit tolerance rule], [first recursive target is recovered], [incomplete support or failed recursion tolerance],
-      [endpoint recovery / RQ2], [paired held-out learned and reference policies], [recovered fraction: #result-status(recovery-available)], [paired scene interval], [learned policy recovers prespecified headroom], [any earlier gate or recovery-rule failure],
+      [measurement / RQ1], [#evidence-status(measurement-state)], [#gate-status(measurement-state)], [#claim-status(measurement-state)], [metric comparisons are stable under the frozen protocol], [absent repeats, identity mismatch, or tolerance non-pass],
+      [population/action / RQ4], [#evidence-status(support-state)], [#gate-status(support-state)], [#claim-status(support-state)], [the held-out task and finite-action population is supported], [missing denominators, exclusions, family survival, or feasibility],
+      [headroom / RQ2a], [#evidence-status(headroom-state)], [#gate-status(headroom-state)], [#claim-status(headroom-state)], [the frozen setup exposes meaningful non-myopic endpoint headroom], [a shared foundation or meaningful-effect rule does not pass],
+      [actor $Q_1$ / RQ3], [#evidence-status(q1-state)], [#gate-status(q1-state)], [#claim-status(q1-state)], [actor-visible evidence recovers immediate target value], [a shared foundation, actor protocol, matching, leakage, ranking, or calibration rule does not pass],
+      [learned/exact $Q_2$ / RQ2], [#evidence-status(q2-state)], [#gate-status(q2-state)], [#claim-status(q2-state)], [the first learned recursive prediction agrees on complete exact support], [the $Q_1$ claim, complete support, or recursion tolerance does not pass],
+      [endpoint recovery / RQ2b], [#evidence-status(recovery-state)], [#gate-status(recovery-state)], [#claim-status(recovery-state)], [the learned policy recovers the prespecified fraction of headroom], [headroom, the learned-value lane, or the recovery rule does not pass],
     ),
   ),
-  caption: [Evidence availability by inferential stage. “Not available” preserves missingness and names the blocker; it is not a zero estimate.],
+  caption: [Evidence state, gate decision, and claim admissibility by inferential stage. Available evidence remains reported after a non-pass; only claims whose prerequisites pass are admitted.],
 ) <tab:thesis-result-availability>
 
 #let result-summary-families = {
   let families = ()
-  if population-available {
+  if population-evidence-available {
     families.push((label: [Population], metrics: (
       (label: [Scenes], key: "study.population.scenes"),
       (label: [Targets], key: "study.population.targets"),
       (label: [Exclusions], key: "study.population.exclusions"),
     )))
   }
-  if measurement-available {
+  if measurement-state.evidence_available {
     families.push((label: [Measurement], metrics: (
       (label: [Maximum repeat discrepancy], key: "oracle.metric.repeatability.max_abs_diff", denominator-key: "oracle.metric.repeatability.n_repeats", digits: 5),
       (label: [Repeatability gate], key: "oracle.metric.repeatability.passed"),
     )))
   }
-  if support-available {
+  if support-state.evidence_available {
     families.push((label: [Candidate support], metrics: (
       (label: [Actor-valid fraction], key: "candidate-support.actor-valid-fraction", digits: 3),
       (label: [P05 valid support], key: "candidate-support.valid-support-p05", digits: 1),
       (label: [Configured-family zero rate], key: "candidate-support.configured-family-zero-rate", digits: 3),
       (label: [Target-side balance], key: "candidate-support.target-side-balance", digits: 3),
       (label: [Circular orbit span], key: "candidate-support.circular-orbit-span", digits: 2),
+      (label: [Support gate], key: "candidate-support.gate.passed", denominator-key: "study.population.scenes"),
     )))
   }
-  if headroom-available {
+  if headroom-state.evidence_available {
     families.push((label: [Oracle headroom], metrics: (
       (label: [Paired endpoint effect], key: "policy.paired_scene_endpoint.effect", low-key: "policy.paired_scene_endpoint.ci_low", high-key: "policy.paired_scene_endpoint.ci_high", denominator-key: "policy.paired_scene_endpoint.n_scenes", digits: 3),
       (label: [Meaningful-headroom gate], key: "headroom_gate.passed", denominator-key: "policy.paired_scene_endpoint.n_scenes"),
     )))
   }
-  if q1-available {
+  if q1-state.evidence_available {
     families.push((label: [Actor Q1], metrics: (
       (label: [Pairwise ranking], key: "q1.ranking.pairwise_accuracy", denominator-key: "q1.population.n_scenes", digits: 3),
       (label: [Calibration MAE], key: "q1.calibration.mae", denominator-key: "q1.population.n_scenes", digits: 4),
+      (label: [Actor-Q1 gate], key: "q1.gate.passed", denominator-key: "q1.population.n_scenes"),
     )))
   }
-  if q2-available {
-    families.push((label: [Exact Q2], metrics: (
+  if q2-state.evidence_available {
+    families.push((label: [Learned / exact $Q_2$ agreement], metrics: (
       (label: [Recursive MAE], key: "q2.exact.mae", denominator-key: "q2.exact.n_independent_units", digits: 4),
       (label: [Complete-support coverage], key: "q2.exact.coverage", denominator-key: "q2.exact.n_independent_units", digits: 3),
-      (label: [Exact-Q2 gate], key: "q2.exact.passed", denominator-key: "q2.exact.n_independent_units"),
+      (label: [Learned/exact agreement gate], key: "q2.exact.passed", denominator-key: "q2.exact.n_independent_units"),
     )))
   }
-  if recovery-available {
+  if recovery-state.evidence_available {
     families.push((label: [Endpoint recovery], metrics: (
       (label: [Recovered headroom], key: "policy.q_recovery.fraction", low-key: "policy.q_recovery.ci_low", high-key: "policy.q_recovery.ci_high", denominator-key: "policy.q_recovery.n_scenes", digits: 3),
       (label: [Recovery gate], key: "policy.q_recovery.passed", denominator-key: "policy.q_recovery.n_scenes"),
@@ -215,53 +253,91 @@ and its own required facts are present.
 
 == Measurement Validity
 
-#if measurement-available [
-  The confirmatory bundle contains the frozen repeatability population, statistic, tolerance decision, and provenance needed to admit downstream comparisons; values appear in @tab:thesis-confirmatory-values.
+#if measurement-state.evidence_available [
+  The confirmatory bundle contains the frozen repeatability population,
+  statistic, tolerance decision, and provenance; values appear in
+  @tab:thesis-confirmatory-values. The measurement gate
+  #if measurement-state.gate_passed [passes, so its dependent claims may use
+  the metric.] else [does not pass; the observed result remains auditable, but
+  dependent claims are blocked.]
 ] else [
-  The loaded evidence does not establish repeatability of the frozen target-specific endpoint metric. All downstream policy quantities therefore remain unavailable.
+  The loaded evidence does not contain the confirmatory repeatability statistic
+  and decision for the frozen target-specific endpoint metric. Dependent claims
+  are therefore blocked; separately recorded diagnostics are not converted to
+  zero or erased.
 ]
 
 == Population and Action Support
 
-#if support-available [
+#if support-state.evidence_available [
   The report supplies scene, target, and exclusion denominators together with
   actor-valid fraction, lower-tail valid support, configured-family zero rate,
   target-side balance, and circular orbit span. These state--scene summaries
-  delimit the supported action population; they are not paired policy effects.
+  delimit the action population; they are not paired policy effects. The
+  prespecified support decision #if support-state.gate_passed [passes.] else [is
+  a non-pass, so claims requiring adequate held-out task and action support are
+  blocked.]
 ] else [
-  No validated held-out bundle currently defines the study population and complete candidate-support denominators. Training-source reachability and renderer failures remain feasibility observations only.
+  No validated held-out bundle currently supplies both the study population,
+  complete candidate-support denominators, and their prespecified support
+  decision. Training-source reachability and renderer failures remain
+  feasibility observations only.
 ]
 
 == Oracle Headroom
 
-#if headroom-available [
-  The paired scene endpoint effect, interval, denominator, and meaningful-headroom decision are available in @tab:thesis-confirmatory-values. Interpretation remains conditional on the frozen support definition and metric protocol.
+#if headroom-state.evidence_available [
+  The paired scene endpoint effect, interval, denominator, and
+  meaningful-headroom decision are available in
+  @tab:thesis-confirmatory-values. The headroom claim is
+  #if headroom-state.claim_admissible [admissible under the passed shared
+  foundations.] else [blocked by a non-passing shared foundation or headroom
+  decision; its measured effect remains reported.]
 ] else [
-  Meaningful equal-budget lookahead headroom over one-step oracle greedy is not estimable from the loaded evidence.
+  No complete paired held-out endpoint estimate and meaningful-headroom
+  decision are available. This absence does not determine actor-visible
+  one-step or recursive prediction accuracy on the separate learned-value lane.
 ]
 
 == Actor-Visible One-Step Value
 
-#if q1-available [
-  Held-out actor-visible ranking and calibration are available with scene denominators. They establish only immediate target-value recovery under the admitted target and state protocols.
+#if q1-state.evidence_available [
+  Held-out actor-visible ranking, calibration, scene denominators, and their
+  decision are available. The actor-$Q_1$ claim is
+  #if q1-state.claim_admissible [admissible under the passed target, state,
+  measurement, and support protocols.] else [blocked by a shared foundation or
+  the actor-$Q_1$ decision; the measurements remain reportable independently of
+  oracle headroom.]
 ] else [
   No validated held-out result currently shows target-conditioned one-step ranking and calibration from actor-visible inputs.
 ]
 
-== Exact Two-Step Recursion
+== Learned-versus-Exact $Q_2$ Agreement
 
-#if q2-available [
-  Exact-Q2 error, complete-support coverage, independent-unit count, and the frozen tolerance decision are available. This admits the first recursive target, not endpoint policy success.
+#if q2-state.evidence_available [
+  Learned-versus-exact $Q_2$ error, complete-support coverage,
+  independent-unit count, and the frozen tolerance decision are available. The
+  recursive claim is #if q2-state.claim_admissible [admissible on the passed
+  actor-$Q_1$ path.] else [blocked by its shared foundations, actor-$Q_1$, or
+  exact-$Q_2$ decision.] Even an admitted result does not establish endpoint
+  policy success.
 ] else [
-  No qualifying held-out exact-Q2 receipt is available; recursive finite-horizon accuracy is therefore unestablished.
+  No qualifying held-out learned-versus-exact $Q_2$ receipt is available;
+  recursive finite-horizon accuracy is therefore unestablished.
 ]
 
 == Endpoint Recovery
 
-#if recovery-available [
-  The recovered-headroom fraction, paired scene interval, denominator, and recovery decision are available under the admitted upstream gates.
+#if recovery-state.evidence_available [
+  The recovered-headroom fraction, paired scene interval, denominator, and
+  recovery decision are available. The endpoint claim is
+  #if recovery-state.claim_admissible [admissible because both the oracle-
+  headroom and learned-value lanes pass.] else [blocked by at least one lane or
+  the recovery decision; the recorded endpoint observations remain auditable.]
 ] else [
-  The thesis cannot estimate learned endpoint recovery because the prerequisite gate chain is incomplete.
+  The thesis has no complete matched endpoint-recovery estimate and decision.
+  Endpoint recovery additionally requires passed oracle-headroom and learned-
+  value lanes; a result on either lane alone cannot answer RQ2.
 ]
 
 == Resource Feasibility

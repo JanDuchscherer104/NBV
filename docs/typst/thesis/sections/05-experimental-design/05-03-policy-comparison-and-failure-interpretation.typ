@@ -46,21 +46,21 @@ headroom denominator passes the meaningful-effect gate.
   publication-table(
     text-size: 7.7pt,
     columns: (0.72fr, 1.08fr, 1.32fr, 1.28fr),
-    header: ([*First failed gate*], [*Admitted interpretation*], [*Not implied*], [*Next discriminating evidence*]),
+    header: ([*Non-passing prerequisite*], [*Admitted interpretation*], [*Not implied*], [*Next discriminating evidence*]),
     rows: (
       [measurement], [the oracle outcome is not stable enough for comparison], [anything about planning, learning, or support], [repair and repeat the frozen metric protocol],
       [population / action support], [the requested estimand lacks an adequate study or action population], [zero utility or policy failure], [report exclusions, family survival, horizon coverage, and resource failures],
       [oracle headroom], [no meaningful non-myopic structure was detected in the frozen setup], [universal myopia or model inadequacy], [change support or horizon only in a separately declared study],
       [actor-visible $Q_1$], [the available actor information does not recover immediate target value], [a specifically long-horizon failure], [audit target matching, leakage, calibration, and state support],
-      [exact $Q_2$], [the first learned recursion is unsupported or inaccurate], [endpoint planning value or a need for more architecture], [separate coverage, $Q_1$ error, successor linkage, and bootstrap error],
+      [learned / exact $Q_2$], [the first learned recursion is unsupported or inaccurate], [endpoint planning value or a need for more architecture], [separate coverage, $Q_1$ error, successor linkage, and bootstrap error],
       [endpoint recovery], [the admitted learned policy does not recover prespecified headroom], [which mechanism failed], [stratify by support, target observability, replay coverage, and state aliasing],
     ),
   ),
-  caption: [Failure-attribution matrix. Interpretation stops at the first failed gate; downstream architecture stories remain hypotheses.],
+  caption: [Failure-attribution matrix. A failed or unresolved prerequisite blocks dependent claims; measurements on an independent lane remain diagnostics rather than counterevidence.],
 ) <tab:thesis-failure-attribution>
 
 #validation_todo(
-  [Populate the six gates in order. Missing upstream evidence blocks downstream quantities rather than becoming a zero result.],
+  [Populate all six gate decisions and their dependency paths. Missing evidence blocks dependent claims rather than becoming a zero result or suppressing measurements from an independent lane.],
   source: [confirmatory report bundle and exact-Q2 receipt],
   gate: [artifact-backed Results chapter],
 )

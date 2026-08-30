@@ -8,36 +8,39 @@ without replacing missing evidence. These properties make the proposed study
 auditable. They do not establish metric repeatability, held-out population
 support, non-myopic headroom, learned value accuracy, or endpoint improvement.
 
-The evidence chain in @fig:qh-learning-evidence-loop makes this distinction
-constructive. The first unresolved gate owns the current interpretation. Here,
-repeatability and the held-out population are not established, so headroom,
-actor-visible $Q_1$, exact $Q_2$, and endpoint recovery remain unavailable—not
-negative. Treating them as zeros would collapse missing evidence into measured
-failure and could make a pipeline limitation appear to answer the scientific
-question.
+The evidence graph in @fig:qh-learning-evidence-loop makes this distinction
+constructive. The earliest non-passing prerequisite on each claim path owns its
+interpretation. Here, repeatability and the held-out population are unresolved,
+so neither the oracle-headroom nor learned-value lane supports a confirmatory
+claim, and endpoint recovery is blocked at their shared foundations. Any pilot
+or train-only diagnostics remain auditable but non-admissible—not negative.
+Treating them as zeros would collapse missing evidence into measured failure and
+could make a pipeline limitation appear to answer the scientific question.
 
 == Interpreting future outcomes
 
 The failure-attribution matrix in @tab:thesis-failure-attribution separates
 mechanisms that an endpoint score alone cannot identify. Unstable measurement
-invalidates every downstream comparison. Adequate measurement but insufficient
-target or action support locates the problem in the study population rather
-than the policy. Stable support with negligible oracle headroom means that the
+blocks both inferential lanes. Adequate measurement but insufficient target or
+action support locates the problem in the study population rather than either
+policy. With both foundations passed, negligible oracle headroom means that the
 frozen candidate generator, horizon, and metric expose little exploitable
-non-myopic structure; it does not imply universal myopia.
+non-myopic structure; it does not imply universal myopia or erase independently
+measured actor-visible prediction results.
 
-If meaningful headroom exists, actor-visible $Q_1$ tests whether the declared
+On the learned-value lane, actor-visible $Q_1$ tests whether the declared
 information state contains enough immediate target signal. Failure there
 directs attention to target association, leakage, representation support, or
-calibration before long-horizon architecture. Passing $Q_1$ but failing exact
-$Q_2$ localizes the first non-myopic defect to successor coverage, state
-aliasing, recursive targets, or bootstrap estimation. Only after those gates
-pass does failed endpoint recovery become evidence about planning under the
-admitted model and replay support. Even then, the endpoint estimate alone does
-not identify which representation or optimization mechanism failed.
+calibration before long-horizon architecture, regardless of the headroom-lane
+outcome. Passing $Q_1$ but failing learned-versus-exact $Q_2$ agreement localizes
+the first recursive defect to successor coverage, state aliasing, targets, or
+bootstrap estimation. Endpoint recovery becomes admissible only when this lane
+and meaningful oracle headroom both pass. Even then, its endpoint estimate alone
+does not identify which representation or optimization mechanism failed.
 
-This logic also disciplines positive outcomes. Exact $Q_2$ would validate the
-first recursive prediction on its admitted support, not the complete policy.
+This logic also disciplines positive outcomes. Learned-versus-exact $Q_2$
+agreement would validate the first recursive prediction on its admitted
+support, not the complete policy.
 Endpoint recovery would remain conditional on the target protocol, finite
 candidate generator, hard-validity regime, horizon, oracle metric, and ASE
 population. The privileged bounded-lookahead policy is a reference within that
