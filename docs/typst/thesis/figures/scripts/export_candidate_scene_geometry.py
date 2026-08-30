@@ -593,6 +593,10 @@ def main() -> None:
             "frustum_primitive": "CameraTW-valid eight-point fisheye support polygon with four cardinal spokes; no filled faces",
             "camera_source": f"{RAW_SHARD_RELATIVE.as_posix()}::{SNIPPET_ID}",
             "family_source": "stored candidates/position_id decoded by rollouts.read_model.decode_position_id",
+            "family_display": (
+                "Shapes encode stored row-level family identities decoded from "
+                "position provenance (24/24/12 rows)."
+            ),
             "render_backend": f"Open3D {o3d.__version__} offscreen z-buffer; CeTZ overlays remain vector",
             "view_contracts": {
                 "oblique": {

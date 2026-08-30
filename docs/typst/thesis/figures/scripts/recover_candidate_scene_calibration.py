@@ -253,6 +253,10 @@ def _recover(
         "lateral-target-bypass); the original rollout position_id table is unavailable, "
         "so row-level stored family provenance is not independently re-decoded"
     )
+    provenance["family_display"] = (
+        "Shapes reconstruct configured shell blocks (24/24/12); stored row-level "
+        "family identities were unavailable to this recovery export."
+    )
     provenance["calibrated_outline"] = {
         "owner": "efm3d.aria.CameraTW.unproject with its returned validity mask",
         "camera_model": "CameraModelType.FISHEYE624",
