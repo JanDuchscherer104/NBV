@@ -61,6 +61,10 @@ scientific, visual, and reproducibility verification.
 - A subsequent rereview found that the primary exporter did not prove the raw
   camera shard and rollout store shared one sampling root. A single frame-owner
   assertion now gates both primary and recovery exports before rendering.
+- The color-role follow-up rereview found that the static caption could retain
+  the recovery disclaimer after a primary export. Both exporters now emit a
+  concise `family_display` provenance sentence, and the caption and alternative
+  text consume the active JSON value.
 - Semantic roles remain distinct in color and grayscale: neutral mesh, solid
   purple physical trajectory, teal dashed historical frusta, orange double-line
   OBB, family-shaped shell markers, and black/gold selection.
@@ -72,6 +76,7 @@ scientific, visual, and reproducibility verification.
 - https://github.com/JanDuchscherer104/ARIA-NBV/commit/6eb42262924ce2b60c475a8de10a709eb0708254
 - https://github.com/JanDuchscherer104/ARIA-NBV/commit/e13253c546859bad18e890842d6cfceba3360848
 - https://github.com/JanDuchscherer104/ARIA-NBV/commit/5d5add406f74625f0a10f6edfe9b01fea2337645
+- https://github.com/JanDuchscherer104/ARIA-NBV/commit/83ccf6545667dd0a51b35d3a895626f007fec2f6
 
 ## Verification
 
@@ -92,6 +97,9 @@ scientific, visual, and reproducibility verification.
   radius equations.
 - canonical sampling-root assertion: pinned raw history and recovered root pass;
   a synthetic one-metre root mismatch raises before evidence generation.
+- recovery run twice after the provenance-caption fix: JSON and publication crop
+  are byte-stable; the rendered caption resolves to the recovery disclaimer,
+  while the primary exporter owns its stored-`position_id` wording.
 
 The original rollout Zarr remains unavailable locally, so the primary exporter
 cannot be executed end to end. The tracked recovery path and published caption
