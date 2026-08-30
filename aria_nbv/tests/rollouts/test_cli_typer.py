@@ -172,9 +172,15 @@ def test_internal_preflight_uses_current_writer_store_for_foreign_manifest_path(
 def test_campaign_preflight_writes_same_phase_a_evidence_payload(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    class _Copyable(SimpleNamespace):
+        def model_copy(self, *, update: dict[str, Any]) -> "_Copyable":
+            return _Copyable(**(vars(self) | update))
+
     manifest_path = tmp_path / "source.json"
     manifest_path.write_text('{"source":"fixture"}\n', encoding="utf-8")
     output_path = tmp_path / "phase-a.json"
+    source_store = tmp_path / "source-store"
+    source_store.mkdir()
     captured: dict[str, Any] = {}
 
     class _Evidence:
@@ -191,8 +197,11 @@ def test_campaign_preflight_writes_same_phase_a_evidence_payload(
             captured.update(writer=writer, manifest=manifest, **kwargs) or _Evidence()
         ),
     )
-    writer = SimpleNamespace(source_manifest_path=manifest_path)
-    manifest = SimpleNamespace(rows=(1,))
+    writer = _Copyable(
+        source_manifest_path=manifest_path,
+        source=_Copyable(store=_Copyable(store_dir=tmp_path / "configured-store")),
+    )
+    manifest = SimpleNamespace(rows=(1,), source_store_dir="source-store")
     monkeypatch.setattr(rollout_cli, "_campaign", lambda _path: campaign)
     monkeypatch.setattr(rollout_cli, "_writer_config", lambda _campaign: writer)
     monkeypatch.setattr(rollout_cli, "read_rollout_source_manifest", lambda _path: manifest)
@@ -205,12 +214,15 @@ def test_campaign_preflight_writes_same_phase_a_evidence_payload(
             str(tmp_path / "campaign.toml"),
             "--family-phase-a-output",
             str(output_path),
+            "--source-store",
+            str(source_store),
         ],
     )
 
     assert result.exit_code == 0
     assert json.loads(output_path.read_text(encoding="utf-8")) == _Evidence.to_payload()
-    assert captured["writer"] is writer and captured["manifest"] is manifest
+    assert captured["writer"].source.store.store_dir == source_store.resolve()
+    assert captured["manifest"] is manifest
     assert len(captured["source_manifest_sha256"]) == 64
     assert "candidate family Phase-A go=true" in result.output
 
