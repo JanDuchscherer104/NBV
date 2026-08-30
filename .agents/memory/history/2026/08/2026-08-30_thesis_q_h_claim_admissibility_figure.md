@@ -48,10 +48,15 @@ reviews until zero P0--P2 findings remained.
 - `docs/typst/thesis/figures/qh_learning_evidence_loop.typ` and the Experimental
   Design, Results, Discussion, and Conclusion prose now share this dependency
   model and reader-facing terminology.
+- Exact-head Codex review found one valid residual P2: the failure-attribution
+  matrix still conflated unavailable headroom evidence with an observed
+  negative result. Its six prerequisite rows now distinguish unresolved
+  evidence from a measured decision non-pass explicitly.
 
 ## Commits
 
 - https://github.com/JanDuchscherer104/ARIA-NBV/commit/9897e0f4709ca9ca3ec9c5933fd0e2de2ba1dccf
+- https://github.com/JanDuchscherer104/ARIA-NBV/commit/f1ddfdef8f37c287158fdfa8501a729c2e1089fc
 
 ## Verification
 
