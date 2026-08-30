@@ -13,7 +13,7 @@ touched_owner_paths:
   - docs/typst/thesis/main.pdf
 codex_thread: codex://threads/01a04e7a-ee77-7950-909c-61d1e1cb45b4
 repo_object_format: sha1
-repo_head: 5957ea58f8084afcc4bcd89b0ce398b13cd65b5b
+repo_head: 05660415b671e8750bfd5399c0e22e626701c7b5
 repo_branch: "codex/issue-186-slam-theory"
 worktree_kind: linked
 ---
@@ -32,8 +32,8 @@ Screened the 669-page public release at revision `c9d50ef410bf1a280b33a70854592f
 - The scientific review found no Handbook-derived claim escalation, actor/oracle leakage, estimand drift, mathematical inconsistency, or unsupported result.
 
 ## Commits
-- [ea299100a3e878b94ba90b25ae65770ba9ccfd80](https://github.com/JanDuchscherer104/ARIA-NBV/commit/ea299100a3e878b94ba90b25ae65770ba9ccfd80) — source registration, chapter citations, and theoretical Introduction framing
-- [5957ea58f8084afcc4bcd89b0ce398b13cd65b5b](https://github.com/JanDuchscherer104/ARIA-NBV/commit/5957ea58f8084afcc4bcd89b0ce398b13cd65b5b) — regenerated 127-page thesis PDF after the final narrative-stack scientific-review repairs
+- [a7919aed66c8a5c199c955bb614499c043dac509](https://github.com/JanDuchscherer104/ARIA-NBV/commit/a7919aed66c8a5c199c955bb614499c043dac509) — source registration, chapter citations, and theoretical Introduction framing
+- [05660415b671e8750bfd5399c0e22e626701c7b5](https://github.com/JanDuchscherer104/ARIA-NBV/commit/05660415b671e8750bfd5399c0e22e626701c7b5) — regenerated 127-page thesis PDF after the final narrative-stack scientific-review repairs
 
 ## Verification
 - Literature manifest parsing resolved all 53 rows; both Handbook citation keys join the registered repository identity.
