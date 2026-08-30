@@ -42,6 +42,9 @@ from export_candidate_scene_geometry import (
 
 WIDTH_PX = 1500
 HEIGHT_PX = 920
+PINNED_BASELINE_SHA256 = (
+    "bd1fb9c4792f25f0efbc385a7c3297953d0bdf146027c663f23af0b56a8b57ff"
+)
 PINNED_OBLIQUE_RASTER_SHA256 = (
     "142c3f5c4b305e548dc0846430808bccc9220384d04ebb6c6b0c99e257289c86"
 )
@@ -208,7 +211,6 @@ def _recover(
     baseline: dict[str, Any],
     *,
     raw_shard: Path,
-    baseline_path: Path,
     oblique_background: str,
     top_background: str,
     input_sha256: dict[str, str],
@@ -328,7 +330,7 @@ def _recover(
         },
     }
     provenance["input_sha256"] = {
-        "generic_baseline_json": _sha256(baseline_path),
+        "generic_baseline_json": input_sha256["generic_baseline_json"],
         "oblique_raster": input_sha256["oblique_raster"],
         "top_raster": input_sha256["top_raster"],
         "raw_shard": _sha256(raw_shard),
@@ -386,11 +388,17 @@ def main() -> None:
     crop_output = args.crop_output.expanduser().resolve()
     output_path.parent.mkdir(parents=True, exist_ok=True)
     crop_output.parent.mkdir(parents=True, exist_ok=True)
+    baseline_sha256 = _require_sha256(
+        baseline_path,
+        PINNED_BASELINE_SHA256,
+        role="generic baseline JSON",
+    )
     baseline: dict[str, Any] = json.loads(baseline_path.read_text(encoding="utf-8"))
     top_raster = _resolve_panel_background(
         baseline, baseline_path=baseline_path, panel="top"
     )
     input_sha256 = {
+        "generic_baseline_json": baseline_sha256,
         "oblique_raster": _require_sha256(
             oblique_raster,
             PINNED_OBLIQUE_RASTER_SHA256,
@@ -410,7 +418,6 @@ def main() -> None:
     output = _recover(
         baseline,
         raw_shard=raw_shard,
-        baseline_path=baseline_path,
         oblique_background=Path(
             os.path.relpath(crop_output, start=output_path.parent)
         ).as_posix(),

@@ -29,6 +29,7 @@ import json
 import math
 import os
 import tarfile
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -665,11 +666,6 @@ def main() -> None:
     camera, device_history, history_poses = _load_camera_and_rgb_history(raw_shard)
     _assert_sampling_root_matches_history(device_history, _pose_matrix(rollout_pose))
 
-    mesh = _crop_mesh(mesh_path)
-    renderer = _scene_renderer(mesh, width_px=1500, height_px=920)
-    oblique = _render_oblique(renderer, oblique_path, oblique_crop_path)
-    top = _render_top(renderer, top_path)
-
     selected_diagnostics: dict[str, float] = {}
     diagnostic_rows = reader.array("candidate_diagnostics/candidate_row_id")
     selected_candidate_row = int(
@@ -698,6 +694,26 @@ def main() -> None:
             reader.array(f"candidate_diagnostics/{name}")[selected_diag_row]
         )
 
+    raw_shard_sha256 = _sha256(raw_shard)
+    mesh_sha256 = _sha256(mesh_path)
+    mesh = _crop_mesh(mesh_path)
+    staging = tempfile.TemporaryDirectory(
+        dir=output_dir,
+        prefix=".candidate-scene-",
+    )
+    staging_dir = Path(staging.name)
+    staged_oblique_path = staging_dir / oblique_path.name
+    staged_oblique_crop_path = staging_dir / oblique_crop_path.name
+    staged_top_path = staging_dir / top_path.name
+    staged_json_path = staging_dir / json_path.name
+    renderer = _scene_renderer(mesh, width_px=1500, height_px=920)
+    oblique = _render_oblique(
+        renderer,
+        staged_oblique_path,
+        staged_oblique_crop_path,
+    )
+    top = _render_top(renderer, staged_top_path)
+
     payload = {
         "provenance": {
             "scene_id": str(source_record["scene_id"]),
@@ -722,8 +738,8 @@ def main() -> None:
             "camera_source": f"{raw_shard.name}::{SNIPPET_ID}",
             "input_sha256": {
                 "rollout_store_manifest": store_id,
-                "raw_shard": _sha256(raw_shard),
-                "mesh": _sha256(mesh_path),
+                "raw_shard": raw_shard_sha256,
+                "mesh": mesh_sha256,
             },
             "family_source": "stored candidates/position_id decoded by rollouts.read_model.decode_position_id",
             "family_display": (
@@ -816,7 +832,18 @@ def main() -> None:
             ),
         },
     }
-    json_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+    staged_json_path.write_text(
+        json.dumps(payload, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    for staged_path, publication_path in (
+        (staged_oblique_path, oblique_path),
+        (staged_oblique_crop_path, oblique_crop_path),
+        (staged_top_path, top_path),
+        (staged_json_path, json_path),
+    ):
+        staged_path.replace(publication_path)
+    staging.cleanup()
     print(f"wrote {json_path}")
     print(f"wrote {oblique_path}")
     print(f"wrote {oblique_crop_path}")
