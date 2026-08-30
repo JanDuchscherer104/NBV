@@ -23,6 +23,7 @@ rectilinear image plane.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import io
 import json
 import math
@@ -89,6 +90,14 @@ BOX_EDGES = (
     (2, 6),
     (3, 7),
 )
+
+
+def _sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for block in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest()
 
 
 @dataclass(frozen=True)
@@ -546,9 +555,8 @@ def main() -> None:
         np.float64
     )
     target_corners = _obb_corners(target_pose, target_extents)
-    camera, device_history, history_poses = _load_camera_and_rgb_history(
-        args.raw_shard.expanduser().resolve()
-    )
+    raw_shard = args.raw_shard.expanduser().resolve()
+    camera, device_history, history_poses = _load_camera_and_rgb_history(raw_shard)
     _assert_sampling_root_matches_history(device_history, _pose_matrix(rollout_pose))
 
     mesh = _crop_mesh(args.mesh)
@@ -591,7 +599,8 @@ def main() -> None:
             "construction": "physical calibrated RGB history and stored rollout geometry over a processed ASE ground-truth mesh cutaway",
             "evidential_role": "auditable finite-candidate contract example, not a performance result",
             "frustum_primitive": "CameraTW-valid eight-point fisheye support polygon with four cardinal spokes; no filled faces",
-            "camera_source": f"{RAW_SHARD_RELATIVE.as_posix()}::{SNIPPET_ID}",
+            "camera_source": f"{raw_shard.name}::{SNIPPET_ID}",
+            "input_sha256": {"raw_shard": _sha256(raw_shard)},
             "family_source": "stored candidates/position_id decoded by rollouts.read_model.decode_position_id",
             "family_display": (
                 "Shapes encode stored row-level family identities decoded from "
