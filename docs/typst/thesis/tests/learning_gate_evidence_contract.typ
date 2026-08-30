@@ -1,13 +1,17 @@
-#import "../experiment_data.typ": candidate-support-decision-rule, paired-interval-method, q1-decision-rule, q1-pairwise-chance, q2-decision-rule, repeatability-decision-rule, report-store-population-evidence-valid, report-store-measurement-evidence-valid, report-store-candidate-support-evidence-valid, report-store-q1-evidence-valid, report-store-q2-evidence-valid
+#import "../experiment_data.typ": candidate-support-decision-rule, paired-interval-method, q1-decision-rule, q1-pairwise-chance, q1-protocol-receipt-name, q1-protocol-receipt-schema, q1-scene-role, q1-target-source-protocol, q2-decision-rule, repeatability-decision-rule, report-store-population-evidence-valid, report-store-measurement-evidence-valid, report-store-candidate-support-evidence-valid, report-store-q1-evidence-valid, report-store-q2-evidence-valid
 
 #let sidecar-a = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 #let sidecar-b = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
 #let digest-a = "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
 #let digest-b = "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+#let protocol-sidecar = "1c562d9babd0f28634d46b6b1e1e4fe71f340625b51b35669944d28ff06dc7bf"
+#let protocol-digest = "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
 #let source = "analysis/qh-gates.json|sidecar:" + sidecar-a
+#let protocol-source = "analysis/q1-actor-protocol.json|sidecar:" + protocol-sidecar
 #let sidecars = (
   (sidecar_id: sidecar-a, path: "qh-gates", name: "qh-gates", sha256: digest-a, format: "json", status: "confirmatory"),
   (sidecar_id: sidecar-b, path: "other", name: "other", sha256: digest-b, format: "json", status: "confirmatory"),
+  (sidecar_id: protocol-sidecar, path: q1-protocol-receipt-name, name: q1-protocol-receipt-name, sha256: protocol-digest, format: "json", status: "confirmatory"),
 )
 #let fact(key, value, unit, n, aggregation, source: source) = (
   store_id: "store-a",
@@ -19,13 +23,83 @@
   status: "confirmatory",
   source: source,
 )
-#let report(rows, sidecar-rows: sidecars) = (
-  tables: (
-    stores: (rows: ((store_id: "store-a"),)),
-    facts: (rows: rows),
-    sidecars: (rows: sidecar-rows),
-  ),
-)
+#let typed-sidecar-row(sidecar-id, key, value) = {
+  let base = (
+    sidecar_id: sidecar-id,
+    key: key,
+    value_bool: none,
+    value_int: none,
+    value_float: none,
+    value_text: none,
+    is_missing: false,
+  )
+  if type(value) == bool {
+    base + (value_type: "bool", value_bool: value)
+  } else if type(value) == int {
+    base + (value_type: "int", value_int: value)
+  } else if type(value) == float {
+    base + (value_type: "float", value_float: value)
+  } else if type(value) == str {
+    base + (value_type: "str", value_text: value)
+  } else {
+    assert(false, message: "unsupported synthetic sidecar value")
+  }
+}
+#let analysis-sidecar-value-rows(sidecar-id, logical-name, rows) = {
+  let output = (
+    typed-sidecar-row(sidecar-id, "schema_version", "aria-nbv-analysis-facts-v1"),
+    typed-sidecar-row(sidecar-id, "bundle_role", "analysis_facts"),
+    typed-sidecar-row(sidecar-id, "logical_name", logical-name),
+    typed-sidecar-row(sidecar-id, "status", "confirmatory"),
+  )
+  for (index, row) in rows.enumerate() {
+    let prefix = "facts[" + str(index) + "]"
+    let sidecar-marker = "|sidecar:" + sidecar-id
+    let provenance = row.source.replace(sidecar-marker, "")
+    output += (
+      typed-sidecar-row(sidecar-id, prefix + ".store_id", row.store_id),
+      typed-sidecar-row(sidecar-id, prefix + ".key", row.key),
+      typed-sidecar-row(sidecar-id, prefix + ".value", row.value),
+      typed-sidecar-row(sidecar-id, prefix + ".unit", row.unit),
+      typed-sidecar-row(sidecar-id, prefix + ".n", row.n),
+      typed-sidecar-row(sidecar-id, prefix + ".aggregation", row.aggregation),
+      typed-sidecar-row(sidecar-id, prefix + ".provenance", provenance),
+    )
+  }
+  output
+}
+#let report(rows, sidecar-rows: sidecars, sidecar-value-rows: none) = {
+  let projected-sidecar-values = if sidecar-value-rows != none {
+    sidecar-value-rows
+  } else {
+    let sidecar-id = rows.first().source.split("|sidecar:").last()
+    let matches = sidecar-rows.filter(sidecar => sidecar.sidecar_id == sidecar-id)
+    if matches.len() == 1 {
+      analysis-sidecar-value-rows(sidecar-id, matches.first().name, rows)
+    } else { () }
+  }
+  (
+    tables: (
+      stores: (rows: ((store_id: "store-a"),)),
+      facts: (rows: rows),
+      sidecars: (rows: sidecar-rows),
+      sidecar_values: (rows: projected-sidecar-values),
+    ),
+  )
+}
+
+#let mutate-sidecar-fact-value(sidecar-value-rows, fact-key, replacement) = {
+  let key-leaves = sidecar-value-rows.filter(row => (
+    row.key.match(regex("^facts\\[[0-9]+\\]\\.key$")) != none,
+    row.value_type == "str",
+    row.value_text == fact-key,
+  ).all(value => value))
+  assert(key-leaves.len() == 1, message: "expected one synthetic sidecar fact key")
+  let value-key = key-leaves.first().key.replace(regex("\\.key$"), ".value")
+  sidecar-value-rows.map(row => if row.key == value-key {
+    typed-sidecar-row(row.sidecar_id, row.key, replacement)
+  } else { row })
+}
 
 #let population-rows(
   scene-count-value: 5,
@@ -106,9 +180,23 @@
   calibration-maximum: 0.2,
   rule: q1-decision-rule,
   passed: true,
-  source: source,
-  gate-source: source,
+  receipt-schema: q1-protocol-receipt-schema,
+  scene-role: q1-scene-role,
+  target-source: q1-target-source-protocol,
+  target-matching-passed: true,
+  actor-oracle-leakage-absent: true,
+  hard-mask-applied: true,
+  causal-history-only: true,
+  source: protocol-source,
+  gate-source: protocol-source,
 ) = (
+  fact("q1.protocol.receipt_schema", receipt-schema, "identity", 5, "protocol_identity", source: source),
+  fact("q1.protocol.scene_role", scene-role, "identity", 5, "protocol_identity", source: source),
+  fact("q1.protocol.target_source", target-source, "identity", 5, "protocol_identity", source: source),
+  fact("q1.protocol.target_matching_passed", target-matching-passed, "bool", 5, "protocol_audit", source: source),
+  fact("q1.protocol.actor_oracle_leakage_absent", actor-oracle-leakage-absent, "bool", 5, "protocol_audit", source: source),
+  fact("q1.protocol.hard_mask_applied", hard-mask-applied, "bool", 5, "protocol_audit", source: source),
+  fact("q1.protocol.causal_history_only", causal-history-only, "bool", 5, "protocol_audit", source: source),
   fact("q1.ranking.pairwise_accuracy", ranking-value, ranking-unit, 5, ranking-aggregation, source: source),
   fact("q1.ranking.pairwise_accuracy.ci_low", ranking-ci-low, "fraction", 5, "scene_clustered_interval", source: source),
   fact("q1.ranking.pairwise_accuracy.ci_high", ranking-ci-high, "fraction", 5, "scene_clustered_interval", source: source),
@@ -245,6 +333,57 @@
 #assert(not report-store-q1-evidence-valid(report(q1-rows(chance: 0.4)), "store-a"))
 #assert(not report-store-q1-evidence-valid(report(q1-rows(interval-method: "unfrozen_interval")), "store-a"))
 #assert(not report-store-q1-evidence-valid(report(q1-rows(rule: "unfrozen_q1_rule")), "store-a"))
+#assert(not report-store-q1-evidence-valid(report(q1-rows(receipt-schema: "unversioned_receipt")), "store-a"))
+#assert(not report-store-q1-evidence-valid(report(q1-rows(scene-role: "training_scene")), "store-a"))
+#assert(not report-store-q1-evidence-valid(report(q1-rows(target-source: "privileged_gt_obb")), "store-a"))
+#assert(not report-store-q1-evidence-valid(report(q1-rows(target-matching-passed: false)), "store-a"))
+#assert(not report-store-q1-evidence-valid(report(q1-rows(actor-oracle-leakage-absent: false)), "store-a"))
+#assert(not report-store-q1-evidence-valid(report(q1-rows(hard-mask-applied: false)), "store-a"))
+#assert(not report-store-q1-evidence-valid(report(q1-rows(causal-history-only: false)), "store-a"))
+#assert(not report-store-q1-evidence-valid(report(
+  q1-rows(),
+  sidecar-rows: sidecars.filter(sidecar => sidecar.sidecar_id != protocol-sidecar),
+), "store-a"))
+#assert(not report-store-q1-evidence-valid(report(
+  q1-rows(),
+  sidecar-rows: sidecars.map(sidecar => if sidecar.sidecar_id == protocol-sidecar {
+    (sidecar_id: sidecar.sidecar_id, path: sidecar.path, name: sidecar.name, sha256: "invalid", format: sidecar.format, status: sidecar.status)
+  } else { sidecar }),
+), "store-a"))
+#let q1-baseline-rows = q1-rows()
+#let q1-baseline-payload = analysis-sidecar-value-rows(
+  protocol-sidecar,
+  q1-protocol-receipt-name,
+  q1-baseline-rows,
+)
+#for mutation in (
+  (key: "q1.protocol.receipt_schema", value: "unversioned_receipt"),
+  (key: "q1.protocol.scene_role", value: "training_scene"),
+  (key: "q1.protocol.target_source", value: "privileged_gt_obb"),
+  (key: "q1.protocol.target_matching_passed", value: false),
+  (key: "q1.protocol.actor_oracle_leakage_absent", value: false),
+  (key: "q1.protocol.hard_mask_applied", value: false),
+  (key: "q1.protocol.causal_history_only", value: false),
+) {
+  assert(not report-store-q1-evidence-valid(report(
+    q1-baseline-rows,
+    sidecar-value-rows: mutate-sidecar-fact-value(
+      q1-baseline-payload,
+      mutation.key,
+      mutation.value,
+    ),
+  ), "store-a"))
+}
+#let unrelated-source = "analysis/other.json|sidecar:" + sidecar-b
+#let unrelated-payload = analysis-sidecar-value-rows(
+  sidecar-b,
+  "other",
+  (fact("unrelated.audit", true, "bool", 5, "protocol_audit", source: unrelated-source),),
+)
+#assert(not report-store-q1-evidence-valid(report(
+  q1-rows(source: unrelated-source, gate-source: unrelated-source),
+  sidecar-value-rows: unrelated-payload,
+), "store-a"))
 #assert(not report-store-q1-evidence-valid(report(q1-rows(count-value: 4)), "store-a"))
 #assert(not report-store-q1-evidence-valid(report(q1-rows(ranking-value: "0.8")), "store-a"))
 #assert(not report-store-q1-evidence-valid(report(q1-rows(ranking-value: 1.1)), "store-a"))

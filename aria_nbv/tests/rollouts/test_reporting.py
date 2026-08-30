@@ -1428,6 +1428,10 @@ def test_analysis_fact_sidecar_promotes_typed_facts_with_stable_provenance(tmp_p
         assert row["source"].startswith("analysis/paired_policy.json|sidecar:")
     assert frames["sidecars"].iloc[0]["name"] == "paired-policy-analysis"
     assert frames["sidecars"].iloc[0]["path"] == "paired-policy-analysis"
+    expected_sidecar_id = hashlib.sha256(
+        f"paired-policy-analysis\0{frames['sidecars'].iloc[0]['sha256']}".encode()
+    ).hexdigest()
+    assert frames["sidecars"].iloc[0]["sidecar_id"] == expected_sidecar_id
     assert set(frames["sidecar_values"]["sidecar_id"]) == {frames["sidecars"].iloc[0]["sidecar_id"]}
 
 

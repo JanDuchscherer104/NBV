@@ -115,6 +115,14 @@ reviews until zero P0--P2 findings remained.
   recovery. Each decision now equals every declared conjunct; adversarial
   fixtures fail when any point threshold, interval bound, calibration bound,
   selected-chain receipt, support stratum, unit, or rowwise tolerance fails.
+- The final actor-boundary audit showed that valid Q1 scores alone could still
+  be labelled actor-visible. Q1 admission now requires one versioned
+  `q1-actor-protocol-v1` analysis sidecar whose typed payload records held-out
+  scene role, observation-derived target input, successful target matching,
+  absent actor/oracle leakage, hard-mask use, and strictly causal history.
+  Every promoted Q1 row is matched back to the same sidecar's exact store, key,
+  value, unit, denominator, aggregation, and provenance leaf; an unrelated
+  immutable file or a payload-level mutation fails closed.
 - Candidate-support P05 is now a scene-balanced estimand: actor-valid counts are
   averaged over attempted roots within each scene and nearest-rank P05 is taken
   across those scene means. Failed-root rate is the macro-average of per-scene
@@ -180,6 +188,15 @@ layout PDF
 `5a68563a452a5c39f1fc60787ffcc65b9f88c944a2becf865d28c71930e215e1`,
 and thesis PDF
 `f90910e241796be5fa4f3a11e7ba127fb7bcaf7be63751b68c64d6742776fea5`.
+The final Q1 protocol-receipt repair passed the adversarial Typst contract,
+`make thesis-report-data-contract`, `make typst-authoring-contract`,
+`make thesis-marker-contract`, `make thesis-results-full-profile-render`,
+`make thesis-pdf-ci`, `make thesis-pdf`, the focused report-writer
+content-address regression, `make check-agent-memory`, and `git diff --check`.
+The thesis remains 129 A4 pages; physical Results pages 68--69 were inspected
+at final size in color and grayscale. Independent scientific re-review first
+identified and then approved the exact source-to-payload binding with zero
+remaining P0--P2 findings.
 
 ## Canonical Owner Impact
 

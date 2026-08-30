@@ -158,7 +158,7 @@ nor suppresses independently measured evidence on the other lane.
       [measurement / RQ1], [#evidence-status(measurement-state)], [#gate-status(measurement-state)], [#claim-status(measurement-state)], [metric comparisons are stable under the frozen protocol], [absent repeats, identity mismatch, or tolerance non-pass],
       [population/action / RQ4], [#evidence-status(support-state)], [#gate-status(support-state)], [#claim-status(support-state)], [the held-out population meets its minimum lower-tail action-support rule], [missing denominators, insufficient lower-tail support, or excessive failed roots],
       [headroom / RQ2a], [#evidence-status(headroom-state)], [#gate-status(headroom-state)], [#claim-status(headroom-state)], [the frozen setup exposes meaningful non-myopic endpoint headroom], [a shared foundation or meaningful-effect rule does not pass],
-      [actor $Q_1$ / RQ3], [#evidence-status(q1-state)], [#gate-status(q1-state)], [#claim-status(q1-state)], [the ranking point estimate reaches its threshold, its interval is above chance, and calibration meets its maximum], [a shared foundation, actor protocol, matching, leakage, ranking, uncertainty, or calibration rule does not pass],
+      [actor $Q_1$ / RQ3], [#evidence-status(q1-state)], [#gate-status(q1-state)], [#claim-status(q1-state)], [an immutable receipt verifies the held-out actor protocol, observation-derived target matching, leakage exclusion, hard masking, and causal history; ranking and calibration also pass], [a shared foundation, actor protocol, matching, leakage, ranking, uncertainty, or calibration rule does not pass],
       [learned/exact $Q_2$ / RQ2], [#evidence-status(q2-state)], [#gate-status(q2-state)], [#claim-status(q2-state)], [selected-chain coverage and every admitted row, support stratum, and unit pass the exact-$Q_2$ receipt], [the $Q_1$ claim, selected-chain coverage, exact support, or rowwise tolerance rule does not pass],
       [endpoint recovery / RQ2b], [#evidence-status(recovery-state)], [#gate-status(recovery-state)], [#claim-status(recovery-state)], [the recovery point estimate reaches its threshold and its interval supports positive mean recovery], [headroom, the learned-value lane, or the recovery rule does not pass],
     ),
@@ -410,15 +410,20 @@ nor suppresses independently measured evidence on the other lane.
 == Actor-Visible One-Step Value
 
 #if q1-state.evidence_available [
-  Held-out actor-visible ranking with its interval, calibration, declared
-  thresholds, scene denominators, and their rule-checked decision are available.
+  A content-addressed protocol receipt verifies held-out scene role,
+  observation-derived target matching, absent actor/oracle leakage, hard-mask
+  use, and strictly causal history. Actor-visible ranking with its interval,
+  calibration, declared thresholds, scene denominators, and their rule-checked
+  decision are also available.
   The actor-$Q_1$ claim is
   #if q1-state.claim_admissible [admissible under the passed target, state,
   measurement, and support protocols.] else [blocked by a shared foundation or
   the actor-$Q_1$ decision; the measurements remain reportable independently of
   oracle headroom.]
 ] else [
-  No validated held-out result currently shows target-conditioned one-step ranking and calibration from actor-visible inputs.
+  No validated held-out result currently combines a qualifying actor-protocol
+  receipt with target-conditioned one-step ranking and calibration from
+  actor-visible inputs.
 ]
 
 == Learned-versus-Exact $Q_2$ Agreement

@@ -40,6 +40,10 @@
 #let headroom-decision-rule = "effect_gte_minimum_and_ci_low_gt_zero_v1"
 #let candidate-support-decision-rule = "p05_support_gte_minimum_and_failed_root_rate_lte_maximum_v1"
 #let q1-decision-rule = "ranking_gte_minimum_and_ci_low_gt_chance_and_calibration_mae_lte_maximum_v1"
+#let q1-protocol-receipt-name = "q1-actor-protocol-v1"
+#let q1-protocol-receipt-schema = "actor_visible_q1_protocol_receipt_v1"
+#let q1-scene-role = "held_out_scene_v1"
+#let q1-target-source-protocol = "observation_derived_actor_visible_target_v1"
 #let q2-decision-rule = "all_units_support_and_rowwise_abs_plus_relative_tolerance_v1"
 #let recovery-decision-rule = "fraction_gte_minimum_and_ci_low_gt_zero_v1"
 #let derived-identity-abs-tolerance = 1e-10
@@ -166,6 +170,13 @@
   (key: "candidate-support.gate.passed", aggregation: "state_then_scene_decision", unit: "bool", value_kind: "boolean"),
 )
 #let q1-evidence-facts = (
+  "q1.protocol.receipt_schema",
+  "q1.protocol.scene_role",
+  "q1.protocol.target_source",
+  "q1.protocol.target_matching_passed",
+  "q1.protocol.actor_oracle_leakage_absent",
+  "q1.protocol.hard_mask_applied",
+  "q1.protocol.causal_history_only",
   "q1.ranking.pairwise_accuracy",
   "q1.ranking.pairwise_accuracy.ci_low",
   "q1.ranking.pairwise_accuracy.ci_high",
@@ -179,6 +190,13 @@
   "q1.gate.passed",
 )
 #let q1-evidence-contract = (
+  (key: "q1.protocol.receipt_schema", aggregation: "protocol_identity", unit: "identity", value_kind: "string"),
+  (key: "q1.protocol.scene_role", aggregation: "protocol_identity", unit: "identity", value_kind: "string"),
+  (key: "q1.protocol.target_source", aggregation: "protocol_identity", unit: "identity", value_kind: "string"),
+  (key: "q1.protocol.target_matching_passed", aggregation: "protocol_audit", unit: "bool", value_kind: "boolean"),
+  (key: "q1.protocol.actor_oracle_leakage_absent", aggregation: "protocol_audit", unit: "bool", value_kind: "boolean"),
+  (key: "q1.protocol.hard_mask_applied", aggregation: "protocol_audit", unit: "bool", value_kind: "boolean"),
+  (key: "q1.protocol.causal_history_only", aggregation: "protocol_audit", unit: "bool", value_kind: "boolean"),
   (key: "q1.ranking.pairwise_accuracy", aggregation: "state_then_scene_macro", unit: "fraction", value_kind: "number", minimum: 0, maximum: 1),
   (key: "q1.ranking.pairwise_accuracy.ci_low", aggregation: "scene_clustered_interval", unit: "fraction", value_kind: "number", minimum: 0, maximum: 1),
   (key: "q1.ranking.pairwise_accuracy.ci_high", aggregation: "scene_clustered_interval", unit: "fraction", value_kind: "number", minimum: 0, maximum: 1),
@@ -526,6 +544,114 @@
   }
 }
 
+#let report-sidecar-value-matches(
+  report,
+  sidecar-id,
+  key,
+  expected,
+) = {
+  let matches = report.tables.sidecar_values.rows.filter(
+    row => row.sidecar_id == sidecar-id and row.key == key,
+  )
+  matches.len() == 1 and {
+    let row = matches.first()
+    row.is_missing == false and if type(expected) == bool {
+      row.value_type == "bool" and row.at("value_bool", default: none) == expected
+    } else if type(expected) == int {
+      row.value_type == "int" and row.at("value_int", default: none) == expected
+    } else if type(expected) == float {
+      row.value_type == "float" and row.at("value_float", default: none) == expected
+    } else if type(expected) == str {
+      row.value_type == "str" and row.at("value_text", default: none) == expected
+    } else {
+      false
+    }
+  }
+}
+
+#let report-store-analysis-sidecar-binds-facts(
+  report,
+  store-id,
+  facts,
+  required-name,
+) = {
+  let fact-rows = facts.map(key => {
+    let matches = report.tables.facts.rows.filter(
+      row => row.store_id == store-id and row.key == key,
+    )
+    if matches.len() == 1 { matches.first() } else { none }
+  })
+  let sidecar-rows = report.tables.at(
+    "sidecars",
+    default: (rows: ()),
+  ).rows
+  fact-rows.all(row => row != none) and {
+    let source = fact-rows.first().source
+    let source-valid = (
+      type(source) == str,
+      type(source) == str and source.contains("|sidecar:"),
+      fact-rows.all(row => row.source == source),
+    ).all(value => value)
+    let sidecar-id = if source-valid { source.split("|sidecar:").last() } else { "" }
+    let matching-sidecars = sidecar-rows.filter(
+      row => row.sidecar_id == sidecar-id,
+    )
+    (
+      source-valid,
+      sidecar-id.match(regex("^[0-9a-f]{64}$")) != none,
+      matching-sidecars.len() == 1,
+    ).all(value => value) and {
+        let sidecar = matching-sidecars.first()
+        let sidecar-valid = (
+          type(sidecar.path) == str and sidecar.path.len() > 0,
+          sidecar.path == required-name,
+          sidecar.name == required-name,
+          type(sidecar.sha256) == str and sidecar.sha256.match(regex("^[0-9a-f]{64}$")) != none,
+          sidecar.format in ("json", "jsonl"),
+          sidecar.status == "confirmatory",
+        ).all(value => value)
+        let envelope-valid = (
+          (key: "schema_version", value: "aria-nbv-analysis-facts-v1"),
+          (key: "bundle_role", value: "analysis_facts"),
+          (key: "logical_name", value: required-name),
+          (key: "status", value: "confirmatory"),
+        ).all(expected => report-sidecar-value-matches(
+          report,
+          sidecar-id,
+          expected.key,
+          expected.value,
+        ))
+        let payload-valid = fact-rows.all(fact => {
+          let key-leaves = report.tables.sidecar_values.rows.filter(row => (
+            row.sidecar_id == sidecar-id,
+            row.key.match(regex("^facts\\[[0-9]+\\]\\.key$")) != none,
+            row.value_type == "str",
+            row.at("value_text", default: none) == fact.key,
+          ).all(value => value))
+          key-leaves.len() == 1 and {
+            let prefix = key-leaves.first().key.replace(regex("\\.key$"), "")
+            let provenance = source.split("|sidecar:").first()
+            (
+              (key: prefix + ".store_id", value: store-id),
+              (key: prefix + ".key", value: fact.key),
+              (key: prefix + ".value", value: fact.value),
+              (key: prefix + ".unit", value: fact.unit),
+              (key: prefix + ".n", value: fact.n),
+              (key: prefix + ".aggregation", value: fact.aggregation),
+              (key: prefix + ".provenance", value: provenance),
+            ).all(expected => report-sidecar-value-matches(
+              report,
+              sidecar-id,
+              expected.key,
+              expected.value,
+            ))
+          }
+        })
+        sidecar-valid and envelope-valid and payload-valid
+      }
+  }
+}
+
 #let report-store-number-value(report, store-id, key) = {
   let matches = report.tables.facts.rows.filter(
     row => row.store_id == store-id and row.key == key,
@@ -751,10 +877,22 @@
     report,
     store-id,
     (
+      (key: "q1.protocol.receipt_schema", value: q1-protocol-receipt-schema),
+      (key: "q1.protocol.scene_role", value: q1-scene-role),
+      (key: "q1.protocol.target_source", value: q1-target-source-protocol),
+      (key: "q1.protocol.target_matching_passed", value: true),
+      (key: "q1.protocol.actor_oracle_leakage_absent", value: true),
+      (key: "q1.protocol.hard_mask_applied", value: true),
+      (key: "q1.protocol.causal_history_only", value: true),
       (key: "q1.ranking.interval_method", value: paired-interval-method),
       (key: "q1.ranking.chance", value: q1-pairwise-chance),
       (key: "q1.gate.rule", value: q1-decision-rule),
     ),
+  ) and report-store-analysis-sidecar-binds-facts(
+    report,
+    store-id,
+    q1-evidence-facts,
+    q1-protocol-receipt-name,
   ) and report-store-interval-is-ordered(
     report,
     store-id,
