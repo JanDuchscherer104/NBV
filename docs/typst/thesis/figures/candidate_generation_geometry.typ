@@ -8,7 +8,7 @@
 #let muted = rgb("#687380")
 #let hair = rgb("#cbd3dc")
 #let history-path-color = rgb("#aa3377")
-#let history-frustum-color = rgb("#0072b2")
+#let history-frustum-color = rgb("#5b3c9d")
 #let target-color = rgb("#a95f12")
 #let forward-color = rgb("#31689e")
 #let bearing-color = rgb("#c06b12")
@@ -122,20 +122,20 @@
       wire-segments(
         pose,
         map-point,
-        (paint: white.transparentize(10%), thickness: 1.72pt, dash: "dashed"),
+        (paint: white.transparentize(8%), thickness: 1.90pt, dash: "dashed"),
       )
       wire-segments(
         pose,
         map-point,
-        (paint: history-frustum-color, thickness: 1.02pt, dash: "dashed"),
+        (paint: history-frustum-color, thickness: 1.15pt, dash: "dashed"),
       )
     }
     for row in panel.at("history_rows") {
       circle(
         map-point(panel.at("history_path").at(row)),
-        radius: .038,
+        radius: .043,
         fill: white,
-        stroke: .88pt + history-frustum-color,
+        stroke: 1.00pt + history-frustum-color,
       )
     }
     // Expand only the selected hypothetical view. The full shell remains in B.
@@ -262,7 +262,7 @@
       #counts.at("candidates") proposed · #counts.at("valid") admitted ·
       #counts.at("invalid_clearance") rejected
     ]
-    #v(.9mm)
+    #v(.5mm)
     #text(size: 6.3pt, fill: muted)[Configured row blocks:]
     #v(.3mm)
     #grid(
@@ -274,15 +274,16 @@
       text(size: 7.5pt, fill: bypass-color)[▲], text(size: 6.6pt)[lateral-bypass (48--59)],
       text(size: 7.5pt, fill: invalid-color)[×], text(size: 6.6pt)[hard-rejected],
     )
-    #v(.7mm)
+    #v(.35mm)
     #grid(
       columns: (auto, 1fr),
       column-gutter: 1.0mm,
-      row-gutter: .28mm,
-      text(size: 7.5pt, fill: ink)[━], text(size: 6.6pt)[selected candidate + route],
-      text(size: 7.5pt, fill: history-path-color)[━▶], text(size: 6.6pt)[observed RGB trajectory],
-      text(size: 7.5pt, fill: history-frustum-color)[┄], text(size: 6.6pt)[logged RGB camera frusta],
-      text(size: 7.5pt, fill: target-color)[▣], text(size: 6.6pt)[task GT OBB],
+      row-gutter: .10mm,
+      text(size: 7.2pt, fill: muted)[▧], text(size: 6.25pt)[neutral GT mesh],
+      [#text(size: 7.2pt, fill: selected-color)[◆]#h(.2mm)#text(size: 7.2pt, fill: ink)[━]], text(size: 6.25pt)[selected shell 47 + route],
+      text(size: 7.2pt, fill: history-path-color)[━▶], text(size: 6.25pt)[observed RGB trajectory],
+      text(size: 7.2pt, fill: history-frustum-color)[┄○], text(size: 6.25pt)[logged RGB poses / frusta],
+      text(size: 7.2pt, fill: target-color)[▣], text(size: 6.25pt)[task GT OBB],
     )
   ],
 )
