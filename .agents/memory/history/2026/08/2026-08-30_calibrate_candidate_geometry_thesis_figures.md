@@ -68,6 +68,8 @@ scientific, visual, and reproducibility verification.
 - The next rereview found that a primary `--raw-shard` override could retain the
   default shard locator. The exporter now loads from one resolved path and
   records its basename plus a content-exact SHA-256 digest.
+- The symmetric recovery field still named the default raw-pose shard. Recovery
+  now derives `raw_pose_source` from the same resolved path it loads and hashes.
 - Semantic roles remain distinct in color and grayscale: neutral mesh, solid
   purple physical trajectory, teal dashed historical frusta, orange double-line
   OBB, family-shaped shell markers, and black/gold selection.
@@ -81,6 +83,7 @@ scientific, visual, and reproducibility verification.
 - https://github.com/JanDuchscherer104/ARIA-NBV/commit/5d5add406f74625f0a10f6edfe9b01fea2337645
 - https://github.com/JanDuchscherer104/ARIA-NBV/commit/83ccf6545667dd0a51b35d3a895626f007fec2f6
 - https://github.com/JanDuchscherer104/ARIA-NBV/commit/e56a4dd7646ef582585305b475f249beaf5d3f65
+- https://github.com/JanDuchscherer104/ARIA-NBV/commit/5b2d5978ab7e38fa199a754a41e6af164a93072d
 
 ## Verification
 
@@ -107,6 +110,8 @@ scientific, visual, and reproducibility verification.
 - resolved raw-shard provenance: the exporter's streamed digest matches system
   SHA-256 for the pinned 111,370,240-byte shard
   (`e782eb436a80425c16dca50d1854d18f75cfb18ca38d5434c23e809622b0d9f4`).
+- custom recovery override: a differently named shard emits that basename in
+  `raw_pose_source`, while its JSON digest still matches system SHA-256.
 
 The original rollout Zarr remains unavailable locally, so the primary exporter
 cannot be executed end to end. The tracked recovery path and published caption
