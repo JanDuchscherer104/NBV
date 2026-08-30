@@ -72,7 +72,7 @@ from aria_nbv.vin.geometry.semidense_projection import (
     project_points_to_candidate_cameras,
 )
 from aria_nbv.vin.models.scene_myopic import VinModelV3, VinModelV3Config
-from aria_nbv.vin.types import EvlBackboneOutput
+from aria_nbv.vin.types import EvlBackboneOutput, VinPrediction
 
 
 class DummyBackbone:
@@ -262,6 +262,209 @@ def test_vin_model_v3_cached_forward_does_not_move_module(monkeypatch: pytest.Mo
     )
 
     assert pred.logits.shape[:2] == (batch, num_candidates)
+
+
+def _make_v3_scene_cache_inputs() -> tuple[VinSnippetView, PoseTW, PoseTW, PerspectiveCameras, EvlBackboneOutput]:
+    batch = 1
+    num_candidates = 3
+    backbone_out = _make_backbone_out(batch=batch, grid=2)
+    reference_pose, candidate_poses = _make_poses(batch=batch, num_candidates=num_candidates)
+    snippet = _make_vin_snippet()
+    poses_cw = candidate_poses.inverse()
+    cameras = PerspectiveCameras(
+        device=torch.device("cpu"),
+        R=poses_cw.R.transpose(-1, -2).contiguous(),
+        T=poses_cw.t,
+        focal_length=torch.tensor([[40.0, 40.0]], dtype=torch.float32).expand(num_candidates, -1),
+        principal_point=torch.tensor([[32.0, 32.0]], dtype=torch.float32).expand(num_candidates, -1),
+        image_size=torch.tensor([[64.0, 64.0]], dtype=torch.float32).expand(num_candidates, -1),
+        in_ndc=False,
+    )
+    return snippet, candidate_poses, reference_pose, cameras, backbone_out
+
+
+def _forward_v3_for_scene_cache(
+    model: VinModelV3,
+    inputs: tuple[VinSnippetView, PoseTW, PoseTW, PerspectiveCameras, EvlBackboneOutput],
+) -> VinPrediction:
+    snippet, candidate_poses, reference_pose, cameras, backbone_out = inputs
+    return model.forward(
+        efm=snippet,
+        candidate_poses_world_cam=candidate_poses,
+        reference_pose_world_rig=reference_pose,
+        p3d_cameras=cameras,
+        backbone_out=backbone_out,
+    )
+
+
+def test_vin_model_v3_prepared_scene_context_reuses_and_preserves_parity(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    model = VinModelV3(VinModelV3Config(backbone=None)).eval()
+    ensure_calls = 0
+    field_calls = 0
+    original_ensure = model._ensure_vin_snippet
+    original_field = model._build_field_bundle
+
+    def count_ensure(*args, **kwargs):
+        nonlocal ensure_calls
+        ensure_calls += 1
+        return original_ensure(*args, **kwargs)
+
+    def count_field(*args, **kwargs):
+        nonlocal field_calls
+        field_calls += 1
+        return original_field(*args, **kwargs)
+
+    monkeypatch.setattr(model, "_ensure_vin_snippet", count_ensure)
+    monkeypatch.setattr(model, "_build_field_bundle", count_field)
+
+    inputs = _make_v3_scene_cache_inputs()
+    with torch.no_grad():
+        first = _forward_v3_for_scene_cache(model, inputs)
+        second = _forward_v3_for_scene_cache(model, inputs)
+
+    assert ensure_calls == 1
+    assert field_calls == 1
+    assert first.logits.shape == second.logits.shape
+    torch.testing.assert_close(first.logits, second.logits)
+
+
+def test_vin_model_v3_prepared_scene_context_is_disabled_for_training(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    model = VinModelV3(VinModelV3Config(backbone=None)).train()
+    field_calls = 0
+    original_field = model._build_field_bundle
+
+    def count_field(*args, **kwargs):
+        nonlocal field_calls
+        field_calls += 1
+        return original_field(*args, **kwargs)
+
+    monkeypatch.setattr(model, "_build_field_bundle", count_field)
+    inputs = _make_v3_scene_cache_inputs()
+    _forward_v3_for_scene_cache(model, inputs)
+    _forward_v3_for_scene_cache(model, inputs)
+
+    assert field_calls == 2
+
+
+def test_vin_model_v3_prepared_scene_context_bypasses_untrackable_snippets(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    model = VinModelV3(VinModelV3Config(backbone=None)).eval()
+    prepare_calls = 0
+    context = object()
+
+    def prepare(*_args, **_kwargs):
+        nonlocal prepare_calls
+        prepare_calls += 1
+        return context
+
+    monkeypatch.setattr(model, "_prepare_scene_context", prepare)
+    efm = object()
+    backbone_out = _make_backbone_out(batch=1, grid=2)
+    with torch.no_grad():
+        first = model._get_prepared_scene_context(efm, backbone_out, device=torch.device("cpu"))  # type: ignore[arg-type]
+        second = model._get_prepared_scene_context(efm, backbone_out, device=torch.device("cpu"))  # type: ignore[arg-type]
+
+    assert first is second is context
+    assert prepare_calls == 2
+
+
+def test_vin_model_v3_inference_tensors_bypass_prepared_scene_cache(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    model = VinModelV3(VinModelV3Config(backbone=None)).eval()
+    field_calls = 0
+    original_field = model._build_field_bundle
+
+    def count_field(*args, **kwargs):
+        nonlocal field_calls
+        field_calls += 1
+        return original_field(*args, **kwargs)
+
+    monkeypatch.setattr(model, "_build_field_bundle", count_field)
+    with torch.inference_mode():
+        inputs = _make_v3_scene_cache_inputs()
+        first = _forward_v3_for_scene_cache(model, inputs)
+        second = _forward_v3_for_scene_cache(model, inputs)
+
+    assert field_calls == 2
+    assert first.logits.shape == second.logits.shape
+    torch.testing.assert_close(first.logits, second.logits)
+
+
+def test_vin_model_v3_prepared_scene_cache_tracks_autocast_context(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    model = VinModelV3(VinModelV3Config(backbone=None)).eval()
+    field_calls = 0
+    original_field = model._build_field_bundle
+
+    def count_field(*args, **kwargs):
+        nonlocal field_calls
+        field_calls += 1
+        return original_field(*args, **kwargs)
+
+    monkeypatch.setattr(model, "_build_field_bundle", count_field)
+    inputs = _make_v3_scene_cache_inputs()
+    with torch.no_grad():
+        full_precision = _forward_v3_for_scene_cache(model, inputs)
+        with torch.autocast(device_type="cpu", dtype=torch.bfloat16):
+            autocast = _forward_v3_for_scene_cache(model, inputs)
+        with torch.autocast(device_type="cpu", enabled=False):
+            restored_full_precision = _forward_v3_for_scene_cache(model, inputs)
+
+    assert field_calls == 3
+    assert full_precision.logits.shape == autocast.logits.shape == restored_full_precision.logits.shape
+    torch.testing.assert_close(full_precision.logits, restored_full_precision.logits, rtol=0.0, atol=0.0)
+
+
+def test_vin_model_v3_prepared_scene_context_invalidates_after_weight_update(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    model = VinModelV3(VinModelV3Config(backbone=None)).eval()
+    field_calls = 0
+    original_field = model._build_field_bundle
+
+    def count_field(*args, **kwargs):
+        nonlocal field_calls
+        field_calls += 1
+        return original_field(*args, **kwargs)
+
+    monkeypatch.setattr(model, "_build_field_bundle", count_field)
+    inputs = _make_v3_scene_cache_inputs()
+    with torch.no_grad():
+        _forward_v3_for_scene_cache(model, inputs)
+        next(model.field_proj.parameters()).add_(0.01)
+        _forward_v3_for_scene_cache(model, inputs)
+
+    assert field_calls == 2
+
+
+def test_vin_model_v3_prepared_scene_context_invalidates_after_trajectory_replacement(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    model = VinModelV3(VinModelV3Config(backbone=None, use_traj_encoder=True)).eval()
+    field_calls = 0
+    original_field = model._build_field_bundle
+
+    def count_field(*args, **kwargs):
+        nonlocal field_calls
+        field_calls += 1
+        return original_field(*args, **kwargs)
+
+    monkeypatch.setattr(model, "_build_field_bundle", count_field)
+    inputs = _make_v3_scene_cache_inputs()
+    snippet = inputs[0]
+    with torch.no_grad():
+        _forward_v3_for_scene_cache(model, inputs)
+        snippet.t_world_rig = PoseTW.from_Rt(torch.eye(3).unsqueeze(0), torch.tensor([[1.0, 0.0, 0.0]]))
+        _forward_v3_for_scene_cache(model, inputs)
+
+    assert field_calls == 2
 
 
 def test_v3_shared_head_preserves_checkpoint_keys() -> None:
