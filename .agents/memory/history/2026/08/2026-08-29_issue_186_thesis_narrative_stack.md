@@ -18,7 +18,7 @@ touched_owner_paths:
   - scripts/tests/test_typst_authoring_hygiene.py
 codex_thread: codex://threads/01a04e7a-ee77-7950-909c-61d1e1cb45b4
 repo_object_format: sha1
-repo_head: 4c05a0197e0e3c1b1cea9dcdeaa94b49f32b04f0
+repo_head: 635a43f887d3206f4a692d5ee5ab952c200ed5c1
 repo_branch: "codex/issue-186-thesis-evidence-gates"
 worktree_kind: linked
 ---
@@ -40,12 +40,13 @@ Audited the issue against the live base, separated edits by canonical narrative 
 - Exact-head CI exposed a layer-specific table-inventory regression hidden by the cumulative final check: PR #190 contains 27 publication tables, while PR #191 intentionally reduces the active inventory to 26. Both stacked layers now assert their own derived count and pass independently.
 - Canonical unit-vector notation was added through `docs/typst/shared/equations/action.typ` and `docs/notation.yml`; generated projections and the tracked thesis PDF were regenerated.
 - The accepted scientific-review repairs distinguish oracle headroom from learned-control endpoint-gap closure, fail explicitly instead of silently changing the PowerSpherical sampling intervention, align the selected Method with the implemented scorer inputs and joint budget--query support, and require target matching, actor-input identity, leakage, aggregation, uncertainty, and explicit Boolean decisions before RQ3 claims are admitted.
+- Final exact-layer review conditioned the `realistic_core_60` radius law on candidate family, replaced a desired pair-gated runtime contract with the literal dense-Q1, diagonal-recursion, horizon-gated implementation boundary, and bound actor matching, Q1 calibration, exact Q2, and endpoint recovery to positive denominators and declared aggregation and identity contracts.
 
 ## Commits
 - [b4753605fc1ed0c99e074bf30f9c33a5146144f5](https://github.com/JanDuchscherer104/ARIA-NBV/commit/b4753605fc1ed0c99e074bf30f9c33a5146144f5) — final narrative-spine and Foundations layer with the estimand, gap-closure admissibility, and primary-source repairs
-- [eb3997e2af8afbffead61ded4b6cb459eefcaf2d](https://github.com/JanDuchscherer104/ARIA-NBV/commit/eb3997e2af8afbffead61ded4b6cb459eefcaf2d) — final experimental-world layer with explicit sampling-intervention failure semantics
-- [88d6e81d736a44db275ac802263fd6d484fc9f68](https://github.com/JanDuchscherer104/ARIA-NBV/commit/88d6e81d736a44db275ac802263fd6d484fc9f68) — final selected finite-horizon Method layer with implementation-faithful inputs and its 27-table guard
-- [4c05a0197e0e3c1b1cea9dcdeaa94b49f32b04f0](https://github.com/JanDuchscherer104/ARIA-NBV/commit/4c05a0197e0e3c1b1cea9dcdeaa94b49f32b04f0) — final evidence-stage repair before this debrief, with fail-closed decisions, independent actor-protocol evidence, and an explicit learned gap-closure estimability rule
+- [527078859a4cc0ef1bcd5ce12fec359f59e6f96b](https://github.com/JanDuchscherer104/ARIA-NBV/commit/527078859a4cc0ef1bcd5ce12fec359f59e6f96b) — final experimental-world layer with explicit sampling-intervention failure semantics and family-conditioned candidate radii
+- [04e57bd423fc9a26afe14f9382051ede36242aa1](https://github.com/JanDuchscherer104/ARIA-NBV/commit/04e57bd423fc9a26afe14f9382051ede36242aa1) — final selected finite-horizon Method layer with implementation-faithful inputs, literal deployed horizon support, and its 27-table guard
+- [635a43f887d3206f4a692d5ee5ab952c200ed5c1](https://github.com/JanDuchscherer104/ARIA-NBV/commit/635a43f887d3206f4a692d5ee5ab952c200ed5c1) — final evidence-stage repair before this debrief, with fail-closed decisions, population-bound actor-protocol evidence, uncertainty-bearing calibration, exact Q2 and recovery contracts, and an explicit learned gap-closure estimability rule
 
 ## Verification
 - `make glossary`: passed with 57 terms, 110 symbols, and 122 equations.
