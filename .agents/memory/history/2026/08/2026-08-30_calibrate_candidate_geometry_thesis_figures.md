@@ -51,6 +51,9 @@ scientific, visual, and reproducibility verification.
   publication crop when the original rollout Zarr is unavailable. It explicitly
   classifies family markers as reconstructed configured blocks because the
   stored `position_id` rows cannot be re-read on this host.
+- Exact-head review found that CLI raster/crop overrides were not propagated to
+  JSON references and checksums. The recovery owner now derives the background
+  path and hashes from the resolved override assets.
 - Semantic roles remain distinct in color and grayscale: neutral mesh, purple
   dashed history/frusta, orange double-line OBB, family-shaped shell markers,
   and black/gold selection.
@@ -58,6 +61,7 @@ scientific, visual, and reproducibility verification.
 ## Commits
 
 - https://github.com/JanDuchscherer104/ARIA-NBV/commit/7fc7e488dba6d46a3721b9447b55b61890ca0fb0
+- https://github.com/JanDuchscherer104/ARIA-NBV/commit/fe651e06093f242d8c0b62a3bcd5b193df3ae7a7
 
 ## Verification
 
@@ -70,6 +74,9 @@ scientific, visual, and reproducibility verification.
 - independent scientific review: approve, zero P0--P2;
 - independent visual review: pass, zero P0--P2;
 - exact reproducibility review: pass.
+- custom `--oblique-raster`, `--crop-output`, and `--output` recovery: emitted
+  background reference and both SHA-256 records match the resolved override
+  files.
 
 The original rollout Zarr remains unavailable locally, so the primary exporter
 cannot be executed end to end. The tracked recovery path and published caption
