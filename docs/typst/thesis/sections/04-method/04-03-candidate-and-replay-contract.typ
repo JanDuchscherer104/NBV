@@ -83,6 +83,32 @@ passing Phase-A family gate is necessary but not sufficient for broad rollout
 generation; the final hash-bound pre-scale decision remains a later issue-120
 gate.
 
+The frozen 100-scene Phase-A control attempted $6,000$ candidates and admitted
+$3,146$ into the compact valid shells. It nevertheless failed the support gate:
+$44$ applicable state/family cells had no selected row, $24$ states missed the
+aggregate non-forward target-aware-family floor, and $8$ states missed the
+root-support threshold. All $100$ reviewed source rows, scenes, and target
+states were represented without exclusions. Since this phase deliberately
+contains no oracle labels, the flat-gain outcome is unavailable with
+denominator zero. This is proposal-support evidence, not evidence about RRI or
+candidate quality, and it does not admit broad rollout generation.
+
+#figure(
+  image(
+    "../../../../contents/evidence/candidate_family_phase_a_wp02_audit_heatmap.svg",
+    width: 100%,
+  ),
+  caption: [
+    Candidate-family survival for one deterministic scene from each of the ten
+    persisted Phase-A audit strata. Each cell reports compact-valid-shell
+    membership divided by attempted rows for one factual state and proposal
+    family. The complete 100-state matrix remains in the evidence bundle. The
+    artifact is bound to implementation revision
+    `31888f86fc6348ef223e5c606f7ad41fda7e3082` and artifact SHA-256
+    `78632654ffb1bdf8cc085874483547f090bb6013eab5264efe35a5628c39d356`.
+  ],
+) <fig:candidate-family-phase-a-support>
+
 === Implemented replay transition
 
 Rollout expansion records the full candidate table, selected valid and shell indices, policy scores and probabilities, selection policy, and random seed. The implemented transition is

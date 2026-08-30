@@ -46,6 +46,13 @@ revision, every full candidate shell, and the canonical family gate. A failed
 gate is still written and exits with status 2. Broad rollout generation stays
 blocked until the independent WP18 artifact is present.
 
+The current 100-scene control completed with a machine-readable no-go. Its
+canonical artifact and figures live in the
+[rollout evidence directory](../../../../docs/contents/evidence/candidate_family_phase_a_wp02.json):
+all source rows were evaluated, but applicable-family collapse and low support
+remain. A no-go command writes the complete artifact and exits with status 2;
+it is evidence for retuning, not campaign admission.
+
 ## Composition Boundaries
 
 | Module | Responsibility |

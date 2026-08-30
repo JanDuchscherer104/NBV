@@ -45,6 +45,22 @@ action-shell membership, exactly as in the store-backed reducer. The campaign
 preflight serializes these same benchmark records and reducer output into one
 content-hashed evidence JSON; it does not reinterpret candidate support.
 
+### Current Phase-A evidence
+
+The frozen 100-scene control is
+[`candidate_family_phase_a_wp02.json`](../../../docs/contents/evidence/candidate_family_phase_a_wp02.json)
+(artifact SHA-256 `78632654ffb1bdf8cc085874483547f090bb6013eab5264efe35a5628c39d356`).
+It covers all 100 reviewed source rows, scenes, and target states with no
+exclusions. Of 6,000 attempted rows, 3,146 entered the compact valid shell, but
+the gate is a no-go: 44 state/family cells collapsed, 24 states missed the
+non-forward target-family floor, and 8 states missed the root-support floor.
+`flat_gain` is explicitly unavailable with denominator zero because Phase A
+contains no oracle labels. The full
+[state-by-family heatmap](../../../docs/contents/evidence/candidate_family_phase_a_wp02_heatmap.html)
+and [per-state funnels](../../../docs/contents/evidence/candidate_family_phase_a_wp02_funnels.html)
+are derived from that same canonical reducer result. This evidence does not
+close issue #54 and does not admit broad generation.
+
 ## Generate and Inspect
 
 Run from `aria_nbv/`:
