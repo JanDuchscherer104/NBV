@@ -271,7 +271,7 @@ def _recover(
             "inward to the raster, and asserted all-valid by CameraTW.unproject."
         ),
         "raw_pose_source": (
-            f"{RAW_SHARD_RELATIVE.as_posix()}::{SNIPPET_ID}.mtd#ts_world_device.pth "
+            f"{raw_shard.name}::{SNIPPET_ID}.mtd#ts_world_device.pth "
             "and RGB t_device_camera"
         ),
         "candidate_pose_recovery": {
