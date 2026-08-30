@@ -51,7 +51,11 @@ Here the numerator is the gain of the finite-horizon learned policy over the
 actor-visible learned-myopic control, and the denominator is the full gap from
 that control to oracle lookahead. The ratio is therefore conditional learned
 gap closure, not a fraction of the oracle-lookahead headroom above
-oracle-greedy. Because the headroom rule and required gap-closure fraction are
+oracle-greedy. It is reported only when the paired denominator
+$J_e^(H)(pi_"oracle-look") - J_e^(H)(pi_"learned-1")$ exceeds a predeclared
+positive tolerance $tau_"gap" > 0$; otherwise the analysis reports the raw
+paired policy effects and classifies gap closure as not estimable. Because the
+headroom rule and required gap-closure fraction are
 not yet frozen, RQ2 remains prospective. If headroom is absent, the evaluated
 support does not expose a non-myopic advantage; this does not establish its
 universal absence.

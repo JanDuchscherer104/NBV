@@ -73,7 +73,7 @@ structure, and strength of geometric prior, but none by itself guarantees the
 observation contract or improves the endpoint utility.
 
 // evidence:
-// - @EFM3D-straub2024 -> docs/literature/tex-src/arXiv-EFM3D/method.tex:50-63 (surface-point mask, camera-to-surface free-space mask, and their concatenation with lifted features)
+// - @EFM3D-straub2024 -> docs/literature/tex-src/arXiv-EFM3D/method.tex:37-42 (surface-point mask, camera-to-surface free-space mask, and their concatenation with lifted features)
 // - @point-transformer-zhao2021 -> docs/literature/tex-src/arXiv-Point-Transformer/tex/method.tex:21-27, docs/literature/tex-src/arXiv-Point-Transformer/tex/method.tex:55-62 (local neighborhoods and relative position encoding)
 // - @MinkowskiEngine-choy2019 -> docs/literature/tex-src/arXiv-MinkowskiEngine/sections/1_intro.tex:53-62 (sparse coordinates and computational savings)
 // - @EGNN-satorras2021 -> docs/literature/tex-src/arXiv-EGNN/sections/model.tex:6-20, docs/literature/tex-src/arXiv-EGNN/sections/model.tex:42-60 (relative-coordinate message passing and E(n) equivariance)
