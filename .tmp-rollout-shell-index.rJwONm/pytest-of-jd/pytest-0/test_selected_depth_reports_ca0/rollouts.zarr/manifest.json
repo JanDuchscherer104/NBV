@@ -1,0 +1,177 @@
+{
+  "config_hashes": {
+    "candidate": [
+      "40642da48008b90b"
+    ],
+    "model_checkpoint": [],
+    "oracle": [
+      "fixture-oracle"
+    ],
+    "rollout": [
+      "4afbe7078a1aec75"
+    ],
+    "source_manifest": [
+      "fixture-source-manifest"
+    ],
+    "split_manifest": [
+      "fixture-split-manifest"
+    ],
+    "target_crop_policy": [
+      "gt_obb_oriented_any_vertex_v1"
+    ],
+    "target_protocol": [
+      "v0_gt_input"
+    ]
+  },
+  "counts": {
+    "candidate_diagnostics": 24,
+    "candidates": 24,
+    "q_h_max_candidates": 12,
+    "q_h_states": 2,
+    "rollouts": 1,
+    "selected_depths": 2,
+    "sources": 1,
+    "steps": 2,
+    "target_eval_crops": 0,
+    "targets": 1
+  },
+  "created_at_utc": "2026-08-26T16:51:35Z",
+  "dictionary_sizes": {
+    "class_name": 1,
+    "config": 13,
+    "descriptor_hash": 1,
+    "descriptor_provenance": 1,
+    "descriptor_source": 1,
+    "explicit_target_hash": 1,
+    "policy": 2,
+    "rollout": 1,
+    "scene": 1,
+    "score_source": 1,
+    "snippet": 1,
+    "source_key": 1,
+    "source_shard": 1,
+    "split": 2,
+    "target": 2,
+    "target_match_status": 1,
+    "target_source": 1,
+    "termination_reason": 1
+  },
+  "generation": {
+    "invocation": {
+      "argv": [],
+      "config_path": null,
+      "mode": "programmatic",
+      "raw_toml_sha256": null,
+      "raw_toml_text": null
+    },
+    "runtime": {
+      "git": {
+        "available": true,
+        "branch": "codex/fix-parentless-graphify-setup",
+        "commit": "b34a955468c8eaa701d78e841229f08b1887509c",
+        "dirty": true,
+        "dirty_path_count": 3,
+        "root": "/home/jd/.codex/worktrees/eb93/ARIA-NBV"
+      },
+      "packages": {
+        "aria-nbv": "0.1.0",
+        "numpy": "2.4.4",
+        "pydantic": "2.13.4",
+        "rerun-sdk": "0.26.2",
+        "torch": "2.4.1+cu121",
+        "zarr": "3.1.6"
+      },
+      "platform": "Linux-7.0.0-30-generic-x86_64-with-glibc2.43",
+      "python": "3.11.15"
+    },
+    "shard": null,
+    "writer_config": null
+  },
+  "manifest_version": "rollout-store-manifest-v1",
+  "root_attrs": {
+    "campaign_split": "unknown",
+    "candidate_diagnostics_enabled": true,
+    "candidate_diagnostics_role": "audit_rerun_only",
+    "candidate_diagnostics_unavailable_bool": "false",
+    "candidate_diagnostics_unavailable_float": "NaN",
+    "created_at_utc": "2026-08-26T16:51:35Z",
+    "discount_gamma": 1.0,
+    "field_retention_policy": "compact",
+    "label_support_semantics": "subset_of_action_v1",
+    "manifest_path": "manifest.json",
+    "manifest_version": "rollout-store-manifest-v1",
+    "num_candidate_diagnostics": 24,
+    "num_candidates": 24,
+    "num_q_h_states": 2,
+    "num_rollouts": 1,
+    "num_selected_depths": 2,
+    "num_sources": 1,
+    "num_steps": 2,
+    "num_targets": 1,
+    "oracle_query_mode": "legacy_unspecified",
+    "q_h_chunk_states": 64,
+    "q_h_horizon": 2,
+    "q_h_max_candidates": 12,
+    "q_h_return_semantics": "cumulative_target_root_gain",
+    "q_h_reward_metric": "target_root_gain",
+    "q_h_source_tables": "steps,candidates,rollouts,targets",
+    "q_h_state_count": 2,
+    "q_h_view_persisted": true,
+    "q_h_view_role": "training_core_derived_cache",
+    "reason_code_version": "rollout-invalidity-v1",
+    "return_semantics": "cumulative_target_root_gain",
+    "schema_id": "aria_nbv.rollout_zarr_q_invalidity",
+    "schema_version": "2.0-target-rollout-provenance",
+    "selected_depth_chunk_steps": 16,
+    "selected_depth_codec": "blosc:zstd:clevel=5:bitshuffle",
+    "selected_depth_dtype": "float16",
+    "selected_depth_enabled": true,
+    "selected_depth_height_px": 240,
+    "selected_depth_invalid_fill_value": 0.0,
+    "selected_depth_renderer": "Pytorch3DDepthRenderer",
+    "selected_depth_role": "selected_successor_state_history",
+    "selected_depth_source_resolution": "exact_output_size",
+    "selected_depth_units": "m",
+    "selected_depth_valid_mask_dtype": "bool",
+    "selected_depth_width_px": 240,
+    "selected_depth_zfar_m": 20.0,
+    "selected_depth_znear_m": 0.001,
+    "source_offline_store_version": "unknown-source-version",
+    "source_split": "train",
+    "split_manifest_hash": "unknown-split-manifest",
+    "target_eval_crops_coordinate_frame": "world",
+    "target_eval_crops_enabled": false,
+    "target_eval_crops_max_points": 50000,
+    "target_eval_crops_num_rows": 0,
+    "target_eval_crops_role": "oracle_eval_only",
+    "target_protocol_version": "v0_gt_input",
+    "zarr_format": 3
+  },
+  "schema_id": "aria_nbv.rollout_zarr_q_invalidity",
+  "schema_version": "2.0-target-rollout-provenance",
+  "source_coverage": {
+    "num_source_rows": 1,
+    "scene_counts": {
+      "fixture_box": 1
+    },
+    "source_shard_counts": {
+      "vin-shard-000000": 1
+    },
+    "sources": [
+      {
+        "scene_id": "fixture_box",
+        "snippet_id": "smoke",
+        "source_row_id": 0,
+        "source_sample_index": 0,
+        "source_sample_key": "fixture:smoke:0",
+        "source_shard_id": "vin-shard-000000",
+        "source_shard_row": 0,
+        "split": "train"
+      }
+    ],
+    "split_counts": {
+      "train": 1
+    }
+  },
+  "store_kind": "standalone_rollout_zarr_shard"
+}

@@ -76,7 +76,11 @@ def _pdf_text(path: Path) -> str:
 
 
 def main() -> None:
-    positive = (("marker-development", None), ("marker-submission", "submission"))
+    positive = (
+        ("marker-development", None),
+        ("marker-submission", "submission"),
+        ("todo-marker-development", None),
+    )
     invalid = (
         "promotion-invalid-empty-target",
         "promotion-invalid-empty",
@@ -116,6 +120,10 @@ def main() -> None:
         assert _query_metadata("marker-development", "<marker-development>") == [
             "development-present"
         ]
+        development_text = _pdf_text(output_dir / "marker-development.pdf")
+        assert "DEVELOPMENT ONLY" in development_text
+        todo_development_text = _pdf_text(output_dir / "todo-marker-development.pdf")
+        assert "DEVELOPMENT ONLY" in todo_development_text
         for disposition in ("candidate", "blocked", "deferred", "rejected"):
             selector = f"<marker-promotion-{disposition}>"
             assert _query_metadata("marker-development", selector) == [

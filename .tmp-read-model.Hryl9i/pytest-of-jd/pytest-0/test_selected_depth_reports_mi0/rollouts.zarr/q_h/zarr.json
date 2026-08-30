@@ -1,0 +1,17 @@
+{
+  "attributes": {
+    "view_role": "training_core_derived_cache",
+    "source_tables": "steps,candidates,rollouts,targets",
+    "td_semantics": "selected_transition_only",
+    "reward_metric": "target_root_gain",
+    "return_semantics": "cumulative_target_root_gain",
+    "td_reward_target_rri_role": "diagnostic_state_relative_rri",
+    "state_count": 2,
+    "max_candidates": 12,
+    "horizon": 2,
+    "discount_gamma": 1.0,
+    "chunk_states": 64
+  },
+  "zarr_format": 3,
+  "node_type": "group"
+}

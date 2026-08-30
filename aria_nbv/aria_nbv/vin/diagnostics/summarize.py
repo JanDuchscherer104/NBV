@@ -257,7 +257,7 @@ def summarize_vin_v3(
     tree = rich_summary(
         tree_dict=summary_dict,
         root_label="VIN v3 summary (oracle batch)",
-        with_shape=True,
+        include_stats=True,
         is_print=False,
     )
     lines: list[str] = [capture_tree(tree), ""]

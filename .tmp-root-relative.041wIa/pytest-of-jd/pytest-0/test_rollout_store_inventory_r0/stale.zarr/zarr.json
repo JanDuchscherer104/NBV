@@ -1,0 +1,7 @@
+{
+  "attributes": {
+    "schema_version": "0.6-rollout-core"
+  },
+  "zarr_format": 3,
+  "node_type": "group"
+}
