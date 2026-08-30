@@ -1,6 +1,6 @@
 = Results <sec:thesis-results>
 
-#import "../experiment_data.typ": thesis-report-settings, load-thesis-report, endpoint-evidence-facts, headroom-evidence-facts, recovery-evidence-facts, report-store-fact, report-store-facts-match-contract, report-store-endpoint-evidence-valid, report-store-headroom-evidence-valid, report-store-recovery-evidence-valid, report-store-facts-share-value, report-store-facts-share-source, report-stores-have-facts, report-stores-have-boolean-fact, report-stores-decision-passed, evidence-gate-state, conditional-ratio-gate-state, short-store-label, format-report-value
+#import "../experiment_data.typ": thesis-report-settings, load-thesis-report, endpoint-evidence-facts, headroom-evidence-facts, recovery-evidence-facts, report-store-fact, report-store-facts-match-contract, report-store-endpoint-evidence-valid, report-store-headroom-evidence-valid, report-store-recovery-evidence-valid, report-store-facts-share-value, report-store-facts-share-source, report-store-count-binds-facts, report-stores-have-facts, report-stores-have-boolean-fact, report-stores-decision-passed, evidence-gate-state, conditional-ratio-gate-state, short-store-label, format-report-value
 #import "../draft_markers.typ": validation_todo
 #import "../../shared/tables.typ": publication-table, index-cell
 
@@ -107,13 +107,23 @@
   report-stores-decision-passed(thesis_data, "headroom_gate.passed"),
   prerequisites-passed: shared-foundations-pass,
 )
-#let q1-evidence-available = confirmatory-evidence and report-stores-have-facts(thesis_data, q1-facts, denominators: true) and report-stores-have-boolean-fact(thesis_data, "q1.gate.passed")
+#let q1-evidence-available = confirmatory-evidence and report-stores-have-facts(thesis_data, q1-facts, denominators: true) and report-stores-have-boolean-fact(thesis_data, "q1.gate.passed") and thesis_data.tables.stores.rows.all(store => report-store-count-binds-facts(
+  thesis_data,
+  store.store_id,
+  "q1.population.n_scenes",
+  q1-facts,
+))
 #let q1-state = evidence-gate-state(
   q1-evidence-available,
   report-stores-decision-passed(thesis_data, "q1.gate.passed"),
   prerequisites-passed: shared-foundations-pass,
 )
-#let q2-evidence-available = confirmatory-evidence and report-stores-have-facts(thesis_data, q2-facts, denominators: true) and report-stores-have-boolean-fact(thesis_data, "q2.exact.passed")
+#let q2-evidence-available = confirmatory-evidence and report-stores-have-facts(thesis_data, q2-facts, denominators: true) and report-stores-have-boolean-fact(thesis_data, "q2.exact.passed") and thesis_data.tables.stores.rows.all(store => report-store-count-binds-facts(
+  thesis_data,
+  store.store_id,
+  "q2.exact.n_independent_units",
+  q2-facts,
+))
 #let q2-state = evidence-gate-state(
   q2-evidence-available,
   report-stores-decision-passed(thesis_data, "q2.exact.passed"),

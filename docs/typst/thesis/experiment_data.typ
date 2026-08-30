@@ -185,6 +185,21 @@
   })
 }
 
+#let report-store-count-binds-facts(report, store-id, count-key, keys) = {
+  let count-matches = report.tables.facts.rows.filter(
+    row => row.store_id == store-id and row.key == count-key,
+  )
+  count-matches.len() == 1 and {
+    let count = count-matches.first().value
+    type(count) == int and count > 0 and keys.all(key => {
+      let matches = report.tables.facts.rows.filter(
+        row => row.store_id == store-id and row.key == key,
+      )
+      matches.len() == 1 and matches.first().n == count
+    })
+  }
+}
+
 #let report-stores-decision-passed(report, key) = {
   report-stores-have-boolean-fact(report, key) and report.tables.stores.rows.all(store => {
     let matches = report.tables.facts.rows.filter(

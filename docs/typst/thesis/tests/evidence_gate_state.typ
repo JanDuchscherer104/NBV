@@ -1,4 +1,4 @@
-#import "../experiment_data.typ": evidence-gate-state, report-stores-decision-passed, report-stores-have-facts, report-stores-have-boolean-fact
+#import "../experiment_data.typ": evidence-gate-state, report-store-count-binds-facts, report-stores-decision-passed, report-stores-have-facts, report-stores-have-boolean-fact
 
 #let report = (
   tables: (
@@ -35,6 +35,41 @@
 #assert(not report-stores-have-boolean-fact(malformed-report, "gate.integer"))
 #assert(not report-stores-decision-passed(malformed-report, "gate.string"))
 #assert(not report-stores-decision-passed(malformed-report, "gate.integer"))
+
+#let count-binding-report(count-value: 5, row-n: 5) = (
+  tables: (
+    facts: (rows: (
+      (store_id: "store-a", key: "gate.metric", value: 0.2, n: row-n),
+      (store_id: "store-a", key: "gate.n_units", value: count-value, n: row-n),
+      (store_id: "store-a", key: "gate.passed", value: true, n: row-n),
+    )),
+  ),
+)
+#let bound-keys = ("gate.metric", "gate.n_units", "gate.passed")
+#assert(report-store-count-binds-facts(
+  count-binding-report(),
+  "store-a",
+  "gate.n_units",
+  bound-keys,
+))
+#assert(not report-store-count-binds-facts(
+  count-binding-report(count-value: 0),
+  "store-a",
+  "gate.n_units",
+  bound-keys,
+))
+#assert(not report-store-count-binds-facts(
+  count-binding-report(count-value: "5"),
+  "store-a",
+  "gate.n_units",
+  bound-keys,
+))
+#assert(not report-store-count-binds-facts(
+  count-binding-report(row-n: 4),
+  "store-a",
+  "gate.n_units",
+  bound-keys,
+))
 
 #let failed = evidence-gate-state(true, false)
 #assert(failed.evidence_available)
