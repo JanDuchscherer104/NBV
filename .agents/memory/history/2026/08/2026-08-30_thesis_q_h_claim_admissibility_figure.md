@@ -19,7 +19,7 @@ touched_owner_paths:
   - scripts/tests/test_typst_report_data_contract.py
 codex_thread: codex://threads/01a04fd9-0c7c-7813-a9c5-dc49f2f867a6
 repo_object_format: sha1
-repo_head: c8880786c7ea9456672a06188330102fa0b09a22
+repo_head: 1190e5e7bc4863f46221edee20a693198a23a9ae
 repo_branch: "codex/thesis-figure-qh-evidence-gates"
 worktree_kind: linked
 ---
@@ -73,6 +73,11 @@ reviews until zero P0--P2 findings remained.
   helper and all non-contracted gate families now require boolean values;
   explicit negative fixtures preserve malformed decisions as unavailable and
   not decided.
+- The subsequent exact-head review found a Q1 denominator-value P2: positive
+  row metadata could coexist with a zero or mistyped scene-count fact. A shared
+  positive-integer/count-binding helper now binds all Q1 rows to the declared
+  scene count and all Q2 rows to the declared independent-unit count; zero,
+  string, and mismatched-row fixtures are rejected.
 
 ## Commits
 
@@ -81,6 +86,7 @@ reviews until zero P0--P2 findings remained.
 - https://github.com/JanDuchscherer104/ARIA-NBV/commit/72a1136a11e4fe751893ad606fcc923882e7ecb3
 - https://github.com/JanDuchscherer104/ARIA-NBV/commit/fb31b12cbc7fb92acb9f4f203395ced99d50407e
 - https://github.com/JanDuchscherer104/ARIA-NBV/commit/c8880786c7ea9456672a06188330102fa0b09a22
+- https://github.com/JanDuchscherer104/ARIA-NBV/commit/1190e5e7bc4863f46221edee20a693198a23a9ae
 
 ## Verification
 
