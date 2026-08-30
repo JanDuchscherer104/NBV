@@ -75,6 +75,7 @@
     },
     "family_source": "reconstructed pinned configuration blocks from preserved shell order (shells 0--23 forward-local, 24--47 target-bearing-local, and 48--59 lateral-target-bypass); the original rollout position_id table is unavailable, so row-level stored family provenance is not independently re-decoded",
     "family_display": "Shapes reconstruct configured shell blocks (24/24/12); stored row-level family identities were unavailable to this recovery export.",
+    "candidate_pose_display": "Recovery reconstructs this pose from the preserved projection.",
     "calibrated_outline": {
       "owner": "efm3d.aria.CameraTW.unproject with its returned validity mask",
       "camera_model": "CameraModelType.FISHEYE624",
@@ -94,7 +95,7 @@
         "selected": 0.14
       },
       "boundary_note": "The outline is sampled just inside the valid-radius ellipse, clipped inward to the raster, and asserted all-valid by CameraTW.unproject.",
-      "raw_pose_source": "ase_efm/81286/shards-0004.tar::AriaSyntheticEnvironment_81286_AtekDataSample_000035.mtd#ts_world_device.pth and RGB t_device_camera",
+      "raw_pose_source": "shards-0004.tar::AriaSyntheticEnvironment_81286_AtekDataSample_000035.mtd#ts_world_device.pth and RGB t_device_camera",
       "candidate_pose_recovery": {
         "method": "OpenCV EPNP plus iterative refinement against the exact preserved Open3D view/projection and generic wire endpoints",
         "root_residual": {
@@ -113,13 +114,16 @@
           "translation_m": 0.013730062522897574,
           "rotation_deg": 92.54486727370097
         }
-      },
-      "input_sha256": {
-        "generic_baseline_json": "bd1fb9c4792f25f0efbc385a7c3297953d0bdf146027c663f23af0b56a8b57ff",
-        "oblique_raster": "142c3f5c4b305e548dc0846430808bccc9220384d04ebb6c6b0c99e257289c86",
-        "oblique_crop": "ecb2dd7170a4f6f9ab44467abf6ad6beff680f7096ed030d505952ec94c056b3",
-        "raw_shard": "e782eb436a80425c16dca50d1854d18f75cfb18ca38d5434c23e809622b0d9f4"
       }
+    },
+    "input_sha256": {
+      "generic_baseline_json": "bd1fb9c4792f25f0efbc385a7c3297953d0bdf146027c663f23af0b56a8b57ff",
+      "oblique_raster": "142c3f5c4b305e548dc0846430808bccc9220384d04ebb6c6b0c99e257289c86",
+      "top_raster": "55e14ca34f337bc08bc5bcb2a4dfe26b4d6199e26b534aa337caa30d25c2149c",
+      "raw_shard": "e782eb436a80425c16dca50d1854d18f75cfb18ca38d5434c23e809622b0d9f4"
+    },
+    "generated_sha256": {
+      "oblique_crop": "ecb2dd7170a4f6f9ab44467abf6ad6beff680f7096ed030d505952ec94c056b3"
     }
   },
   "counts": {

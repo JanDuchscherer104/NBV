@@ -21,6 +21,7 @@ import hashlib
 import json
 import math
 import os
+import shutil
 from pathlib import Path
 from typing import Any
 
@@ -41,6 +42,12 @@ from export_candidate_scene_geometry import (
 
 WIDTH_PX = 1500
 HEIGHT_PX = 920
+PINNED_OBLIQUE_RASTER_SHA256 = (
+    "142c3f5c4b305e548dc0846430808bccc9220384d04ebb6c6b0c99e257289c86"
+)
+PINNED_TOP_RASTER_SHA256 = (
+    "55e14ca34f337bc08bc5bcb2a4dfe26b4d6199e26b534aa337caa30d25c2149c"
+)
 VIEW = np.asarray(
     [
         [0.74239320, 0.66996443, -5.9604645e-8, 11.514154],
@@ -86,6 +93,29 @@ def _sha256(path: Path) -> str:
         for block in iter(lambda: stream.read(1024 * 1024), b""):
             digest.update(block)
     return digest.hexdigest()
+
+
+def _require_sha256(path: Path, expected: str, *, role: str) -> str:
+    """Bind a recovery input to the preserved pinned scene artifact."""
+
+    actual = _sha256(path)
+    if actual != expected:
+        raise ValueError(
+            f"{role} does not match the pinned scene artifact: "
+            f"expected {expected}, got {actual}"
+        )
+    return actual
+
+
+def _resolve_panel_background(
+    baseline: dict[str, Any], *, baseline_path: Path, panel: str
+) -> Path:
+    """Resolve one inherited raster relative to the baseline JSON owner."""
+
+    background = Path(str(baseline[panel]["background"]))
+    if not background.is_absolute():
+        background = baseline_path.parent / background
+    return background.expanduser().resolve()
 
 
 def _project(points_world: np.ndarray) -> list[list[float]]:
@@ -179,9 +209,9 @@ def _recover(
     *,
     raw_shard: Path,
     baseline_path: Path,
-    oblique_raster: Path,
-    oblique_crop: Path,
     oblique_background: str,
+    top_background: str,
+    input_sha256: dict[str, str],
 ) -> dict[str, Any]:
     output = copy.deepcopy(baseline)
     original_oblique = baseline["oblique"]
@@ -214,6 +244,7 @@ def _recover(
     np.testing.assert_allclose(physical_sampling_rotation, 92.544884, atol=2e-4)
 
     oblique["background"] = oblique_background
+    output["top"]["background"] = top_background
     oblique["history_path"] = _project(rgb_history[:, 9:12])
     oblique["history_frusta"] = [
         _project_segments(
@@ -257,6 +288,9 @@ def _recover(
         "Shapes reconstruct configured shell blocks (24/24/12); stored row-level "
         "family identities were unavailable to this recovery export."
     )
+    provenance["candidate_pose_display"] = (
+        "Recovery reconstructs this pose from the preserved projection."
+    )
     provenance["calibrated_outline"] = {
         "owner": "efm3d.aria.CameraTW.unproject with its returned validity mask",
         "camera_model": "CameraModelType.FISHEYE624",
@@ -292,12 +326,12 @@ def _recover(
                 "rotation_deg": physical_sampling_rotation,
             },
         },
-        "input_sha256": {
-            "generic_baseline_json": _sha256(baseline_path),
-            "oblique_raster": _sha256(oblique_raster),
-            "oblique_crop": _sha256(oblique_crop),
-            "raw_shard": _sha256(raw_shard),
-        },
+    }
+    provenance["input_sha256"] = {
+        "generic_baseline_json": _sha256(baseline_path),
+        "oblique_raster": input_sha256["oblique_raster"],
+        "top_raster": input_sha256["top_raster"],
+        "raw_shard": _sha256(raw_shard),
     }
     return output
 
@@ -335,6 +369,15 @@ def main() -> None:
         default=Path(__file__).resolve().parents[1]
         / "data/candidate_scene_81286_000035_oblique_crop.png",
     )
+    parser.add_argument(
+        "--top-output",
+        type=Path,
+        default=None,
+        help=(
+            "Materialized top raster beside the recovered JSON by default; "
+            "use an explicit path to relocate that sidecar."
+        ),
+    )
     args = parser.parse_args()
     baseline_path = args.baseline.expanduser().resolve()
     raw_shard = args.raw_shard.expanduser().resolve()
@@ -343,18 +386,46 @@ def main() -> None:
     crop_output = args.crop_output.expanduser().resolve()
     output_path.parent.mkdir(parents=True, exist_ok=True)
     crop_output.parent.mkdir(parents=True, exist_ok=True)
-    _crop_oblique_raster(oblique_raster, crop_output)
     baseline: dict[str, Any] = json.loads(baseline_path.read_text(encoding="utf-8"))
+    top_raster = _resolve_panel_background(
+        baseline, baseline_path=baseline_path, panel="top"
+    )
+    input_sha256 = {
+        "oblique_raster": _require_sha256(
+            oblique_raster,
+            PINNED_OBLIQUE_RASTER_SHA256,
+            role="oblique raster",
+        ),
+        "top_raster": _require_sha256(
+            top_raster,
+            PINNED_TOP_RASTER_SHA256,
+            role="top raster",
+        ),
+    }
+    top_output = (
+        output_path.parent / top_raster.name
+        if args.top_output is None
+        else args.top_output.expanduser().resolve()
+    )
     output = _recover(
         baseline,
         raw_shard=raw_shard,
         baseline_path=baseline_path,
-        oblique_raster=oblique_raster,
-        oblique_crop=crop_output,
         oblique_background=Path(
             os.path.relpath(crop_output, start=output_path.parent)
         ).as_posix(),
+        top_background=Path(
+            os.path.relpath(top_output, start=output_path.parent)
+        ).as_posix(),
+        input_sha256=input_sha256,
     )
+    top_output.parent.mkdir(parents=True, exist_ok=True)
+    if top_output != top_raster:
+        shutil.copyfile(top_raster, top_output)
+    _crop_oblique_raster(oblique_raster, crop_output)
+    output["provenance"]["generated_sha256"] = {
+        "oblique_crop": _sha256(crop_output),
+    }
     output_path.write_text(json.dumps(output, indent=2) + "\n", encoding="utf-8")
     print(f"wrote {output_path}")
 

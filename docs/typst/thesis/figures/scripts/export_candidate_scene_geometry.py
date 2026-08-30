@@ -38,7 +38,9 @@ import open3d as o3d
 import torch
 from efm3d.aria import CameraTW, PoseTW
 
-from aria_nbv.rollouts.read_model import decode_position_id
+from aria_nbv.data_handling.identifiers import compact_ase_atek_sample_id
+from aria_nbv.rollouts.manifest import manifest_sha256
+from aria_nbv.rollouts.read_model import decode_position_id, rollout_by_id
 from aria_nbv.rollouts.zarr_store import RolloutZarrStoreReader
 
 
@@ -98,6 +100,13 @@ def _sha256(path: Path) -> str:
         for block in iter(lambda: stream.read(1024 * 1024), b""):
             digest.update(block)
     return digest.hexdigest()
+
+
+def _require(condition: bool, message: str) -> None:
+    """Reject an external-input provenance mismatch in optimized Python too."""
+
+    if not condition:
+        raise ValueError(message)
 
 
 @dataclass(frozen=True)
@@ -510,6 +519,10 @@ def main() -> None:
             data_root / "ase_meshes_processed/scene_81286_0.1_nocrop_dbbf5c71a22f.ply"
         )
 
+    rollout_store = args.rollout_store.expanduser().resolve()
+    raw_shard = args.raw_shard.expanduser().resolve()
+    mesh_path = args.mesh.expanduser().resolve()
+
     os.environ.setdefault("EGL_PLATFORM", "surfaceless")
     output_dir = args.output_dir.expanduser().resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -518,16 +531,83 @@ def main() -> None:
     top_path = output_dir / "candidate_scene_81286_000035_top.png"
     json_path = output_dir / "candidate_scene_81286_000035.json"
 
-    reader = RolloutZarrStoreReader(args.rollout_store)
-    rollout_pose = reader.array("rollouts/root_pose_world")[ROLLOUT_ROW].astype(
-        np.float64
+    reader = RolloutZarrStoreReader(rollout_store)
+    store_manifest = reader.manifest()
+    store_id_value = store_manifest["root_attrs"].get("manifest_sha256")
+    _require(
+        isinstance(store_id_value, str) and bool(store_id_value),
+        "rollout store has no canonical manifest SHA-256",
     )
-    assert int(reader.array("rollouts/target_row_id")[ROLLOUT_ROW]) == TARGET_ROW
-    assert int(reader.array("steps/rollout_row_id")[STEP_ROW]) == ROLLOUT_ROW
-    assert int(reader.array("steps/selected_shell_index")[STEP_ROW]) == SELECTED_SHELL
+    store_id = str(store_id_value)
+    _require(
+        manifest_sha256(store_manifest["manifest"]) == store_id,
+        "rollout store manifest digest does not match its root identity",
+    )
+    rollout = rollout_by_id(reader, ROLLOUT_ROW)
+    _require(rollout.rollout_row_id == ROLLOUT_ROW, "pinned rollout row is absent")
+    _require(
+        rollout.target_row_id == TARGET_ROW,
+        "pinned rollout does not reference the expected target row",
+    )
+    _require(rollout.scene == SCENE_ID, "pinned rollout scene does not match")
+    compact_snippet = compact_ase_atek_sample_id(SNIPPET_ID)
+    _require(
+        rollout.snippet == compact_snippet,
+        "pinned rollout snippet does not match",
+    )
+    source_records = store_manifest["manifest"]["source_coverage"]["sources"]
+    source_matches = [
+        record
+        for record in source_records
+        if int(record["source_row_id"]) == rollout.source_row_id
+    ]
+    _require(
+        len(source_matches) == 1,
+        "pinned rollout source row must occur exactly once in manifest coverage",
+    )
+    source_record = source_matches[0]
+    _require(
+        int(source_record["source_sample_index"]) == SOURCE_SAMPLE_INDEX,
+        "pinned source sample index does not match",
+    )
+    _require(
+        str(source_record["scene_id"]) == SCENE_ID,
+        "pinned source scene does not match",
+    )
+    _require(
+        str(source_record["snippet_id"]) == compact_snippet,
+        "pinned source snippet does not match",
+    )
+    _require(
+        str(source_record["source_sample_key"]) == compact_snippet,
+        "pinned source sample key does not match",
+    )
+    step_matches = np.flatnonzero(reader.array("steps/step_row_id") == STEP_ROW)
+    _require(step_matches.size == 1, "pinned step row must occur exactly once")
+    step_position = int(step_matches[0])
+    target_matches = np.flatnonzero(reader.array("targets/target_row_id") == TARGET_ROW)
+    _require(target_matches.size == 1, "pinned target row must occur exactly once")
+    target_position = int(target_matches[0])
+    rollout_pose = reader.array("rollouts/root_pose_world")[
+        rollout.row_position
+    ].astype(np.float64)
+    _require(
+        int(reader.array("steps/rollout_row_id")[step_position]) == ROLLOUT_ROW,
+        "pinned step does not belong to the pinned rollout",
+    )
+    _require(
+        int(reader.array("steps/selected_shell_index")[step_position])
+        == SELECTED_SHELL,
+        "pinned step does not select the documented shell",
+    )
 
     candidate_mask = reader.array("candidates/step_row_id") == STEP_ROW
-    shell_order = np.argsort(reader.array("candidates/shell_index")[candidate_mask])
+    shell_indices = reader.array("candidates/shell_index")[candidate_mask]
+    shell_order = np.argsort(shell_indices)
+    _require(
+        np.array_equal(shell_indices[shell_order], np.arange(60)),
+        "pinned step must contain each shell index from 0 through 59 exactly once",
+    )
     candidate_poses = reader.array("candidates/pose_world_cam")[candidate_mask][
         shell_order
     ].astype(np.float64)
@@ -544,22 +624,48 @@ def main() -> None:
     primary_reason = reader.array("candidates/primary_invalid_reason")[candidate_mask][
         shell_order
     ]
-    assert candidate_poses.shape == (60, 12)
-    assert int(valid.sum()) == 25 and int((~valid).sum()) == 35
-    assert np.all(primary_reason[~valid] == 5)
-
-    target_pose = reader.array("targets/target_pose_world_object")[TARGET_ROW].astype(
-        np.float64
+    _require(
+        candidate_poses.shape == (60, 12),
+        "pinned step must expose sixty 12-parameter candidate poses",
     )
-    target_extents = reader.array("targets/target_extents")[TARGET_ROW].astype(
+    _require(
+        int(valid.sum()) == 25 and int((~valid).sum()) == 35,
+        "pinned step no longer has the documented 25/35 validity split",
+    )
+    _require(
+        bool(np.all(primary_reason[~valid] == 5)),
+        "pinned rejected candidates no longer share the documented clearance reason",
+    )
+    _require(bool(valid[SELECTED_SHELL]), "documented selected shell is not admissible")
+    family_counts = {
+        name: int((candidate_families == name).sum())
+        for name in (
+            "forward_local",
+            "target_bearing_local",
+            "lateral_target_bypass",
+        )
+    }
+    _require(
+        family_counts
+        == {
+            "forward_local": 24,
+            "target_bearing_local": 24,
+            "lateral_target_bypass": 12,
+        },
+        "pinned candidate families no longer have the documented 24/24/12 split",
+    )
+
+    target_pose = reader.array("targets/target_pose_world_object")[
+        target_position
+    ].astype(np.float64)
+    target_extents = reader.array("targets/target_extents")[target_position].astype(
         np.float64
     )
     target_corners = _obb_corners(target_pose, target_extents)
-    raw_shard = args.raw_shard.expanduser().resolve()
     camera, device_history, history_poses = _load_camera_and_rgb_history(raw_shard)
     _assert_sampling_root_matches_history(device_history, _pose_matrix(rollout_pose))
 
-    mesh = _crop_mesh(args.mesh)
+    mesh = _crop_mesh(mesh_path)
     renderer = _scene_renderer(mesh, width_px=1500, height_px=920)
     oblique = _render_oblique(renderer, oblique_path, oblique_crop_path)
     top = _render_top(renderer, top_path)
@@ -567,11 +673,21 @@ def main() -> None:
     selected_diagnostics: dict[str, float] = {}
     diagnostic_rows = reader.array("candidate_diagnostics/candidate_row_id")
     selected_candidate_row = int(
-        reader.array("steps/selected_candidate_row_id")[STEP_ROW]
+        reader.array("steps/selected_candidate_row_id")[step_position]
     )
-    selected_diag_row = int(
-        np.flatnonzero(diagnostic_rows == selected_candidate_row)[0]
+    candidate_row_ids = reader.array("candidates/candidate_row_id")[candidate_mask][
+        shell_order
+    ]
+    _require(
+        int(candidate_row_ids[SELECTED_SHELL]) == selected_candidate_row,
+        "selected candidate row does not match the documented shell",
     )
+    selected_diag_matches = np.flatnonzero(diagnostic_rows == selected_candidate_row)
+    _require(
+        selected_diag_matches.size == 1,
+        "selected candidate must have exactly one diagnostics row",
+    )
+    selected_diag_row = int(selected_diag_matches[0])
     for name in (
         "motion_step_length_m",
         "mesh_distance_m",
@@ -584,27 +700,39 @@ def main() -> None:
 
     payload = {
         "provenance": {
-            "scene_id": SCENE_ID,
-            "snippet_id": SNIPPET_ID,
-            "source_sample_index": SOURCE_SAMPLE_INDEX,
-            "rollout_store": args.rollout_store.name,
+            "scene_id": str(source_record["scene_id"]),
+            "snippet_id": str(source_record["snippet_id"]),
+            "source_sample_index": int(source_record["source_sample_index"]),
+            "source_row_id": int(source_record["source_row_id"]),
+            "source_sample_key": str(source_record["source_sample_key"]),
+            "source_shard_id": str(source_record["source_shard_id"]),
+            "source_shard_row": int(source_record["source_shard_row"]),
+            "rollout_store": rollout_store.name,
             "rollout_row": ROLLOUT_ROW,
             "step_row": STEP_ROW,
             "target_row": TARGET_ROW,
             "target_instance_id": int(
-                reader.array("targets/target_inst_id")[TARGET_ROW]
+                reader.array("targets/target_inst_id")[target_position]
             ),
-            "mesh": args.mesh.name,
+            "mesh": mesh_path.name,
             "frame": "ASE world; physical RGB history and canonical candidate-sampling cameras; metres",
             "construction": "physical calibrated RGB history and stored rollout geometry over a processed ASE ground-truth mesh cutaway",
             "evidential_role": "auditable finite-candidate contract example, not a performance result",
             "frustum_primitive": "CameraTW-valid eight-point fisheye support polygon with four cardinal spokes; no filled faces",
             "camera_source": f"{raw_shard.name}::{SNIPPET_ID}",
-            "input_sha256": {"raw_shard": _sha256(raw_shard)},
+            "input_sha256": {
+                "rollout_store_manifest": store_id,
+                "raw_shard": _sha256(raw_shard),
+                "mesh": _sha256(mesh_path),
+            },
             "family_source": "stored candidates/position_id decoded by rollouts.read_model.decode_position_id",
             "family_display": (
                 "Shapes encode stored row-level family identities decoded from "
                 "position provenance (24/24/12 rows)."
+            ),
+            "candidate_pose_display": (
+                "The primary exporter reads this pose directly from the stored "
+                "candidates/pose_world_cam row."
             ),
             "render_backend": f"Open3D {o3d.__version__} offscreen z-buffer; CeTZ overlays remain vector",
             "view_contracts": {
