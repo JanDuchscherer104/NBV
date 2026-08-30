@@ -69,16 +69,19 @@ zero in executable tensors denotes padding and is never a learned query.
 
 Dense labels train $h=1$ for every hard-valid candidate. For $h>1$, only the
 factual selected action has a successor observation, so recursive supervision
-is necessarily narrower. A bundle records realized support by horizon and
-rejects any requested horizon that lacks frozen training and evaluation
-evidence. A wide syntactic interface is not evidence of wide learned
-capability.
+is necessarily narrower. The current recursive construction and exact-$Q_2$
+receipt populate the factual diagonal $h=b_t$; the implemented ability to query
+$h<b_t$ is not evidence that those off-diagonal pairs were trained. A bundle
+must therefore record realized support over pairs $(b_t,h)$ and reject any
+requested pair that lacks frozen training and evaluation evidence. A wide
+syntactic interface is not evidence of wide learned capability.
 
 === Direct continuous objective
 
-The decoder maps each candidate representation directly to root-normalized
-finite-horizon return. Huber loss retains the metric order and additive units of
-that outcome while limiting the leverage of extreme targets. Losses are first
+The decoder maps each candidate representation directly to the continuous,
+root-normalized finite-horizon return. This regression target preserves metric
+order and additive return units; Huber loss supplies robust residual weighting
+by limiting the leverage of extreme targets. Losses are first
 averaged within realized state and then within horizon so large candidate
 tables and abundant one-step labels do not silently dominate recursive rows.
 Reported calibration and support remain stratified by horizon.

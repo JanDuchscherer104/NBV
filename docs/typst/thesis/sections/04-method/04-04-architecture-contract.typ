@@ -53,9 +53,10 @@ valid-count tests further prevent accidental set normalization from redefining
 the value of an unchanged physical candidate.
 
 Local-frame encoding removes arbitrary global origin conventions without
-claiming exact $op("SE")(3)$ equivariance. Gravity, scale, height, yaw, camera
-direction, target orientation, and frustum geometry remain meaningful physical
-variables @GeometricDeepLearning-bronstein2021. Provenance tests additionally
+claiming exact $op("SE")(3)$ equivariance. Complete root/current-relative
+candidate poses and the candidate-from-target pose retain translation and
+rotation relationships represented by the shared PoseTW encoder
+@GeometricDeepLearning-bronstein2021. Provenance tests additionally
 exclude target gains, meshes, associations, and current candidate renders from
 the actor graph. Previously selected privileged depth belongs only to an
 explicit non-deployable state protocol.

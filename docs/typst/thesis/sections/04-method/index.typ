@@ -12,7 +12,7 @@ geometry, the factual selected-pose prefix, and remaining budget; it predicts a
 conditional value for every materialized candidate before the authoritative
 hard mask is applied.
 
-The evaluated configuration uses the `S0-pose` state, H0 mean-pooled pose
+The selected executable configuration uses the `S0-pose` state, H0 mean-pooled pose
 history, A1 candidate-to-state cross-attention, and direct continuous Huber
 regression. A0, an independent-row MLP with the same inputs and decoder, is the
 matched interaction control. Both execute the same value task; their held-out
@@ -21,7 +21,10 @@ ordinal decoding, and candidate-set interaction remain alternatives because
 none has yet passed a frozen comparative evaluation.
 
 The value query distinguishes factual remaining budget $b_t$ from requested
-residual horizon $h$. Dense one-step labels anchor $Q_1$; factual selected
+residual horizon $h$. The executable scorer admits the joint triangular domain
+$1 <= h <= b_t$, but the present recursive and exact-$Q_2$ evidence occupies
+the factual diagonal $h=b_t$; it does not establish off-diagonal training
+support. Dense one-step labels anchor $Q_1$; factual selected
 transitions provide the only admissible recursive path to $Q_h$ for $h>1$.
 Exact horizon two is consequently the first epistemic test of learned
 lookahead: it checks whether recursion recovers a target that can be computed

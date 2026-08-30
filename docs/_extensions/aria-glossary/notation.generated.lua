@@ -110,10 +110,16 @@ return {
       description = "State-relative marginal target RRI for candidate i at rollout step t.",
       thesis_list = true,
     },
+    ["model.candidate_physical_token"] = {
+      tex = "\\boldsymbol{h}_{t,i}^{\\mathrm{phys}}",
+      typst = "#symb.model.candidate_physical_token",
+      description = "Candidate-local physical token from root/current-relative candidate poses and compact root evidence.",
+      thesis_list = true,
+    },
     ["model.candidate_row"] = {
       tex = "\\boldsymbol{x}_{t,i}",
       typst = "#symb.model.candidate_row",
-      description = "Per-candidate row feature assembled from pose, relation, support, validity, provenance, and history descriptors.",
+      description = "Candidate-local conditional-value query formed by adding candidate-from-target pose encoding to the physical token.",
       thesis_list = true,
     },
     ["model.history_pose_feature"] = {
@@ -137,7 +143,7 @@ return {
     ["model.target_token"] = {
       tex = "\\boldsymbol{h}_e^{\\mathrm{tgt}}",
       typst = "#symb.model.target_token",
-      description = "Learned selected-target token built from the actor-visible target descriptor and scene support.",
+      description = "Learned selected-target token built from root-relative target pose and metric extents.",
       thesis_list = true,
     },
     ["obs.depth"] = {
@@ -911,9 +917,9 @@ return {
       thesis_list = true,
     },
     ["model.candidate_row_features"] = {
-      tex = "\\boldsymbol{x}_{t,i}=\\operatorname{concat}(\\boldsymbol{h}_{t,i}^{\\mathrm{pose+rel}},\\boldsymbol{h}_{t,i}^{\\mathrm{geom}},\\boldsymbol{h}_{t,i}^{\\mathrm{valid}},\\boldsymbol{h}_{t,i}^{\\mathrm{prov}},\\boldsymbol{H}_t)",
+      tex = "\\boldsymbol{x}_{t,i}=\\operatorname{ValueQueryProj}(\\operatorname{concat}(\\boldsymbol{h}_{t,i}^{\\mathrm{phys}},\\operatorname{PoseEnc}(\\boldsymbol{T}_{c_i\\leftarrow e})))",
       typst = "#eqs.model.candidate_row_features",
-      description = "",
+      description = "Selected conditional-value query from the physical candidate token and candidate-from-target pose.",
       thesis_list = false,
     },
     ["model.qh_cfplus_h0_control"] = {
@@ -923,9 +929,9 @@ return {
       thesis_list = false,
     },
     ["model.qh_frozen_interface"] = {
-      tex = "f_\\theta(s_t^{\\mathrm{S0-pose}},\\boldsymbol{\\phi}_e,\\{q_{t,i}\\}_{i=1}^{N_q},h)\\to(\\{Q_{h,\\theta,e,i}^{\\mathrm{cond}}\\}_{i=1}^{N_q},\\{\\ell_{t,i}^{\\mathrm{feas}}\\}_{i=1}^{N_q})",
+      tex = "f_\\theta(s_t^{\\mathrm{S0-pose}},\\boldsymbol{T}_{r\\leftarrow e},\\boldsymbol{a}_e,\\{q_{t,i}\\}_{i=1}^{N_q},h)\\to(\\{Q_{h,\\theta,e,i}^{\\mathrm{cond}}\\}_{i=1}^{N_q},\\{\\ell_{t,i}^{\\mathrm{feas}}\\}_{i=1}^{N_q})",
       typst = "#eqs.model.qh_frozen_interface",
-      description = "Frozen scalar requested-horizon scorer interface.",
+      description = "Frozen scalar requested-horizon scorer interface over selected raw target geometry.",
       thesis_list = false,
     },
     ["model.qh_history_controls"] = {
@@ -935,9 +941,9 @@ return {
       thesis_list = false,
     },
     ["model.qh_input_contract"] = {
-      tex = "\\mathcal{I}_{t,e}=(\\boldsymbol{h}_e^{\\mathrm{tgt}},\\boldsymbol{\\Phi}_t^{\\mathrm{scene}},\\boldsymbol{H}_t,\\boldsymbol{b}_t,t,H,\\{\\boldsymbol{x}_{t,i},\\boldsymbol{e}_{a\\mid i}^{\\mathrm{rel}},m_{t,i},\\boldsymbol{\\rho}_{t,i}\\}_{i=1}^{N_q})",
+      tex = "\\mathcal{I}_{t,e}=(\\boldsymbol{\\Phi}_t^{\\mathrm{scene}},\\boldsymbol{T}_{r\\leftarrow e},\\boldsymbol{a}_e,\\{\\boldsymbol{T}_{r\\leftarrow c_i},\\boldsymbol{T}_{c_t\\leftarrow c_i},\\boldsymbol{T}_{c_i\\leftarrow e},m_{t,i}^{\\mathrm{cand}}\\}_{i=1}^{N_q},\\{\\boldsymbol{T}_{c_t\\leftarrow c_j}\\}_{j<t},b_t,h)",
       typst = "#eqs.model.qh_input_contract",
-      description = "",
+      description = "Actor-visible selected-scorer input contract before learned projection.",
       thesis_list = false,
     },
     ["model.qh_s1_selected_surface"] = {
@@ -953,9 +959,9 @@ return {
       thesis_list = false,
     },
     ["model.qh_target_token"] = {
-      tex = "\\boldsymbol{h}_e^{\\mathrm{tgt}}=\\operatorname{MLP}_{\\mathrm{tgt}}(\\operatorname{concat}(\\boldsymbol{\\phi}_e,\\boldsymbol{g}_e^{\\mathrm{tgt}}))",
+      tex = "\\boldsymbol{h}_e^{\\mathrm{tgt}}=\\operatorname{TargetProj}(\\operatorname{concat}(\\operatorname{PoseEnc}(\\boldsymbol{T}_{r\\leftarrow e}),\\boldsymbol{a}_e))",
       typst = "#eqs.model.qh_target_token",
-      description = "",
+      description = "Selected target token from root-relative pose and metric OBB extents.",
       thesis_list = false,
     },
     ["rl.candidate_mask_isolation"] = {
