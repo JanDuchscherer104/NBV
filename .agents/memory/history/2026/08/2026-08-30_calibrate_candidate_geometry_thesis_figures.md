@@ -8,6 +8,7 @@ confidence: high
 canonical_updates_needed: []
 touched_owner_paths:
   - docs/typst/shared/equations/action.typ
+  - docs/typst/shared/equations.typ
   - docs/typst/thesis/figures/candidate_family_geometry.typ
   - docs/typst/thesis/figures/candidate_generation_geometry.typ
   - docs/typst/thesis/figures/scripts/export_candidate_scene_geometry.py
@@ -54,6 +55,9 @@ scientific, visual, and reproducibility verification.
 - Exact-head review found that CLI raster/crop overrides were not propagated to
   JSON references and checksums. The recovery owner now derives the background
   path and hashes from the resolved override assets.
+- Exact-head rereview found that the cross-format equation registry still
+  exported the former fixed shell size and radius interval. The registry now
+  matches the modular Typst bodies, and all notation adapters were regenerated.
 - Semantic roles remain distinct in color and grayscale: neutral mesh, purple
   dashed history/frusta, orange double-line OBB, family-shaped shell markers,
   and black/gold selection.
@@ -62,6 +66,7 @@ scientific, visual, and reproducibility verification.
 
 - https://github.com/JanDuchscherer104/ARIA-NBV/commit/7fc7e488dba6d46a3721b9447b55b61890ca0fb0
 - https://github.com/JanDuchscherer104/ARIA-NBV/commit/fe651e06093f242d8c0b62a3bcd5b193df3ae7a7
+- https://github.com/JanDuchscherer104/ARIA-NBV/commit/6eb42262924ce2b60c475a8de10a709eb0708254
 
 ## Verification
 
@@ -77,6 +82,9 @@ scientific, visual, and reproducibility verification.
 - custom `--oblique-raster`, `--crop-output`, and `--output` recovery: emitted
   background reference and both SHA-256 records match the resolved override
   files.
+- `make glossary` run twice: canonical registry and Quarto, Typst, and Lua
+  adapters remain byte-stable and contain the component-resolved shell and
+  radius equations.
 
 The original rollout Zarr remains unavailable locally, so the primary exporter
 cannot be executed end to end. The tracked recovery path and published caption
