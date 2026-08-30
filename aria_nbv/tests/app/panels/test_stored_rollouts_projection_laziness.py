@@ -907,6 +907,11 @@ def test_candidate_benchmark_cache_keys_separate_display_limit_from_complete_exp
         "_cached_candidate_benchmark_export_cached",
         lambda *args, **kwargs: _record(calls, ("export", args, kwargs), b"bundle"),
     )
+    monkeypatch.setattr(
+        session,
+        "_cached_candidate_family_preflight_cached",
+        lambda *args, **kwargs: _record(calls, ("preflight", args, kwargs), None),
+    )
 
     handle.build_candidate_benchmark(state_key="rollout:1/step:2", candidate_limit=7)
 
@@ -919,6 +924,11 @@ def test_candidate_benchmark_cache_keys_separate_display_limit_from_complete_exp
         (
             "export",
             ("/selected.zarr", "rollout:1/step:2"),
+            {"store_identity": "identity"},
+        ),
+        (
+            "preflight",
+            ("/selected.zarr",),
             {"store_identity": "identity"},
         ),
     ]
