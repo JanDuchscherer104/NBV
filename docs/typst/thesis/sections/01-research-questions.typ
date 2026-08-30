@@ -25,10 +25,14 @@ validity rules, horizon, and budget defines oracle-lookahead headroom:
 #eqs.entity.lookahead_headroom
 
 The learned comparison proceeds only if headroom passes a predeclared
-meaningful-effect and uncertainty rule. Because that rule and the required
-recovery fraction are not yet frozen, RQ2 remains prospective. If headroom is
-absent, the evaluated support does not expose a non-myopic advantage; this does
-not establish its universal absence.
+meaningful-effect and uncertainty rule: the paired point estimate must reach a
+manifest-declared positive minimum effect and its 95% interval must exclude zero
+on the positive side. Because the numeric minimum effect and required
+recovery fraction are not yet supplied by a frozen analysis manifest, RQ2
+remains prospective. A non-pass means that the frozen study does not admit the
+headroom claim: the point estimate may fall below the declared minimum, its
+interval may not establish a positive mean effect, or both. None establishes
+the universal absence of non-myopic advantage.
 
 === Conditions for interpretation
 

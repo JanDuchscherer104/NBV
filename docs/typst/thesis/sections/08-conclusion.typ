@@ -24,10 +24,12 @@ population effect, deployment readiness, or a scale estimate.
 
 The eventual conclusion on each claim path is determined by its earliest
 non-passing prerequisite. Unstable measurement or inadequate support blocks
-both inferential lanes. Negligible headroom is a setup-specific negative result
-that blocks the recovered-fraction claim but does not erase independent learned-
-value diagnostics. A non-pass in actor-visible $Q_1$ or learned-versus-exact
-$Q_2$ agreement localizes a learning prerequisite; passed headroom and learned
-value without endpoint recovery is a bounded learned-policy failure. This graph
-preserves informative negative outcomes without extending them beyond the
-frozen finite-candidate experiment.
+both inferential lanes. A headroom point estimate below the frozen meaningful-
+effect minimum is a setup-specific negative magnitude result; an interval that
+still includes zero is an uncertainty non-pass rather than evidence of
+negligible headroom. Both block the recovered-fraction claim without erasing
+independent learned-value diagnostics. A non-pass in actor-visible $Q_1$ or
+learned-versus-exact $Q_2$ agreement localizes a learning prerequisite; passed
+headroom and learned value without endpoint recovery is a bounded learned-policy
+failure. This graph preserves informative negative outcomes without extending
+them beyond the frozen finite-candidate experiment.

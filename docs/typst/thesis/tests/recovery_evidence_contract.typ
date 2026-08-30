@@ -1,4 +1,4 @@
-#import "../experiment_data.typ": conditional-ratio-gate-state, evidence-gate-state, endpoint-evidence-facts, headroom-evidence-facts, recovery-evidence-facts, paired-interval-method, recovery-ratio-definition, report-store-endpoint-evidence-valid, report-store-headroom-evidence-valid, report-store-recovery-evidence-valid, report-store-headroom-identity-valid, report-store-recovery-identity-valid, report-store-fact, report-store-facts-share-source, report-store-facts-share-value, report-stores-have-facts
+#import "../experiment_data.typ": conditional-ratio-gate-state, evidence-gate-state, endpoint-evidence-facts, headroom-evidence-facts, recovery-evidence-facts, headroom-decision-rule, paired-interval-method, recovery-ratio-definition, report-store-endpoint-evidence-valid, report-store-headroom-evidence-valid, report-store-recovery-evidence-valid, report-store-headroom-identity-valid, report-store-recovery-identity-valid, report-store-fact, report-store-facts-share-source, report-store-facts-share-value, report-stores-have-facts
 
 #let sidecar-a = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 #let sidecar-b = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
@@ -35,14 +35,25 @@
   fact("policy.endpoint_gain.n_scenes", scene-value, "count", 5, "count", source: source),
   fact("policy.endpoint_gain.cohort_sha256", cohort, "sha256", 5, "cohort_binding_sha256", source: source),
 )
-#let headroom-rows(cohort: cohort-a, source: source, effect: 0.30) = (
+#let headroom-rows(
+  cohort: cohort-a,
+  source: source,
+  effect: 0.30,
+  ci-low: 0.18,
+  ci-high: 0.42,
+  minimum-effect: 0.20,
+  rule: headroom-decision-rule,
+  passed: true,
+) = (
   fact("policy.paired_scene_endpoint.effect", effect, "fraction", 5, "paired_scene_mean_difference", source: source),
-  fact("policy.paired_scene_endpoint.ci_low", 0.18, "fraction", 5, "paired_scene_mean_difference", source: source),
-  fact("policy.paired_scene_endpoint.ci_high", 0.42, "fraction", 5, "paired_scene_mean_difference", source: source),
+  fact("policy.paired_scene_endpoint.ci_low", ci-low, "fraction", 5, "paired_scene_mean_difference", source: source),
+  fact("policy.paired_scene_endpoint.ci_high", ci-high, "fraction", 5, "paired_scene_mean_difference", source: source),
   fact("policy.paired_scene_endpoint.interval_method", paired-interval-method, "identity", 5, "analysis_identity", source: source),
   fact("policy.paired_scene_endpoint.n_scenes", 5, "count", 5, "count", source: source),
   fact("policy.paired_scene_endpoint.cohort_sha256", cohort, "sha256", 5, "cohort_binding_sha256", source: source),
-  fact("headroom_gate.passed", true, "bool", 5, "paired_scene_decision", source: source),
+  fact("headroom_gate.minimum_effect", minimum-effect, "fraction", 5, "analysis_threshold", source: source),
+  fact("headroom_gate.rule", rule, "identity", 5, "analysis_identity", source: source),
+  fact("headroom_gate.passed", passed, "bool", 5, "paired_scene_decision", source: source),
 )
 #let recovery-rows(
   cohort: cohort-a,
@@ -81,6 +92,95 @@
 #assert(recovery-valid)
 #assert(report-store-headroom-identity-valid(accepted, "store-a"))
 #assert(report-store-recovery-identity-valid(accepted, "store-a"))
+#assert(report-store-headroom-evidence-valid(
+  report(headroom-rows(effect: 0.19, passed: false)),
+  "store-a",
+  5,
+))
+#assert(report-store-headroom-evidence-valid(
+  report(headroom-rows(effect: 0.20)),
+  "store-a",
+  5,
+))
+#assert(report-store-headroom-evidence-valid(
+  report(headroom-rows(ci-low: -0.01, passed: false)),
+  "store-a",
+  5,
+))
+#assert(report-store-headroom-evidence-valid(
+  report(headroom-rows(ci-low: 0, passed: false)),
+  "store-a",
+  5,
+))
+#assert(not report-store-headroom-evidence-valid(
+  report(headroom-rows(effect: 0.19, passed: true)),
+  "store-a",
+  5,
+))
+#assert(not report-store-headroom-evidence-valid(
+  report(headroom-rows(ci-low: -0.01, passed: true)),
+  "store-a",
+  5,
+))
+#assert(not report-store-headroom-evidence-valid(
+  report(headroom-rows(ci-low: 0, passed: true)),
+  "store-a",
+  5,
+))
+#assert(not report-store-headroom-evidence-valid(
+  report(headroom-rows(passed: false)),
+  "store-a",
+  5,
+))
+#assert(not report-store-headroom-evidence-valid(
+  report(headroom-rows(minimum-effect: -0.01)),
+  "store-a",
+  5,
+))
+#assert(not report-store-headroom-evidence-valid(
+  report(headroom-rows(minimum-effect: 0)),
+  "store-a",
+  5,
+))
+#assert(not report-store-headroom-evidence-valid(
+  report(headroom-rows(minimum-effect: "0.20")),
+  "store-a",
+  5,
+))
+#assert(not report-store-headroom-evidence-valid(
+  report(headroom-rows(rule: "unfrozen_headroom_rule")),
+  "store-a",
+  5,
+))
+#assert(not report-store-headroom-evidence-valid(
+  report(headroom-rows().filter(row => row.key != "headroom_gate.minimum_effect")),
+  "store-a",
+  5,
+))
+#assert(not report-store-headroom-evidence-valid(
+  report(headroom-rows().filter(row => row.key != "headroom_gate.rule")),
+  "store-a",
+  5,
+))
+#assert(not report-store-headroom-evidence-valid(
+  report(headroom-rows().map(row => if row.key == "headroom_gate.minimum_effect" {
+    row + (unit: "count",)
+  } else { row })),
+  "store-a",
+  5,
+))
+#assert(not report-store-headroom-evidence-valid(
+  report(headroom-rows().map(row => if row.key == "headroom_gate.minimum_effect" {
+    row + (aggregation: "post_hoc_threshold",)
+  } else { row })),
+  "store-a",
+  5,
+))
+#assert(not report-store-headroom-evidence-valid(
+  report(headroom-rows(passed: "true")),
+  "store-a",
+  5,
+))
 #assert(not report-store-headroom-identity-valid(
   report(endpoint-rows() + headroom-rows(effect: 0.90)),
   "store-a",

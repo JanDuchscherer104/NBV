@@ -206,6 +206,7 @@ nor suppresses independently measured evidence on the other lane.
   if headroom-state.evidence_available {
     families.push((label: [Oracle headroom], metrics: (
       (label: [Paired endpoint effect], key: "policy.paired_scene_endpoint.effect", low-key: "policy.paired_scene_endpoint.ci_low", high-key: "policy.paired_scene_endpoint.ci_high", denominator-key: "policy.paired_scene_endpoint.n_scenes", digits: 3),
+      (label: [Declared minimum effect], key: "headroom_gate.minimum_effect", denominator-key: "policy.paired_scene_endpoint.n_scenes", digits: 3),
       (label: [Meaningful-headroom gate], key: "headroom_gate.passed", denominator-key: "policy.paired_scene_endpoint.n_scenes"),
     )))
   }
@@ -323,8 +324,8 @@ nor suppresses independently measured evidence on the other lane.
 == Oracle Headroom
 
 #if headroom-state.evidence_available [
-  The paired scene endpoint effect, interval, denominator, and
-  meaningful-headroom decision are available in
+  The paired scene endpoint effect, interval, denominator, declared minimum
+  effect, and rule-checked meaningful-headroom decision are available in
   @tab:thesis-confirmatory-values. The headroom claim is
   #if headroom-state.claim_admissible [admissible under the passed shared
   foundations.] else [blocked by a non-passing shared foundation or headroom

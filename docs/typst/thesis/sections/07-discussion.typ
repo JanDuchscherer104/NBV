@@ -23,10 +23,13 @@ The failure-attribution matrix in @tab:thesis-failure-attribution separates
 mechanisms that an endpoint score alone cannot identify. Unstable measurement
 blocks both inferential lanes. Adequate measurement but insufficient target or
 action support locates the problem in the study population rather than either
-policy. With both foundations passed, negligible oracle headroom means that the
-frozen candidate generator, horizon, and metric expose little exploitable
-non-myopic structure; it does not imply universal myopia or erase independently
-measured actor-visible prediction results.
+policy. With both foundations passed, a point estimate below the frozen
+meaningful-effect minimum indicates that the candidate generator, horizon, and
+metric expose less non-myopic advantage than the study declared practically
+relevant. A point estimate above that minimum with an interval that includes
+zero is instead inconclusive about positive mean headroom. Neither result
+implies universal myopia or erases independently measured actor-visible
+prediction results.
 
 On the learned-value lane, actor-visible $Q_1$ tests whether the declared
 information state contains enough immediate target signal. Failure there

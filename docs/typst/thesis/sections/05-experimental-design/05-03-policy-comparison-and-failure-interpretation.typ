@@ -44,9 +44,16 @@ three per-policy endpoint estimates and intervals before deriving either
 contrast, and binds their scene count, cohort identity, aggregation, interval
 method, and provenance to both the headroom and recovery facts. Ratios and their
 decisions are reported only when this contract is complete and their headroom
-denominator passes the meaningful-effect gate. The derived headroom effect and
-recovery point estimate must also reproduce the endpoint means within a fixed
-numeric serialization tolerance.
+denominator passes the meaningful-effect gate. That gate records a positive,
+prospectively justified
+minimum effect in the analysis manifest and applies the frozen rule
+`effect_gte_minimum_and_ci_low_gt_zero_v1`: the paired point estimate must meet
+the declared minimum and the 95% interval's lower bound must be strictly above
+zero. Its reported boolean must equal that literal comparison; a measured
+non-pass remains available evidence, whereas a contradictory decision leaves
+the gate unavailable. The derived headroom effect and recovery point estimate
+must also reproduce the endpoint means within a fixed numeric serialization
+tolerance.
 
 #figure(
   publication-table(
@@ -56,7 +63,7 @@ numeric serialization tolerance.
     rows: (
       [measurement], [metric validity is unresolved], [the oracle outcome is not stable enough for comparison], [Neither state implies planning, learning, or support behavior; complete or repair and repeat the frozen metric protocol.],
       [population / action support], [the study and action population is unresolved], [the requested estimand lacks adequate population support], [Neither state implies zero utility or policy failure; report exclusions, family survival, horizon coverage, and resource failures.],
-      [oracle headroom], [non-myopic headroom is unresolved], [no meaningful non-myopic structure was detected in the frozen setup], [Neither state implies universal myopia or model inadequacy; complete the paired estimate, or change support or horizon only in a separately declared study.],
+      [oracle headroom], [non-myopic headroom is unresolved], [the frozen study does not admit the headroom claim], [Inspect whether the point estimate misses the declared minimum, the interval includes zero, or both; none implies universal myopia or model inadequacy.],
       [actor-visible $Q_1$], [immediate-value recovery is unresolved], [the available actor information does not recover immediate target value], [Neither state establishes a specifically long-horizon failure; complete or audit target matching, leakage, calibration, and state support.],
       [learned / exact $Q_2$], [recursive agreement is unresolved], [the first learned recursion is unsupported or inaccurate], [Neither state establishes endpoint planning value or a need for more architecture; separate coverage, $Q_1$ error, linkage, and bootstrap error.],
       [endpoint recovery], [endpoint recovery is unresolved], [the admitted learned policy does not recover prespecified headroom], [Neither state identifies the failed mechanism; complete or stratify by support, observability, replay coverage, and state aliasing.],

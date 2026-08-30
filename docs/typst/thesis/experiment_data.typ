@@ -35,6 +35,7 @@
 #let paired-interval-method = "scene_clustered_percentile_bootstrap_95"
 #let recovery-ratio-definition = "ratio_of_paired_scene_mean_differences"
 #let repeatability-decision-rule = "max_abs_diff_lte_tolerance_v1"
+#let headroom-decision-rule = "effect_gte_minimum_and_ci_low_gt_zero_v1"
 #let derived-identity-abs-tolerance = 1e-10
 #let endpoint-evidence-facts = (
   "policy.endpoint_gain.oracle_one_step.mean",
@@ -71,6 +72,8 @@
   "policy.paired_scene_endpoint.interval_method",
   "policy.paired_scene_endpoint.n_scenes",
   "policy.paired_scene_endpoint.cohort_sha256",
+  "headroom_gate.minimum_effect",
+  "headroom_gate.rule",
   "headroom_gate.passed",
 )
 #let headroom-evidence-contract = (
@@ -80,6 +83,8 @@
   (key: "policy.paired_scene_endpoint.interval_method", aggregation: "analysis_identity", unit: "identity", value_kind: "string"),
   (key: "policy.paired_scene_endpoint.n_scenes", aggregation: "count", unit: "count", value_kind: "integer"),
   (key: "policy.paired_scene_endpoint.cohort_sha256", aggregation: "cohort_binding_sha256", unit: "sha256", value_kind: "string"),
+  (key: "headroom_gate.minimum_effect", aggregation: "analysis_threshold", unit: "fraction", value_kind: "number", minimum: 0),
+  (key: "headroom_gate.rule", aggregation: "analysis_identity", unit: "identity", value_kind: "string"),
   (key: "headroom_gate.passed", aggregation: "paired_scene_decision", unit: "bool", value_kind: "boolean"),
 )
 #let recovery-evidence-facts = (
@@ -694,16 +699,39 @@
 }
 
 #let report-store-headroom-evidence-valid(report, store-id, expected-n) = {
+  let effect = report-store-number-value(
+    report,
+    store-id,
+    "policy.paired_scene_endpoint.effect",
+  )
+  let ci-low = report-store-number-value(
+    report,
+    store-id,
+    "policy.paired_scene_endpoint.ci_low",
+  )
+  let minimum-effect = report-store-number-value(
+    report,
+    store-id,
+    "headroom_gate.minimum_effect",
+  )
+  let passed-matches = report.tables.facts.rows.filter(
+    row => row.store_id == store-id and row.key == "headroom_gate.passed",
+  )
   report-store-analysis-family-valid(
     report,
     store-id,
     headroom-evidence-facts,
     headroom-evidence-contract,
     expected-n,
-    expected-values: ((key: "policy.paired_scene_endpoint.interval_method", value: paired-interval-method),),
+    expected-values: (
+      (key: "policy.paired_scene_endpoint.interval_method", value: paired-interval-method),
+      (key: "headroom_gate.rule", value: headroom-decision-rule),
+    ),
     interval-pairs: ((low: "policy.paired_scene_endpoint.ci_low", high: "policy.paired_scene_endpoint.ci_high"),),
     digest-keys: ("policy.paired_scene_endpoint.cohort_sha256",),
     required-source-fragment: "|sidecar:",
+  ) and effect != none and ci-low != none and minimum-effect != none and minimum-effect > 0 and passed-matches.len() == 1 and passed-matches.first().value == (
+    effect >= minimum-effect and ci-low > 0
   )
 }
 
