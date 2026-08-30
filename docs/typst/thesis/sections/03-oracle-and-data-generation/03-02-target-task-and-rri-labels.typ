@@ -327,14 +327,15 @@ annotated as uncapped spherical support and are not represented by a bounded box
 
 Rollout recipes select and retain finite chains from the valid action table. The implemented families are uniform valid sampling, one-step oracle greedy selection, bounded oracle lookahead, and temperature-softmax sampling. Their horizon, branch factor, beam width, temperature, and seed are resolved parameters. These recipes generate replay diversity and bounded references; they do not constitute a learned policy.
 
-Bounded oracle lookahead can select a different first action from one-step greedy because it ranks retained finite-horizon chains rather than immediate gain alone (@fig:oracle-lookahead-tree). The persisted artifact contains these selected or beam-retained chains and their full per-step candidate shells; it is not an exhaustive materialization of the counterfactual action tree.
+The first action of the highest-ranked bounded-lookahead chain can differ from the action preferred by one-step greedy because lookahead ranks retained finite-horizon chains rather than immediate gain alone (@fig:oracle-lookahead-tree). The persisted artifact contains the beam-retained chains and their full per-step candidate shells; it is not an exhaustive materialization of the counterfactual action tree.
 
 #figure(
   align(center, image(
     "../../figures/oracle_lookahead_tree.pdf",
     width: 100%,
   )),
-  caption: [Constructed symbolic topology of the bounded oracle-lookahead reference. Nodes are counterfactual states and edge labels are candidate actions with immediate rewards. Only valid first-action rows produce children; the beam retains a bounded prefix set, and invalid rows receive no branch. The inequalities illustrate how the selected first action can differ from one-step greedy without inventing measured reward values.],
+  alt: "A short factual prefix reaches root state s t. Two complete beam-retained paths then cross time planes t, t plus 1, and t plus 2. The thinner path begins with action i1, whose immediate target-root gain exceeds that of i2. The thicker path begins with i2 and ends in a ringed highest-ranked endpoint because its two-step return exceeds the return of the i1 path; both solid paths persist. A red dotted invalid-row stub ends at a cross before t plus 1 and has no child. A gray dashed root stub ends at one bar to denote a legal row outside branch factor two that remains in the full shell; a later dashed stub ends at two bars to denote an expanded path removed by beam width two.",
+  caption: [Constructed depth-two ordering reversal for target-root gain. Both solid paths are beam-retained from one factual prefix: $i_1$ has the larger immediate gain, while $tau_2$ ranks first at $h=2$ and $gamma=1$; $tau_1$ also persists. The dotted stub is invalid. The single-bar stub is a legal shell row outside branch factor $2$; the double-bar stub is an expanded path removed by beam width $2$. Inequalities encode ordering only, not measured rewards or learned-policy performance.],
 ) <fig:oracle-lookahead-tree>
 
 For stochastic branches, let $s_i$ be the finite oracle score of valid row $i$. The robust logit used for temperature-softmax is
