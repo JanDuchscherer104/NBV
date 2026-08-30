@@ -10,7 +10,7 @@ from typing import Any
 
 import pytest
 
-from aria_nbv.app.panels._stored_rollouts import candidate_generation, validity_support
+from aria_nbv.app.panels._stored_rollouts import validity_support
 from aria_nbv.rollouts.candidate_benchmark import (
     BINDING_KEYS,
     CANDIDATE_SUPPORT_METRICS_REVISION,
@@ -30,7 +30,7 @@ from aria_nbv.rollouts.candidate_benchmark import (
     target_side_count_balance,
     write_bundle,
 )
-from aria_nbv.rollouts.candidate_support_plotting import candidate_support_figures
+from aria_nbv.rollouts.candidate_support_plotting import candidate_benchmark_figures, candidate_support_figures
 from aria_nbv.rollouts.reporting import candidate_benchmark_report_frames
 
 
@@ -227,6 +227,9 @@ def test_serialized_bundle_is_byte_stable_and_round_trips_with_binding() -> None
     second = serialize_bundle_bytes(records, provenance=_binding())
     assert first == second
     loaded = read_bundle_bytes(first, expected_binding=_binding())
+    assert loaded.source.kind == "archive-bytes"
+    assert loaded.source.path is None
+    assert loaded.source.sha256 == sha256_bytes(first)
     actual, expected = loaded.records[0], records[0]
     assert (actual.scene_key, actual.state_key, actual.candidate_ids, actual.coordinates) == (
         expected.scene_key,
@@ -260,6 +263,10 @@ def test_reader_rejects_invalid_binding_provenance(tmp_path: Path, mutation: str
 
 def test_bundle_is_immutable_and_rejects_overwrite_or_unexpected_files(tmp_path: Path) -> None:
     path = write_bundle(tmp_path / "bundle", (_record(),), provenance=_binding())
+    loaded = read_bundle(path, expected_binding=_binding())
+    assert loaded.source.kind == "directory"
+    assert loaded.source.path == path.resolve()
+    assert len(loaded.source.sha256) == 64
     with pytest.raises(FileExistsError):
         write_bundle(path, (_record(),), provenance=_binding())
     with pytest.raises(TypeError):
@@ -315,7 +322,7 @@ def test_reporting_frames_are_canonical_reader_projection(tmp_path: Path) -> Non
 
 
 def test_public_benchmark_figures_expose_six_named_groups_and_support_metadata() -> None:
-    figures = candidate_generation._candidate_benchmark_figures((_record(),))
+    figures = candidate_benchmark_figures((_record(),))
     assert [figure.layout.title.text for figure in figures] == [
         "Candidate family attempted → valid → selected funnel",
         "Candidate family survival",
@@ -340,7 +347,7 @@ def test_public_benchmark_figures_expose_six_named_groups_and_support_metadata()
 
 
 def test_public_benchmark_ground_plot_option_adds_valid_camera_forward_arrows() -> None:
-    figures = candidate_generation._candidate_benchmark_figures((_record(),), show_view_directions=True)
+    figures = candidate_benchmark_figures((_record(),), show_view_directions=True)
 
     assert len(figures[2].layout.annotations) == 2
     assert all(annotation.showarrow for annotation in figures[2].layout.annotations)
@@ -372,7 +379,7 @@ def test_benchmark_figure_bulk_projection_preserves_point_status_and_funnel_tota
         ),
     )
 
-    figures = candidate_generation._candidate_benchmark_figures((_record(), additional))
+    figures = candidate_benchmark_figures((_record(), additional))
 
     support = figures[3].data[0]
     assert list(support.x) == [0.1, -0.2, 0.5]
@@ -541,7 +548,7 @@ def test_benchmark_reader_retains_counts_when_state_projection_is_unavailable(
         assert "proposal support unavailable: missing_target" in {
             annotation.text for annotation in figure.layout.annotations
         }
-    panel_figures = candidate_generation._candidate_benchmark_figures(result)
+    panel_figures = candidate_benchmark_figures(result)
     assert list(panel_figures[0].data[0].y) == [1, 1, 0]
     assert set(panel_figures[1].data[0].x) == {"target_component"}
     for figure in panel_figures[2:4]:
@@ -676,7 +683,7 @@ def test_benchmark_reader_uses_native_state_filters_and_bounded_limit(monkeypatc
 
 
 def test_empty_benchmark_figures_show_no_matching_or_resource_annotations() -> None:
-    figures = candidate_generation._candidate_benchmark_figures(())
+    figures = candidate_benchmark_figures(())
     assert len(figures) == 6
     assert [figure.layout.title.text for figure in figures] == [
         "Candidate family attempted → valid → selected funnel",
@@ -690,6 +697,30 @@ def test_empty_benchmark_figures_show_no_matching_or_resource_annotations() -> N
         assert "No matching benchmark candidates" in {annotation.text for annotation in figure.layout.annotations}
     assert "unavailable: no persisted timing/resource facts" in {
         annotation.text for annotation in figures[5].layout.annotations
+    }
+
+
+def test_resource_figure_preserves_per_state_runtime_and_peak_memory_units() -> None:
+    second = CandidateBenchmark(
+        "state-2",
+        "scene-a",
+        (),
+        timings_ms={"total_ms": 7.0},
+        resources={},
+    )
+
+    resource = candidate_benchmark_figures((_record(), second))[5]
+
+    assert list(resource.data[0].x) == ["state-1", "state-2"]
+    assert list(resource.data[0].y) == [2.0, 7.0]
+    assert resource.data[0].name == "runtime per state"
+    assert list(resource.data[1].x) == ["state-1"]
+    assert list(resource.data[1].y) == [4.0]
+    assert resource.data[1].name == "peak GPU memory per state"
+    assert resource.layout.yaxis.title.text == "runtime [ms]"
+    assert resource.layout.yaxis2.title.text == "peak GPU memory [MB]"
+    assert "unavailable: no persisted peak GPU memory" not in {
+        annotation.text for annotation in resource.layout.annotations
     }
 
 
@@ -727,7 +758,7 @@ def test_benchmark_panel_dispatches_only_after_toggle_and_propagates_state_and_l
     monkeypatch.setattr(
         validity_support,
         "_candidate_benchmark_figures",
-        lambda records, **kwargs: candidate_generation._candidate_benchmark_figures(records, **kwargs),
+        lambda records, **kwargs: candidate_benchmark_figures(records, **kwargs),
     )
     monkeypatch.setattr(validity_support, "_render_bounded_candidate_geometry", lambda *_a, **_k: None)
 

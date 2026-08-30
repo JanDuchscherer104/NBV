@@ -315,3 +315,28 @@ def test_rollouts_info_rejects_incomplete_thesis_export_options(tmp_path: Path, 
     cli_result = runner.invoke(rollouts_info_app, ["--store", str(result.store_dir), *arguments])
 
     assert cli_result.exit_code == 2
+
+
+@pytest.mark.parametrize(
+    "arguments, expected",
+    [
+        (["--candidate-benchmark-bundle", "benchmark"], "candidate-benchmark-binding-json"),
+        (["--candidate-benchmark-binding-json", "binding.json"], "candidate-benchmark-bundle"),
+        (
+            ["--candidate-benchmark-bundle", "benchmark", "--candidate-benchmark-binding-json", "binding.json"],
+            "thesis-bundle-output",
+        ),
+    ],
+)
+def test_rollouts_info_rejects_incomplete_benchmark_attachment_before_opening_store(
+    tmp_path: Path,
+    arguments: list[str],
+    expected: str,
+) -> None:
+    cli_result = runner.invoke(
+        rollouts_info_app,
+        ["--store", str(tmp_path / "missing.zarr"), *arguments],
+    )
+
+    assert cli_result.exit_code == 2
+    assert expected in cli_result.output

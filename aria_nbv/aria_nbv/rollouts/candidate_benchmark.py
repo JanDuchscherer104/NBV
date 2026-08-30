@@ -8,6 +8,7 @@ content-addressed bundle rather than reinterpreting rollout metadata.
 from __future__ import annotations
 
 import hashlib
+import io
 import json
 import math
 import os
@@ -18,7 +19,7 @@ from collections.abc import Collection, Iterable, Mapping
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from types import MappingProxyType
-from typing import Any, cast
+from typing import Any, Literal, cast
 
 import numpy as np
 import pandas as pd
@@ -292,12 +293,37 @@ class CandidateBenchmark:
 
 
 @dataclass(frozen=True, slots=True)
+class CandidateBenchmarkSource:
+    """Durable identity of a validated benchmark representation.
+
+    Attributes:
+        kind: ``directory`` for a persisted bundle or ``archive-bytes`` for an
+            in-memory ZIP payload.
+        sha256: Content identity of the exact source representation.
+        path: Canonical persisted directory for ``directory`` sources; absent
+            for archive bytes, which have no durable filesystem location.
+    """
+
+    kind: Literal["directory", "archive-bytes"]
+    sha256: str
+    path: Path | None = None
+
+    def __post_init__(self) -> None:
+        if not re.fullmatch(r"[0-9a-f]{64}", self.sha256):
+            raise ValueError("candidate benchmark source requires a SHA-256 identity")
+        if self.kind == "directory" and self.path is None:
+            raise ValueError("directory benchmark source requires a path")
+        if self.kind == "archive-bytes" and self.path is not None:
+            raise ValueError("archive-byte benchmark source cannot claim a filesystem path")
+
+
+@dataclass(frozen=True, slots=True)
 class CandidateBenchmarkBundle:
-    """Validated immutable bundle returned by :func:`read_bundle`."""
+    """Validated immutable benchmark facts and their durable source identity."""
 
     manifest: Mapping[str, Any]
     records: tuple[CandidateBenchmark, ...]
-    path: Path
+    source: CandidateBenchmarkSource
 
 
 def reduce_candidate_records(records: list[Mapping[str, Any]]) -> tuple[CandidateBenchmark, ...]:
@@ -938,19 +964,23 @@ def serialize_bundle_bytes(records: tuple[CandidateBenchmark, ...], *, provenanc
 
 
 def read_bundle_bytes(payload: bytes, *, expected_binding: Mapping[str, str]) -> CandidateBenchmarkBundle:
-    """Validate a canonical exported ZIP through :func:`read_bundle`."""
+    """Validate canonical ZIP bytes without fabricating a temporary path."""
 
-    with tempfile.TemporaryDirectory() as directory:
-        archive_path = Path(directory) / "bundle.zip"
-        archive_path.write_bytes(payload)
-        with zipfile.ZipFile(archive_path) as archive:
+    try:
+        with zipfile.ZipFile(io.BytesIO(payload)) as archive:
             names = sorted(archive.namelist())
             if names != [DATA_NAME, MANIFEST_NAME]:
                 raise ValueError("invalid candidate benchmark archive members")
-            root = Path(directory) / "bundle"
-            root.mkdir()
-            archive.extractall(root)
-        return read_bundle(root, expected_binding=expected_binding)
+            manifest_bytes = archive.read(MANIFEST_NAME)
+            parquet_bytes = archive.read(DATA_NAME)
+    except zipfile.BadZipFile as exc:
+        raise ValueError("invalid candidate benchmark archive") from exc
+    return _read_bundle_payload(
+        manifest_bytes,
+        parquet_bytes,
+        expected_binding=expected_binding,
+        source=CandidateBenchmarkSource("archive-bytes", sha256_bytes(payload)),
+    )
 
 
 def read_bundle(path: Path | str, *, expected_binding: Mapping[str, str]) -> CandidateBenchmarkBundle:
@@ -964,9 +994,39 @@ def read_bundle(path: Path | str, *, expected_binding: Mapping[str, str]) -> Can
         raise ValueError("partial candidate benchmark bundle")
     if {entry.name for entry in root.iterdir()} != {MANIFEST_NAME, DATA_NAME}:
         raise ValueError("schema-mismatched candidate benchmark bundle: unexpected files")
+    manifest_bytes = manifest_path.read_bytes()
+    parquet_bytes = parquet_path.read_bytes()
+    return _read_bundle_payload(
+        manifest_bytes,
+        parquet_bytes,
+        expected_binding=expected_binding,
+        source=CandidateBenchmarkSource(
+            "directory",
+            sha256_bytes(
+                canonical_json_bytes(
+                    {
+                        MANIFEST_NAME: sha256_bytes(manifest_bytes),
+                        DATA_NAME: sha256_bytes(parquet_bytes),
+                    }
+                )
+            ),
+            root,
+        ),
+    )
+
+
+def _read_bundle_payload(
+    manifest_bytes: bytes,
+    parquet_bytes: bytes,
+    *,
+    expected_binding: Mapping[str, str],
+    source: CandidateBenchmarkSource,
+) -> CandidateBenchmarkBundle:
+    """Validate exact manifest and Parquet bytes from either supported source."""
+
     try:
-        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as exc:
+        manifest = json.loads(manifest_bytes.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise ValueError("invalid candidate benchmark manifest") from exc
     required = {"schema_id", "evidence_class", "completion", "revision", "record_count", "data_sha256", "provenance"}
     if set(manifest) != required:
@@ -997,11 +1057,11 @@ def read_bundle(path: Path | str, *, expected_binding: Mapping[str, str]) -> Can
         raise ValueError("stale candidate benchmark bundle: provenance binding mismatch")
     if any(key not in manifest["provenance"] for key in BINDING_KEYS):
         raise ValueError("stale candidate benchmark bundle: incomplete provenance binding")
-    actual_hash = sha256_bytes(parquet_path.read_bytes())
+    actual_hash = sha256_bytes(parquet_bytes)
     if manifest.get("data_sha256") != actual_hash:
         raise ValueError("hash-mismatched candidate benchmark bundle")
     try:
-        frame = pd.read_parquet(parquet_path)
+        frame = pd.read_parquet(io.BytesIO(parquet_bytes))
     except Exception as exc:
         raise ValueError("invalid candidate benchmark Parquet payload") from exc
     expected_columns = {
@@ -1027,7 +1087,7 @@ def read_bundle(path: Path | str, *, expected_binding: Mapping[str, str]) -> Can
         records = reduce_candidate_records(cast(list[Mapping[str, Any]], raw_records))
     except (KeyError, TypeError, ValueError) as exc:
         raise ValueError("schema-mismatched candidate benchmark rows") from exc
-    return CandidateBenchmarkBundle(_freeze(manifest), records, root)
+    return CandidateBenchmarkBundle(_freeze(manifest), records, source)
 
 
 __all__ = [
@@ -1036,6 +1096,7 @@ __all__ = [
     "BINDING_KEYS",
     "CandidateBenchmark",
     "CandidateBenchmarkBundle",
+    "CandidateBenchmarkSource",
     "CandidateFamilyCounts",
     "CandidatePoint",
     "candidate_support_metrics",
