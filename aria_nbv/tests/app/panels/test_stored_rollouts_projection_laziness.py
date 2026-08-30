@@ -249,19 +249,30 @@ def test_named_session_operations_have_no_generic_projection_dispatcher() -> Non
     assert hasattr(session, "_cached_candidates")
 
 
-def test_refresh_rollout_caches_clears_each_page_family(monkeypatch: pytest.MonkeyPatch) -> None:
-    """The shared refresh action invalidates Training Dataset lazily as well."""
+def test_refresh_rollout_caches_is_page_local(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Stored Rollouts refresh does not import or invalidate another page."""
 
-    calls: list[str] = []
-    monkeypatch.setattr(session, "_clear_stored_rollout_caches", lambda: calls.append("rollouts"))
-    monkeypatch.setattr(
-        "aria_nbv.app.panels.training_dataset._clear_training_dataset_caches",
-        lambda: calls.append("training"),
-    )
+    state = {
+        session.CORPUS_SUMMARY_STATE_KEY: object(),
+        "training_dataset:test-sentinel": object(),
+        "unrelated:test-sentinel": object(),
+    }
+    monkeypatch.setattr(st, "session_state", state)
+    original_import = __import__
+
+    def guarded_import(name: str, *args: Any, **kwargs: Any) -> Any:
+        if "training_dataset" in name:
+            pytest.fail("Stored Rollouts refresh imported Training Dataset")
+        return original_import(name, *args, **kwargs)
+
+    monkeypatch.setattr("builtins.__import__", guarded_import)
 
     session.clear_rollout_page_caches()
 
-    assert calls == ["rollouts", "training"]
+    assert session.CORPUS_SUMMARY_STATE_KEY not in state
+    assert "training_dataset:test-sentinel" in state
+    assert "unrelated:test-sentinel" in state
+    assert "training_dataset" not in inspect.getsource(session.clear_rollout_page_caches)
 
 
 def test_invalid_store_withholds_scientific_header_projection(monkeypatch: pytest.MonkeyPatch) -> None:

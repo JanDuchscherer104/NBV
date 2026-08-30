@@ -5,6 +5,8 @@
 from __future__ import annotations
 
 import json
+import os
+import signal
 from copy import deepcopy
 from dataclasses import replace
 from pathlib import Path
@@ -30,7 +32,9 @@ from aria_nbv.oracle.pipelines.rollout_dataset import (
     _RolloutSourceLineageBuilder,
     _select_source_manifest_rows,
 )
+from aria_nbv.oracle.pipelines.shard_promotion import read_promotion_marker_json
 from aria_nbv.oracle.pipelines.shards import (
+    RolloutShardOwnershipConflictError,
     plan_rollout_shards,
     plan_rollout_source_manifest,
     read_validated_completed_shard,
@@ -1045,6 +1049,33 @@ def test_rollout_shard_atomic_promotion_writes_markers_and_skips_completed(tmp_p
     )
 
 
+def test_rollout_shard_owner_marker_stays_bounded_for_large_row_manifests(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    records = [_fake_record(index) for index in range(6_000)]
+    config = _FakeRolloutConfig(records, store_dir=tmp_path)
+    entry = plan_rollout_shards(config, rows_per_shard=len(records))[0]
+    assert len(json.dumps(entry.to_jsonable()).encode()) > 1_048_576
+    monkeypatch.setattr(shards_module, "_rollout_store_content_sha256", lambda _path: "d" * 64)
+    monkeypatch.setattr(shards_module, "collect_runtime_provenance", lambda: {"python": "test"})
+
+    owner = shards_module._owner_payload(
+        shard_entry=entry,
+        writer_config_hash=entry.writer_config_hash,
+        result=SimpleNamespace(manifest_sha256="e" * 64, num_rollouts=1, num_steps=1, num_candidates=1),
+        output_tmp=tmp_path / "tmp",
+        output_final=tmp_path / "final",
+    )
+    marker = tmp_path / "_owner.json"
+    marker.write_text(json.dumps(owner), encoding="utf-8")
+
+    status, decoded = read_promotion_marker_json(marker)
+
+    assert status == "present"
+    assert decoded is not None
+    assert "shard_entry" not in decoded
+
+
 def test_read_validated_completed_shard_rejects_tampered_success_binding(tmp_path: Path) -> None:
     config = _FakeRolloutConfig([_fake_record(0)], store_dir=tmp_path)
     entry = plan_rollout_shards(config, rows_per_shard=1)[0]
@@ -1062,6 +1093,33 @@ def test_read_validated_completed_shard_rejects_tampered_success_binding(tmp_pat
         read_validated_completed_shard(final_dir, shard_entry=entry, writer_config_hash=entry.writer_config_hash)
         is None
     )
+
+
+def test_shard_currentness_and_read_reject_fifo_promotion_marker_without_blocking(tmp_path: Path) -> None:
+    config = _FakeRolloutConfig([_fake_record(0)], store_dir=tmp_path)
+    entry = plan_rollout_shards(config, rows_per_shard=1)[0]
+    final_dir = tmp_path / "final" / entry.shard_id
+    run_rollout_shard(config, shard_entry=entry, output_tmp=tmp_path / "tmp", output_final=final_dir)
+    success = final_dir / "_SUCCESS.json"
+    success.unlink()
+    os.mkfifo(success)
+    previous_handler = signal.getsignal(signal.SIGALRM)
+
+    def _deadline(_signum: int, _frame: object) -> None:
+        raise TimeoutError("FIFO promotion-marker currentness check exceeded its two-second deadline")
+
+    signal.signal(signal.SIGALRM, _deadline)
+    signal.setitimer(signal.ITIMER_REAL, 2)
+    try:
+        assert (
+            read_validated_completed_shard(final_dir, shard_entry=entry, writer_config_hash=entry.writer_config_hash)
+            is None
+        )
+        with pytest.raises(RolloutShardOwnershipConflictError):
+            run_rollout_shard(config, shard_entry=entry, output_tmp=tmp_path / "other.tmp", output_final=final_dir)
+    finally:
+        signal.setitimer(signal.ITIMER_REAL, 0)
+        signal.signal(signal.SIGALRM, previous_handler)
 
 
 def test_rollout_shard_timeout_delegates_atomic_quarantine_and_allows_restart(

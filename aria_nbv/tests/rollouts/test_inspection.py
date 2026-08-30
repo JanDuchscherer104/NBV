@@ -813,6 +813,20 @@ def test_rollout_store_inventory_can_skip_deep_validation_for_interactive_discov
     assert row["observed_candidates"] == current.num_candidates
 
 
+def test_promoted_store_validation_rejects_two_broken_marker_aliases(tmp_path: Path) -> None:
+    """Only two truly absent marker files preserve legacy-store compatibility."""
+
+    records = build_rollout_records(horizon=1, num_samples=2, seed=43)[:1]
+    result = write_rollout_zarr_store(tmp_path / "rollouts.zarr", records)
+    for marker in ("_SUCCESS.json", "_owner.json"):
+        (result.store_dir / marker).symlink_to(tmp_path / f"missing-{marker}")
+
+    error = inspection_module.promoted_store_validation_error(RolloutZarrStoreReader(result.store_dir))
+
+    assert error is not None
+    assert "unreadable" in error
+
+
 def test_discover_rollout_store_paths_returns_zarr_directories(tmp_path: Path) -> None:
     """Discovery should recursively find candidate Zarr directories only."""
 

@@ -9,9 +9,8 @@ export; it never repairs stores or persists a training-bundle configuration.
 from __future__ import annotations
 
 import json
-import stat
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import numpy as np
 import pandas as pd
@@ -21,17 +20,22 @@ import streamlit as st
 from ...configs import PathConfig
 from ...dataset_bundle import (
     DatasetBundleEvidence,
+    DatasetBundleGeneration,
+    DatasetBundleGenerationChangedError,
     DatasetBundleSelection,
+    DatasetBundleSummaryRequest,
     QhBatchPreview,
     QhCorpusReadiness,
     QhReadinessContract,
-    build_dataset_bundle_summary,
+    assert_dataset_bundle_generation_current,
     build_qh_corpus_readiness,
+    capture_dataset_bundle_generation,
     compute_dataset_bundle_deep_statistics,
+    discover_dataset_bundle_candidates,
+    inspect_dataset_bundle,
+    prepare_dataset_bundle_export,
     preview_qh_batch,
 )
-from ...dataset_topology import discover_vin_store_dirs
-from ...rollouts.inspection import discover_rollout_store_paths
 from ._stored_rollouts.shared import ExplanationSection, ScientificExplanation
 from ._stored_rollouts.shared import plot_control_key as _plot_control_key
 from ._stored_rollouts.shared import render_plot as _render_plot
@@ -43,80 +47,14 @@ _QH_READINESS_STATE_KEY = "training_dataset_qh_readiness"
 _QH_PREVIEW_STATE_KEY = "training_dataset_qh_preview"
 _QH_BATCH_SIZE_KEY = "training_dataset_qh_batch_size"
 _QH_SEED_KEY = "training_dataset_qh_seed"
-_QH_READINESS_CONTRACT = QhReadinessContract("qh_cf0_v1", "evl_v1", "none")
+_QH_READINESS_CONTRACT = QhReadinessContract("qh_cf0_v1", "evl_v1", "none", "qh_dense_valid_fitted_q_v1")
 
-ArtifactEntryIdentity = tuple[str, int, int, int, int]
-QhReadinessIdentity = tuple[tuple[Any, ...], int, int]
-QhPreviewIdentity = tuple[tuple[Any, ...], str, int, int, int]
-
-
-def _artifact_identity(path: Path) -> tuple[ArtifactEntryIdentity, ...]:
-    """Return a bounded cache key for persisted artifact metadata.
-
-    Immutable payload chunks are intentionally excluded: the lightweight page
-    keys manifests, promotion sidecars, root Zarr metadata, and split indexes
-    without recursively statting every store file. Directory and metadata
-    entries use ``lstat`` identity (including inode and ctime), so an atomic
-    same-path replacement invalidates cached readiness even when replacement
-    bytes happen to have the same size and mtime. Metadata that disappears
-    during this cache-key snapshot is omitted; the subsequent evidence read
-    still reports an unreadable or incomplete store explicitly.
-    """
-
-    resolved = path.expanduser().resolve()
-    if resolved.is_file():
-        candidates = (resolved,)
-    elif resolved.exists():
-        metadata_names = (
-            "manifest.json",
-            "_SUCCESS.json",
-            "_owner.json",
-            "sample_index.jsonl",
-            ".zattrs",
-            ".zgroup",
-            ".zarray",
-            "zarr.json",
-        )
-        direct = [resolved / name for name in metadata_names]
-        marker_names = {"_SUCCESS.json", "_owner.json"}
-        direct = [child for child in direct if _metadata_entry_present(child, marker=child.name in marker_names)]
-        split_metadata = list((resolved / "splits").glob("*.npy"))
-        candidates = (resolved, *direct, *[child for child in split_metadata if child.is_file()])
-    else:
-        candidates = ()
-    rows: list[ArtifactEntryIdentity] = []
-    for child in sorted(candidates, key=lambda item: item.as_posix()):
-        try:
-            stat = child.lstat()
-        except OSError:
-            continue
-        rows.append((child.as_posix(), stat.st_mtime_ns, stat.st_size, stat.st_ctime_ns, stat.st_ino))
-    return tuple(rows)
-
-
-def _metadata_entry_present(path: Path, *, marker: bool = False) -> bool:
-    """Return bounded metadata membership without following marker symlinks."""
-
-    try:
-        entry = path.lstat()
-    except OSError:
-        return False
-    return marker or stat.S_ISREG(entry.st_mode)
-
-
-def _selection_cache_key(selection: DatasetBundleSelection) -> tuple[Any, ...]:
-    """Return the session-result key for one immutable bundle snapshot."""
-
-    return (
-        selection.root_store.as_posix(),
-        tuple(path.as_posix() for path in selection.rollout_stores),
-        _artifact_identity(selection.root_store),
-        tuple(_artifact_identity(path) for path in selection.rollout_stores),
-    )
+QhReadinessIdentity = tuple[str, int, int]
+QhPreviewIdentity = tuple[str, str, int, int, int]
 
 
 def _qh_preview_identity(
-    selection_identity: tuple[Any, ...],
+    generation_digest: str,
     *,
     stage: str,
     chain_index: int,
@@ -125,68 +63,84 @@ def _qh_preview_identity(
 ) -> QhPreviewIdentity:
     """Return the exact selection and controls that produced one preview."""
 
-    return (selection_identity, stage, chain_index, batch_size, seed)
+    return (generation_digest, stage, chain_index, batch_size, seed)
 
 
 def _qh_readiness_identity(
-    selection_identity: tuple[Any, ...],
+    generation_digest: str,
     *,
     batch_size: int,
     seed: int,
 ) -> QhReadinessIdentity:
     """Return the exact selection and loader controls that produced readiness."""
 
-    return (selection_identity, batch_size, seed)
+    return (generation_digest, batch_size, seed)
 
 
 def _qh_readiness_for_identity(
-    readiness_state: tuple[QhReadinessIdentity, QhCorpusReadiness] | None,
+    readiness_state: Any,
     identity: QhReadinessIdentity,
 ) -> QhCorpusReadiness | None:
     """Return readiness evidence only when its selection and loader controls match."""
 
-    return readiness_state[1] if readiness_state is not None and readiness_state[0] == identity else None
+    if not isinstance(readiness_state, tuple) or len(readiness_state) != 2 or readiness_state[0] != identity:
+        return None
+    return readiness_state[1] if isinstance(readiness_state[1], QhCorpusReadiness) else None
 
 
 def _qh_preview_for_identity(
-    preview_state: tuple[QhPreviewIdentity, QhBatchPreview] | None,
+    preview_state: Any,
     identity: QhPreviewIdentity,
 ) -> QhBatchPreview | None:
     """Return preview evidence only when its selection and controls still match."""
 
-    return preview_state[1] if preview_state is not None and preview_state[0] == identity else None
+    if not isinstance(preview_state, tuple) or len(preview_state) != 2 or preview_state[0] != identity:
+        return None
+    return preview_state[1] if isinstance(preview_state[1], QhBatchPreview) else None
+
+
+def _retained_bundle_evidence(state: Any, identity: str) -> DatasetBundleEvidence | None:
+    """Reject stale or malformed page-local lightweight evidence."""
+
+    if not isinstance(state, tuple) or len(state) != 2 or state[0] != identity:
+        return None
+    return state[1] if isinstance(state[1], DatasetBundleEvidence) else None
+
+
+def _retained_deep_statistics(state: Any, identity: str) -> dict[str, Any] | None:
+    """Reject stale or malformed page-local deep evidence."""
+
+    if not isinstance(state, tuple) or len(state) != 2 or state[0] != identity:
+        return None
+    return state[1] if isinstance(state[1], dict) else None
 
 
 @st.cache_data(show_spinner="Inspecting manifests and indexes…", max_entries=32)
-def _cached_bundle_summary(
-    root_store: str,
-    rollout_stores: tuple[str, ...],
-    artifact_identity: tuple[Any, ...],
-    *,
-    validate_rollouts: bool,
+def _cached_bundle_summary_inner(
+    request: DatasetBundleSummaryRequest,
 ) -> DatasetBundleEvidence:
-    """Build lightweight or validated evidence for one artifact identity."""
+    """Cache one frozen summary product by its complete domain request."""
 
-    del artifact_identity
-    selection = DatasetBundleSelection(
-        Path(root_store),
-        tuple(Path(path) for path in rollout_stores),
-    )
-    return build_dataset_bundle_summary(
-        selection,
-        validate_rollouts=validate_rollouts,
-    )
+    return inspect_dataset_bundle(request)
+
+
+def _cached_bundle_summary(request: DatasetBundleSummaryRequest) -> DatasetBundleEvidence:
+    """Return summary evidence only while its request generation stays current."""
+
+    assert_dataset_bundle_generation_current(request.generation)
+    result = _cached_bundle_summary_inner(request)
+    assert_dataset_bundle_generation_current(request.generation)
+    return result
 
 
 @st.cache_data(show_spinner="Scanning rollout arrays and target identities…", max_entries=16)
-def _cached_deep_statistics(
+def _cached_deep_statistics_inner(
     root_store: str,
     rollout_stores: tuple[str, ...],
-    artifact_identity: tuple[Any, ...],
+    generation: DatasetBundleGeneration,
 ) -> dict[str, Any]:
-    """Return deep rollout statistics cached by immutable artifact identity."""
+    """Cache deep rollout statistics by immutable artifact identity."""
 
-    del artifact_identity
     selection = DatasetBundleSelection(
         Path(root_store),
         tuple(Path(path) for path in rollout_stores),
@@ -194,18 +148,30 @@ def _cached_deep_statistics(
     return compute_dataset_bundle_deep_statistics(selection)
 
 
-@st.cache_data(show_spinner="Constructing Q_H datasets and DataModule…", max_entries=8)
-def _cached_qh_readiness(
+def _cached_deep_statistics(
     root_store: str,
     rollout_stores: tuple[str, ...],
-    artifact_identity: tuple[Any, ...],
+    generation: DatasetBundleGeneration,
+) -> dict[str, Any]:
+    """Return cached deep evidence only while its generation stays current."""
+
+    assert_dataset_bundle_generation_current(generation)
+    result = _cached_deep_statistics_inner(root_store, rollout_stores, generation)
+    assert_dataset_bundle_generation_current(generation)
+    return result
+
+
+@st.cache_data(show_spinner="Constructing Q_H datasets and DataModule…", max_entries=8)
+def _cached_qh_readiness_inner(
+    root_store: str,
+    rollout_stores: tuple[str, ...],
+    generation: DatasetBundleGeneration,
     batch_size: int,
     seed: int,
     contract: QhReadinessContract,
 ) -> QhCorpusReadiness:
-    """Cross the real Q_H dataset/DataModule seam after explicit request."""
+    """Cache the explicit Q_H dataset/DataModule readiness product."""
 
-    del artifact_identity
     return build_qh_corpus_readiness(
         DatasetBundleSelection(Path(root_store), tuple(Path(path) for path in rollout_stores)),
         contract=contract,
@@ -214,20 +180,35 @@ def _cached_qh_readiness(
     )
 
 
-@st.cache_data(show_spinner="Reading one Q_H chain and collating one batch…", max_entries=8)
-def _cached_qh_preview(
+def _cached_qh_readiness(
     root_store: str,
     rollout_stores: tuple[str, ...],
-    artifact_identity: tuple[Any, ...],
+    generation: DatasetBundleGeneration,
+    batch_size: int,
+    seed: int,
+    contract: QhReadinessContract,
+) -> QhCorpusReadiness:
+    """Return cached Q_H readiness only while its generation stays current."""
+
+    assert_dataset_bundle_generation_current(generation)
+    result = _cached_qh_readiness_inner(root_store, rollout_stores, generation, batch_size, seed, contract)
+    assert_dataset_bundle_generation_current(generation)
+    return result
+
+
+@st.cache_data(show_spinner="Reading one Q_H chain and collating one batch…", max_entries=8)
+def _cached_qh_preview_inner(
+    root_store: str,
+    rollout_stores: tuple[str, ...],
+    generation: DatasetBundleGeneration,
     stage: str,
     chain_index: int,
     batch_size: int,
     seed: int,
     contract: QhReadinessContract,
 ) -> QhBatchPreview:
-    """Materialize one bounded chain and DataLoader batch after explicit request."""
+    """Cache one explicitly requested bounded chain and DataLoader batch."""
 
-    del artifact_identity
     return preview_qh_batch(
         DatasetBundleSelection(Path(root_store), tuple(Path(path) for path in rollout_stores)),
         contract=contract,
@@ -238,13 +219,46 @@ def _cached_qh_preview(
     )
 
 
+def _cached_qh_preview(
+    root_store: str,
+    rollout_stores: tuple[str, ...],
+    generation: DatasetBundleGeneration,
+    stage: str,
+    chain_index: int,
+    batch_size: int,
+    seed: int,
+    contract: QhReadinessContract,
+) -> QhBatchPreview:
+    """Return a cached Q_H preview only while its generation stays current."""
+
+    assert_dataset_bundle_generation_current(generation)
+    result = _cached_qh_preview_inner(
+        root_store,
+        rollout_stores,
+        generation,
+        stage,
+        chain_index,
+        batch_size,
+        seed,
+        contract,
+    )
+    assert_dataset_bundle_generation_current(generation)
+    return result
+
+
 def _clear_training_dataset_caches() -> None:
     """Clear this page's cached read models and selection-bound session results."""
 
-    _cached_bundle_summary.clear()
-    _cached_deep_statistics.clear()
-    _cached_qh_readiness.clear()
-    _cached_qh_preview.clear()
+    _cached_bundle_summary_inner.clear()
+    _cached_deep_statistics_inner.clear()
+    _cached_qh_readiness_inner.clear()
+    _cached_qh_preview_inner.clear()
+    _clear_training_dataset_results()
+
+
+def _clear_training_dataset_results() -> None:
+    """Drop every selection-bound result retained by this page."""
+
     for key in (
         _VALIDATED_STATE_KEY,
         _DEEP_STATE_KEY,
@@ -252,6 +266,18 @@ def _clear_training_dataset_caches() -> None:
         _QH_PREVIEW_STATE_KEY,
     ):
         st.session_state.pop(key, None)
+
+
+def _render_acquisition_failure(label: str, exc: Exception, *, action: str) -> None:
+    """Render expected acquisition failures concisely and retain unexpected diagnostics."""
+
+    if not isinstance(exc, (DatasetBundleGenerationChangedError, OSError, ValueError)):
+        st.exception(exc)
+        return
+    detail = str(exc).strip().splitlines()[0] if str(exc).strip() else "No diagnostic detail was provided."
+    if len(detail) > 240:
+        detail = f"{detail[:237]}..."
+    st.error(f"{label} failed. {action} Detail: {detail}")
 
 
 def _clear_qh_results_for_control_change() -> None:
@@ -574,7 +600,8 @@ def _render_store_attribution(evidence: DatasetBundleEvidence) -> None:
             root_findings.append({"code": finding.code, "message": finding.message, "severity": finding.severity})
     binding_rows: list[dict[str, Any]] = []
     status_rows: list[dict[str, str]] = []
-    for row in evidence.rollouts:
+    for frozen_row in evidence.rollouts:
+        row = frozen_row.to_jsonable()
         path = str(row["path"])
         included = bool(row.get("included_in_training_totals"))
         status = "Compatible" if included else "Excluded"
@@ -688,7 +715,8 @@ def _rollout_rows(evidence: DatasetBundleEvidence) -> list[dict[str, Any]]:
     """Project compatibility, schema, profile, split, and count evidence."""
 
     rows: list[dict[str, Any]] = []
-    for row in evidence.rollouts:
+    for frozen_row in evidence.rollouts:
+        row = frozen_row.to_jsonable()
         counts = row.get("counts", {})
         rows.append(
             {
@@ -717,13 +745,9 @@ def _download_payload(
     qh_readiness: QhCorpusReadiness | None = None,
     qh_preview: QhBatchPreview | None = None,
 ) -> bytes:
-    """Serialize deterministic, complete bundle evidence for download."""
+    """Delegate export preparation to the dataset owner."""
 
-    payload = evidence.to_jsonable()
-    payload["deep_statistics"] = deep
-    payload["q_h_readiness"] = None if qh_readiness is None else qh_readiness.to_jsonable()
-    payload["q_h_batch_preview"] = None if qh_preview is None else qh_preview.to_jsonable()
-    return (json.dumps(payload, indent=2, sort_keys=True) + "\n").encode("utf-8")
+    return prepare_dataset_bundle_export(evidence, deep, qh_readiness, qh_preview)
 
 
 def render_training_dataset_page() -> None:  # pragma: no cover - Streamlit UI
@@ -734,24 +758,21 @@ def render_training_dataset_page() -> None:  # pragma: no cover - Streamlit UI
         "Compose one immutable VIN root observation store with explicit rollout supervision stores, "
         "then audit whether the resulting Q_H training bundle is usable."
     )
-    from ._stored_rollouts.session import clear_rollout_page_caches
-
     if st.button(
         "Refresh rollout caches",
         help="Clear cached rollout and training-bundle read models after creating or replacing an artifact.",
     ):
-        clear_rollout_page_caches()
+        _clear_training_dataset_caches()
         st.rerun()
 
     paths = PathConfig()
-    discovered_roots = discover_vin_store_dirs(paths.offline_cache_dir)
-    discovered_rollouts = discover_rollout_store_paths(paths.offline_cache_dir)
+    discovery = discover_dataset_bundle_candidates(paths.offline_cache_dir)
     with st.expander("Bundle selection", expanded=True):
-        root_store = _select_root_store(discovered_roots)
-        rollout_stores = _select_rollout_stores(discovered_rollouts)
+        root_store = _select_root_store(list(discovery.root_stores))
+        rollout_stores = _select_rollout_stores(list(discovery.rollout_stores))
         st.caption(
-            f"Discovered {len(discovered_roots)} VIN root store(s) and "
-            f"{len(discovered_rollouts)} rollout store candidate(s) below {paths.offline_cache_dir}."
+            f"Discovered {len(discovery.root_stores)} VIN root store(s) and "
+            f"{len(discovery.rollout_stores)} rollout store candidate(s) below {paths.offline_cache_dir}."
         )
 
     if root_store is None:
@@ -763,35 +784,58 @@ def render_training_dataset_page() -> None:  # pragma: no cover - Streamlit UI
         return
 
     try:
-        selection = DatasetBundleSelection(root_store, rollout_stores)
+        selection, generation = capture_dataset_bundle_generation(root_store, rollout_stores)
     except ValueError as exc:
         st.error(str(exc))
         return
-    identity = _selection_cache_key(selection)
+    identity = generation.generation_digest
     root_text = selection.root_store.as_posix()
     rollout_texts = tuple(path.as_posix() for path in selection.rollout_stores)
-    light = _cached_bundle_summary(
-        root_text,
-        rollout_texts,
-        identity,
-        validate_rollouts=False,
-    )
+    try:
+        light = _cached_bundle_summary(
+            DatasetBundleSummaryRequest(
+                selection=selection,
+                generation=generation,
+                validate_rollouts=False,
+            )
+        )
+    except Exception as exc:
+        _clear_training_dataset_results()
+        _render_acquisition_failure(
+            "Bundle summary",
+            exc,
+            action="Refresh the rollout caches, then reselect the root and rollout stores.",
+        )
+        return
 
     validate = st.button("Validate bundle", type="primary", width="stretch")
     if validate:
-        st.session_state[_VALIDATED_STATE_KEY] = (
-            identity,
-            _cached_bundle_summary(
-                root_text,
-                rollout_texts,
-                identity,
-                validate_rollouts=True,
-            ),
-        )
+        st.session_state.pop(_VALIDATED_STATE_KEY, None)
+        try:
+            validated = _cached_bundle_summary(
+                DatasetBundleSummaryRequest(
+                    selection=selection,
+                    generation=generation,
+                    validate_rollouts=True,
+                )
+            )
+        except Exception as exc:
+            _render_acquisition_failure(
+                "Bundle validation",
+                exc,
+                action="Refresh the rollout caches and run validation again.",
+            )
+        else:
+            st.session_state[_VALIDATED_STATE_KEY] = (identity, validated)
     validated_state = st.session_state.get(_VALIDATED_STATE_KEY)
-    evidence = validated_state[1] if validated_state and validated_state[0] == identity else light
+    retained_evidence = _retained_bundle_evidence(validated_state, identity)
+    if validated_state is not None and retained_evidence is None:
+        st.session_state.pop(_VALIDATED_STATE_KEY, None)
+    evidence = retained_evidence or light
     deep_state = st.session_state.get(_DEEP_STATE_KEY)
-    deep = deep_state[1] if deep_state and deep_state[0] == identity else None
+    deep = _retained_deep_statistics(deep_state, identity)
+    if deep_state is not None and deep is None:
+        st.session_state.pop(_DEEP_STATE_KEY, None)
     qh_readiness: QhCorpusReadiness | None = None
     qh_preview: QhBatchPreview | None = None
 
@@ -801,11 +845,14 @@ def render_training_dataset_page() -> None:  # pragma: no cover - Streamlit UI
     readiness_tab, qh_tab, details_tab = st.tabs(["Readiness", "Q_H corpus", "Details"])
     with readiness_tab:
         st.subheader("Bundle readiness")
-        root_samples = sum(int(value) for value in evidence.root.get("split_counts", {}).values())
-        included_rollouts = [row for row in evidence.rollouts if bool(row.get("included_in_training_totals"))]
+        root_payload = evidence.root.to_jsonable()
+        split_counts = cast(dict[str, int], root_payload.get("split_counts", {}))
+        root_samples = evidence.root.get("sample_count")
+        rollout_payloads = [row.to_jsonable() for row in evidence.rollouts]
+        included_rollouts = [row for row in rollout_payloads if bool(row.get("included_in_training_totals"))]
         rollout_counts = [row.get("counts", {}) for row in included_rollouts]
         summary_columns = st.columns(5)
-        summary_columns[0].metric("Root samples", f"{root_samples:,}")
+        summary_columns[0].metric("Root samples", _metric_value(root_samples))
         summary_columns[1].metric("Compatible rollout stores", f"{len(included_rollouts)} / {len(evidence.rollouts)}")
         summary_columns[2].metric(
             "Rollouts", _metric_value(sum(int(count.get("rollouts", 0)) for count in rollout_counts))
@@ -818,10 +865,7 @@ def render_training_dataset_page() -> None:  # pragma: no cover - Streamlit UI
         )
         with st.expander("Root splits and selected-store details", expanded=False):
             st.subheader("Root splits")
-            split_rows = [
-                {"split": split, "samples": count}
-                for split, count in sorted(evidence.root.get("split_counts", {}).items())
-            ]
+            split_rows = [{"split": split, "samples": count} for split, count in sorted(split_counts.items())]
             st.dataframe(pd.DataFrame(split_rows), hide_index=True, width="stretch")
             st.subheader("Selected rollout stores")
             rollout_rows = _rollout_rows(evidence)
@@ -866,18 +910,31 @@ def render_training_dataset_page() -> None:  # pragma: no cover - Streamlit UI
         readiness_identity = _qh_readiness_identity(identity, batch_size=batch_size, seed=seed)
         qh_state = st.session_state.get(_QH_READINESS_STATE_KEY)
         qh_readiness = _qh_readiness_for_identity(qh_state, readiness_identity)
-        if controls[2].button("Preflight Q_H corpus", type="primary", width="stretch"):
-            qh_readiness = _cached_qh_readiness(
-                root_text,
-                rollout_texts,
-                identity,
-                batch_size,
-                seed,
-                _QH_READINESS_CONTRACT,
-            )
-            st.session_state[_QH_READINESS_STATE_KEY] = (readiness_identity, qh_readiness)
+        if qh_state is not None and qh_readiness is None:
+            st.session_state.pop(_QH_READINESS_STATE_KEY, None)
             st.session_state.pop(_QH_PREVIEW_STATE_KEY, None)
+        if controls[2].button("Preflight Q_H corpus", type="primary", width="stretch"):
+            st.session_state.pop(_QH_READINESS_STATE_KEY, None)
+            st.session_state.pop(_QH_PREVIEW_STATE_KEY, None)
+            qh_readiness = None
             qh_preview = None
+            try:
+                qh_readiness = _cached_qh_readiness(
+                    root_text,
+                    rollout_texts,
+                    generation,
+                    batch_size,
+                    seed,
+                    _QH_READINESS_CONTRACT,
+                )
+            except Exception as exc:
+                _render_acquisition_failure(
+                    "Q_H corpus preflight",
+                    exc,
+                    action="Verify the selected stores and loader controls, then run the preflight again.",
+                )
+            else:
+                st.session_state[_QH_READINESS_STATE_KEY] = (readiness_identity, qh_readiness)
         if qh_readiness is None:
             st.info("Run the preflight to prove stage admission, joins, DataModule construction, and factual counts.")
         else:
@@ -930,12 +987,16 @@ def render_training_dataset_page() -> None:  # pragma: no cover - Streamlit UI
                 )
                 preview_state = st.session_state.get(_QH_PREVIEW_STATE_KEY)
                 qh_preview = _qh_preview_for_identity(preview_state, preview_identity)
+                if preview_state is not None and qh_preview is None:
+                    st.session_state.pop(_QH_PREVIEW_STATE_KEY, None)
                 if preview_controls[2].button("Preview one chain and batch", width="stretch"):
+                    st.session_state.pop(_QH_PREVIEW_STATE_KEY, None)
+                    qh_preview = None
                     try:
                         qh_preview = _cached_qh_preview(
                             root_text,
                             rollout_texts,
-                            identity,
+                            generation,
                             preview_stage,
                             preview_index,
                             batch_size,
@@ -943,7 +1004,11 @@ def render_training_dataset_page() -> None:  # pragma: no cover - Streamlit UI
                             _QH_READINESS_CONTRACT,
                         )
                     except Exception as exc:
-                        st.error(f"Q_H preview failed: {type(exc).__name__}: {exc}")
+                        _render_acquisition_failure(
+                            "Q_H preview",
+                            exc,
+                            action="Verify the selected stage and chain index, then run the preview again.",
+                        )
                     else:
                         st.session_state[_QH_PREVIEW_STATE_KEY] = (preview_identity, qh_preview)
             if qh_preview is not None:
@@ -964,8 +1029,18 @@ def render_training_dataset_page() -> None:  # pragma: no cover - Streamlit UI
                 )
     with details_tab:
         if st.button("Deep statistics / target scan", width="stretch"):
-            deep = _cached_deep_statistics(root_text, rollout_texts, identity)
-            st.session_state[_DEEP_STATE_KEY] = (identity, deep)
+            st.session_state.pop(_DEEP_STATE_KEY, None)
+            deep = None
+            try:
+                deep = _cached_deep_statistics(root_text, rollout_texts, generation)
+            except Exception as exc:
+                _render_acquisition_failure(
+                    "Deep statistics scan",
+                    exc,
+                    action="Refresh the rollout caches, verify the selected stores, and run the scan again.",
+                )
+            else:
+                st.session_state[_DEEP_STATE_KEY] = (identity, deep)
         if deep is None:
             st.info("Run the deep scan to materialize target and candidate denominators.")
         root_target_scan = deep.get("root_gt_obb_target_opportunities", {}) if deep is not None else {}

@@ -10,32 +10,40 @@ scan. Neither path repairs, migrates, or writes a store.
 
 from __future__ import annotations
 
+import io
 import json
+import os
+import stat
 from collections import Counter
+from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass, fields
+from hashlib import sha256
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Literal, TypeAlias, cast, overload
 
 import msgspec
 import numpy as np
 
 from .data_handling.identifiers import compact_ase_atek_sample_id
-from .data_handling.qh_data.views import (
+from .data_handling.qh_contracts import (
     QhExperimentProfile,
     QhRootEvlProfile,
     QhSelectedObservationProtocol,
     validate_experiment_profile,
 )
+from .data_handling.qh_data.batching import QhObjectiveProfile
 from .data_handling.vin_store.format import VinOfflineIndexRecord, VinOfflineManifest
 from .data_handling.vin_store.store import OFFLINE_DATASET_VERSION, VinOfflineStoreConfig, VinOfflineStoreReader
 from .data_handling.vin_store.target_inventory import inspect_target_inventory
+from .dataset_topology import discover_vin_store_dirs
+from .oracle.pipelines.shard_promotion import promotion_metadata_validation_error, read_promotion_marker_json
 from .rollouts.inspection import (
     build_effective_streamlit_trust,
     build_manifest_facts,
     build_promotion_evidence,
     build_schema_validation,
+    discover_rollout_store_paths,
 )
-from .rollouts.manifest import read_rollout_store_manifest
 from .rollouts.zarr_store import ROLLOUT_ZARR_SCHEMA_VERSION, RolloutZarrStoreReader
 from .utils import Stage
 from .utils.fingerprints import stable_msgspec_hash
@@ -45,6 +53,163 @@ DatasetBundleVerdict = Literal["Ready", "Incomplete", "Blocked"]
 
 FindingSeverity = Literal["blocking", "incomplete", "information"]
 """Effect of one bundle finding on the aggregate readiness verdict."""
+
+GenerationEntryStatus = Literal["present", "missing", "broken_alias"]
+"""Resolution state of one selected filesystem entry."""
+
+AuthoritativeFieldStatus = Literal[
+    "present",
+    "missing_file",
+    "invalid_json",
+    "missing_field",
+    "invalid_type",
+    "unreadable",
+    "oversized",
+]
+"""Parse state of one bounded authoritative JSON field."""
+
+JsonScalar: TypeAlias = None | bool | int | float | str
+
+_MAX_SMALL_SIDECAR_JSON_BYTES = 1_048_576
+_REGULAR_FILE_READ_CHUNK_BYTES = 1_048_576
+_ROOT_AUTHORITATIVE_FIELDS = (("manifest.json", "version", "int"),)
+_ROLLOUT_AUTHORITATIVE_FIELDS = (
+    ("manifest.json", "manifest_version", "str"),
+    ("manifest.json", "schema_version", "str"),
+    ("_SUCCESS.json", "rollout_store_content_sha256", "str"),
+    ("_owner.json", "rollout_store_content_sha256", "str"),
+)
+
+
+@dataclass(frozen=True, slots=True)
+class FrozenJsonArray(Sequence["FrozenJsonValue"]):
+    """Immutable recursively typed JSON array."""
+
+    values: tuple["FrozenJsonValue", ...]
+
+    @overload
+    def __getitem__(self, index: int) -> "FrozenJsonValue": ...
+
+    @overload
+    def __getitem__(self, index: slice) -> tuple["FrozenJsonValue", ...]: ...
+
+    def __getitem__(self, index: int | slice) -> "FrozenJsonValue | tuple[FrozenJsonValue, ...]":
+        return self.values[index]
+
+    def __len__(self) -> int:
+        return len(self.values)
+
+    def to_jsonable(self) -> list[Any]:
+        """Return a fresh mutable JSON projection."""
+
+        return [_thaw_json(value) for value in self.values]
+
+
+@dataclass(frozen=True, slots=True)
+class FrozenJsonObject(Mapping[str, "FrozenJsonValue"]):
+    """Immutable recursively typed JSON object with deterministic ordering."""
+
+    entries: tuple[tuple[str, "FrozenJsonValue"], ...]
+
+    def __getitem__(self, key: str) -> "FrozenJsonValue":
+        for candidate, value in self.entries:
+            if candidate == key:
+                return value
+        raise KeyError(key)
+
+    def __iter__(self) -> Iterator[str]:
+        return (key for key, _value in self.entries)
+
+    def __len__(self) -> int:
+        return len(self.entries)
+
+    def to_jsonable(self) -> dict[str, Any]:
+        """Return a fresh mutable JSON projection."""
+
+        return {key: _thaw_json(value) for key, value in self.entries}
+
+
+FrozenJsonValue: TypeAlias = JsonScalar | FrozenJsonArray | FrozenJsonObject
+
+
+@dataclass(frozen=True, slots=True)
+class DatasetBundleAuthoritativeField:
+    """One separately parsed seal or version used by generation identity."""
+
+    relative_name: str
+    field_name: str
+    status: AuthoritativeFieldStatus
+    value: int | str | None
+
+
+@dataclass(frozen=True, slots=True)
+class DatasetBundleEntryFingerprint:
+    """Bounded selected-entry and authoritative-metadata identity."""
+
+    selected_entry: Path
+    entry_status: GenerationEntryStatus
+    entry_kind: str | None
+    symlink_target: str | None
+    inode: int | None
+    ctime_ns: int | None
+    mtime_ns: int | None
+    size: int | None
+    canonical_target: Path | None
+    metadata: tuple[tuple[str, str, str | None, int, int, int, int, int | None, int | None, int | None], ...]
+    authoritative_fields: tuple[DatasetBundleAuthoritativeField, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class DatasetBundleGeneration:
+    """Versioned replacement-sensitive identity for one selected bundle."""
+
+    identity_version: Literal["dataset-bundle-generation-v1"]
+    root: DatasetBundleEntryFingerprint
+    rollouts: tuple[DatasetBundleEntryFingerprint, ...]
+    generation_digest: str
+
+
+class DatasetBundleGenerationChangedError(RuntimeError):
+    """Raised when selected bundle entries change during acquisition."""
+
+    def __init__(self, expected: DatasetBundleGeneration, observed: DatasetBundleGeneration) -> None:
+        self.expected = expected
+        self.observed = observed
+        expected_entries = (expected.root, *expected.rollouts)
+        observed_entries = (observed.root, *observed.rollouts)
+        paths = "; ".join(
+            f"expected_selected={left.selected_entry.as_posix()} "
+            f"expected_canonical={_path_text(left.canonical_target)} "
+            f"observed_selected={right.selected_entry.as_posix()} "
+            f"observed_canonical={_path_text(right.canonical_target)}"
+            for left, right in zip(expected_entries, observed_entries, strict=False)
+        )
+        super().__init__(
+            "Dataset bundle generation changed: "
+            f"expected_identity_version={expected.identity_version} "
+            f"expected_generation_digest={expected.generation_digest}; "
+            f"observed_identity_version={observed.identity_version} "
+            f"observed_generation_digest={observed.generation_digest}; "
+            f"{paths}"
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class DatasetBundleDiscovery:
+    """Bounded filenames-only candidates for the Training Dataset page."""
+
+    root_stores: tuple[Path, ...]
+    rollout_stores: tuple[Path, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class DatasetBundleSummaryRequest:
+    """Complete cache request for lightweight or validated bundle evidence."""
+
+    selection: "DatasetBundleSelection"
+    generation: DatasetBundleGeneration
+    coral_artifact_roots: tuple[Path, ...] = ()
+    validate_rollouts: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -69,6 +234,361 @@ class DatasetBundleSelection:
             raise ValueError("The VIN root store cannot also be selected as a rollout store.")
         object.__setattr__(self, "root_store", root)
         object.__setattr__(self, "rollout_stores", rollouts)
+
+
+def discover_dataset_bundle_candidates(cache_root: Path) -> DatasetBundleDiscovery:
+    """Discover filenames-only root and rollout candidates below ``cache_root``."""
+
+    return DatasetBundleDiscovery(
+        root_stores=tuple(discover_vin_store_dirs(cache_root)),
+        rollout_stores=tuple(discover_rollout_store_paths(cache_root)),
+    )
+
+
+def capture_dataset_bundle_generation(
+    root_entry: Path,
+    rollout_entries: tuple[Path, ...],
+) -> tuple[DatasetBundleSelection, DatasetBundleGeneration]:
+    """Capture selected entries before resolving the canonical bundle selection.
+
+    The bounded fingerprint includes selected-entry ``lstat`` identity and only
+    authoritative root metadata. Payload chunks are never enumerated. Rollout
+    membership is canonicalized by absolute selected-entry path because its
+    input order has no scientific meaning.
+    """
+
+    root_selected = _absolute_selected_entry(root_entry)
+    rollout_selected = tuple(
+        sorted(
+            {_absolute_selected_entry(path) for path in rollout_entries},
+            key=lambda path: path.as_posix(),
+        )
+    )
+    generation = _capture_dataset_bundle_generation_value(root_selected, rollout_selected)
+    return _selection_from_generation(generation), generation
+
+
+def _capture_dataset_bundle_generation_value(
+    root_selected: Path,
+    rollout_selected: tuple[Path, ...],
+) -> DatasetBundleGeneration:
+    """Fingerprint a bundle without applying semantic selection validation."""
+
+    root = _capture_bundle_entry(root_selected, _ROOT_AUTHORITATIVE_FIELDS)
+    rollouts = tuple(_capture_bundle_entry(path, _ROLLOUT_AUTHORITATIVE_FIELDS) for path in rollout_selected)
+    payload = {
+        "root": _generation_entry_json(root),
+        "rollouts": [_generation_entry_json(entry) for entry in rollouts],
+    }
+    identity_version: Literal["dataset-bundle-generation-v1"] = "dataset-bundle-generation-v1"
+    canonical_json = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    digest = sha256(f"{identity_version}\n{canonical_json}".encode()).hexdigest()
+    return DatasetBundleGeneration(identity_version, root, rollouts, digest)
+
+
+def _selection_from_generation(generation: DatasetBundleGeneration) -> DatasetBundleSelection:
+    return DatasetBundleSelection(
+        generation.root.canonical_target or generation.root.selected_entry,
+        tuple(entry.canonical_target or entry.selected_entry for entry in generation.rollouts),
+    )
+
+
+def assert_dataset_bundle_generation_current(generation: DatasetBundleGeneration) -> None:
+    """Raise when any selected entry or bounded authoritative metadata changed."""
+
+    observed = _capture_dataset_bundle_generation_value(
+        _absolute_selected_entry(generation.root.selected_entry),
+        tuple(_absolute_selected_entry(entry.selected_entry) for entry in generation.rollouts),
+    )
+    if observed.generation_digest != generation.generation_digest:
+        raise DatasetBundleGenerationChangedError(generation, observed)
+
+
+def _absolute_selected_entry(path: Path) -> Path:
+    return Path(os.path.abspath(Path(path).expanduser()))
+
+
+def _capture_bundle_entry(
+    selected_entry: Path,
+    authoritative_specs: tuple[tuple[str, str, str], ...],
+) -> DatasetBundleEntryFingerprint:
+    try:
+        entry = selected_entry.lstat()
+    except OSError:
+        return DatasetBundleEntryFingerprint(
+            selected_entry,
+            "missing",
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            (),
+            _missing_authoritative_fields(authoritative_specs),
+        )
+    entry_kind = _entry_kind(entry.st_mode)
+    symlink_target = os.readlink(selected_entry) if stat.S_ISLNK(entry.st_mode) else None
+    try:
+        canonical_target = selected_entry.resolve(strict=True)
+    except OSError:
+        status: GenerationEntryStatus = "broken_alias" if symlink_target is not None else "missing"
+        canonical_target = None
+    else:
+        status = "present"
+    metadata = () if canonical_target is None else _bounded_metadata_fingerprints(canonical_target)
+    authoritative_fields = (
+        _missing_authoritative_fields(authoritative_specs)
+        if canonical_target is None
+        else _parse_authoritative_fields(canonical_target, authoritative_specs)
+    )
+    return DatasetBundleEntryFingerprint(
+        selected_entry=selected_entry,
+        entry_status=status,
+        entry_kind=entry_kind,
+        symlink_target=symlink_target,
+        inode=entry.st_ino,
+        ctime_ns=entry.st_ctime_ns,
+        mtime_ns=entry.st_mtime_ns,
+        size=entry.st_size,
+        canonical_target=canonical_target,
+        metadata=metadata,
+        authoritative_fields=authoritative_fields,
+    )
+
+
+def _missing_authoritative_fields(
+    specs: tuple[tuple[str, str, str], ...],
+) -> tuple[DatasetBundleAuthoritativeField, ...]:
+    return tuple(
+        DatasetBundleAuthoritativeField(relative_name, field_name, "missing_file", None)
+        for relative_name, field_name, _expected_type in specs
+    )
+
+
+def _parse_authoritative_fields(
+    root: Path,
+    specs: tuple[tuple[str, str, str], ...],
+) -> tuple[DatasetBundleAuthoritativeField, ...]:
+    documents: dict[str, tuple[AuthoritativeFieldStatus, Mapping[str, Any] | None]] = {}
+    rows: list[DatasetBundleAuthoritativeField] = []
+    for relative_name, field_name, expected_type in specs:
+        if relative_name not in documents:
+            documents[relative_name] = _read_bounded_json_object(root / relative_name)
+        document_status, document = documents[relative_name]
+        if document is None:
+            rows.append(DatasetBundleAuthoritativeField(relative_name, field_name, document_status, None))
+            continue
+        if field_name not in document:
+            rows.append(DatasetBundleAuthoritativeField(relative_name, field_name, "missing_field", None))
+            continue
+        value = document[field_name]
+        if not _matches_authoritative_type(value, expected_type):
+            rows.append(DatasetBundleAuthoritativeField(relative_name, field_name, "invalid_type", None))
+            continue
+        rows.append(DatasetBundleAuthoritativeField(relative_name, field_name, "present", cast(int | str, value)))
+    return tuple(rows)
+
+
+def _read_bounded_regular_file(
+    path: Path,
+    *,
+    max_bytes: int = _MAX_SMALL_SIDECAR_JSON_BYTES,
+) -> tuple[AuthoritativeFieldStatus, bytes | None]:
+    """Read one bounded regular file without blocking on special entries."""
+
+    descriptor: int | None = None
+    try:
+        descriptor = os.open(path, os.O_RDONLY | os.O_NONBLOCK)
+        if not stat.S_ISREG(os.fstat(descriptor).st_mode):
+            return "unreadable", None
+        chunks: list[bytes] = []
+        remaining = max_bytes + 1
+        while remaining:
+            chunk = os.read(descriptor, remaining)
+            if not chunk:
+                break
+            chunks.append(chunk)
+            remaining -= len(chunk)
+    except FileNotFoundError:
+        return "missing_file", None
+    except OSError:
+        return "unreadable", None
+    finally:
+        if descriptor is not None:
+            os.close(descriptor)
+    payload = b"".join(chunks)
+    if len(payload) > max_bytes:
+        return "oversized", None
+    return "present", payload
+
+
+def _read_regular_file(path: Path) -> tuple[AuthoritativeFieldStatus, bytes | None]:
+    """Read a regular file in chunks without blocking on special entries."""
+
+    descriptor: int | None = None
+    try:
+        descriptor = os.open(path, os.O_RDONLY | os.O_NONBLOCK)
+        if not stat.S_ISREG(os.fstat(descriptor).st_mode):
+            return "unreadable", None
+        chunks: list[bytes] = []
+        while chunk := os.read(descriptor, _REGULAR_FILE_READ_CHUNK_BYTES):
+            chunks.append(chunk)
+    except FileNotFoundError:
+        return "missing_file", None
+    except OSError:
+        return "unreadable", None
+    finally:
+        if descriptor is not None:
+            os.close(descriptor)
+    return "present", b"".join(chunks)
+
+
+def _read_json_object(path: Path) -> tuple[AuthoritativeFieldStatus, Mapping[str, Any] | None]:
+    """Read a regular JSON object without imposing a production-size cap."""
+
+    status, payload = _read_regular_file(path)
+    if payload is None:
+        return status, None
+    try:
+        decoded = json.loads(payload)
+    except (UnicodeDecodeError, json.JSONDecodeError, RecursionError):
+        return "invalid_json", None
+    if not isinstance(decoded, Mapping):
+        return "invalid_json", None
+    return "present", cast(Mapping[str, Any], decoded)
+
+
+def _read_bounded_json_object(
+    path: Path,
+    *,
+    max_bytes: int = _MAX_SMALL_SIDECAR_JSON_BYTES,
+) -> tuple[AuthoritativeFieldStatus, Mapping[str, Any] | None]:
+    status, payload = _read_bounded_regular_file(path, max_bytes=max_bytes)
+    if payload is None:
+        return status, None
+    try:
+        decoded = json.loads(payload)
+    except (UnicodeDecodeError, json.JSONDecodeError, RecursionError):
+        return "invalid_json", None
+    if not isinstance(decoded, Mapping):
+        return "invalid_json", None
+    return "present", cast(Mapping[str, Any], decoded)
+
+
+def _matches_authoritative_type(value: Any, expected_type: str) -> bool:
+    if expected_type == "int":
+        return isinstance(value, int) and not isinstance(value, bool)
+    if expected_type == "str":
+        return isinstance(value, str)
+    raise AssertionError(f"unsupported authoritative field type: {expected_type}")
+
+
+def _bounded_metadata_fingerprints(
+    root: Path,
+) -> tuple[tuple[str, str, str | None, int, int, int, int, int | None, int | None, int | None], ...]:
+    candidates = [
+        root / "manifest.json",
+        root / "_SUCCESS.json",
+        root / "_owner.json",
+        root / "zarr.json",
+        root / ".zgroup",
+        root / ".zattrs",
+        root / "sample_index.jsonl",
+    ]
+    splits = root / "splits"
+    if splits.is_dir():
+        candidates.extend(splits.glob("*.npy"))
+    rows: list[tuple[str, str, str | None, int, int, int, int, int | None, int | None, int | None]] = []
+    for path in sorted(candidates, key=lambda candidate: candidate.relative_to(root).as_posix()):
+        try:
+            entry = path.lstat()
+        except OSError:
+            continue
+        relative_name = path.relative_to(root).as_posix()
+        target = os.readlink(path) if stat.S_ISLNK(entry.st_mode) else None
+        target_entry = _regular_file_target_stat(path) if stat.S_ISLNK(entry.st_mode) else None
+        rows.append(
+            (
+                relative_name,
+                _entry_kind(entry.st_mode),
+                target,
+                entry.st_ino,
+                entry.st_ctime_ns,
+                entry.st_mtime_ns,
+                entry.st_size,
+                None if target_entry is None else target_entry.st_ino,
+                None if target_entry is None else target_entry.st_ctime_ns,
+                None if target_entry is None else target_entry.st_mtime_ns,
+            )
+        )
+    return tuple(rows)
+
+
+def _regular_file_target_stat(path: Path) -> os.stat_result | None:
+    """Return a symlink target stat only after a nonblocking regular-file open."""
+
+    descriptor: int | None = None
+    try:
+        descriptor = os.open(path, os.O_RDONLY | os.O_NONBLOCK)
+        target = os.fstat(descriptor)
+        return target if stat.S_ISREG(target.st_mode) else None
+    except OSError:
+        return None
+    finally:
+        if descriptor is not None:
+            os.close(descriptor)
+
+
+def _entry_kind(mode: int) -> str:
+    if stat.S_ISLNK(mode):
+        return "symlink"
+    if stat.S_ISDIR(mode):
+        return "directory"
+    if stat.S_ISREG(mode):
+        return "file"
+    return "other"
+
+
+def _generation_entry_json(entry: DatasetBundleEntryFingerprint) -> dict[str, Any]:
+    return {
+        "selected_entry": entry.selected_entry.as_posix(),
+        "selected_entry_fingerprint": [
+            ".",
+            entry.entry_status,
+            entry.entry_kind,
+            entry.symlink_target,
+            entry.inode,
+            entry.ctime_ns,
+            entry.mtime_ns,
+            entry.size,
+        ],
+        "canonical_target": _path_text(entry.canonical_target),
+        "metadata": [list(row) for row in entry.metadata],
+        "authoritative_fields": [
+            {
+                "relative_name": field.relative_name,
+                "field_name": field.field_name,
+                "status": field.status,
+                "value": field.value,
+            }
+            for field in entry.authoritative_fields
+        ],
+    }
+
+
+def _generation_json(generation: DatasetBundleGeneration) -> dict[str, Any]:
+    return {
+        "identity_version": generation.identity_version,
+        "root": _generation_entry_json(generation.root),
+        "rollouts": [_generation_entry_json(entry) for entry in generation.rollouts],
+        "generation_digest": generation.generation_digest,
+    }
+
+
+def _path_text(path: Path | None) -> str | None:
+    return None if path is None else path.as_posix()
 
 
 @dataclass(frozen=True, slots=True)
@@ -105,22 +625,25 @@ class DatasetBundleEvidence:
     selection: DatasetBundleSelection
     """Normalized root and rollout selection."""
 
+    generation: DatasetBundleGeneration
+    """Selected-entry and canonical-target attribution for this acquisition."""
+
     verdict: DatasetBundleVerdict
     """Strict readiness verdict derived from :attr:`findings`."""
 
-    root: dict[str, Any]
+    root: FrozenJsonObject
     """VIN manifest, index, split, schema, and storage summary."""
 
-    rollouts: tuple[dict[str, Any], ...]
+    rollouts: tuple[FrozenJsonObject, ...]
     """All selected rollout summaries, including incompatible stores."""
 
-    aggregate: dict[str, Any]
+    aggregate: FrozenJsonObject
     """Totals over compatible stores only; unavailable values remain ``None``."""
 
-    topology: dict[str, Any]
+    topology: FrozenJsonObject
     """Compact root-to-rollout dependency nodes and classified edges."""
 
-    coral_artifacts: tuple[dict[str, Any], ...]
+    coral_artifacts: tuple[FrozenJsonObject, ...]
     """Optional CORAL binner artifacts; missing provenance never blocks readiness."""
 
     findings: tuple[DatasetBundleFinding, ...]
@@ -134,12 +657,13 @@ class DatasetBundleEvidence:
                 "root_store": self.selection.root_store.as_posix(),
                 "rollout_stores": [path.as_posix() for path in self.selection.rollout_stores],
             },
+            "generation": _generation_json(self.generation),
             "verdict": self.verdict,
-            "root": self.root,
-            "rollouts": list(self.rollouts),
-            "aggregate": self.aggregate,
-            "topology": self.topology,
-            "coral_artifacts": list(self.coral_artifacts),
+            "root": self.root.to_jsonable(),
+            "rollouts": [row.to_jsonable() for row in self.rollouts],
+            "aggregate": self.aggregate.to_jsonable(),
+            "topology": self.topology.to_jsonable(),
+            "coral_artifacts": [row.to_jsonable() for row in self.coral_artifacts],
             "findings": [finding.to_jsonable() for finding in self.findings],
         }
 
@@ -218,7 +742,7 @@ class QhCorpusReadiness:
     actor_contract: dict[str, Any] | None
     """Exact named actor contract used to construct every stage."""
 
-    loader_settings: dict[str, int | bool]
+    loader_settings: dict[str, int | bool | str]
     """Deterministic DataLoader settings used for admission and preview."""
 
     scene_disjoint: bool | None
@@ -281,6 +805,9 @@ class QhReadinessContract:
     selected_observation_protocol: QhSelectedObservationProtocol
     """Selected-observation source bound to the actor contract."""
 
+    objective_profile: QhObjectiveProfile = "qh_dense_valid_fitted_q_v1"
+    """Population-independent fitted-Q objective used for admission and preview."""
+
 
 @dataclass(frozen=True, slots=True)
 class QhBatchPreview:
@@ -341,6 +868,21 @@ class QhBatchPreview:
         }
 
 
+def prepare_dataset_bundle_export(
+    evidence: DatasetBundleEvidence,
+    deep_statistics: Mapping[str, Any] | None = None,
+    qh_readiness: QhCorpusReadiness | None = None,
+    qh_preview: QhBatchPreview | None = None,
+) -> bytes:
+    """Serialize the already acquired Training Dataset products exactly once."""
+
+    payload = evidence.to_jsonable()
+    payload["deep_statistics"] = None if deep_statistics is None else dict(deep_statistics)
+    payload["q_h_readiness"] = None if qh_readiness is None else qh_readiness.to_jsonable()
+    payload["q_h_batch_preview"] = None if qh_preview is None else qh_preview.to_jsonable()
+    return (json.dumps(payload, indent=2, sort_keys=True) + "\n").encode()
+
+
 def build_qh_corpus_readiness(
     selection: DatasetBundleSelection,
     *,
@@ -357,12 +899,13 @@ def build_qh_corpus_readiness(
     Trainer, writer, or mutable store handle.
     """
 
-    loader_settings = {
+    loader_settings: dict[str, int | bool | str] = {
         "batch_size": batch_size,
         "num_workers": 0,
         "pin_memory": False,
         "persistent_workers": False,
         "seed": seed,
+        "objective_profile": contract.objective_profile,
     }
     if batch_size < 1:
         return _blocked_qh_readiness(selection, loader_settings, "Q_H batch_size must be positive.")
@@ -419,35 +962,78 @@ def _qh_promotion_blockers(selection: DatasetBundleSelection) -> tuple[str, ...]
 
     blockers: list[str] = []
     for store in selection.rollout_stores:
-        marker_present = _promotion_marker_present(store)
-        if not marker_present:
-            # V0/non-promoted stores intentionally have no promotion trust
-            # contract; their existing lineage/provenance checks above remain
-            # the compatibility boundary.
-            continue
-        try:
-            reader = RolloutZarrStoreReader(store)
-            manifest_facts = build_manifest_facts(reader)
-            promotion = build_promotion_evidence(reader, manifest_payload=manifest_facts.payload)
-        except Exception as exc:
-            blockers.append(f"Q_H rollout trust could not be evaluated for {store.name}: {type(exc).__name__}: {exc}")
-            continue
-        try:
-            schema = build_schema_validation(reader)
-            trust = build_effective_streamlit_trust(schema, promotion)
-        except Exception as exc:
-            blockers.append(f"Q_H promoted rollout validation failed for {store.name}: {type(exc).__name__}: {exc}")
-            continue
-        if not trust.ok:
-            detail = "; ".join(trust.errors[:3]) or "unknown trust error"
-            blockers.append(f"Q_H promoted rollout {store.name} is not trusted: {detail}")
+        blocker = _rollout_promotion_blocker(store)
+        if blocker is not None:
+            blockers.append(blocker)
     return tuple(blockers)
 
 
-def _promotion_marker_present(store: Path) -> bool:
-    """Treat broken marker symlinks as advertised, not as absent V0 metadata."""
+def _rollout_promotion_blocker(store: Path) -> str | None:
+    """Return one fail-closed trust error for an advertised promoted store."""
 
-    return any(_lstat_exists(store / marker) for marker in ("_SUCCESS.json", "_owner.json"))
+    _manifest_status, manifest = _read_json_object(store / "manifest.json")
+    marker_statuses = {name: read_promotion_marker_json(store / name)[0] for name in ("_SUCCESS.json", "_owner.json")}
+    if all(status == "missing_file" for status in marker_statuses.values()):
+        if manifest is None or not _promotion_advertised(store, manifest):
+            return None
+    missing = tuple(name for name, status in marker_statuses.items() if status == "missing_file")
+    if missing:
+        return f"Promoted rollout {store.name} has incomplete promotion markers: {', '.join(missing)}."
+    invalid = tuple(name for name, status in marker_statuses.items() if status != "present")
+    if invalid:
+        details = ", ".join(f"{name} is {marker_statuses[name].replace('_', ' ')}" for name in invalid)
+        return f"Promoted rollout {store.name} has invalid promotion markers: {details}."
+    try:
+        reader = RolloutZarrStoreReader(store)
+        manifest_facts = build_manifest_facts(reader)
+        promotion = build_promotion_evidence(reader, manifest_payload=manifest_facts.payload)
+    except Exception as exc:
+        return f"Q_H rollout trust could not be evaluated for {store.name}: {type(exc).__name__}: {exc}"
+    try:
+        schema = build_schema_validation(reader)
+        trust = build_effective_streamlit_trust(schema, promotion)
+    except Exception as exc:
+        return f"Q_H promoted rollout validation failed for {store.name}: {type(exc).__name__}: {exc}"
+    if trust.ok:
+        return None
+    detail = "; ".join(trust.errors[:3]) or "unknown trust error"
+    return f"Q_H promoted rollout {store.name} is not trusted: {detail}"
+
+
+def _bounded_promotion_marker_blocker(store: Path, manifest: Mapping[str, Any]) -> str | None:
+    """Validate bounded marker documents without opening Zarr arrays."""
+
+    if not _promotion_advertised(store, manifest):
+        return None
+    missing = _missing_promotion_markers(store)
+    if missing:
+        return f"Promoted rollout {store.name} has incomplete promotion markers: {', '.join(missing)}."
+    payloads: list[dict[str, Any]] = []
+    for name in ("_SUCCESS.json", "_owner.json"):
+        status, payload = read_promotion_marker_json(store / name)
+        if payload is None:
+            return f"Promoted rollout {store.name} marker {name} is {status.replace('_', ' ')}."
+        payloads.append(dict(payload))
+    error = promotion_metadata_validation_error(
+        store_manifest=manifest,
+        success=payloads[0],
+        owner=payloads[1],
+    )
+    return None if error is None else f"Promoted rollout {store.name} {error}."
+
+
+def _promotion_advertised(store: Path, manifest: Mapping[str, Any]) -> bool:
+    """Treat typed shard ownership or either marker as promotion advertisement."""
+
+    generation = manifest.get("generation")
+    typed_shard = isinstance(generation, Mapping) and isinstance(generation.get("shard"), Mapping)
+    return typed_shard or any(_lstat_exists(store / marker) for marker in ("_SUCCESS.json", "_owner.json"))
+
+
+def _missing_promotion_markers(store: Path) -> tuple[str, ...]:
+    """Return missing promotion sidecars without following potentially broken aliases."""
+
+    return tuple(name for name in ("_SUCCESS.json", "_owner.json") if not _lstat_exists(store / name))
 
 
 def _lstat_exists(path: Path) -> bool:
@@ -560,6 +1146,7 @@ def _build_qh_data_module(
         persistent_workers=False,
         seed=seed,
         experiment_profile=contract.experiment_profile,
+        objective_profile=contract.objective_profile,
     )
     actor_contract = data_module.train_dataset.actor_state_contract
     if (
@@ -659,7 +1246,7 @@ def _storage_metric(
 
 def _blocked_qh_readiness(
     selection: DatasetBundleSelection,
-    loader_settings: dict[str, int | bool],
+    loader_settings: dict[str, int | bool | str],
     *blockers: str,
 ) -> QhCorpusReadiness:
     """Return a fail-closed readiness result without partial admission claims."""
@@ -705,6 +1292,40 @@ def _plain_value(value: Any) -> Any:
     return value
 
 
+def _freeze_json(value: Any) -> FrozenJsonValue:
+    """Freeze one JSON-compatible value at the evidence product seam."""
+
+    if value is None or isinstance(value, bool | int | float | str):
+        return value
+    if isinstance(value, Path):
+        return value.as_posix()
+    if isinstance(value, Mapping):
+        return FrozenJsonObject(
+            tuple(sorted(((str(key), _freeze_json(item)) for key, item in value.items()), key=lambda row: row[0]))
+        )
+    if isinstance(value, Sequence) and not isinstance(value, str | bytes | bytearray):
+        return FrozenJsonArray(tuple(_freeze_json(item) for item in value))
+    if isinstance(value, set | frozenset):
+        frozen = tuple(_freeze_json(item) for item in value)
+        return FrozenJsonArray(tuple(sorted(frozen, key=lambda item: json.dumps(_thaw_json(item), sort_keys=True))))
+    raise TypeError(f"Unsupported evidence value {type(value).__name__}")
+
+
+def _freeze_object(value: Mapping[str, Any]) -> FrozenJsonObject:
+    frozen = _freeze_json(value)
+    if not isinstance(frozen, FrozenJsonObject):  # pragma: no cover - construction invariant
+        raise TypeError("Expected a JSON object")
+    return frozen
+
+
+def _thaw_json(value: FrozenJsonValue) -> Any:
+    """Project frozen JSON values without leaking their internal containers."""
+
+    if isinstance(value, FrozenJsonObject | FrozenJsonArray):
+        return value.to_jsonable()
+    return value
+
+
 def build_dataset_bundle_summary(
     selection: DatasetBundleSelection,
     *,
@@ -726,6 +1347,39 @@ def build_dataset_bundle_summary(
         ``rollouts`` but are excluded from ``aggregate`` training totals.
     """
 
+    _canonical_selection, generation = capture_dataset_bundle_generation(
+        selection.root_store,
+        selection.rollout_stores,
+    )
+    return inspect_dataset_bundle(
+        DatasetBundleSummaryRequest(
+            selection=selection,
+            generation=generation,
+            coral_artifact_roots=coral_artifact_roots,
+            validate_rollouts=validate_rollouts,
+        )
+    )
+
+
+def inspect_dataset_bundle(request: DatasetBundleSummaryRequest) -> DatasetBundleEvidence:
+    """Acquire frozen bundle evidence against one complete generation-bound request."""
+
+    observed_generation = _capture_dataset_bundle_generation_value(
+        _absolute_selected_entry(request.generation.root.selected_entry),
+        tuple(_absolute_selected_entry(entry.selected_entry) for entry in request.generation.rollouts),
+    )
+    if observed_generation.generation_digest != request.generation.generation_digest:
+        raise DatasetBundleGenerationChangedError(request.generation, observed_generation)
+    observed_selection = _selection_from_generation(observed_generation)
+    if observed_selection != request.selection:
+        raise ValueError("DatasetBundleSummaryRequest selection does not match its generation.")
+    evidence = _build_dataset_bundle_summary_unchecked(request)
+    assert_dataset_bundle_generation_current(request.generation)
+    return evidence
+
+
+def _build_dataset_bundle_summary_unchecked(request: DatasetBundleSummaryRequest) -> DatasetBundleEvidence:
+    selection = request.selection
     findings: list[DatasetBundleFinding] = []
     root, root_records = _root_summary(selection.root_store, findings=findings)
     root_usable = not any(
@@ -738,7 +1392,7 @@ def build_dataset_bundle_summary(
             root_hash=root_hash if isinstance(root_hash, str) else None,
             root_records=root_records,
             root_usable=root_usable,
-            validate=validate_rollouts,
+            validate=request.validate_rollouts,
             findings=findings,
         )
         for path in selection.rollout_stores
@@ -754,9 +1408,19 @@ def build_dataset_bundle_summary(
 
     aggregate = _aggregate_summary(root, rollout_rows)
     topology = _bundle_topology(selection.root_store, rollout_rows)
-    coral = tuple(_catalog_coral_artifacts(coral_artifact_roots))
+    coral = tuple(_catalog_coral_artifacts(request.coral_artifact_roots))
     verdict = _verdict(findings)
-    return DatasetBundleEvidence(selection, verdict, root, rollout_rows, aggregate, topology, coral, tuple(findings))
+    return DatasetBundleEvidence(
+        selection,
+        request.generation,
+        verdict,
+        _freeze_object(root),
+        tuple(_freeze_object(row) for row in rollout_rows),
+        _freeze_object(aggregate),
+        _freeze_object(topology),
+        tuple(_freeze_object(row) for row in coral),
+        tuple(findings),
+    )
 
 
 def compute_dataset_bundle_deep_statistics(selection: DatasetBundleSelection) -> dict[str, Any]:
@@ -786,8 +1450,12 @@ def compute_dataset_bundle_deep_statistics(selection: DatasetBundleSelection) ->
         if not bool(row["included_in_training_totals"]):
             stores.append({"path": row["path"], "included": False, "reason": "lineage_or_schema_blocked"})
             continue
-        eligible_store_count += 1
         path = Path(str(row["path"]))
+        promotion_blocker = _rollout_promotion_blocker(path)
+        if promotion_blocker is not None:
+            stores.append({"path": path.as_posix(), "included": False, "reason": promotion_blocker})
+            continue
+        eligible_store_count += 1
         try:
             reader = RolloutZarrStoreReader(path)
             q_train = _required_array(reader, "candidates/q_train_mask", np.bool_)
@@ -875,9 +1543,17 @@ def scan_root_gt_obb_target_opportunities(root_store: Path | str) -> dict[str, A
     """
 
     store = Path(root_store).expanduser().resolve()
+    manifest_status, manifest_bytes = _read_regular_file(store / "manifest.json")
+    index_status, index_bytes = _read_regular_file(store / "sample_index.jsonl")
     try:
-        manifest = VinOfflineManifest.read(store / "manifest.json")
-        records = tuple(VinOfflineIndexRecord.read_many(store / "sample_index.jsonl"))
+        if manifest_bytes is None:
+            raise OSError(f"manifest.json is {manifest_status.replace('_', ' ')}")
+        if index_bytes is None:
+            raise OSError(f"sample_index.jsonl is {index_status.replace('_', ' ')}")
+        manifest = msgspec.json.decode(manifest_bytes, type=VinOfflineManifest)
+        records = tuple(
+            msgspec.json.decode(line, type=VinOfflineIndexRecord) for line in index_bytes.splitlines() if line.strip()
+        )
     except (OSError, ValueError, TypeError, msgspec.MsgspecError) as exc:
         return _unavailable_target_opportunities(store, f"root_store_unreadable:{type(exc).__name__}:{exc}")
     if not manifest.materialized_blocks.gt_obbs:
@@ -955,9 +1631,17 @@ def _root_summary(
     *,
     findings: list[DatasetBundleFinding],
 ) -> tuple[dict[str, Any], tuple[VinOfflineIndexRecord, ...]]:
+    manifest_status, manifest_bytes = _read_regular_file(store / "manifest.json")
+    index_status, index_bytes = _read_regular_file(store / "sample_index.jsonl")
     try:
-        manifest = VinOfflineManifest.read(store / "manifest.json")
-        records = tuple(VinOfflineIndexRecord.read_many(store / "sample_index.jsonl"))
+        if manifest_bytes is None:
+            raise OSError(f"manifest.json is {manifest_status.replace('_', ' ')}")
+        if index_bytes is None:
+            raise OSError(f"sample_index.jsonl is {index_status.replace('_', ' ')}")
+        manifest = msgspec.json.decode(manifest_bytes, type=VinOfflineManifest)
+        records = tuple(
+            msgspec.json.decode(line, type=VinOfflineIndexRecord) for line in index_bytes.splitlines() if line.strip()
+        )
     except (OSError, ValueError, TypeError, msgspec.MsgspecError) as exc:
         findings.append(
             DatasetBundleFinding(
@@ -1041,8 +1725,11 @@ def _validate_root_records(
         )
     for split in sorted({record.split for record in records}):
         split_path = store / "splits" / f"{split}.npy"
+        split_status, split_bytes = _read_regular_file(split_path)
         try:
-            persisted = np.asarray(np.load(split_path, allow_pickle=False), dtype=np.int64).reshape(-1)
+            if split_bytes is None:
+                raise OSError(f"split is {split_status.replace('_', ' ')}")
+            persisted = np.asarray(np.load(io.BytesIO(split_bytes), allow_pickle=False), dtype=np.int64).reshape(-1)
         except (OSError, ValueError) as exc:
             findings.append(
                 DatasetBundleFinding(
@@ -1077,8 +1764,13 @@ def _rollout_summary(
     blockers_before = sum(
         finding.severity == "blocking" and finding.store_path == store.as_posix() for finding in findings
     )
+    manifest_status, manifest_bytes = _read_regular_file(store / "manifest.json")
     try:
-        manifest = read_rollout_store_manifest(store)
+        if manifest_bytes is None:
+            raise OSError(f"manifest.json is {manifest_status.replace('_', ' ')}")
+        manifest = json.loads(manifest_bytes)
+        if not isinstance(manifest, dict):
+            raise TypeError("rollout manifest is not an object")
     except Exception as exc:
         findings.append(
             DatasetBundleFinding(
@@ -1129,6 +1821,19 @@ def _rollout_summary(
                 "blocking",
                 "source_split_identity_mismatch",
                 "At least one rollout source row does not uniquely match its VIN sample index, key, and split identity.",
+                store.as_posix(),
+            )
+        )
+
+    promotion_blocker = (
+        _rollout_promotion_blocker(store) if validate else _bounded_promotion_marker_blocker(store, manifest)
+    )
+    if promotion_blocker is not None:
+        findings.append(
+            DatasetBundleFinding(
+                "blocking",
+                "rollout_promotion_invalid",
+                promotion_blocker,
                 store.as_posix(),
             )
         )
@@ -1257,7 +1962,7 @@ def _source_identity_matches(row: dict[str, Any], record: VinOfflineIndexRecord)
 def _canonical_key(value: Any) -> str:
     if value in (None, ""):
         return ""
-    return compact_ase_atek_sample_id(str(value)).rsplit("::", maxsplit=1)[-1]
+    return str(compact_ase_atek_sample_id(str(value)).rsplit("::", maxsplit=1)[-1])
 
 
 def _aggregate_summary(root: dict[str, Any], rollouts: tuple[dict[str, Any], ...]) -> dict[str, Any]:
@@ -1390,7 +2095,7 @@ def _decoded_dictionary_values(reader: RolloutZarrStoreReader, array_path: str, 
 
 
 def _required_array(reader: RolloutZarrStoreReader, path: str, dtype: Any) -> np.ndarray:
-    return np.asarray(reader.array(path), dtype=dtype).reshape(-1)
+    return cast(np.ndarray, np.asarray(reader.array(path), dtype=dtype).reshape(-1))
 
 
 def _distribution(values: np.ndarray) -> dict[str, float | int | None]:
@@ -1511,18 +2216,30 @@ def _verdict(findings: list[DatasetBundleFinding]) -> DatasetBundleVerdict:
 
 
 __all__ = [
+    "DatasetBundleDiscovery",
     "DatasetBundleEvidence",
+    "DatasetBundleEntryFingerprint",
     "DatasetBundleFinding",
+    "DatasetBundleGeneration",
+    "DatasetBundleGenerationChangedError",
     "DatasetBundleSelection",
+    "DatasetBundleSummaryRequest",
     "DatasetBundleVerdict",
+    "FrozenJsonArray",
+    "FrozenJsonObject",
     "NormalizedStorageMetric",
     "QhBatchPreview",
     "QhCorpusReadiness",
     "QhReadinessContract",
     "QhStageReadiness",
+    "assert_dataset_bundle_generation_current",
     "build_dataset_bundle_summary",
     "build_qh_corpus_readiness",
+    "capture_dataset_bundle_generation",
     "compute_dataset_bundle_deep_statistics",
+    "discover_dataset_bundle_candidates",
+    "inspect_dataset_bundle",
+    "prepare_dataset_bundle_export",
     "preview_qh_batch",
     "scan_root_gt_obb_target_opportunities",
 ]
