@@ -7,7 +7,8 @@
 #let ink = rgb("#17202a")
 #let muted = rgb("#687380")
 #let hair = rgb("#cbd3dc")
-#let history-color = rgb("#705b8e")
+#let history-path-color = rgb("#66307c")
+#let history-frustum-color = rgb("#008c99")
 #let target-color = rgb("#a95f12")
 #let forward-color = rgb("#31689e")
 #let bearing-color = rgb("#c06b12")
@@ -106,16 +107,26 @@
     wire-segments(panel.at("target_obb_segments"), map-point, 1.85pt + target-color)
     wire-segments(panel.at("target_obb_segments"), map-point, .42pt + white)
 
-    // Physical RGB history is purple and dashed; it is not the sampling root.
+    // Separate the logged path from its sparse historical camera footprints.
+    // Both remain distinct from the neutral mesh and the sampling root.
     line(
       ..panel.at("history_path").map(map-point),
-      stroke: (paint: history-color, thickness: .88pt, dash: "dashed"),
+      stroke: 2.05pt + white.transparentize(18%),
+    )
+    line(
+      ..panel.at("history_path").map(map-point),
+      stroke: 1.18pt + history-path-color,
     )
     for pose in panel.at("history_frusta") {
       wire-segments(
         pose,
         map-point,
-        (paint: history-color, thickness: .62pt, dash: "dashed"),
+        (paint: white.transparentize(18%), thickness: 1.28pt, dash: "dashed"),
+      )
+      wire-segments(
+        pose,
+        map-point,
+        (paint: history-frustum-color, thickness: .64pt, dash: "dashed"),
       )
     }
 
@@ -253,7 +264,8 @@
       column-gutter: 1.0mm,
       row-gutter: .35mm,
       text(size: 7.5pt, fill: ink)[━], text(size: 6.6pt)[selected (black/gold)],
-      text(size: 7.5pt, fill: history-color)[┄], text(size: 6.6pt)[physical RGB history],
+      text(size: 7.5pt, fill: history-path-color)[━], text(size: 6.6pt)[physical RGB trajectory],
+      text(size: 7.5pt, fill: history-frustum-color)[┄], text(size: 6.6pt)[historical RGB frusta],
       text(size: 7.5pt, fill: target-color)[▣], text(size: 6.6pt)[task GT OBB],
     )
   ],

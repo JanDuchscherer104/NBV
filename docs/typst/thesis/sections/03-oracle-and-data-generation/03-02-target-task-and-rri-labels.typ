@@ -113,7 +113,7 @@ finite table retains.
   align(center, image(
     "../../figures/candidate_generation_geometry.pdf",
     width: 100%,
-    alt: "A dominant oblique 3D view shows a neutral processed ground-truth room mesh, an orange selected task bounding box, a purple dashed physical RGB history with two calibrated frusta, a separate sampling-root anchor, and the selected black-and-gold candidate frustum. A narrow bird's-eye audit shows all sixty candidate centers and validity decisions; marker shapes annotate reconstructed configured row blocks, including rejected crosses.",
+    alt: "A dominant oblique 3D view shows a neutral processed ground-truth room mesh, an orange selected task bounding box, a solid purple physical RGB trajectory with two teal dashed calibrated historical frusta, a separate sampling-root anchor, and the selected black-and-gold candidate frustum. A narrow bird's-eye audit shows all sixty candidate centers and validity decisions; marker shapes annotate reconstructed configured row blocks, including rejected crosses.",
   )),
   caption: [Scene grounding and support audit for one pinned ASE decision state. Panel A separates physical RGB history, the canonical sampling root, the selected oracle-task GT OBB, and the selected candidate view. Panel B retains all 60 stored centers and validity decisions: 25 admissible, 35 hard-rejected, and shell 47 selected. Shapes annotate the reconstructed configured shell blocks (24/24/12), not independently recovered row-level family provenance. Frusta approximate the calibrated Fisheye624 valid domain; the example fixes support and validity, not policy performance.],
 ) <fig:candidate-generation-geometry>
