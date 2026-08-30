@@ -371,16 +371,24 @@ def _candidate_resource_figure(records: tuple[CandidateBenchmark, ...]) -> go.Fi
         subplot_titles=("Runtime observations", "Peak GPU-memory observations"),
     )
     runtimes = [
-        (record.state_key, value) for record in records if (value := record.timings_ms.get("total_ms")) is not None
+        (record.scene_key, record.state_key, f"{record.scene_key}<br>{record.state_key}", value)
+        for record in records
+        if (value := record.timings_ms.get("total_ms")) is not None
     ]
     memory = [
-        (record.state_key, value) for record in records if (value := record.resources.get("gpu_memory_mb")) is not None
+        (record.scene_key, record.state_key, f"{record.scene_key}<br>{record.state_key}", value)
+        for record in records
+        if (value := record.resources.get("gpu_memory_mb")) is not None
     ]
     if runtimes:
         figure.add_trace(
             go.Bar(
-                x=[state for state, _ in runtimes],
-                y=[value for _, value in runtimes],
+                x=[identity for _, _, identity, _ in runtimes],
+                y=[value for _, _, _, value in runtimes],
+                customdata=[(scene, state) for scene, state, _, _ in runtimes],
+                hovertemplate=(
+                    "scene=%{customdata[0]}<br>state=%{customdata[1]}<br>runtime=%{y:.3f} ms<extra></extra>"
+                ),
                 name="runtime per state",
             ),
             row=1,
@@ -398,8 +406,12 @@ def _candidate_resource_figure(records: tuple[CandidateBenchmark, ...]) -> go.Fi
     if memory:
         figure.add_trace(
             go.Bar(
-                x=[state for state, _ in memory],
-                y=[value for _, value in memory],
+                x=[identity for _, _, identity, _ in memory],
+                y=[value for _, _, _, value in memory],
+                customdata=[(scene, state) for scene, state, _, _ in memory],
+                hovertemplate=(
+                    "scene=%{customdata[0]}<br>state=%{customdata[1]}<br>peak GPU memory=%{y:.3f} MB<extra></extra>"
+                ),
                 name="peak GPU memory per state",
             ),
             row=2,
@@ -425,7 +437,8 @@ def _candidate_resource_figure(records: tuple[CandidateBenchmark, ...]) -> go.Fi
         )
     figure.update_yaxes(title_text="runtime [ms]", row=1, col=1)
     figure.update_yaxes(title_text="peak GPU memory [MB]", row=2, col=1)
-    figure.update_xaxes(title_text="factual state", row=2, col=1)
+    figure.update_xaxes(tickangle=-25, automargin=True)
+    figure.update_xaxes(title_text="scene / factual state", row=2, col=1)
     figure.update_layout(title=_BENCHMARK_FIGURE_TITLES[5], barmode="group")
     return figure
 

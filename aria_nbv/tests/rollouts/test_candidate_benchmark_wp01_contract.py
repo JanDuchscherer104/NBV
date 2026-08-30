@@ -711,10 +711,10 @@ def test_resource_figure_preserves_per_state_runtime_and_peak_memory_units() -> 
 
     resource = candidate_benchmark_figures((_record(), second))[5]
 
-    assert list(resource.data[0].x) == ["state-1", "state-2"]
+    assert list(resource.data[0].x) == ["scene-a<br>state-1", "scene-a<br>state-2"]
     assert list(resource.data[0].y) == [2.0, 7.0]
     assert resource.data[0].name == "runtime per state"
-    assert list(resource.data[1].x) == ["state-1"]
+    assert list(resource.data[1].x) == ["scene-a<br>state-1"]
     assert list(resource.data[1].y) == [4.0]
     assert resource.data[1].name == "peak GPU memory per state"
     assert resource.layout.yaxis.title.text == "runtime [ms]"
@@ -722,6 +722,28 @@ def test_resource_figure_preserves_per_state_runtime_and_peak_memory_units() -> 
     assert "unavailable: no persisted peak GPU memory" not in {
         annotation.text for annotation in resource.layout.annotations
     }
+
+
+def test_resource_figure_distinguishes_same_state_key_across_scenes() -> None:
+    first = _record()
+    second = CandidateBenchmark(
+        first.state_key,
+        "scene-b",
+        (),
+        timings_ms={"total_ms": 7.0},
+        resources={"gpu_memory_mb": 9.0},
+    )
+
+    resource = candidate_benchmark_figures((first, second))[5]
+
+    expected_identities = ["scene-a<br>state-1", "scene-b<br>state-1"]
+    assert list(resource.data[0].x) == expected_identities
+    assert list(resource.data[1].x) == expected_identities
+    expected_hover_identity = [["scene-a", "state-1"], ["scene-b", "state-1"]]
+    assert list(resource.data[0].customdata) == expected_hover_identity
+    assert list(resource.data[1].customdata) == expected_hover_identity
+    assert "scene=%{customdata[0]}" in resource.data[0].hovertemplate
+    assert "scene=%{customdata[0]}" in resource.data[1].hovertemplate
 
 
 def test_benchmark_panel_dispatches_only_after_toggle_and_propagates_state_and_limit(
