@@ -7,6 +7,7 @@ from __future__ import annotations
 import inspect
 import json
 from collections.abc import Callable, Generator, Iterable
+from contextlib import nullcontext
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, cast, get_type_hints
@@ -19,6 +20,7 @@ from streamlit.testing.v1 import AppTest
 import aria_nbv.app.panels.training_dataset as training_dataset
 import aria_nbv.dataset_bundle as dataset_bundle
 from aria_nbv.app.panels._stored_rollouts import session as stored_rollout_session
+from aria_nbv.app.panels._stored_rollouts.shared import ExplanationSection, ScientificExplanation
 from aria_nbv.app.panels.training_dataset import (
     _cached_deep_statistics,
     _cached_qh_preview,
@@ -32,10 +34,9 @@ from aria_nbv.app.panels.training_dataset import (
     _qh_readiness_identity,
     _retained_bundle_evidence,
     _retained_deep_statistics,
-    _target_inventory_explanation,
-    _target_inventory_frames,
 )
 from aria_nbv.configs import PathConfig
+from aria_nbv.data_handling.vin_store import target_inventory as target_inventory_domain
 from aria_nbv.data_handling.vin_store.format import (
     VinOfflineIndexRecord,
     VinOfflineManifest,
@@ -43,15 +44,21 @@ from aria_nbv.data_handling.vin_store.format import (
 )
 from aria_nbv.data_handling.vin_store.store import OFFLINE_DATASET_VERSION
 from aria_nbv.dataset_bundle import (
+    DatasetBundleDeepRequest,
     DatasetBundleGenerationChangedError,
     DatasetBundleSelection,
     DatasetBundleSummaryRequest,
+    FrozenJsonObject,
     QhBatchPreview,
     QhCorpusReadiness,
+    QhPreviewRequest,
+    QhReadinessRequest,
     QhStageReadiness,
     build_dataset_bundle_summary,
     capture_dataset_bundle_generation,
+    inspect_dataset_bundle_deep,
 )
+from aria_nbv.reporting.notation import TheoryReferences
 from aria_nbv.rollouts.zarr_store import ROLLOUT_ZARR_SCHEMA_VERSION
 from aria_nbv.utils import Stage
 from aria_nbv.utils.fingerprints import stable_msgspec_hash
@@ -72,13 +79,20 @@ _PATH_CONFIG_FIELDS = (
     "processed_meshes",
     "external_dir",
 )
+_EMPTY_JSON = FrozenJsonObject(())
+
+
+def _json_object(**values: int) -> FrozenJsonObject:
+    """Return a small typed immutable JSON fixture."""
+
+    return FrozenJsonObject(tuple(values.items()))
 
 
 def _element_labels(elements: Iterable[Any]) -> list[str]:
     return [str(element.label) for element in elements]
 
 
-@pytest.fixture  # type: ignore[untyped-decorator]
+@pytest.fixture
 def isolated_path_config(tmp_path: Path) -> Generator[PathConfig, None, None]:
     """Point the singleton path owner at one isolated app workspace."""
 
@@ -179,17 +193,42 @@ def _ready_qh_evidence(root: Path) -> QhCorpusReadiness:
         selection=DatasetBundleSelection(root, ()),
         verdict="Ready",
         blockers=(),
-        stages=(QhStageReadiness(Stage.TRAIN, True, 1, 1, 1, ("scene-a",), 1, {}),),
-        contract={},
-        actor_contract={},
-        loader_settings={"batch_size": 1, "seed": 0},
+        stages=(QhStageReadiness(Stage.TRAIN, True, 1, 1, 1, ("scene-a",), 1, _EMPTY_JSON),),
+        contract=_EMPTY_JSON,
+        actor_contract=_EMPTY_JSON,
+        loader_settings=_json_object(batch_size=1, seed=0),
         scene_disjoint=True,
         storage=(),
     )
 
 
 def _qh_preview_evidence() -> QhBatchPreview:
-    return QhBatchPreview(Stage.TRAIN, 0, {}, 1, ({},), (1,), {}, {}, 0, 0, 1, 1)
+    return QhBatchPreview(
+        Stage.TRAIN,
+        0,
+        _EMPTY_JSON,
+        1,
+        (_EMPTY_JSON,),
+        (1,),
+        _EMPTY_JSON,
+        _EMPTY_JSON,
+        0,
+        0,
+        1,
+        1,
+    )
+
+
+def _qh_request(
+    root: Path = Path("/tmp/qh-identity-root"),
+    *,
+    batch_size: int = 1,
+    seed: int = 0,
+) -> QhReadinessRequest:
+    """Build a complete request for retained-identity regression tests."""
+
+    selection, generation = capture_dataset_bundle_generation(root, ())
+    return QhReadinessRequest(selection, generation, training_dataset._QH_READINESS_CONTRACT, batch_size, seed)
 
 
 def test_hub_discovers_composes_and_scans_explicit_stores(
@@ -258,11 +297,9 @@ def test_initial_render_never_dispatches_deep_or_qh_acquisition(
         calls[name] += 1
         raise AssertionError(f"unexpected initial-render {name} acquisition")
 
-    monkeypatch.setattr(
-        training_dataset, "compute_dataset_bundle_deep_statistics", lambda _selection: _unexpected("deep")
-    )
-    monkeypatch.setattr(training_dataset, "build_qh_corpus_readiness", lambda *_args, **_kwargs: _unexpected("qh"))
-    monkeypatch.setattr(training_dataset, "preview_qh_batch", lambda *_args, **_kwargs: _unexpected("preview"))
+    monkeypatch.setattr(training_dataset, "inspect_dataset_bundle_deep", lambda _request: _unexpected("deep"))
+    monkeypatch.setattr(training_dataset, "inspect_qh_readiness", lambda *_args, **_kwargs: _unexpected("qh"))
+    monkeypatch.setattr(training_dataset, "inspect_qh_preview", lambda *_args, **_kwargs: _unexpected("preview"))
 
     app = _app(tmp_path).run()
 
@@ -372,7 +409,7 @@ def test_validation_failure_is_section_local_and_drops_retained_evidence(
             "Deep statistics scan failed",
         ),
     ],
-)  # type: ignore[untyped-decorator]
+)
 def test_dispatched_section_failure_drops_stale_evidence(
     button_label: str,
     cached_name: str,
@@ -413,10 +450,10 @@ def test_qh_preview_failure_drops_stale_preview(
         selection=DatasetBundleSelection(root, ()),
         verdict="Ready",
         blockers=(),
-        stages=(QhStageReadiness(Stage.TRAIN, True, 1, 1, 1, ("scene-a",), 1, {}),),
-        contract={},
-        actor_contract={},
-        loader_settings={"batch_size": 1, "seed": 0},
+        stages=(QhStageReadiness(Stage.TRAIN, True, 1, 1, 1, ("scene-a",), 1, _EMPTY_JSON),),
+        contract=_EMPTY_JSON,
+        actor_contract=_EMPTY_JSON,
+        loader_settings=_json_object(batch_size=1, seed=0),
         scene_disjoint=True,
         storage=(),
     )
@@ -457,7 +494,7 @@ def test_unexpected_acquisition_failure_retains_exception_type_in_app_diagnostic
     assert "RuntimeError" in "\n".join(app.exception[0].stack_trace)
 
 
-@pytest.mark.parametrize("acquisition", ["summary", "validation", "deep", "readiness", "preview"])  # type: ignore[untyped-decorator]
+@pytest.mark.parametrize("acquisition", ["summary", "validation", "deep", "readiness", "preview"])
 def test_warmed_cache_hits_remain_guarded_before_and_after_acquisition(
     acquisition: str,
     monkeypatch: pytest.MonkeyPatch,
@@ -465,7 +502,6 @@ def test_warmed_cache_hits_remain_guarded_before_and_after_acquisition(
 ) -> None:
     root, _source_hash = _write_root_store(isolated_path_config.offline_cache_dir)
     selection, generation = capture_dataset_bundle_generation(root, ())
-    root_arg = root.as_posix()
     domain_calls = 0
     acquire: Callable[[], Any]
 
@@ -494,48 +530,67 @@ def test_warmed_cache_hits_remain_guarded_before_and_after_acquisition(
     elif acquisition == "deep":
         cache_owner = training_dataset._cached_deep_statistics_inner
 
-        def counted_deep(_selection: DatasetBundleSelection) -> dict[str, Any]:
+        def counted_deep(request: DatasetBundleDeepRequest) -> Any:
             nonlocal domain_calls
             domain_calls += 1
-            return {"aggregate": {}}
+            return inspect_dataset_bundle_deep(request)
 
-        monkeypatch.setattr(training_dataset, "compute_dataset_bundle_deep_statistics", counted_deep)
+        monkeypatch.setattr(training_dataset, "inspect_dataset_bundle_deep", counted_deep)
 
         def acquire_deep() -> Any:
-            return training_dataset._cached_deep_statistics(root_arg, (), generation)
+            return training_dataset._cached_deep_statistics(DatasetBundleDeepRequest(selection, generation))
 
         acquire = acquire_deep
     elif acquisition == "readiness":
         cache_owner = training_dataset._cached_qh_readiness_inner
-        expected_readiness = QhCorpusReadiness(selection, "Blocked", ("fixture",), (), None, None, {}, None, ())
+        expected_readiness = QhCorpusReadiness(
+            selection, "Blocked", ("fixture",), (), None, None, _EMPTY_JSON, None, ()
+        )
 
         def counted_readiness(*_args: Any, **_kwargs: Any) -> QhCorpusReadiness:
             nonlocal domain_calls
             domain_calls += 1
             return expected_readiness
 
-        monkeypatch.setattr(training_dataset, "build_qh_corpus_readiness", counted_readiness)
+        monkeypatch.setattr(training_dataset, "inspect_qh_readiness", counted_readiness)
 
         def acquire_readiness() -> Any:
             return training_dataset._cached_qh_readiness(
-                root_arg, (), generation, 1, 0, training_dataset._QH_READINESS_CONTRACT
+                QhReadinessRequest(selection, generation, training_dataset._QH_READINESS_CONTRACT, 1, 0)
             )
 
         acquire = acquire_readiness
     else:
         cache_owner = training_dataset._cached_qh_preview_inner
-        preview = QhBatchPreview(Stage.TRAIN, 0, {}, 1, ({},), (1,), {}, {}, 0, 0, 1, 1)
+        preview = QhBatchPreview(
+            Stage.TRAIN,
+            0,
+            _EMPTY_JSON,
+            1,
+            (_EMPTY_JSON,),
+            (1,),
+            _EMPTY_JSON,
+            _EMPTY_JSON,
+            0,
+            0,
+            1,
+            1,
+        )
 
         def counted_preview(*_args: Any, **_kwargs: Any) -> QhBatchPreview:
             nonlocal domain_calls
             domain_calls += 1
             return preview
 
-        monkeypatch.setattr(training_dataset, "preview_qh_batch", counted_preview)
+        monkeypatch.setattr(training_dataset, "inspect_qh_preview", counted_preview)
 
         def acquire_preview() -> Any:
             return training_dataset._cached_qh_preview(
-                root_arg, (), generation, "train", 0, 1, 0, training_dataset._QH_READINESS_CONTRACT
+                QhPreviewRequest(
+                    QhReadinessRequest(selection, generation, training_dataset._QH_READINESS_CONTRACT, 1, 0),
+                    Stage.TRAIN,
+                    0,
+                )
             )
 
         acquire = acquire_preview
@@ -563,7 +618,7 @@ def test_warmed_cache_hits_remain_guarded_before_and_after_acquisition(
     cache_owner.clear()
 
 
-@pytest.mark.parametrize("acquisition", ["deep", "readiness", "preview"])  # type: ignore[untyped-decorator]
+@pytest.mark.parametrize("acquisition", ["deep", "readiness", "preview"])
 def test_explicit_acquisition_rejects_replacement_under_stale_generation(
     acquisition: str,
     monkeypatch: pytest.MonkeyPatch,
@@ -579,20 +634,27 @@ def test_explicit_acquisition_rejects_replacement_under_stale_generation(
         manifest_path.write_text(json.dumps(payload), encoding="utf-8")
         return object()
 
-    root_arg = root.as_posix()
     with pytest.raises(DatasetBundleGenerationChangedError):
         if acquisition == "deep":
-            monkeypatch.setattr(training_dataset, "compute_dataset_bundle_deep_statistics", _replace_manifest)
-            _cached_deep_statistics(root_arg, (), generation)
+            monkeypatch.setattr(training_dataset, "inspect_dataset_bundle_deep", _replace_manifest)
+            _cached_deep_statistics(DatasetBundleDeepRequest(_selection, generation))
         elif acquisition == "readiness":
-            monkeypatch.setattr(training_dataset, "build_qh_corpus_readiness", _replace_manifest)
-            _cached_qh_readiness(root_arg, (), generation, 1, 0, training_dataset._QH_READINESS_CONTRACT)
+            monkeypatch.setattr(training_dataset, "inspect_qh_readiness", _replace_manifest)
+            _cached_qh_readiness(
+                QhReadinessRequest(_selection, generation, training_dataset._QH_READINESS_CONTRACT, 1, 0)
+            )
         else:
-            monkeypatch.setattr(training_dataset, "preview_qh_batch", _replace_manifest)
-            _cached_qh_preview(root_arg, (), generation, "train", 0, 1, 0, training_dataset._QH_READINESS_CONTRACT)
+            monkeypatch.setattr(training_dataset, "inspect_qh_preview", _replace_manifest)
+            _cached_qh_preview(
+                QhPreviewRequest(
+                    QhReadinessRequest(_selection, generation, training_dataset._QH_READINESS_CONTRACT, 1, 0),
+                    Stage.TRAIN,
+                    0,
+                )
+            )
 
 
-@pytest.mark.parametrize("acquisition", ["deep", "readiness", "preview"])  # type: ignore[untyped-decorator]
+@pytest.mark.parametrize("acquisition", ["deep", "readiness", "preview"])
 def test_cached_acquisition_rejects_stale_generation_before_domain_call(
     acquisition: str,
     monkeypatch: pytest.MonkeyPatch,
@@ -606,17 +668,24 @@ def test_cached_acquisition_rejects_stale_generation_before_domain_call(
     def _unexpected(*_args: object, **_kwargs: object) -> Any:
         pytest.fail(f"{acquisition} domain function ran for a stale generation")
 
-    root_arg = root.as_posix()
     with pytest.raises(DatasetBundleGenerationChangedError):
         if acquisition == "deep":
-            monkeypatch.setattr(training_dataset, "compute_dataset_bundle_deep_statistics", _unexpected)
-            _cached_deep_statistics(root_arg, (), generation)
+            monkeypatch.setattr(training_dataset, "inspect_dataset_bundle_deep", _unexpected)
+            _cached_deep_statistics(DatasetBundleDeepRequest(_selection, generation))
         elif acquisition == "readiness":
-            monkeypatch.setattr(training_dataset, "build_qh_corpus_readiness", _unexpected)
-            _cached_qh_readiness(root_arg, (), generation, 1, 0, training_dataset._QH_READINESS_CONTRACT)
+            monkeypatch.setattr(training_dataset, "inspect_qh_readiness", _unexpected)
+            _cached_qh_readiness(
+                QhReadinessRequest(_selection, generation, training_dataset._QH_READINESS_CONTRACT, 1, 0)
+            )
         else:
-            monkeypatch.setattr(training_dataset, "preview_qh_batch", _unexpected)
-            _cached_qh_preview(root_arg, (), generation, "train", 0, 1, 0, training_dataset._QH_READINESS_CONTRACT)
+            monkeypatch.setattr(training_dataset, "inspect_qh_preview", _unexpected)
+            _cached_qh_preview(
+                QhPreviewRequest(
+                    QhReadinessRequest(_selection, generation, training_dataset._QH_READINESS_CONTRACT, 1, 0),
+                    Stage.TRAIN,
+                    0,
+                )
+            )
 
 
 def test_blocked_store_remains_selected_but_is_excluded_from_totals(
@@ -729,46 +798,43 @@ def test_selected_root_blocker_is_not_mislabeled_as_rollout_finding(
 
 
 def test_qh_preview_reuses_only_exact_selection_and_controls() -> None:
-    selection_a = "generation-a"
-    baseline = _qh_preview_identity(
-        selection_a,
-        stage="train",
-        chain_index=0,
-        batch_size=4,
-        seed=7,
-    )
+    request = _qh_request(batch_size=4, seed=7)
+    baseline = _qh_preview_identity(QhPreviewRequest(request, Stage.TRAIN, 0))
     evidence = _qh_preview_evidence()
     state = (baseline, evidence)
 
     assert _qh_preview_for_identity(state, baseline) is evidence
     for changed in (
-        _qh_preview_identity("generation-b", stage="train", chain_index=0, batch_size=4, seed=7),
-        _qh_preview_identity(selection_a, stage="val", chain_index=0, batch_size=4, seed=7),
-        _qh_preview_identity(selection_a, stage="train", chain_index=1, batch_size=4, seed=7),
-        _qh_preview_identity(selection_a, stage="train", chain_index=0, batch_size=8, seed=7),
-        _qh_preview_identity(selection_a, stage="train", chain_index=0, batch_size=4, seed=8),
+        _qh_preview_identity(
+            QhPreviewRequest(_qh_request(Path("/tmp/qh-identity-other"), batch_size=4, seed=7), Stage.TRAIN, 0)
+        ),
+        _qh_preview_identity(QhPreviewRequest(request, Stage.VAL, 0)),
+        _qh_preview_identity(QhPreviewRequest(request, Stage.TRAIN, 1)),
+        _qh_preview_identity(QhPreviewRequest(_qh_request(batch_size=8, seed=7), Stage.TRAIN, 0)),
+        _qh_preview_identity(QhPreviewRequest(_qh_request(batch_size=4, seed=8), Stage.TRAIN, 0)),
     ):
         assert _qh_preview_for_identity(state, changed) is None
 
 
 def test_qh_readiness_hides_stale_preflight_after_loader_control_changes() -> None:
-    selection = "generation"
-    baseline = _qh_readiness_identity(selection, batch_size=4, seed=7)
-    evidence = QhCorpusReadiness(DatasetBundleSelection(Path("/root"), ()), "Blocked", (), (), None, None, {}, None, ())
+    baseline = _qh_readiness_identity(_qh_request(batch_size=4, seed=7))
+    evidence = QhCorpusReadiness(
+        DatasetBundleSelection(Path("/root"), ()), "Blocked", (), (), None, None, _EMPTY_JSON, None, ()
+    )
     state = (baseline, evidence)
 
     assert _qh_readiness_for_identity(state, baseline) is evidence
-    assert _qh_readiness_for_identity(state, _qh_readiness_identity(selection, batch_size=8, seed=7)) is None
-    assert _qh_readiness_for_identity(state, _qh_readiness_identity(selection, batch_size=4, seed=8)) is None
+    assert _qh_readiness_for_identity(state, _qh_readiness_identity(_qh_request(batch_size=8, seed=7))) is None
+    assert _qh_readiness_for_identity(state, _qh_readiness_identity(_qh_request(batch_size=4, seed=8))) is None
 
 
 @pytest.mark.parametrize(
     ("helper", "identity", "wrong_payload"),
     [
-        (_qh_readiness_for_identity, _qh_readiness_identity("generation", batch_size=1, seed=0), object()),
+        (_qh_readiness_for_identity, _qh_readiness_identity(_qh_request()), object()),
         (
             _qh_preview_for_identity,
-            _qh_preview_identity("generation", stage="train", chain_index=0, batch_size=1, seed=0),
+            _qh_preview_identity(QhPreviewRequest(_qh_request(), Stage.TRAIN, 0)),
             object(),
         ),
     ],
@@ -788,8 +854,10 @@ def test_exact_key_malformed_qh_state_is_removed_page_locally(
     tmp_path: Path,
 ) -> None:
     root, _source_hash = _write_root_store(isolated_path_config.offline_cache_dir)
-    _selection, generation = capture_dataset_bundle_generation(root, ())
-    readiness_identity = _qh_readiness_identity(generation.generation_digest, batch_size=1, seed=0)
+    selection, generation = capture_dataset_bundle_generation(root, ())
+    readiness_identity = _qh_readiness_identity(
+        QhReadinessRequest(selection, generation, training_dataset._QH_READINESS_CONTRACT, 1, 0)
+    )
     app = _app(tmp_path).run()
     app.session_state[training_dataset._QH_READINESS_STATE_KEY] = (readiness_identity, object())
     app.session_state[training_dataset._QH_PREVIEW_STATE_KEY] = ("stale", object())
@@ -806,15 +874,10 @@ def test_exact_key_malformed_qh_preview_is_removed_page_locally(
     tmp_path: Path,
 ) -> None:
     root, _source_hash = _write_root_store(isolated_path_config.offline_cache_dir)
-    _selection, generation = capture_dataset_bundle_generation(root, ())
-    readiness_identity = _qh_readiness_identity(generation.generation_digest, batch_size=1, seed=0)
-    preview_identity = _qh_preview_identity(
-        generation.generation_digest,
-        stage="train",
-        chain_index=0,
-        batch_size=1,
-        seed=0,
-    )
+    selection, generation = capture_dataset_bundle_generation(root, ())
+    readiness_request = QhReadinessRequest(selection, generation, training_dataset._QH_READINESS_CONTRACT, 1, 0)
+    readiness_identity = _qh_readiness_identity(readiness_request)
+    preview_identity = _qh_preview_identity(QhPreviewRequest(readiness_request, Stage.TRAIN, 0))
     app = _app(tmp_path).run()
     app.session_state[training_dataset._QH_READINESS_STATE_KEY] = (readiness_identity, _ready_qh_evidence(root))
     app.session_state[training_dataset._QH_PREVIEW_STATE_KEY] = (preview_identity, object())
@@ -867,7 +930,7 @@ def test_page_retained_slots_reject_invalid_or_stale_values() -> None:
     assert _retained_bundle_evidence(("digest", evidence), "digest") is None
     assert _retained_bundle_evidence({"digest": evidence}, "digest") is None
     assert _retained_deep_statistics(("other", {"aggregate": {}}), "digest") is None
-    assert _retained_deep_statistics(("digest", {"aggregate": {}}), "digest") == {"aggregate": {}}
+    assert _retained_deep_statistics(("digest", {"aggregate": {}}), "digest") is None
 
 
 def test_download_payload_is_deterministic_and_keeps_denominators_distinct(tmp_path: Path) -> None:
@@ -928,26 +991,245 @@ def test_deep_metric_value_marks_partial_counts_and_unavailable_failures() -> No
     assert _deep_metric_value(unavailable, "q_h_trainable_candidates", deep_available=True) == "Unavailable"
 
 
-def test_target_inventory_frames_preserve_zero_samples_and_class_scene_support() -> None:
-    inventory = {
-        "detected": {
-            "available": True,
-            "sample_rows": [{"sample_index": 0, "count": 0}, {"sample_index": 1, "count": 2}],
-            "rows": [
-                {"source_row": 0, "class_name": "chair", "scene_id": "scene-a"},
-                {"source_row": 1, "class_name": "chair", "scene_id": "scene-b"},
-            ],
-        },
-        "gt": {"available": True, "sample_rows": [{"sample_index": 0, "count": 1}], "rows": []},
-    }
+def test_target_inventory_renderer_is_presentation_only() -> None:
+    """The page consumes the report and has no scientific reduction imports."""
 
-    samples, targets = _target_inventory_frames(inventory)
+    source = inspect.getsource(training_dataset._render_target_inventory)
 
-    assert len(samples) == 3
-    assert int((samples["count"] == 0).sum()) == 1
-    assert targets["class_name"].value_counts().to_dict() == {"chair": 2}
-    assert targets["scene_id"].nunique() == 2
-    assert (
-        "aria_nbv/aria_nbv/data_handling/vin_store/target_inventory.py"
-        in _target_inventory_explanation("detected").external_references[0][1]
+    assert "TargetInventoryReport" in source
+    assert "row.to_jsonable()" in source
+    assert "inspect_target_inventory" not in source
+    assert "np." not in source
+    assert "px." not in source
+    assert "_render_plot" in source
+    assert "_plot_control_key" in source
+
+
+def test_target_inventory_renderer_projects_typed_rows_without_reacquisition(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Raw evidence uses the retained typed rows and preserves their exact fields."""
+
+    row = target_inventory_domain.TargetInventoryRow(
+        population="detected",
+        sample_index=3,
+        sample_key="sample-3",
+        scene_id="scene-a",
+        snippet_id="snippet-a",
+        split="train",
+        source_row=4,
+        target_index=5,
+        semantic_id=6,
+        instance_id=7,
+        class_name="chair",
+        confidence=0.75,
+        center=(1.0, 2.0, 3.0),
+        extents=(0.5, 1.0, 1.5),
+        diagonal=2.0,
+        volume=0.75,
+        aspect_ratio=3.0,
     )
+    detected = target_inventory_domain.TargetPopulationEvidence(
+        population="detected",
+        available=True,
+        reason=None,
+        rows=(row,),
+        excluded_padding_count=0,
+        excluded_nonfinite_count=0,
+        excluded_invalid_geometry_count=0,
+        sample_rows=(),
+        sample_counts=(),
+        scene_counts=(),
+        split_counts=(),
+        class_counts=(),
+    )
+    gt = target_inventory_domain.TargetPopulationEvidence(
+        population="gt",
+        available=False,
+        reason="gt.obbs_not_materialized",
+        rows=(),
+        excluded_padding_count=0,
+        excluded_nonfinite_count=0,
+        excluded_invalid_geometry_count=0,
+        sample_rows=(),
+        sample_counts=(),
+        scene_counts=(),
+        split_counts=(),
+        class_counts=(),
+    )
+    inventory = target_inventory_domain.TargetInventory("/immutable/root", detected, gt)
+    report = target_inventory_domain.TargetInventoryReport(
+        inventory=inventory,
+        summaries=(
+            target_inventory_domain.TargetPopulationSummary("detected", True, None, 1, 1, 0, 0, 0, 0),
+            target_inventory_domain.TargetPopulationSummary(
+                "gt", False, "gt.obbs_not_materialized", None, None, None, 0, 0, 0
+            ),
+        ),
+        figures=(),
+        admission_handoff="Retained evidence only.",
+        provenance=(),
+    )
+    rendered: list[Any] = []
+
+    class _MetricColumn:
+        def metric(self, _label: str, _value: object) -> None:
+            pass
+
+    monkeypatch.setattr(st, "columns", lambda _count: [_MetricColumn() for _ in range(4)])
+    monkeypatch.setattr(st, "info", lambda _message: None)
+    monkeypatch.setattr(st, "expander", lambda *_args, **_kwargs: nullcontext())
+    monkeypatch.setattr(st, "dataframe", lambda frame, **_kwargs: rendered.append(frame))
+    monkeypatch.setattr(st, "download_button", lambda *_args, **_kwargs: False)
+    monkeypatch.setattr(
+        training_dataset,
+        "inspect_dataset_bundle_deep",
+        lambda _request: pytest.fail("presentation must not reacquire deep evidence"),
+    )
+
+    training_dataset._render_target_inventory(report)
+
+    assert len(rendered) == 1
+    assert rendered[0].to_dict(orient="records") == [row.to_jsonable()]
+
+
+def _unavailable_target_report(
+    *, figures: tuple[target_inventory_domain.CanonicalPlotlyFigure, ...] = ()
+) -> target_inventory_domain.TargetInventoryReport:
+    """Return a report retaining two explicitly unavailable populations."""
+
+    def population(name: target_inventory_domain.TargetPopulation) -> target_inventory_domain.TargetPopulationEvidence:
+        return target_inventory_domain.TargetPopulationEvidence(
+            population=name,
+            available=False,
+            reason=f"{name}.obbs_not_materialized",
+            rows=(),
+            excluded_padding_count=0,
+            excluded_nonfinite_count=0,
+            excluded_invalid_geometry_count=0,
+            sample_rows=(),
+            sample_counts=(),
+            scene_counts=(),
+            split_counts=(),
+            class_counts=(),
+        )
+
+    detected = population("detected")
+    gt = population("gt")
+    return target_inventory_domain.TargetInventoryReport(
+        inventory=target_inventory_domain.TargetInventory("/immutable/root", detected, gt),
+        summaries=(
+            target_inventory_domain.TargetPopulationSummary(
+                "detected", False, detected.reason, None, None, None, 0, 0, 0
+            ),
+            target_inventory_domain.TargetPopulationSummary("gt", False, gt.reason, None, None, None, 0, 0, 0),
+        ),
+        figures=figures,
+        admission_handoff="Unavailable populations remain explicit.",
+        provenance=(("root", "/immutable/root"),),
+    )
+
+
+def test_target_inventory_renderer_keeps_unavailable_report_surfaces(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Unavailable evidence still renders its factual report and deterministic export."""
+
+    report = _unavailable_target_report()
+    metrics: list[tuple[str, object]] = []
+    infos: list[str] = []
+    warnings: list[str] = []
+    captions: list[str] = []
+    downloads: list[tuple[str, dict[str, Any]]] = []
+
+    class _MetricColumn:
+        def metric(self, label: str, value: object) -> None:
+            metrics.append((label, value))
+
+    monkeypatch.setattr(st, "columns", lambda _count: [_MetricColumn() for _ in range(4)])
+    monkeypatch.setattr(st, "info", infos.append)
+    monkeypatch.setattr(st, "warning", warnings.append)
+    monkeypatch.setattr(st, "expander", lambda *_args, **_kwargs: nullcontext())
+    monkeypatch.setattr(st, "caption", captions.append)
+    monkeypatch.setattr(st, "download_button", lambda label, **kwargs: downloads.append((label, kwargs)))
+    monkeypatch.setattr(
+        training_dataset,
+        "inspect_dataset_bundle_deep",
+        lambda _request: pytest.fail("presentation must not reacquire unavailable evidence"),
+    )
+
+    training_dataset._render_target_inventory(report)
+
+    assert metrics == [
+        ("Detected valid rows", "Unavailable"),
+        ("GT valid rows", "Unavailable"),
+        ("Detected zero-target samples", "Unavailable"),
+        ("GT zero-target samples", "Unavailable"),
+    ]
+    assert infos == ["**Admission-quality handoff:** Unavailable populations remain explicit."]
+    assert warnings == [
+        "Detected target inventory unavailable: `detected.obbs_not_materialized`",
+        "GT target inventory unavailable: `gt.obbs_not_materialized`",
+    ]
+    assert captions == ["No valid materialized detected or GT target rows are available."]
+    assert downloads == [
+        (
+            "Download target inventory JSON",
+            {
+                "data": report.export_bytes,
+                "file_name": "target_inventory.json",
+                "mime": "application/json",
+                "on_click": "ignore",
+            },
+        )
+    ]
+
+
+def test_target_inventory_renderer_preserves_complete_explanation_metadata(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The app adapter retains domain units, theory, and implementation provenance."""
+
+    theory = TheoryReferences(term_ids=("oriented-bounding-box",))
+    implementation_url = "https://github.com/JanDuchscherer104/ARIA-NBV/blob/main/aria_nbv/aria_nbv/data_handling/vin_store/target_inventory.py"
+    metadata = target_inventory_domain.TargetFigureExplanation(
+        question="Which population is supported?",
+        answer="Neither population is materialized.",
+        denominator_missingness="Both denominators are unavailable.",
+        units="Targets per physical sample.",
+        interpretation="No population comparison is possible.",
+        warning="Do not interpret unavailable evidence as zero.",
+        source_fields=("detected.obbs", "gt.obbs"),
+        external_implementation_reference=implementation_url,
+        evidence_role="provenance",
+        theory=theory,
+    )
+    figure = target_inventory_domain.CanonicalPlotlyFigure("support", b'{"data":[],"layout":{}}', metadata)
+    report = _unavailable_target_report(figures=(figure,))
+    explanations: list[ScientificExplanation] = []
+
+    class _MetricColumn:
+        def metric(self, _label: str, _value: object) -> None:
+            pass
+
+    monkeypatch.setattr(st, "columns", lambda _count: [_MetricColumn() for _ in range(4)])
+    monkeypatch.setattr(st, "info", lambda _message: None)
+    monkeypatch.setattr(st, "warning", lambda _message: None)
+    monkeypatch.setattr(st, "expander", lambda *_args, **_kwargs: nullcontext())
+    monkeypatch.setattr(st, "caption", lambda _message: None)
+    monkeypatch.setattr(st, "download_button", lambda *_args, **_kwargs: False)
+    monkeypatch.setattr(
+        training_dataset,
+        "_render_plot",
+        lambda _figure, explanation, **_kwargs: explanations.append(explanation),
+    )
+
+    training_dataset._render_target_inventory(report)
+
+    assert len(explanations) == 1
+    explanation = explanations[0]
+    assert ExplanationSection("Units", metadata.units) in explanation.sections
+    assert explanation.theory == theory
+    assert explanation.external_references == (("Target inventory implementation", implementation_url),)
+    assert explanation.source_fields == metadata.source_fields
+    assert explanation.evidence_role == metadata.evidence_role

@@ -9,33 +9,37 @@ export; it never repairs stores or persists a training-bundle configuration.
 from __future__ import annotations
 
 import json
+from collections.abc import Mapping
 from pathlib import Path
-from typing import Any, cast
+from typing import Any, Literal, cast
 
-import numpy as np
 import pandas as pd
-import plotly.express as px
 import streamlit as st
 
 from ...configs import PathConfig
+from ...data_handling.vin_store.target_inventory import TargetInventoryReport
 from ...dataset_bundle import (
+    DatasetBundleDeepRequest,
+    DatasetBundleDeepStatistics,
     DatasetBundleEvidence,
-    DatasetBundleGeneration,
     DatasetBundleGenerationChangedError,
-    DatasetBundleSelection,
     DatasetBundleSummaryRequest,
+    FrozenJsonArray,
     QhBatchPreview,
     QhCorpusReadiness,
+    QhPreviewRequest,
     QhReadinessContract,
+    QhReadinessRequest,
     assert_dataset_bundle_generation_current,
-    build_qh_corpus_readiness,
     capture_dataset_bundle_generation,
-    compute_dataset_bundle_deep_statistics,
     discover_dataset_bundle_candidates,
     inspect_dataset_bundle,
+    inspect_dataset_bundle_deep,
+    inspect_qh_preview,
+    inspect_qh_readiness,
     prepare_dataset_bundle_export,
-    preview_qh_batch,
 )
+from ...utils import Stage
 from ._stored_rollouts.shared import ExplanationSection, ScientificExplanation
 from ._stored_rollouts.shared import plot_control_key as _plot_control_key
 from ._stored_rollouts.shared import render_plot as _render_plot
@@ -49,32 +53,21 @@ _QH_BATCH_SIZE_KEY = "training_dataset_qh_batch_size"
 _QH_SEED_KEY = "training_dataset_qh_seed"
 _QH_READINESS_CONTRACT = QhReadinessContract("qh_cf0_v1", "evl_v1", "none", "qh_dense_valid_fitted_q_v1")
 
-QhReadinessIdentity = tuple[str, int, int]
-QhPreviewIdentity = tuple[str, str, int, int, int]
+QhReadinessIdentity = str
+QhPreviewIdentity = str
+_STRETCH_WIDTH: Literal["stretch"] = "stretch"
 
 
-def _qh_preview_identity(
-    generation_digest: str,
-    *,
-    stage: str,
-    chain_index: int,
-    batch_size: int,
-    seed: int,
-) -> QhPreviewIdentity:
-    """Return the exact selection and controls that produced one preview."""
+def _qh_preview_identity(request: QhPreviewRequest) -> QhPreviewIdentity:
+    """Return the complete request identity that produced one preview."""
 
-    return (generation_digest, stage, chain_index, batch_size, seed)
+    return request.digest()
 
 
-def _qh_readiness_identity(
-    generation_digest: str,
-    *,
-    batch_size: int,
-    seed: int,
-) -> QhReadinessIdentity:
-    """Return the exact selection and loader controls that produced readiness."""
+def _qh_readiness_identity(request: QhReadinessRequest) -> QhReadinessIdentity:
+    """Return the complete request identity that produced readiness."""
 
-    return (generation_digest, batch_size, seed)
+    return request.digest()
 
 
 def _qh_readiness_for_identity(
@@ -107,12 +100,12 @@ def _retained_bundle_evidence(state: Any, identity: str) -> DatasetBundleEvidenc
     return state[1] if isinstance(state[1], DatasetBundleEvidence) else None
 
 
-def _retained_deep_statistics(state: Any, identity: str) -> dict[str, Any] | None:
+def _retained_deep_statistics(state: Any, identity: str) -> DatasetBundleDeepStatistics | None:
     """Reject stale or malformed page-local deep evidence."""
 
     if not isinstance(state, tuple) or len(state) != 2 or state[0] != identity:
         return None
-    return state[1] if isinstance(state[1], dict) else None
+    return state[1] if isinstance(state[1], DatasetBundleDeepStatistics) else None
 
 
 @st.cache_data(show_spinner="Inspecting manifests and indexes…", max_entries=32)
@@ -135,114 +128,51 @@ def _cached_bundle_summary(request: DatasetBundleSummaryRequest) -> DatasetBundl
 
 @st.cache_data(show_spinner="Scanning rollout arrays and target identities…", max_entries=16)
 def _cached_deep_statistics_inner(
-    root_store: str,
-    rollout_stores: tuple[str, ...],
-    generation: DatasetBundleGeneration,
-) -> dict[str, Any]:
+    request: DatasetBundleDeepRequest,
+) -> DatasetBundleDeepStatistics:
     """Cache deep rollout statistics by immutable artifact identity."""
 
-    selection = DatasetBundleSelection(
-        Path(root_store),
-        tuple(Path(path) for path in rollout_stores),
-    )
-    return compute_dataset_bundle_deep_statistics(selection)
+    return inspect_dataset_bundle_deep(request)
 
 
-def _cached_deep_statistics(
-    root_store: str,
-    rollout_stores: tuple[str, ...],
-    generation: DatasetBundleGeneration,
-) -> dict[str, Any]:
+def _cached_deep_statistics(request: DatasetBundleDeepRequest) -> DatasetBundleDeepStatistics:
     """Return cached deep evidence only while its generation stays current."""
 
-    assert_dataset_bundle_generation_current(generation)
-    result = _cached_deep_statistics_inner(root_store, rollout_stores, generation)
-    assert_dataset_bundle_generation_current(generation)
+    assert_dataset_bundle_generation_current(request.generation)
+    result = _cached_deep_statistics_inner(request)
+    assert_dataset_bundle_generation_current(request.generation)
     return result
 
 
 @st.cache_data(show_spinner="Constructing Q_H datasets and DataModule…", max_entries=8)
-def _cached_qh_readiness_inner(
-    root_store: str,
-    rollout_stores: tuple[str, ...],
-    generation: DatasetBundleGeneration,
-    batch_size: int,
-    seed: int,
-    contract: QhReadinessContract,
-) -> QhCorpusReadiness:
+def _cached_qh_readiness_inner(request: QhReadinessRequest) -> QhCorpusReadiness:
     """Cache the explicit Q_H dataset/DataModule readiness product."""
 
-    return build_qh_corpus_readiness(
-        DatasetBundleSelection(Path(root_store), tuple(Path(path) for path in rollout_stores)),
-        contract=contract,
-        batch_size=batch_size,
-        seed=seed,
-    )
+    return inspect_qh_readiness(request)
 
 
-def _cached_qh_readiness(
-    root_store: str,
-    rollout_stores: tuple[str, ...],
-    generation: DatasetBundleGeneration,
-    batch_size: int,
-    seed: int,
-    contract: QhReadinessContract,
-) -> QhCorpusReadiness:
+def _cached_qh_readiness(request: QhReadinessRequest) -> QhCorpusReadiness:
     """Return cached Q_H readiness only while its generation stays current."""
 
-    assert_dataset_bundle_generation_current(generation)
-    result = _cached_qh_readiness_inner(root_store, rollout_stores, generation, batch_size, seed, contract)
-    assert_dataset_bundle_generation_current(generation)
+    assert_dataset_bundle_generation_current(request.generation)
+    result = _cached_qh_readiness_inner(request)
+    assert_dataset_bundle_generation_current(request.generation)
     return result
 
 
 @st.cache_data(show_spinner="Reading one Q_H chain and collating one batch…", max_entries=8)
-def _cached_qh_preview_inner(
-    root_store: str,
-    rollout_stores: tuple[str, ...],
-    generation: DatasetBundleGeneration,
-    stage: str,
-    chain_index: int,
-    batch_size: int,
-    seed: int,
-    contract: QhReadinessContract,
-) -> QhBatchPreview:
+def _cached_qh_preview_inner(request: QhPreviewRequest) -> QhBatchPreview:
     """Cache one explicitly requested bounded chain and DataLoader batch."""
 
-    return preview_qh_batch(
-        DatasetBundleSelection(Path(root_store), tuple(Path(path) for path in rollout_stores)),
-        contract=contract,
-        stage=stage,
-        chain_index=chain_index,
-        batch_size=batch_size,
-        seed=seed,
-    )
+    return inspect_qh_preview(request)
 
 
-def _cached_qh_preview(
-    root_store: str,
-    rollout_stores: tuple[str, ...],
-    generation: DatasetBundleGeneration,
-    stage: str,
-    chain_index: int,
-    batch_size: int,
-    seed: int,
-    contract: QhReadinessContract,
-) -> QhBatchPreview:
+def _cached_qh_preview(request: QhPreviewRequest) -> QhBatchPreview:
     """Return a cached Q_H preview only while its generation stays current."""
 
-    assert_dataset_bundle_generation_current(generation)
-    result = _cached_qh_preview_inner(
-        root_store,
-        rollout_stores,
-        generation,
-        stage,
-        chain_index,
-        batch_size,
-        seed,
-        contract,
-    )
-    assert_dataset_bundle_generation_current(generation)
+    assert_dataset_bundle_generation_current(request.readiness.generation)
+    result = _cached_qh_preview_inner(request)
+    assert_dataset_bundle_generation_current(request.readiness.generation)
     return result
 
 
@@ -293,194 +223,56 @@ def _manual_paths(value: str) -> tuple[Path, ...]:
     return tuple(Path(line.strip()).expanduser() for line in value.splitlines() if line.strip())
 
 
-def _target_inventory_frames(inventory: dict[str, Any]) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Normalize typed detected/GT inventory rows for presentation plots."""
+def _render_target_inventory(report: TargetInventoryReport) -> None:
+    """Render frozen target-inventory report products without scientific reduction."""
 
-    sample_rows: list[dict[str, Any]] = []
-    target_rows: list[dict[str, Any]] = []
-    for population in ("detected", "gt"):
-        evidence = inventory.get(population, {})
-        if not bool(evidence.get("available")):
-            continue
-        sample_rows.extend({**row, "population": population} for row in evidence.get("sample_rows", ()))
-        target_rows.extend({**row, "population": population} for row in evidence.get("rows", ()))
-    samples = pd.DataFrame(sample_rows)
-    targets = pd.DataFrame(target_rows)
-    return samples, targets
-
-
-def _render_target_inventory(inventory: dict[str, Any]) -> None:
-    """Show detector/GT availability and geometry distributions from deep evidence."""
-
-    samples, targets = _target_inventory_frames(inventory)
-    detected = inventory.get("detected", {})
-    gt = inventory.get("gt", {})
-    cols = st.columns(4)
-    cols[0].metric("Detected targets", _metric_value(detected.get("row_count")))
-    cols[1].metric("GT targets", _metric_value(gt.get("row_count")))
-    for index, (label, population) in enumerate((("Zero-detection samples", "detected"), ("Zero-GT samples", "gt")), 2):
-        rows = samples.loc[samples["population"] == population] if not samples.empty else samples
-        value = "Unavailable" if rows.empty else f"{int((rows['count'] == 0).sum()):,} / {len(rows):,}"
-        cols[index].metric(label, value)
-
-    st.info(
-        "**Admission-quality handoff:** this page describes detected/GT availability and source geometry only. "
-        "The Campaign Generation page owns immutable admission decisions, including strict same-class oriented "
-        "IoU **> 0.20** and exactly one qualifying GT match; those criteria are not recomputed here."
-    )
-
-    exclusion_rows = [
-        {"population": population, "reason": reason, "count": int(evidence.get(field, 0))}
-        for population, evidence in (("detected", detected), ("gt", gt))
-        for reason, field in (
-            ("padding", "excluded_padding_count"),
-            ("non-finite", "excluded_nonfinite_count"),
-            ("invalid geometry", "excluded_invalid_geometry_count"),
-        )
-        if int(evidence.get(field, 0))
-    ]
-    if exclusion_rows:
-        _render_target_inventory_plot(
-            px.bar(
-                pd.DataFrame(exclusion_rows),
-                x="reason",
-                y="count",
-                color="population",
-                barmode="group",
-                title="Target rows excluded before statistical summaries",
+    detected, gt = report.inventory.detected, report.inventory.gt
+    summaries = {summary.population: summary for summary in report.summaries}
+    columns = st.columns(4)
+    columns[0].metric("Detected valid rows", _metric_value(detected.row_count) if detected.available else "Unavailable")
+    columns[1].metric("GT valid rows", _metric_value(gt.row_count) if gt.available else "Unavailable")
+    for column, summary, label in (
+        (columns[2], summaries["detected"], "Detected zero-target samples"),
+        (columns[3], summaries["gt"], "GT zero-target samples"),
+    ):
+        value = "Unavailable"
+        if summary.available and summary.physical_sample_count and summary.zero_target_sample_count is not None:
+            value = f"{summary.zero_target_sample_count / summary.physical_sample_count:.1%}"
+        column.metric(label, value)
+    for summary in report.summaries:
+        if not summary.available and summary.unavailable_reason:
+            population_label = "Detected" if summary.population == "detected" else "GT"
+            st.warning(f"{population_label} target inventory unavailable: `{summary.unavailable_reason}`")
+    st.info(f"**Admission-quality handoff:** {report.admission_handoff}")
+    for figure in report.figures:
+        metadata = figure.explanation
+        explanation = ScientificExplanation(
+            question=metadata.question,
+            answer=metadata.answer,
+            sections=(
+                ExplanationSection("Denominator and missingness", metadata.denominator_missingness),
+                ExplanationSection("Units", metadata.units),
+                ExplanationSection("Interpretation", metadata.interpretation),
+                ExplanationSection("Caution", metadata.warning),
             ),
-            "exclusions",
-            _target_inventory_explanation("exclusions"),
+            evidence_role=metadata.evidence_role,
+            source_fields=metadata.source_fields,
+            theory=metadata.theory,
+            external_references=(("Target inventory implementation", metadata.external_implementation_reference),),
         )
-    if not samples.empty:
-        _render_target_inventory_plot(
-            px.histogram(
-                samples,
-                x="count",
-                color="population",
-                barmode="overlay",
-                marginal="box",
-                title="Detected and GT targets per physical sample",
-                labels={"count": "finite valid OBB rows per sample"},
-            ),
-            "per-sample-counts",
-            _target_inventory_explanation("per-sample counts"),
-        )
-    if targets.empty:
-        return
-    class_rows = (
-        targets.groupby(["population", "class_name"], dropna=False)
-        .agg(target_count=("source_row", "size"), scene_count=("scene_id", "nunique"))
-        .reset_index()
-    )
-    _render_target_inventory_plot(
-        px.bar(
-            class_rows,
-            x="class_name",
-            y="target_count",
-            color="population",
-            barmode="group",
-            hover_data=["scene_count"],
-            title="Target support by semantic class",
-        ),
-        "class-support",
-        _target_inventory_explanation("class support"),
-    )
-    geometry = targets.loc[(targets["volume"] > 0) & targets["volume"].notna()].copy()
-    if not geometry.empty:
-        geometry["log10_volume"] = np.log10(geometry["volume"])
-        geometry["log10_aspect_ratio"] = np.log10(geometry["aspect_ratio"])
-        _render_target_inventory_plot(
-            px.histogram(
-                geometry,
-                x="log10_volume",
-                color="population",
-                barmode="overlay",
-                histnorm="probability",
-                title="Target OBB volume distribution",
-                labels={"log10_volume": "log10 oriented-box volume [m³]"},
-            ),
-            "obb-volume",
-            _target_inventory_explanation("OBB volume"),
-        )
-        _render_target_inventory_plot(
-            px.histogram(
-                geometry,
-                x="log10_aspect_ratio",
-                color="population",
-                barmode="overlay",
-                histnorm="probability",
-                title="Target OBB aspect-ratio distribution",
-                labels={"log10_aspect_ratio": "log10 largest / smallest extent"},
-            ),
-            "obb-aspect-ratio",
-            _target_inventory_explanation("OBB aspect ratio"),
-        )
-    confidence = targets.loc[(targets["population"] == "detected") & targets["confidence"].notna()]
-    if not confidence.empty:
-        _render_target_inventory_plot(
-            px.histogram(confidence, x="confidence", color="class_name", title="Actor-visible detection confidence"),
-            "detection-confidence",
-            _target_inventory_explanation("detection confidence"),
-        )
-    with st.expander("Target inventory rows and export", expanded=False):
-        st.dataframe(targets, hide_index=True, width="stretch")
-        st.download_button(
-            "Download target inventory JSON",
-            data=json.dumps(inventory, indent=2, sort_keys=True),
-            file_name="target_inventory.json",
-            mime="application/json",
-            on_click="ignore",
-        )
-
-
-def _render_target_inventory_plot(figure: Any, key: str, explanation: ScientificExplanation) -> None:
-    """Render one target-inventory figure through the shared scientific seam."""
-
-    _render_plot(figure, explanation, log_y_key=_plot_control_key("target-inventory", key))
-
-
-def _target_inventory_explanation(kind: str) -> ScientificExplanation:
-    """Describe target-inventory denominators without conflating detected and GT rows."""
-
-    common = (
-        ExplanationSection(
-            "population",
-            "Physical VIN samples retain zero-target rows; detected and GT populations are shown as separate evidence roles.",
-        ),
-        ExplanationSection(
-            "denominator / missingness",
-            "Counts use valid persisted rows after padding, non-finite, and invalid-geometry exclusions; missing values are not imputed.",
-        ),
-        ExplanationSection(
-            "metric / units",
-            "Counts are rows or samples; geometric volume is in cubic metres, aspect ratio is dimensionless, and confidence is a detector score.",
-        ),
-        ExplanationSection(
-            "interpretation",
-            "Detected rows describe actor-visible observations, while GT rows describe privileged evaluation geometry. They are not interchangeable training labels.",
-        ),
-        ExplanationSection(
-            "warning",
-            "Changes in valid-row coverage or class support can reflect source-store filtering rather than a change in scene content.",
-        ),
-    )
-    return ScientificExplanation(
-        question=f"What does the target-inventory {kind} distribution say about source coverage?",
-        answer="This view summarizes the selected persisted target inventory; it is a coverage diagnostic, not a model-performance estimate.",
-        sections=common,
-        evidence_role="provenance",
-        source_fields=(
-            "data_handling.vin_store.target_inventory.inspect_target_inventory",
-            "target inventory rows",
-            "VIN source-store metadata",
-        ),
-        external_references=(
-            (
-                "Target inventory implementation",
-                "https://github.com/JanDuchscherer104/ARIA-NBV/blob/main/aria_nbv/aria_nbv/data_handling/vin_store/target_inventory.py",
-            ),
-        ),
+        _render_plot(figure.build_figure(), explanation, log_y_key=_plot_control_key("target-inventory", figure.key))
+    raw_rows = [row.to_jsonable() for population in (detected, gt) for row in population.rows]
+    with st.expander("Raw target inventory rows", expanded=False):
+        if raw_rows:
+            st.dataframe(pd.DataFrame(raw_rows), hide_index=True, width="stretch")
+        else:
+            st.caption("No valid materialized detected or GT target rows are available.")
+    st.download_button(
+        "Download target inventory JSON",
+        data=report.export_bytes,
+        file_name="target_inventory.json",
+        mime="application/json",
+        on_click="ignore",
     )
 
 
@@ -741,7 +533,7 @@ def _rollout_rows(evidence: DatasetBundleEvidence) -> list[dict[str, Any]]:
 
 def _download_payload(
     evidence: DatasetBundleEvidence,
-    deep: dict[str, Any] | None,
+    deep: DatasetBundleDeepStatistics | Mapping[str, Any] | None,
     qh_readiness: QhCorpusReadiness | None = None,
     qh_preview: QhBatchPreview | None = None,
 ) -> bytes:
@@ -789,8 +581,6 @@ def render_training_dataset_page() -> None:  # pragma: no cover - Streamlit UI
         st.error(str(exc))
         return
     identity = generation.generation_digest
-    root_text = selection.root_store.as_posix()
-    rollout_texts = tuple(path.as_posix() for path in selection.rollout_stores)
     try:
         light = _cached_bundle_summary(
             DatasetBundleSummaryRequest(
@@ -832,8 +622,9 @@ def render_training_dataset_page() -> None:  # pragma: no cover - Streamlit UI
     if validated_state is not None and retained_evidence is None:
         st.session_state.pop(_VALIDATED_STATE_KEY, None)
     evidence = retained_evidence or light
+    deep_request = DatasetBundleDeepRequest(selection, generation)
     deep_state = st.session_state.get(_DEEP_STATE_KEY)
-    deep = _retained_deep_statistics(deep_state, identity)
+    deep = _retained_deep_statistics(deep_state, deep_request.digest())
     if deep_state is not None and deep is None:
         st.session_state.pop(_DEEP_STATE_KEY, None)
     qh_readiness: QhCorpusReadiness | None = None
@@ -907,7 +698,14 @@ def render_training_dataset_page() -> None:  # pragma: no cover - Streamlit UI
                 on_change=_clear_qh_results_for_control_change,
             )
         )
-        readiness_identity = _qh_readiness_identity(identity, batch_size=batch_size, seed=seed)
+        readiness_request = QhReadinessRequest(
+            selection=selection,
+            generation=generation,
+            contract=_QH_READINESS_CONTRACT,
+            batch_size=batch_size,
+            seed=seed,
+        )
+        readiness_identity = _qh_readiness_identity(readiness_request)
         qh_state = st.session_state.get(_QH_READINESS_STATE_KEY)
         qh_readiness = _qh_readiness_for_identity(qh_state, readiness_identity)
         if qh_state is not None and qh_readiness is None:
@@ -919,14 +717,7 @@ def render_training_dataset_page() -> None:  # pragma: no cover - Streamlit UI
             qh_readiness = None
             qh_preview = None
             try:
-                qh_readiness = _cached_qh_readiness(
-                    root_text,
-                    rollout_texts,
-                    generation,
-                    batch_size,
-                    seed,
-                    _QH_READINESS_CONTRACT,
-                )
+                qh_readiness = _cached_qh_readiness(readiness_request)
             except Exception as exc:
                 _render_acquisition_failure(
                     "Q_H corpus preflight",
@@ -978,13 +769,12 @@ def render_training_dataset_page() -> None:  # pragma: no cover - Streamlit UI
                 preview_index = int(
                     preview_controls[1].number_input("Preview chain index", min_value=0, value=0, step=1)
                 )
-                preview_identity = _qh_preview_identity(
-                    identity,
-                    stage=preview_stage,
+                preview_request = QhPreviewRequest(
+                    readiness=readiness_request,
+                    stage=Stage.from_str(preview_stage),
                     chain_index=preview_index,
-                    batch_size=batch_size,
-                    seed=seed,
                 )
+                preview_identity = _qh_preview_identity(preview_request)
                 preview_state = st.session_state.get(_QH_PREVIEW_STATE_KEY)
                 qh_preview = _qh_preview_for_identity(preview_state, preview_identity)
                 if preview_state is not None and qh_preview is None:
@@ -993,16 +783,7 @@ def render_training_dataset_page() -> None:  # pragma: no cover - Streamlit UI
                     st.session_state.pop(_QH_PREVIEW_STATE_KEY, None)
                     qh_preview = None
                     try:
-                        qh_preview = _cached_qh_preview(
-                            root_text,
-                            rollout_texts,
-                            generation,
-                            preview_stage,
-                            preview_index,
-                            batch_size,
-                            seed,
-                            _QH_READINESS_CONTRACT,
-                        )
+                        qh_preview = _cached_qh_preview(preview_request)
                     except Exception as exc:
                         _render_acquisition_failure(
                             "Q_H preview",
@@ -1017,22 +798,19 @@ def render_training_dataset_page() -> None:  # pragma: no cover - Streamlit UI
                 preview_cols[1].metric("Batch trainable", qh_preview.trainable_candidate_count)
                 preview_cols[2].metric("Step padding", qh_preview.step_padding_count)
                 preview_cols[3].metric("Candidate padding", qh_preview.candidate_padding_count)
-                st.dataframe(
-                    pd.DataFrame(
-                        [
-                            {"tensor": name, "shape": list(shape), "dtype": qh_preview.dtypes[name]}
-                            for name, shape in qh_preview.shapes.items()
-                        ]
-                    ),
-                    hide_index=True,
-                    width="stretch",
-                )
+                shape_rows: list[dict[str, Any]] = []
+                for name, shape in qh_preview.shapes.items():
+                    dtype = qh_preview.dtypes[name]
+                    if not isinstance(shape, FrozenJsonArray) or not isinstance(dtype, str):
+                        raise TypeError(f"Q_H preview tensor metadata is malformed for {name!r}.")
+                    shape_rows.append({"tensor": name, "shape": shape.to_jsonable(), "dtype": dtype})
+                st.dataframe(pd.DataFrame(shape_rows), hide_index=True, width=_STRETCH_WIDTH)
     with details_tab:
         if st.button("Deep statistics / target scan", width="stretch"):
             st.session_state.pop(_DEEP_STATE_KEY, None)
             deep = None
             try:
-                deep = _cached_deep_statistics(root_text, rollout_texts, generation)
+                deep = _cached_deep_statistics(deep_request)
             except Exception as exc:
                 _render_acquisition_failure(
                     "Deep statistics scan",
@@ -1040,13 +818,14 @@ def render_training_dataset_page() -> None:  # pragma: no cover - Streamlit UI
                     action="Refresh the rollout caches, verify the selected stores, and run the scan again.",
                 )
             else:
-                st.session_state[_DEEP_STATE_KEY] = (identity, deep)
+                st.session_state[_DEEP_STATE_KEY] = (deep_request.digest(), deep)
         if deep is None:
             st.info("Run the deep scan to materialize target and candidate denominators.")
-        root_target_scan = deep.get("root_gt_obb_target_opportunities", {}) if deep is not None else {}
-        if deep is not None:
-            deep_aggregate = deep.get("aggregate", {})
-            inventory = deep.get("root_target_inventory", {})
+        deep_json = deep.to_jsonable() if deep is not None else None
+        root_target_scan = deep_json.get("root_gt_obb_target_opportunities", {}) if deep_json is not None else {}
+        if deep_json is not None and deep is not None:
+            deep_aggregate = deep_json.get("aggregate", {})
+            inventory = deep_json.get("root_target_inventory", {})
             detected = inventory.get("detected", {})
             gt = inventory.get("gt", {})
             deep_columns = st.columns(5)
@@ -1072,10 +851,9 @@ def render_training_dataset_page() -> None:  # pragma: no cover - Streamlit UI
                 "GT targets",
                 _metric_value(gt.get("row_count")) if gt.get("available") else "Unavailable",
             )
-            if detected.get("available") or gt.get("available"):
-                _render_target_inventory(inventory)
+            _render_target_inventory(deep.target_inventory)
             with st.expander("Raw deep evidence JSON", expanded=False):
-                st.json(deep)
+                st.json(deep_json)
         if not bool(root_target_scan.get("available")):
             reason = root_target_scan.get("reason", "deep scan not run")
             st.warning(
