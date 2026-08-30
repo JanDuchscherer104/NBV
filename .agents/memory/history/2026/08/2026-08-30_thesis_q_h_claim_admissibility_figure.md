@@ -52,11 +52,16 @@ reviews until zero P0--P2 findings remained.
   matrix still conflated unavailable headroom evidence with an observed
   negative result. Its six prerequisite rows now distinguish unresolved
   evidence from a measured decision non-pass explicitly.
+- Exact-head rereview found a second valid P2: the recovered-headroom ratio
+  could be printed while its headroom denominator was inadmissible. Ratio
+  publication now requires admissible headroom, while underlying matched
+  endpoint observations and their decision remain auditable.
 
 ## Commits
 
 - https://github.com/JanDuchscherer104/ARIA-NBV/commit/9897e0f4709ca9ca3ec9c5933fd0e2de2ba1dccf
 - https://github.com/JanDuchscherer104/ARIA-NBV/commit/f1ddfdef8f37c287158fdfa8501a729c2e1089fc
+- https://github.com/JanDuchscherer104/ARIA-NBV/commit/72a1136a11e4fe751893ad606fcc923882e7ecb3
 
 ## Verification
 
