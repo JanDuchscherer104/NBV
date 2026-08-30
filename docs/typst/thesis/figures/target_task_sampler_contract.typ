@@ -52,14 +52,15 @@
   rect((2.78, 3.58), (3.18, 3.82), fill: white, stroke: (paint: muted, thickness: .55pt, dash: "dashed"))
   content((2.98, 3.36), text(size: 7.1pt, fill: muted)[padding], anchor: "north")
 
-  heading(4.20, [Audit rows], [all non-padding OBBs])
-  dot(4.42, 3.70, [$e_0$], role: "eligible")
-  dot(5.26, 3.70, [$e_1$], role: "invalid")
-  dot(6.10, 3.70, [$e_2$], role: "eligible")
+  heading(4.20, [Source rows], [all non-padding OBBs])
+  dot(4.42, 3.70, [$e_0$])
+  dot(5.26, 3.70, [$e_1$])
+  dot(6.10, 3.70, [$e_2$])
 
-  heading(7.82, [Eligible rows], [geometry gate · $cal(R)_s^"geom"$], tint: eligible)
+  heading(7.82, [Validated rows], [`rows` $= cal(R)_s^"geom"$], tint: eligible)
   dot(8.04, 3.70, [$e_0$], role: "eligible")
-  dot(8.92, 3.70, [$e_2$], role: "eligible")
+  dot(8.92, 3.70, [$e_1$], role: "eligible")
+  dot(9.80, 3.70, [$e_2$], role: "eligible")
 
   heading(11.32, [Seeded cap], [uniform draw], tint: selected)
   content((12.44, 3.78), text(size: 8.1pt, weight: "bold")[$pi_"seed"$], anchor: "center")
@@ -71,15 +72,16 @@
 
   rail-arrow(3.34, 3.98)
   rail-arrow(6.55, 7.60)
-  rail-arrow(9.70, 11.08)
+  content((7.08, 4.08), text(size: 7.4pt)[all $g(e)=1$], anchor: "south")
+  rail-arrow(10.30, 11.08)
   rail-arrow(13.65, 14.78)
 
-  // Invalid rows remain in the audit table but cannot enter support.
-  line((5.26, 3.45), (5.26, 2.24), stroke: (paint: invalid, thickness: .70pt, dash: "dashed"), mark: (end: ">", scale: .48))
-  content((5.26, 1.98), align(center, text(size: 7.45pt, fill: invalid)[invalid geometry\
-  audit only; excluded from $cal(R)_s^"geom"$]), anchor: "north")
+  // Invalid geometry is fail-fast: descriptor validation raises before append.
+  line((7.08, 3.45), (7.08, 2.24), stroke: (paint: invalid, thickness: .70pt, dash: "dashed"), mark: (end: ">", scale: .48))
+  content((7.08, 1.98), align(center, text(size: 7.45pt, fill: invalid)[any $g(e)=0$\
+  descriptor raises before result]), anchor: "north")
 
   // The exact admission predicate is the only secondary annotation.
   content((.42, .82), text(size: 7.45pt, fill: muted)[all-padding block $arrow.r$ no task rows], anchor: "west")
-  content((7.70, .82), text(size: 8pt)[$g(e) = op("finite")(bold(B)_e) and op("finite")(bold(l)_e) and min(bold(l)_e) > 0$], anchor: "west")
+  content((10.05, .82), text(size: 7.8pt)[$g(e) = op("finite")(bold(B)_e) and op("finite")(bold(l)_e) and min(bold(l)_e) > 0$], anchor: "west")
 })
