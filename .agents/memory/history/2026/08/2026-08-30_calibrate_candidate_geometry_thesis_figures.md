@@ -58,6 +58,9 @@ scientific, visual, and reproducibility verification.
 - Exact-head rereview found that the cross-format equation registry still
   exported the former fixed shell size and radius interval. The registry now
   matches the modular Typst bodies, and all notation adapters were regenerated.
+- A subsequent rereview found that the primary exporter did not prove the raw
+  camera shard and rollout store shared one sampling root. A single frame-owner
+  assertion now gates both primary and recovery exports before rendering.
 - Semantic roles remain distinct in color and grayscale: neutral mesh, purple
   dashed history/frusta, orange double-line OBB, family-shaped shell markers,
   and black/gold selection.
@@ -67,6 +70,7 @@ scientific, visual, and reproducibility verification.
 - https://github.com/JanDuchscherer104/ARIA-NBV/commit/7fc7e488dba6d46a3721b9447b55b61890ca0fb0
 - https://github.com/JanDuchscherer104/ARIA-NBV/commit/fe651e06093f242d8c0b62a3bcd5b193df3ae7a7
 - https://github.com/JanDuchscherer104/ARIA-NBV/commit/6eb42262924ce2b60c475a8de10a709eb0708254
+- https://github.com/JanDuchscherer104/ARIA-NBV/commit/e13253c546859bad18e890842d6cfceba3360848
 
 ## Verification
 
@@ -85,6 +89,8 @@ scientific, visual, and reproducibility verification.
 - `make glossary` run twice: canonical registry and Quarto, Typst, and Lua
   adapters remain byte-stable and contain the component-resolved shell and
   radius equations.
+- canonical sampling-root assertion: pinned raw history and recovered root pass;
+  a synthetic one-metre root mismatch raises before evidence generation.
 
 The original rollout Zarr remains unavailable locally, so the primary exporter
 cannot be executed end to end. The tracked recovery path and published caption
