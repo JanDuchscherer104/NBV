@@ -96,7 +96,7 @@ and regret remain undefined until exact or independently oracle-rescored
 candidate tables exist. Recording zero support is more faithful than inventing
 a metric from the selected transition alone.
 
-=== Fitted-Q recursion
+=== Fitted-Q recursion <ssec:thesis-horizon-recursive-offline-learning>
 
 Batch fitted Q iteration turns the fixed replay collection into successive
 supervised problems @FittedQIteration-ernst2005. The immediate reward is
