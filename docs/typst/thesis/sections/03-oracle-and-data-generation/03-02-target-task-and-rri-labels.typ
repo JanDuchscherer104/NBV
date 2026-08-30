@@ -324,6 +324,13 @@ annotated as uncapped spherical support and are not represented by a bounded box
   caption: [Candidate-generation diagnostics and their aggregation populations. Every state-level quantity is reduced before scene and cohort aggregation.],
 ) <tab:candidate-support-metric-contract>
 
+For confirmatory admission, these support metrics and their boolean decision
+form one scene-population family. Every row uses the same positive
+`study.population.scenes` denominator and immutable sidecar source; fraction
+metrics remain in $[0,1]$, support counts are nonnegative, and circular span is
+bounded by a full revolution. Missing or malformed rows make the support gate
+unresolved rather than negative.
+
 === Rollout Branch Sampling and Dataset Impact
 
 Rollout recipes select and retain finite chains from the valid action table. The implemented families are uniform valid sampling, one-step oracle greedy selection, bounded oracle lookahead, and temperature-softmax sampling. Their horizon, branch factor, beam width, temperature, and seed are resolved parameters. These recipes generate replay diversity and bounded references; they do not constitute a learned policy.

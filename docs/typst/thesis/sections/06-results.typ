@@ -1,6 +1,6 @@
 = Results <sec:thesis-results>
 
-#import "../experiment_data.typ": thesis-report-settings, load-thesis-report, endpoint-evidence-facts, headroom-evidence-facts, recovery-evidence-facts, report-store-fact, report-store-facts-match-contract, report-store-endpoint-evidence-valid, report-store-headroom-evidence-valid, report-store-recovery-evidence-valid, report-store-headroom-identity-valid, report-store-recovery-identity-valid, report-store-facts-share-value, report-store-facts-share-source, report-store-count-binds-facts, report-stores-have-facts, report-stores-have-boolean-fact, report-stores-decision-passed, evidence-gate-state, conditional-ratio-gate-state, short-store-label, format-report-value
+#import "../experiment_data.typ": thesis-report-settings, load-thesis-report, endpoint-evidence-facts, headroom-evidence-facts, recovery-evidence-facts, report-store-fact, report-store-endpoint-evidence-valid, report-store-headroom-evidence-valid, report-store-recovery-evidence-valid, report-store-headroom-identity-valid, report-store-recovery-identity-valid, report-store-population-evidence-valid, report-store-measurement-evidence-valid, report-store-candidate-support-evidence-valid, report-store-q1-evidence-valid, report-store-q2-evidence-valid, report-store-facts-share-value, report-store-facts-share-source, report-stores-have-facts, report-stores-decision-passed, evidence-gate-state, conditional-ratio-gate-state, short-store-label, format-report-value
 #import "../draft_markers.typ": validation_todo
 #import "../../shared/tables.typ": publication-table, index-cell
 
@@ -32,43 +32,25 @@
 }
 #let claim-status(state) = if state.claim_admissible [admissible] else [blocked]
 
-#let population-facts = ("study.population.scenes", "study.population.targets", "study.population.exclusions")
-#let measurement-facts = ("oracle.metric.repeatability.max_abs_diff", "oracle.metric.repeatability.n_repeats", "oracle.metric.repeatability.passed")
-#let candidate-support-facts = (
-  "candidate-support.actor-valid-fraction",
-  "candidate-support.valid-support-p05",
-  "candidate-support.configured-family-zero-rate",
-  "candidate-support.target-side-balance",
-  "candidate-support.circular-orbit-span",
-  "candidate-support.gate.passed",
-)
-#let candidate-support-contract = (
-  (key: "candidate-support.actor-valid-fraction", aggregation: "state_then_scene_macro"),
-  (key: "candidate-support.valid-support-p05", aggregation: "state_then_scene_p05"),
-  (key: "candidate-support.configured-family-zero-rate", aggregation: "state_then_scene_macro"),
-  (key: "candidate-support.target-side-balance", aggregation: "state_then_scene_macro"),
-  (key: "candidate-support.circular-orbit-span", aggregation: "state_then_scene_macro"),
-)
-#let q1-facts = ("q1.ranking.pairwise_accuracy", "q1.calibration.mae", "q1.population.n_scenes", "q1.gate.passed")
-#let q2-facts = ("q2.exact.mae", "q2.exact.coverage", "q2.exact.n_independent_units", "q2.exact.passed")
 #let resource-facts = ("runtime.wall_time_s", "runtime.peak_gpu_bytes", "storage.total_bytes")
 
 #let confirmatory-evidence = thesis_evidence_status == "confirmatory" and all-stores-valid
-#let population-evidence-available = confirmatory-evidence and report-stores-have-facts(thesis_data, population-facts, denominators: true)
-#let measurement-evidence-available = confirmatory-evidence and report-stores-have-facts(thesis_data, measurement-facts) and report-stores-have-boolean-fact(thesis_data, "oracle.metric.repeatability.passed")
+#let population-evidence-available = confirmatory-evidence and thesis_data.tables.stores.rows.all(store => report-store-population-evidence-valid(
+  thesis_data,
+  store.store_id,
+))
+#let measurement-evidence-available = confirmatory-evidence and thesis_data.tables.stores.rows.all(store => report-store-measurement-evidence-valid(
+  thesis_data,
+  store.store_id,
+))
 #let measurement-state = evidence-gate-state(
   measurement-evidence-available,
   report-stores-decision-passed(thesis_data, "oracle.metric.repeatability.passed"),
 )
-#let support-evidence-available = population-evidence-available and report-stores-have-facts(thesis_data, candidate-support-facts, denominators: true) and report-stores-have-boolean-fact(thesis_data, "candidate-support.gate.passed") and thesis_data.tables.stores.rows.all(store => {
-  let scene-count = report-store-fact(thesis_data, store.store_id, "study.population.scenes").value
-  scene-count != none and scene-count > 0 and report-store-facts-match-contract(
-    thesis_data,
-    store.store_id,
-    candidate-support-contract,
-    scene-count,
-  )
-})
+#let support-evidence-available = population-evidence-available and thesis_data.tables.stores.rows.all(store => report-store-candidate-support-evidence-valid(
+  thesis_data,
+  store.store_id,
+))
 #let support-state = evidence-gate-state(
   support-evidence-available,
   report-stores-decision-passed(thesis_data, "candidate-support.gate.passed"),
@@ -110,22 +92,18 @@
   report-stores-decision-passed(thesis_data, "headroom_gate.passed"),
   prerequisites-passed: shared-foundations-pass,
 )
-#let q1-evidence-available = confirmatory-evidence and report-stores-have-facts(thesis_data, q1-facts, denominators: true) and report-stores-have-boolean-fact(thesis_data, "q1.gate.passed") and thesis_data.tables.stores.rows.all(store => report-store-count-binds-facts(
+#let q1-evidence-available = confirmatory-evidence and thesis_data.tables.stores.rows.all(store => report-store-q1-evidence-valid(
   thesis_data,
   store.store_id,
-  "q1.population.n_scenes",
-  q1-facts,
 ))
 #let q1-state = evidence-gate-state(
   q1-evidence-available,
   report-stores-decision-passed(thesis_data, "q1.gate.passed"),
   prerequisites-passed: shared-foundations-pass,
 )
-#let q2-evidence-available = confirmatory-evidence and report-stores-have-facts(thesis_data, q2-facts, denominators: true) and report-stores-have-boolean-fact(thesis_data, "q2.exact.passed") and thesis_data.tables.stores.rows.all(store => report-store-count-binds-facts(
+#let q2-evidence-available = confirmatory-evidence and thesis_data.tables.stores.rows.all(store => report-store-q2-evidence-valid(
   thesis_data,
   store.store_id,
-  "q2.exact.n_independent_units",
-  q2-facts,
 ))
 #let q2-state = evidence-gate-state(
   q2-evidence-available,
@@ -204,6 +182,7 @@ nor suppresses independently measured evidence on the other lane.
   if measurement-state.evidence_available {
     families.push((label: [Measurement], metrics: (
       (label: [Maximum repeat discrepancy], key: "oracle.metric.repeatability.max_abs_diff", denominator-key: "oracle.metric.repeatability.n_repeats", digits: 5),
+      (label: [Declared repeatability tolerance], key: "oracle.metric.repeatability.tolerance", digits: 5),
       (label: [Repeatability gate], key: "oracle.metric.repeatability.passed"),
     )))
   }

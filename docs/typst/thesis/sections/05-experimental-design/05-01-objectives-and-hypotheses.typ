@@ -50,6 +50,16 @@ scenes, snippets, admitted target tasks, rollout chains, realized transitions,
 candidate rows, exclusions, and failure strata. A capped training pilot may test
 throughput or support, but it cannot estimate held-out policy performance.
 
+The confirmatory report treats scenes, admitted targets, and exclusions as
+integer counts tied to the same positive scene denominator and immutable
+analysis sidecar. Repeatability likewise reports a nonnegative maximum absolute
+root-normalized-gain discrepancy over at least two repeated executions, a
+nonnegative declared tolerance, the repeat count, and the frozen rule
+`max_abs_diff_lte_tolerance_v1`. Its boolean decision must equal the literal
+comparison between discrepancy and tolerance under one source and denominator.
+Malformed values or metadata leave these foundations unavailable; they are not
+interpreted as measured non-passes.
+
 The current task generator samples geometry-valid ground-truth boxes. It can
 therefore establish oracle-task coverage, not actor-visible target discovery.
 Ground-truth target geometry may define task construction, labels, and bounded

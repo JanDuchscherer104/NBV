@@ -62,3 +62,12 @@ checkpoint bundle, or low error on a few rows cannot establish finite-horizon
 value. Actor-visible $Q_1$ must first pass on held-out scenes; exact $Q_2$ must
 then pass its frozen independent-unit, coverage, and tolerance rules; endpoint
 recovery is interpreted only if oracle headroom is already meaningful.
+
+The report contract preserves those populations explicitly. Pairwise accuracy
+is a unit-interval fraction and one-step calibration MAE is a nonnegative
+root-normalized-gain error, both reduced state first and then scene-macro. The
+exact-$Q_2$ receipt reports a nonnegative independent-unit-macro MAE and
+unit-interval population coverage. Each metric, count, and boolean decision
+shares its declared positive population denominator and one immutable sidecar
+source; a malformed value, aggregation, unit, count, or provenance leaves the
+gate unresolved rather than producing a measured non-pass.

@@ -15,7 +15,7 @@
   selected_depth: ("store_id", "step_index", "available", "valid_fraction"),
   runtime_storage: ("store_id", "file_count", "total_bytes", "status", "source"),
   failures: ("store_id", "kind", "severity", "status", "source"),
-  sidecars: ("sidecar_id", "path", "sha256", "status"),
+  sidecars: ("sidecar_id", "path", "name", "sha256", "format", "status"),
   sidecar_values: ("sidecar_id", "key", "value_type", "is_missing"),
 )
 
@@ -34,6 +34,7 @@
 
 #let paired-interval-method = "scene_clustered_percentile_bootstrap_95"
 #let recovery-ratio-definition = "ratio_of_paired_scene_mean_differences"
+#let repeatability-decision-rule = "max_abs_diff_lte_tolerance_v1"
 #let derived-identity-abs-tolerance = 1e-10
 #let endpoint-evidence-facts = (
   "policy.endpoint_gain.oracle_one_step.mean",
@@ -100,6 +101,70 @@
   (key: "policy.q_recovery.n_scenes", aggregation: "count", unit: "count", value_kind: "integer"),
   (key: "policy.q_recovery.cohort_sha256", aggregation: "cohort_binding_sha256", unit: "sha256", value_kind: "string"),
   (key: "policy.q_recovery.passed", aggregation: "paired_scene_decision", unit: "bool", value_kind: "boolean"),
+)
+#let population-evidence-facts = (
+  "study.population.scenes",
+  "study.population.targets",
+  "study.population.exclusions",
+)
+#let population-evidence-contract = (
+  (key: "study.population.scenes", aggregation: "count", unit: "count", value_kind: "integer", minimum: 1),
+  (key: "study.population.targets", aggregation: "count", unit: "count", value_kind: "integer", minimum: 1),
+  (key: "study.population.exclusions", aggregation: "count", unit: "count", value_kind: "integer", minimum: 0),
+)
+#let measurement-evidence-facts = (
+  "oracle.metric.repeatability.max_abs_diff",
+  "oracle.metric.repeatability.tolerance",
+  "oracle.metric.repeatability.rule",
+  "oracle.metric.repeatability.n_repeats",
+  "oracle.metric.repeatability.passed",
+)
+#let measurement-evidence-contract = (
+  (key: "oracle.metric.repeatability.max_abs_diff", aggregation: "repeatability_max_abs_difference", unit: "fraction", value_kind: "number", minimum: 0),
+  (key: "oracle.metric.repeatability.tolerance", aggregation: "analysis_threshold", unit: "fraction", value_kind: "number", minimum: 0),
+  (key: "oracle.metric.repeatability.rule", aggregation: "analysis_identity", unit: "identity", value_kind: "string"),
+  (key: "oracle.metric.repeatability.n_repeats", aggregation: "count", unit: "count", value_kind: "integer", minimum: 2),
+  (key: "oracle.metric.repeatability.passed", aggregation: "repeatability_decision", unit: "bool", value_kind: "boolean"),
+)
+#let candidate-support-evidence-facts = (
+  "candidate-support.actor-valid-fraction",
+  "candidate-support.valid-support-p05",
+  "candidate-support.configured-family-zero-rate",
+  "candidate-support.target-side-balance",
+  "candidate-support.circular-orbit-span",
+  "candidate-support.gate.passed",
+)
+#let candidate-support-evidence-contract = (
+  (key: "candidate-support.actor-valid-fraction", aggregation: "state_then_scene_macro", unit: "fraction", value_kind: "number", minimum: 0, maximum: 1),
+  (key: "candidate-support.valid-support-p05", aggregation: "state_then_scene_p05", unit: "count", value_kind: "number", minimum: 0),
+  (key: "candidate-support.configured-family-zero-rate", aggregation: "state_then_scene_macro", unit: "fraction", value_kind: "number", minimum: 0, maximum: 1),
+  (key: "candidate-support.target-side-balance", aggregation: "state_then_scene_macro", unit: "fraction", value_kind: "number", minimum: 0, maximum: 1),
+  (key: "candidate-support.circular-orbit-span", aggregation: "state_then_scene_macro", unit: "deg", value_kind: "number", minimum: 0, maximum: 360),
+  (key: "candidate-support.gate.passed", aggregation: "state_then_scene_decision", unit: "bool", value_kind: "boolean"),
+)
+#let q1-evidence-facts = (
+  "q1.ranking.pairwise_accuracy",
+  "q1.calibration.mae",
+  "q1.population.n_scenes",
+  "q1.gate.passed",
+)
+#let q1-evidence-contract = (
+  (key: "q1.ranking.pairwise_accuracy", aggregation: "state_then_scene_macro", unit: "fraction", value_kind: "number", minimum: 0, maximum: 1),
+  (key: "q1.calibration.mae", aggregation: "state_then_scene_macro", unit: "fraction", value_kind: "number", minimum: 0),
+  (key: "q1.population.n_scenes", aggregation: "count", unit: "count", value_kind: "integer", minimum: 1),
+  (key: "q1.gate.passed", aggregation: "state_then_scene_decision", unit: "bool", value_kind: "boolean"),
+)
+#let q2-evidence-facts = (
+  "q2.exact.mae",
+  "q2.exact.coverage",
+  "q2.exact.n_independent_units",
+  "q2.exact.passed",
+)
+#let q2-evidence-contract = (
+  (key: "q2.exact.mae", aggregation: "independent_unit_macro", unit: "fraction", value_kind: "number", minimum: 0),
+  (key: "q2.exact.coverage", aggregation: "independent_unit_fraction", unit: "fraction", value_kind: "number", minimum: 0, maximum: 1),
+  (key: "q2.exact.n_independent_units", aggregation: "count", unit: "count", value_kind: "integer", minimum: 1),
+  (key: "q2.exact.passed", aggregation: "all_units_v1", unit: "bool", value_kind: "boolean"),
 )
 
 #let status-report-tables = ("facts", "runtime_storage", "failures", "sidecars")
@@ -216,6 +281,10 @@
   keys,
   required-fragment: none,
 ) = {
+  let sidecar-rows = report.tables.at(
+    "sidecars",
+    default: (rows: ()),
+  ).rows
   keys.all(key => {
     let matches = report.tables.facts.rows.filter(
       row => row.store_id == store-id and row.key == key,
@@ -223,7 +292,28 @@
     matches.len() == 1 and {
       let source = matches.first().source
       type(source) == str and source.len() > 0 and (
-        required-fragment == none or source.contains(required-fragment)
+        required-fragment == none or (
+          source.contains(required-fragment) and (
+            required-fragment != "|sidecar:" or
+            {
+              let sidecar-id = source.split(required-fragment).last()
+              let matching-sidecars = sidecar-rows.filter(
+                row => row.sidecar_id == sidecar-id,
+              )
+              sidecar-id.match(regex("^[0-9a-f]{64}$")) != none and matching-sidecars.len() == 1 and {
+                let sidecar = matching-sidecars.first()
+                let path-valid = type(sidecar.path) == str and sidecar.path.len() > 0
+                let name-valid = type(sidecar.name) == str and sidecar.name == sidecar.path
+                let digest-valid = type(sidecar.sha256) == str and sidecar.sha256.match(
+                  regex("^[0-9a-f]{64}$"),
+                ) != none
+                let format-valid = sidecar.format in ("json", "jsonl")
+                let status-valid = sidecar.status == "confirmatory"
+                path-valid and name-valid and digest-valid and format-valid and status-valid
+              }
+            }
+          )
+        )
       )
     }
   })
@@ -326,10 +416,20 @@
       let row = matches.first()
       let expected-unit = contract.at("unit", default: none)
       let expected-kind = contract.at("value_kind", default: none)
+      let minimum = contract.at("minimum", default: none)
+      let maximum = contract.at("maximum", default: none)
       row.value != none and row.n == expected-n and row.aggregation == contract.aggregation and (
         expected-unit == none or row.at("unit", default: none) == expected-unit
       ) and (
         expected-kind == none or report-value-matches-kind(row.value, expected-kind)
+      ) and (
+        minimum == none or (
+          report-value-matches-kind(row.value, "number") and row.value >= minimum
+        )
+      ) and (
+        maximum == none or (
+          report-value-matches-kind(row.value, "number") and row.value <= maximum
+        )
       )
     }
   })
@@ -478,6 +578,101 @@
     facts,
     required-fragment: required-source-fragment,
   ) and report-store-facts-share-source(report, store-id, facts)
+}
+
+#let report-store-gated-family-valid(
+  report,
+  store-id,
+  facts,
+  contract,
+  count-key,
+) = {
+  let count-matches = report.tables.facts.rows.filter(
+    row => row.store_id == store-id and row.key == count-key,
+  )
+  count-matches.len() == 1 and {
+    let count = count-matches.first().value
+    type(count) == int and count > 0 and report-store-analysis-family-valid(
+      report,
+      store-id,
+      facts,
+      contract,
+      count,
+      required-source-fragment: "|sidecar:",
+    ) and report-store-count-binds-facts(
+      report,
+      store-id,
+      count-key,
+      facts,
+    )
+  }
+}
+
+#let report-store-candidate-support-evidence-valid(report, store-id) = {
+  report-store-gated-family-valid(
+    report,
+    store-id,
+    candidate-support-evidence-facts,
+    candidate-support-evidence-contract,
+    "study.population.scenes",
+  )
+}
+
+#let report-store-population-evidence-valid(report, store-id) = {
+  report-store-gated-family-valid(
+    report,
+    store-id,
+    population-evidence-facts,
+    population-evidence-contract,
+    "study.population.scenes",
+  )
+}
+
+#let report-store-measurement-evidence-valid(report, store-id) = {
+  let max-abs-diff = report-store-number-value(
+    report,
+    store-id,
+    "oracle.metric.repeatability.max_abs_diff",
+  )
+  let tolerance = report-store-number-value(
+    report,
+    store-id,
+    "oracle.metric.repeatability.tolerance",
+  )
+  let passed-matches = report.tables.facts.rows.filter(
+    row => row.store_id == store-id and row.key == "oracle.metric.repeatability.passed",
+  )
+  report-store-gated-family-valid(
+    report,
+    store-id,
+    measurement-evidence-facts,
+    measurement-evidence-contract,
+    "oracle.metric.repeatability.n_repeats",
+  ) and report-store-fact-values-match(
+    report,
+    store-id,
+    ((key: "oracle.metric.repeatability.rule", value: repeatability-decision-rule),),
+  ) and max-abs-diff != none and tolerance != none and passed-matches.len() == 1 and passed-matches.first().value == (max-abs-diff <= tolerance)
+}
+
+#let report-store-q1-evidence-valid(report, store-id) = {
+  report-store-gated-family-valid(
+    report,
+    store-id,
+    q1-evidence-facts,
+    q1-evidence-contract,
+    "q1.population.n_scenes",
+  )
+}
+
+#let report-store-q2-evidence-valid(report, store-id) = {
+  report-store-gated-family-valid(
+    report,
+    store-id,
+    q2-evidence-facts,
+    q2-evidence-contract,
+    "q2.exact.n_independent_units",
+  )
 }
 
 #let report-store-endpoint-evidence-valid(report, store-id, expected-n) = {

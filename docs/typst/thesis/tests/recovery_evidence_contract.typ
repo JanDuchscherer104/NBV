@@ -1,6 +1,14 @@
 #import "../experiment_data.typ": conditional-ratio-gate-state, evidence-gate-state, endpoint-evidence-facts, headroom-evidence-facts, recovery-evidence-facts, paired-interval-method, recovery-ratio-definition, report-store-endpoint-evidence-valid, report-store-headroom-evidence-valid, report-store-recovery-evidence-valid, report-store-headroom-identity-valid, report-store-recovery-identity-valid, report-store-fact, report-store-facts-share-source, report-store-facts-share-value, report-stores-have-facts
 
-#let source = "analysis/paired-policy.json|sidecar:fixture"
+#let sidecar-a = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+#let sidecar-b = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+#let digest-a = "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+#let digest-b = "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+#let source = "analysis/paired-policy.json|sidecar:" + sidecar-a
+#let sidecars = (
+  (sidecar_id: sidecar-a, path: "paired-policy", name: "paired-policy", sha256: digest-a, format: "json", status: "confirmatory"),
+  (sidecar_id: sidecar-b, path: "other", name: "other", sha256: digest-b, format: "json", status: "confirmatory"),
+)
 #let cohort-a = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 #let cohort-b = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
 #let fact(key, value, unit, n, aggregation, source: source) = (
@@ -57,10 +65,11 @@
   fact("policy.q_recovery.cohort_sha256", cohort, "sha256", row-n, "cohort_binding_sha256", source: source),
   fact("policy.q_recovery.passed", true, "bool", row-n, "paired_scene_decision", source: source),
 )
-#let report(rows) = (
+#let report(rows, sidecar-rows: sidecars) = (
   tables: (
     stores: (rows: ((store_id: "store-a"),)),
     facts: (rows: rows),
+    sidecars: (rows: sidecar-rows),
   ),
 )
 #let accepted = report(endpoint-rows() + headroom-rows() + recovery-rows())
@@ -108,7 +117,12 @@
 #assert(not report-store-recovery-evidence-valid(report(recovery-rows(interval-method: "unfrozen_interval")), "store-a", 5))
 #assert(not report-store-recovery-evidence-valid(report(recovery-rows(ratio-aggregation: "mean_of_scene_ratios")), "store-a", 5))
 #assert(not report-store-recovery-evidence-valid(report(recovery-rows(source: "analysis/unbound.json")), "store-a", 5))
-#assert(not report-store-recovery-evidence-valid(report(recovery-rows(ci-source: "analysis/other.json|sidecar:other")), "store-a", 5))
+#assert(not report-store-recovery-evidence-valid(report(recovery-rows(source: "analysis/paired-policy.json|sidecar:")), "store-a", 5))
+#assert(not report-store-recovery-evidence-valid(report(recovery-rows(ci-source: "analysis/other.json|sidecar:" + sidecar-b)), "store-a", 5))
+#assert(not report-store-recovery-evidence-valid(report(
+  recovery-rows(),
+  sidecar-rows: sidecars + ((sidecar_id: sidecar-a, path: "duplicate", name: "duplicate", sha256: digest-b, format: "json", status: "confirmatory"),),
+), "store-a", 5))
 
 #let mismatched-cohort = report(endpoint-rows() + headroom-rows() + recovery-rows(cohort: cohort-b))
 #assert(report-store-recovery-evidence-valid(mismatched-cohort, "store-a", 5))
@@ -121,7 +135,7 @@
     "policy.q_recovery.cohort_sha256",
   ),
 ))
-#let mismatched-source = report(endpoint-rows() + headroom-rows() + recovery-rows(source: "analysis/other.json|sidecar:other", ci-source: "analysis/other.json|sidecar:other"))
+#let mismatched-source = report(endpoint-rows() + headroom-rows() + recovery-rows(source: "analysis/other.json|sidecar:" + sidecar-b, ci-source: "analysis/other.json|sidecar:" + sidecar-b))
 #assert(report-store-recovery-evidence-valid(mismatched-source, "store-a", 5))
 #assert(not report-store-facts-share-source(
   mismatched-source,

@@ -50,6 +50,7 @@ def main() -> None:
         output_dir = Path(temp)
         _compile("report_data_smoke", output_dir, expect_success=True)
         _compile("evidence_gate_state", output_dir, expect_success=True)
+        _compile("learning_gate_evidence_contract", output_dir, expect_success=True)
         _compile("recovery_evidence_contract", output_dir, expect_success=True)
         expected_lookup_error = (
             "expected one thesis report fact for store and key: store-a / metric"
