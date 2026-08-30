@@ -70,6 +70,19 @@ scientific, visual, and reproducibility verification.
   records its basename plus a content-exact SHA-256 digest.
 - The symmetric recovery field still named the default raw-pose shard. Recovery
   now derives `raw_pose_source` from the same resolved path it loads and hashes.
+- Whole-script review found that relocated recovery JSON could retain a broken
+  top-raster reference, classify the generated crop as an input, and accept an
+  arbitrary same-size oblique raster under fixed projection geometry. Recovery
+  now materializes the pinned top sidecar beside relocated output, separates
+  input and generated digests, and rejects non-pinned raster content before any
+  publication artifact is changed.
+- The primary exporter now verifies the rollout store's canonical manifest
+  digest, joins the pinned rollout to its manifest-owned source record, hashes
+  the processed mesh, and gates every caption-critical row, shell, validity,
+  family, and selection invariant with explicit errors.
+- Selected-pose provenance is data-driven: recovery discloses projection-based
+  reconstruction, while the primary path identifies the stored
+  `candidates/pose_world_cam` row.
 - Semantic roles remain distinct in color and grayscale: neutral mesh, solid
   purple physical trajectory, teal dashed historical frusta, orange double-line
   OBB, family-shaped shell markers, and black/gold selection.
@@ -84,6 +97,7 @@ scientific, visual, and reproducibility verification.
 - https://github.com/JanDuchscherer104/ARIA-NBV/commit/83ccf6545667dd0a51b35d3a895626f007fec2f6
 - https://github.com/JanDuchscherer104/ARIA-NBV/commit/e56a4dd7646ef582585305b475f249beaf5d3f65
 - https://github.com/JanDuchscherer104/ARIA-NBV/commit/5b2d5978ab7e38fa199a754a41e6af164a93072d
+- https://github.com/JanDuchscherer104/ARIA-NBV/commit/2c3fb23ea8c09695ad7abd7f3db322d3a3717929
 
 ## Verification
 
@@ -112,6 +126,20 @@ scientific, visual, and reproducibility verification.
   (`e782eb436a80425c16dca50d1854d18f75cfb18ca38d5434c23e809622b0d9f4`).
 - custom recovery override: a differently named shard emits that basename in
   `raw_pose_source`, while its JSON digest still matches system SHA-256.
+- relocated recovery output: both JSON background references resolve to exact
+  existing sidecars; an altered same-size oblique raster is rejected with
+  expected and actual digests while pre-existing output sentinels remain
+  unchanged.
+- recovery digest taxonomy: `input_sha256` records the generic baseline, pinned
+  oblique and top rasters, and raw shard; `generated_sha256` records only the
+  publication crop.
+- primary static provenance gate: canonical manifest/source joins, processed
+  mesh hashing, stable row-id resolution, and explicit caption-critical
+  invariants pass independent review; the unavailable original rollout Zarr is
+  retained as the only end-to-end proof gap.
+- tracked thesis: 122 A4 pages; final PDF SHA-256
+  `93852f1a74a0e689713094a9e3b91e47c78d85bc6d9777fad9da4e7bb557208a`;
+  page 58 passes exact-size color and direct-grayscale inspection.
 
 The original rollout Zarr remains unavailable locally, so the primary exporter
 cannot be executed end to end. The tracked recovery path and published caption
