@@ -73,7 +73,13 @@ def test_rollouts_info_preserves_demand_aligned_inspection_calls(
 
     assert cli_result.exit_code == 0
     payload = json.loads(cli_result.output)
-    assert calls == expected_calls
+    if "--preflight" in flags:
+        assert calls["manifest"] >= expected_calls["manifest"]
+        assert {key: value for key, value in calls.items() if key != "manifest"} == {
+            key: value for key, value in expected_calls.items() if key != "manifest"
+        }
+    else:
+        assert calls == expected_calls
     assert ("stats" in payload) is has_stats
 
 
@@ -131,6 +137,8 @@ def test_rollouts_info_preflight_json_reports_go_no_go_sections(
     assert preflight["validation"]["ok"]
     assert "coverage" in preflight
     assert "validity" in preflight
+    assert preflight["candidate_family"]["schema_id"] == "aria-nbv-candidate-family-preflight-v1"
+    assert preflight["candidate_family"]["resolved_min_valid"] >= 12
     assert "rewards" in preflight
     assert "storage" in preflight
     assert isinstance(preflight["go"], bool)

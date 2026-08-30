@@ -17,7 +17,7 @@ import socket
 import subprocess
 import sys
 import time
-from collections.abc import Callable, Iterable, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import asdict, dataclass, replace
 from datetime import UTC, datetime
 from enum import StrEnum
@@ -26,6 +26,10 @@ from typing import Any, ClassVar, Protocol, cast
 
 from pydantic import BaseModel, Field, ValidationInfo, field_validator, model_validator
 
+from ...rollouts.candidate_benchmark import (
+    CandidateFamilyPreflight,
+    candidate_family_preflight_from_reader,
+)
 from ...utils import TargetConfig
 from ...utils.config_paths import resolve_cache_artifact_dir
 from ...utils.fingerprints import stable_config_hash, stable_msgspec_hash
@@ -959,6 +963,42 @@ class CudaRolloutCampaign:
         while not candidate.exists() and candidate != candidate.parent:
             candidate = candidate.parent
         return candidate
+
+    def candidate_family_preflight(self, reader: Any) -> CandidateFamilyPreflight:
+        """Evaluate campaign candidate support through the rollout-domain gate."""
+
+        return candidate_family_preflight_from_reader(
+            reader,
+            require_known_applicability=True,
+        )
+
+    def admit_broad_generation(
+        self,
+        reader: Any,
+        *,
+        final_prescale_artifact: Mapping[str, Any] | None,
+    ) -> CandidateFamilyPreflight:
+        """Fail closed until family support and the later WP18 gate both pass.
+
+        Phase-A generation may run to produce the candidate-only evidence.
+        This method owns admission of the broader rollout campaign: a passing
+        family result is necessary but deliberately insufficient until the
+        hash-bound final ``#120`` artifact is supplied by WP18.
+        """
+
+        result = self.candidate_family_preflight(reader)
+        if not result.go:
+            codes = ",".join(blocker.code.value for blocker in result.blockers)
+            raise RuntimeError(f"candidate family preflight blocked broad generation: {codes}")
+        artifact = final_prescale_artifact
+        if (
+            not isinstance(artifact, Mapping)
+            or artifact.get("issue") != 120
+            or artifact.get("go") is not True
+            or not re.fullmatch(r"[0-9a-f]{64}", str(artifact.get("artifact_sha256", "")))
+        ):
+            raise RuntimeError("broad_generation_blocked_pending_wp18")
+        return result
 
     def plan(
         self, source_rows: Iterable[Any], *, source_manifest_hash: str = "", writer_config_hash: str = ""
