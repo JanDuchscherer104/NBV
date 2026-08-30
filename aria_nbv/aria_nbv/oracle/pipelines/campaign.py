@@ -1972,7 +1972,7 @@ class CudaRolloutCampaign:
         if target_payload is not None and hasattr(cfg, "explicit_target"):
             from .rollout_dataset import ExplicitRolloutTargetConfig
 
-            target_payload = ExplicitRolloutTargetConfig.model_validate(target_payload)
+            explicit_target = ExplicitRolloutTargetConfig.model_validate(target_payload)
             from ...targets.protocol import TargetInputProtocol
 
             store = cfg.store.model_copy(update={"target_protocol_version": TargetInputProtocol.V1_OBSERVED})
@@ -1981,7 +1981,7 @@ class CudaRolloutCampaign:
             cfg = cfg.model_copy(
                 update={
                     "store": store,
-                    "explicit_target": target_payload,
+                    "explicit_target": explicit_target,
                     "max_targets_per_sample": 1,
                     "oracle_target_task_sampler": OracleTargetTaskSamplerConfig(),
                     "min_valid_root_candidates": 15,
@@ -3235,11 +3235,12 @@ class CudaRolloutCampaign:
             (event.timestamp for event in reversed(events) if event.kind == "campaign_finished"),
             None,
         )
-        elapsed_seconds = 0.0
         if state in {"completed", "completed_with_failures"}:
             elapsed_seconds = self._canonical_campaign_elapsed(events)
             if elapsed_seconds is None:
                 raise ValueError("canonical campaign finish lacks elapsed evidence")
+        else:
+            elapsed_seconds = 0.0
         rebuilt = self.status(
             plan,
             results,
