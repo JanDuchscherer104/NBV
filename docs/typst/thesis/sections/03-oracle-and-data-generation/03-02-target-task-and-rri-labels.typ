@@ -30,17 +30,18 @@ For target $e$, the oracle computes the target-cropped point--mesh error defined
 
 === Target Selection
 
-The implemented sampler does not match actor proposals to @ground-truth:short objects. It enumerates the non-padding @ground-truth:short OBB rows in a snippet, accepts rows with finite positive geometry, and applies seeded uniform sampling without replacement up to the configured per-snippet cap. Thus the stored `matched` status currently means geometry-valid @ground-truth:short task row, not successful proposal-to-identity association. IoU, ambiguity-gap, visibility, and support thresholds are absent from this admission rule.
+The implemented sampler never starts from actor proposals. From a multi-slice @ground-truth:short OBB block, it selects the latest slice containing at least one non-padding row; if no such slice exists, the final all-padding slice yields no task rows. Within the selected slice, it removes padding and first records whether each full serialized OBB is finite and has finite, strictly positive extents. It then attempts to construct one target descriptor per remaining OBB while preserving source indices and confidence. Descriptor construction independently requires finite object and relative poses and finite, strictly positive extents. A descriptor failure raises before row append and aborts the sampling call. By contrast, a descriptor-constructible OBB whose precomputed status failed because an auxiliary tensor field---for example confidence or a 2D box coordinate---is non-finite is retained in `rows` with `INVALID_GEOMETRY` status and excluded from the sampling pool. Seeded uniform sampling without replacement selects at most the configured per-snippet cap from `matched` rows only. A returned `matched` row therefore passed the full-payload-plus-extents gate and descriptor construction; the name does not mean that a proposal was associated with an identity. No confidence threshold, IoU, ambiguity-gap, visibility, support, headroom, or utility criterion ranks otherwise admissible rows.
 
 #figure(
   align(center, image(
     "../../figures/target_task_sampler_contract.pdf",
     width: 100%,
   )),
-  caption: [Implemented oracle target-task sampler. Geometry-valid @ground-truth:short OBB rows form the task pool, and seeded uniform sampling without replacement applies the manifest-defined cap. Rollout scoring later decides whether the selected crop is evaluable. No actor proposal, IoU match, visibility gate, or support gate is used.],
+  alt: "A left-to-right population flow begins after selecting the latest ground-truth OBB slice that contains a non-padding row; an all-padding block produces no task rows. Padding is removed to obtain source rows. The sampler first assigns status from full serialized OBB finiteness and finite positive extents. It then constructs descriptors from finite object and relative poses and finite positive extents; failure raises before row append. Descriptor-constructible rows are appended with the precomputed status: matched rows remain eligible, while an auxiliary-field failure is retained as invalid geometry and branches away from the cap. Seeded uniform sampling without replacement, capped by the smaller of K and the matched-row count, emits selected rows with provenance.",
+  caption: [Oracle target-task sampler. After latest-slice selection and padding removal, the sampler sets full-payload validity before constructing descriptors. Descriptor-invalid geometry aborts before append; descriptor-constructible rows retain the precomputed status. Only `matched` rows enter the seeded cap, whereas auxiliary-field non-finiteness remains visible as `INVALID_GEOMETRY`. This privileged path neither matches actor observations nor evaluates task utility.],
 ) <fig:oracle-target-task-sampler-contract>
 
-The sampler bounds rollout cost without pre-filtering on headroom. Candidate scoring may subsequently invalidate the task when its mesh crop, current support, or rendered evidence is unusable; otherwise near-solved and negative-gain targets remain scientifically informative. A later actor-visible protocol must introduce proposal identity and observation-quality diagnostics as a separate selection stage rather than retroactively interpreting the present oracle fields as measurements.
+This split boundary matters for interpretation. Sampler rows expose full-payload gate failures only when descriptor construction succeeds; they cannot measure descriptor-invalid inputs because those abort the call. Consequently, the retained `INVALID_GEOMETRY` count is not the total invalid-target rate. Downstream scoring may separately invalidate a selected task when its mesh crop, current support, or rendered evidence is unusable. Near-solved and negative-gain tasks otherwise remain scientifically informative because sampler membership encodes neither headroom nor utility. A later actor-visible protocol must introduce proposal identity and observation-quality diagnostics rather than reinterpret these oracle fields as measurements.
 
 === Observed-Target Admission
 
@@ -70,7 +71,7 @@ $
 
 Equality at $0.20$ is rejected, as are zero or multiple qualifying rows. The
 matching rule has no runner-up-gap or composite score. The current rollout
-sampler remains a distinct oracle-task path: geometry-valid GT-row admission is
+sampler remains a distinct oracle-task path: `matched` GT-row admission is
 not evidence of actor-visible matching.
 
 === Candidate View Generation
