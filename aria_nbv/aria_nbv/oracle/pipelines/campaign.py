@@ -1037,7 +1037,18 @@ class CudaRolloutCampaign:
         from ..target_selection import OracleTargetTaskSampler
         from .rollout_dataset import RolloutDatasetWriter
 
-        dataset = writer_config.source.setup_target()
+        phase_source = writer_config.source
+        if hasattr(phase_source, "model_copy"):
+            phase_source = phase_source.model_copy(
+                update={
+                    "load_backbone": False,
+                    "load_candidates": False,
+                    "load_depths": False,
+                    "load_candidate_pcs": False,
+                    "load_detected_obbs": False,
+                }
+            )
+        dataset = phase_source.setup_target()
         if dataset is None:
             raise RuntimeError("candidate Phase-A requires a VIN offline dataset")
         RolloutDatasetWriter._apply_source_manifest(
