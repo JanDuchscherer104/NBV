@@ -224,4 +224,4 @@ The historical one-step CORAL score remains a motivated myopic ranking and calib
   gate: [model-selection protocol freeze],
 )
 
-The scientific endpoint is not training loss. For every claimed horizon, selected trajectories are regenerated under the documented candidate and state protocol and re-scored by the same target-specific oracle used for the baselines. The model succeeds only if it recovers a prespecified fraction of positive oracle-lookahead headroom on held-out scenes without violating horizon, mask, provenance, source, or support constraints.
+The scientific endpoint is not training loss. For every claimed horizon, selected trajectories are regenerated under the documented candidate and state protocol and re-scored by the same target-specific oracle used for the baselines. After positive oracle-lookahead headroom is established against oracle-greedy, the model succeeds only if it closes a prespecified fraction of the endpoint gap from the actor-visible learned-myopic control to oracle lookahead on held-out scenes without violating horizon, mask, provenance, source, or support constraints.

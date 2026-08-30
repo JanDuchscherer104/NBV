@@ -27,16 +27,16 @@ Support and failure strata are fixed before policy inspection. The report distin
       [$pi_"learned-1"$], [actor-visible], [$H$], [learned myopic control],
       [$pi_"oracle-1"$], [oracle immediate reward], [$H$], [one-step oracle-greedy comparator],
       [$pi_"oracle-look"$], [bounded oracle lookahead], [$H$], [conditional finite-support upper reference],
-      [$pi_Q$], [actor-visible], [$H$], [planned learned finite-horizon recovery],
+      [$pi_Q$], [actor-visible], [$H$], [planned learned finite-horizon gap closure],
     ),
   ),
   caption: [Matched policy comparison. All rows acquire the same number of views; oracle access and planner depth define the decision rule rather than the acquisition budget.],
 ) <tab:thesis-policy-comparison>
 
-The first inferential comparison is bounded oracle lookahead against one-step oracle greedy. Its evaluation contract freezes one target mesh and crop, ASE-depth source, renderer and backprojection, fusion and point cap, and point--mesh metric configuration for every policy. Repeated evaluation must reproduce the same scores within the declared numerical tolerance; it verifies deterministic execution under this contract, not invariance to a different mesh, sampling process, or metric. The analysis artifact also freezes the meaningful-headroom rule before learned-policy inspection. Recovered-headroom ratios are reported only when their denominator passes that gate. The learned comparison then contrasts #symb.rl.qh with the actor-visible myopic control under the same endpoint evaluation and acquisition budget; because neither learned target-conditioned control is presently complete, this comparison remains prospective.
+The first inferential comparison is bounded oracle lookahead against one-step oracle greedy. Its evaluation contract freezes one target mesh and crop, ASE-depth source, renderer and backprojection, fusion and point cap, and point--mesh metric configuration for every policy. Repeated evaluation must reproduce the same scores within the declared numerical tolerance; it verifies deterministic execution under this contract, not invariance to a different mesh, sampling process, or metric. The analysis artifact also freezes the meaningful-headroom rule before learned-policy inspection. Learned-control gap-closure ratios are reported only after oracle headroom passes that gate and only when their distinct actor-visible-myopic-to-oracle-lookahead denominator is admissible. The learned comparison then contrasts #symb.rl.qh with the actor-visible myopic control under the same endpoint evaluation and acquisition budget; because neither learned target-conditioned control is presently complete, this comparison remains prospective.
 
 #validation_todo(
-  [Populate the evidence chain in order: evaluation-contract identity and deterministic repeatability, candidate and target support, oracle-lookahead headroom, myopic-control calibration, finite-horizon recovery, then representation and architecture ablations. Missing upstream evidence blocks downstream claims rather than becoming a zero result.],
+  [Populate the evidence chain in order: evaluation-contract identity and deterministic repeatability, candidate and target support, oracle-lookahead headroom, myopic-control calibration, finite-horizon gap closure, then representation and architecture ablations. Missing upstream evidence blocks downstream claims rather than becoming a zero result.],
   source: [thesis objective-to-evidence contract],
   gate: [artifact-backed Results bundle],
 )

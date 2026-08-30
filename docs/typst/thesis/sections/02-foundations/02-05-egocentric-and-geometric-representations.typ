@@ -58,20 +58,22 @@ attention can all satisfy it.
 // - @DeepSets-zaheer2017 -> docs/literature/tex-src/arXiv-Deep-Sets/nips_2017.tex:103-106 (permutation-invariant set-function decomposition)
 // - @SetTransformer-lee2019 -> docs/literature/tex-src/arXiv-Set-Transformer/03_main.tex:49-65 (permutation-equivariant self-attention and invariant pooling)
 
-Fourth, *physical observability* requires the representation to expose
-missingness and sensing geometry rather than treating unobserved space as
-negative evidence. Point models retain irregular surface samples and fine local
-relations, but their neighborhoods inherit the sampling pattern. Sparse-voxel
-models supply a regular convolutional structure while avoiding dense-grid cost,
-but introduce a chosen resolution and bounded spatial support. Equivariant
-message-passing models encode transformation rules directly, reducing the burden
-of learning them while committing the model to a chosen symmetry family
-@point-transformer-zhao2021 @MinkowskiEngine-choy2019 @EGNN-satorras2021.
-These families therefore trade spatial fidelity, computational structure, and
-strength of geometric prior. None is an established improvement here until
-compared under the same observable inputs, target task, and endpoint utility.
+Fourth, *physical observability* requires the representation to preserve what
+the causal sensing process actually distinguishes. EFM3D derives a surface mask
+from observed semi-dense points and a free-space mask from camera-to-surface
+rays @EFM3D-straub2024. Voxels supported by neither mask remain unobserved;
+they must not be treated as observed free space or negative surface evidence.
+This surface/free/unobserved distinction is the observation contract. The
+choice of carrier is a separate architecture tradeoff: point models retain
+irregular samples and local relations, sparse-voxel models regularize space at
+a chosen resolution and extent, and equivariant message passing commits to a
+chosen symmetry family @point-transformer-zhao2021 @MinkowskiEngine-choy2019
+@EGNN-satorras2021. These families trade spatial fidelity, computational
+structure, and strength of geometric prior, but none by itself guarantees the
+observation contract or improves the endpoint utility.
 
 // evidence:
+// - @EFM3D-straub2024 -> docs/literature/tex-src/arXiv-EFM3D/method.tex:50-63 (surface-point mask, camera-to-surface free-space mask, and their concatenation with lifted features)
 // - @point-transformer-zhao2021 -> docs/literature/tex-src/arXiv-Point-Transformer/tex/method.tex:21-27, docs/literature/tex-src/arXiv-Point-Transformer/tex/method.tex:55-62 (local neighborhoods and relative position encoding)
 // - @MinkowskiEngine-choy2019 -> docs/literature/tex-src/arXiv-MinkowskiEngine/sections/1_intro.tex:53-62 (sparse coordinates and computational savings)
 // - @EGNN-satorras2021 -> docs/literature/tex-src/arXiv-EGNN/sections/model.tex:6-20, docs/literature/tex-src/arXiv-EGNN/sections/model.tex:42-60 (relative-coordinate message passing and E(n) equivariance)

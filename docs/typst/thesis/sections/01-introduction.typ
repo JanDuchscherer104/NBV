@@ -67,9 +67,11 @@ decision process, not merely of the scorer tensor.
 The evaluation proceeds in two stages. First, it measures whether bounded
 oracle lookahead yields better fixed-budget endpoint reconstruction of a
 requested object than one-step oracle-greedy selection. Conditional on such
-headroom, it then measures how much of the advantage an offline finite-horizon
-model recovers from actor-visible inputs. This order separates the existence of
-a planning opportunity from the ability of a learned model to exploit it.
+headroom, it then measures how much of the endpoint gap from an actor-visible
+learned-myopic control to oracle lookahead an offline finite-horizon model
+closes. This order separates the existence of a planning opportunity from the
+ability of a learned model to exploit it; the gap-closure ratio and oracle
+headroom have different baselines.
 
 At every step, each policy selects from the same finite generated candidates;
 hard-invalid actions are excluded, and the target, horizon, candidate support,
@@ -97,7 +99,7 @@ The thesis operationalizes this evaluation through four scientific functions:
 + It defines candidate value relationally over target, causal state, admissible
   action, budget, horizon, and continuation rule.
 + It evaluates measurement, support, oracle headroom, immediate-value learning,
-  recursion, and endpoint recovery in that order.
+  recursion, and learned-control endpoint gap closure in that order.
 
 // evidence:
 // - measurement and information boundary -> docs/typst/thesis/sections/03-oracle-and-data-generation/

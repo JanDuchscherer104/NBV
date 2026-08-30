@@ -5,34 +5,16 @@
 
 === Research aim and evaluation logic <ssec:rq-objectives>
 
-RQ2 joins two conditional comparisons: whether bounded oracle lookahead improves
-fixed-budget endpoint reconstruction relative to one-step oracle-greedy
-selection and, if so, how much of that advantage an actor-visible offline model
-recovers. RQ1 defines the outcome, RQ3 defines the admissible information, and
-RQ4 establishes the target, action, and replay support over which the comparison
-is interpretable. RQ5 and RQ6 extend the study only if the offline
-finite-candidate evidence warrants online or continuous-control claims.
+The study evaluates a sequence of linked questions. RQ1 defines the endpoint
+outcome. RQ2 then asks whether bounded oracle lookahead improves that outcome
+relative to one-step oracle-greedy selection and, conditionally, how much of
+the separate actor-visible myopic-to-oracle-lookahead gap an offline model
+closes. RQ3 defines the admissible information, and RQ4 establishes the target,
+action, and replay support over which both comparisons are interpretable. RQ5
+and RQ6 extend the study only if the offline finite-candidate evidence warrants
+online or continuous-control claims.
 
-=== RQ2 — Bounded lookahead and learned recovery <ssec:rq2>
-
-*How much of the fixed-budget endpoint advantage of bounded oracle lookahead
-over one-step oracle-greedy selection can an offline finite-horizon value model
-recover from actor-visible evidence?*
-
-The paired endpoint difference under the same scene, target, candidates,
-validity rules, horizon, and budget defines oracle-lookahead headroom:
-
-#eqs.entity.lookahead_headroom
-
-The learned comparison proceeds only if headroom passes a predeclared
-meaningful-effect and uncertainty rule. Because that rule and the required
-recovery fraction are not yet frozen, RQ2 remains prospective. If headroom is
-absent, the evaluated support does not expose a non-myopic advantage; this does
-not establish its universal absence.
-
-=== Conditions for interpretation
-
-==== RQ1 — Target-specific objective and endpoint outcome <ssec:rq1>
+=== RQ1 — Target-specific objective and endpoint outcome <ssec:rq1>
 
 *Can target-conditioned finite-candidate NBV be evaluated through a stable,
 target-specific reconstruction objective under a fixed acquisition budget?*
@@ -47,6 +29,34 @@ State-relative RRI is a one-step diagnostic, root-normalized gain supplies the
 training reward, and endpoint gain remains the policy outcome. A positive answer
 requires a frozen, repeatable metric and equal acquisition horizons; runtime,
 invalid actions, and oracle calls are reported separately.
+
+=== RQ2 — Bounded lookahead and learned gap closure <ssec:rq2>
+
+*Does bounded oracle lookahead improve fixed-budget endpoint target gain over
+one-step oracle-greedy selection and, if so, how much of the actor-visible
+myopic-to-oracle-lookahead endpoint gap does an offline finite-horizon value
+model close?*
+
+The paired endpoint difference under the same scene, target, candidates,
+validity rules, horizon, and budget defines oracle-lookahead headroom:
+
+#eqs.entity.lookahead_headroom
+
+The learned comparison proceeds only if this headroom passes a predeclared
+meaningful-effect and uncertainty rule. Its ratio uses a different baseline:
+
+#eqs.entity.q_recovery
+
+Here the numerator is the gain of the finite-horizon learned policy over the
+actor-visible learned-myopic control, and the denominator is the full gap from
+that control to oracle lookahead. The ratio is therefore conditional learned
+gap closure, not a fraction of the oracle-lookahead headroom above
+oracle-greedy. Because the headroom rule and required gap-closure fraction are
+not yet frozen, RQ2 remains prospective. If headroom is absent, the evaluated
+support does not expose a non-myopic advantage; this does not establish its
+universal absence.
+
+=== Conditions for interpretation
 
 ==== RQ3 — Actor-visible target and information state <ssec:rq3>
 
@@ -114,8 +124,8 @@ rules before policy outcomes are inspected.
     columns: (0.42fr, 1.08fr, 1.32fr, 1.18fr),
     header: ([*RQ*], [*Question role*], [*Primary evidence*], [*Interpretation gate*]),
     rows: (
-      index-cell([RQ2]), [lookahead and recovery], [paired greedy, lookahead, and learned-policy outcomes], [meaningful headroom before recovery],
       index-cell([RQ1]), [outcome measurement], [target reconstruction endpoint gain], [frozen repeatable metric; fixed horizon and budget],
+      index-cell([RQ2]), [lookahead and learned gap closure], [paired greedy, lookahead, myopic-control, and learned-policy outcomes], [meaningful oracle headroom before learned gap closure],
       index-cell([RQ3]), [information boundary], [matching, ranking, calibration, and leakage audits], [end-to-end actor-visible protocol],
       index-cell([RQ4]), [population and support], [candidate, replay, validity, and coverage diagnostics], [scene-disjoint aggregation],
       index-cell([RQ5]), [conditional extension], [matched online discrete-policy evaluation], [offline gates satisfied first],

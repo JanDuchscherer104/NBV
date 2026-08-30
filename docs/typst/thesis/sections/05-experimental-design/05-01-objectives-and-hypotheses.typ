@@ -55,13 +55,13 @@ $
   #eqs.entity.lookahead_headroom
 $
 
-Only if the preregistered analysis classifies this headroom as meaningful is #symb.rl.qh evaluated for recovery from offline rollout traces:
+Only if the preregistered analysis classifies this headroom as meaningful is #symb.rl.qh evaluated for closure of the separate actor-visible learned-myopic-to-oracle-lookahead endpoint gap:
 
 $
   #eqs.entity.q_recovery
 $
 
-Success is measured by matched endpoint oracle evaluation, not predicted values or training loss. If lookahead has no meaningful headroom, the result is scoped to the frozen split, target protocol, candidate generator, horizon, branch factor, and validity regime. If headroom exists but the learned model does not recover it, target observability, action support, replay coverage, reward construction, and model capacity remain separate candidate explanations.
+Success is measured by matched endpoint oracle evaluation, not predicted values or training loss. If lookahead has no meaningful headroom, the result is scoped to the frozen split, target protocol, candidate generator, horizon, branch factor, and validity regime. If headroom exists but the learned model does not close the prescribed actor-visible-myopic-to-oracle-lookahead gap, target observability, action support, replay coverage, reward construction, and model capacity remain separate candidate explanations.
 
 #figure(
   publication-table(
@@ -78,8 +78,8 @@ Success is measured by matched endpoint oracle evaluation, not predicted values 
       [ranking, calibration, and oracle-rescored selections],
       [Actor-visible target conditioning must be implemented before comparison.],
       [Planning headroom],
-      [#symb.entity.lookahead_headroom and recovered fraction #symb.entity.q_recovery],
-      [#symb.rl.qh is evaluated only after a meaningful-headroom gate.],
+      [#symb.entity.lookahead_headroom and learned-control gap-closure ratio #symb.entity.q_recovery],
+      [#symb.rl.qh gap closure is evaluated only after a meaningful oracle-headroom gate.],
     ),
   ),
   caption: [Objective-to-evidence matrix.],
