@@ -128,6 +128,20 @@
   })
 }
 
+#let report-store-sha256-facts-resolve(report, store-id, keys) = {
+  keys.all(key => {
+    let matches = report.tables.facts.rows.filter(
+      row => row.store_id == store-id and row.key == key,
+    )
+    matches.len() == 1 and {
+      let row = matches.first()
+      type(row.value) == str and row.value.match(regex("^[0-9a-f]{64}$")) != none and type(row.source) == str and report.tables.sidecars.rows.any(sidecar => (
+        sidecar.sha256 == row.value and type(sidecar.path) == str and sidecar.path.len() > 0 and row.source.ends-with("|sidecar:" + sidecar.sidecar_id)
+      ))
+    }
+  })
+}
+
 #let short-store-label(report, store-id) = {
   let stores = report.tables.stores.rows
   let matches = stores.filter(store => store.store_id == store-id)

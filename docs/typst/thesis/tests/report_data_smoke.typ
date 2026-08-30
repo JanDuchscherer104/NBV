@@ -1,4 +1,4 @@
-#import "../experiment_data.typ": load-thesis-report, report-fact, report-store-fact, report-store-gate-passed, report-store-facts-match-contract, format-report-value
+#import "../experiment_data.typ": load-thesis-report, report-fact, report-store-fact, report-store-gate-passed, report-store-facts-match-contract, report-store-sha256-facts-resolve, format-report-value
 
 #let data-path = sys.inputs.at(
   "aria-thesis-data",
@@ -88,6 +88,30 @@
 #assert(
   not report-store-facts-match-contract(inferential-contract-report, "store-a", ((key: "policy.q_recovery.fraction", aggregation: "candidate_row_mean"),), 4),
   message: "a wrong endpoint-recovery aggregation must fail closed",
+)
+#let identity-report = (
+  tables: (
+    facts: (rows: (
+      (store_id: "store-a", key: "q2.exact.receipt_sha256", value: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", source: "receipt.json|sidecar:receipt-a"),
+      (store_id: "store-a", key: "q2.exact.nonhex_sha256", value: "zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz", source: "receipt.json|sidecar:receipt-a"),
+      (store_id: "store-a", key: "q2.exact.unresolved_sha256", value: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", source: "missing.json|sidecar:missing"),
+    )),
+    sidecars: (rows: (
+      (sidecar_id: "receipt-a", path: "receipt.json", sha256: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"),
+    )),
+  ),
+)
+#assert(
+  report-store-sha256-facts-resolve(identity-report, "store-a", ("q2.exact.receipt_sha256",)),
+  message: "a canonical digest must resolve to its declared sidecar",
+)
+#assert(
+  not report-store-sha256-facts-resolve(identity-report, "store-a", ("q2.exact.nonhex_sha256",)),
+  message: "a non-hexadecimal 64-character identity must fail closed",
+)
+#assert(
+  not report-store-sha256-facts-resolve(identity-report, "store-a", ("q2.exact.unresolved_sha256",)),
+  message: "an unreferenced digest must fail closed",
 )
 #let gate-report = (
   tables: (

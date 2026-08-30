@@ -1,6 +1,6 @@
 = Results <sec:thesis-results>
 
-#import "../experiment_data.typ": thesis-report-settings, load-thesis-report, report-store-fact, report-store-gate-passed, report-store-facts-match-contract, short-store-label, format-report-value
+#import "../experiment_data.typ": thesis-report-settings, load-thesis-report, report-store-fact, report-store-gate-passed, report-store-facts-match-contract, report-store-sha256-facts-resolve, short-store-label, format-report-value
 #import "../draft_markers.typ": validation_todo
 #import "../../shared/tables.typ": publication-table, index-cell
 
@@ -22,10 +22,6 @@
   let matches = thesis_data.tables.facts.rows.filter(row => row.store_id == store.store_id and row.key == key)
   matches.len() == 1 and matches.first().value != none and (not denominators or (matches.first().n != none and matches.first().n > 0))
 }))
-#let store-has-sha256-facts(store-id, keys) = keys.all(key => {
-  let matches = thesis_data.tables.facts.rows.filter(row => row.store_id == store-id and row.key == key)
-  matches.len() == 1 and type(matches.first().value) == str and matches.first().value.len() == 64
-})
 #let fact-value(store-id, key, digits: none) = {
   let row = report-store-fact(thesis_data, store-id, key)
   format-report-value(row.value, digits: digits, unit: row.unit)
@@ -211,7 +207,7 @@
 #let q1-passed = q1-evidence and q1-prerequisites and stores-pass-gate("q1.passed")
 #let q2-evidence = confirmatory-evidence and stores-have-facts(q2-facts, denominators: true) and thesis_data.tables.stores.rows.all(store => {
   let independent-units = report-store-fact(thesis_data, store.store_id, "q2.exact.n_independent_units").value
-  independent-units != none and independent-units > 0 and store-has-sha256-facts(store.store_id, q2-identity-facts) and report-store-facts-match-contract(
+  independent-units != none and independent-units > 0 and report-store-sha256-facts-resolve(thesis_data, store.store_id, q2-identity-facts) and report-store-facts-match-contract(
     thesis_data,
     store.store_id,
     q2-contract,
@@ -222,7 +218,7 @@
 #let q2-passed = q2-evidence and q2-prerequisites and stores-pass-gate("q2.exact.passed")
 #let recovery-evidence = confirmatory-evidence and stores-have-facts(recovery-facts, denominators: true) and thesis_data.tables.stores.rows.all(store => {
   let paired-scenes = report-store-fact(thesis_data, store.store_id, "policy.q_recovery.n_scenes").value
-  paired-scenes != none and paired-scenes > 0 and store-has-sha256-facts(store.store_id, recovery-identity-facts) and report-store-facts-match-contract(
+  paired-scenes != none and paired-scenes > 0 and report-store-sha256-facts-resolve(thesis_data, store.store_id, recovery-identity-facts) and report-store-facts-match-contract(
     thesis_data,
     store.store_id,
     recovery-contract,
