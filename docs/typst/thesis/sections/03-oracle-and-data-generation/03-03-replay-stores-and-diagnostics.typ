@@ -24,7 +24,8 @@ training, and bootstrap masks exclude them from their respective decisions.
     "../../figures/replay_lineage_relations.pdf",
     width: 100%,
   )),
-  caption: [Normalized lineage of the replay evidence. An immutable source row may define several target tasks; each target may produce several retained policy chains; each chain contains ordered steps; and each step owns one full candidate shell. Selected-action successor and finite-horizon training fields are derived from those factual relations rather than treated as an independent counterfactual transition table.],
+  alt: "An immutable VIN source row and a replay target-task row each point to one or more retained rollout chains through the source_row_id and target_row_id stored on each rollout row. Inside a dashed factual-replay boundary, each chain points to ordered steps and each step to a full candidate shell containing exactly one selected row. One downward materialization arrow leads from the factual tables to a derived Q_H cache of padded identifiers, copied masks, rewards, and selected-action successor fields. The cache is validated against its factual rows and is not an independent transition table or exhaustive counterfactual tree.",
+  caption: [Persisted replay lineage and repository-validated $Q_H$ materialization. Solid links are persisted row references or ownership relations; the selected marker identifies one member of each full candidate shell.],
 ) <fig:offline-rollout-store-relation>
 
 #figure(
