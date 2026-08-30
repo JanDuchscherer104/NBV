@@ -61,6 +61,27 @@ and Parquet projection of these facts. Readers reject incomplete, stale,
 schema-mismatched, fixture, or hash-mismatched bundles; presentation layers
 consume the reader and do not recompute scientific quantities.
 
+The candidate-family preflight separates two estimands. Per factual state, the
+root-support floor is $max(12, ceil(0.25 N_q))$; thus $14$ hard-valid rows fail
+and $15$ pass for $N_q=60$. Independently, the versioned diagnostic family
+floor requires at least one selected row from every applicable family across
+the audited population and at least three selected rows in total from
+applicable non-forward target-aware families. Forward-local selections cannot
+satisfy the second requirement. Inapplicable family/state cells remain
+explicit and do not fail the gate, whereas missing legacy applicability is an
+unknown provenance state and fails closed for deployment. These rules diagnose
+proposal support; they do not assign low utility to invalid or absent
+candidates.
+
+Reward variation is label-conditional. When finite target-root-gain labels
+exist under one manifest-bound oracle contract, the preflight compares their
+observed range with a versioned tolerance and reports the exact label-support
+denominator. A candidate-only Phase-A audit has no such labels, so
+`flat_gain` is unavailable rather than inferred from geometric dispersion. A
+passing Phase-A family gate is necessary but not sufficient for broad rollout
+generation; the final hash-bound pre-scale decision remains a later issue-120
+gate.
+
 === Implemented replay transition
 
 Rollout expansion records the full candidate table, selected valid and shell indices, policy scores and probabilities, selection policy, and random seed. The implemented transition is

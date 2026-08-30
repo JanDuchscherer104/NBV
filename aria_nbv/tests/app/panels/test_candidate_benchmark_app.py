@@ -16,9 +16,11 @@ from aria_nbv.rollouts.candidate_benchmark import (
     SCHEMA_ID,
     CandidateBenchmark,
     CandidateFamilyCounts,
+    CandidateFamilyPreflightConfig,
     CandidatePoint,
     benchmark_binding_from_reader,
     read_bundle_bytes,
+    reduce_candidate_family_preflight,
     serialize_bundle_bytes,
     sha256_bytes,
     write_bundle,
@@ -84,6 +86,14 @@ class FakeSession:
             candidate_limit=kwargs["candidate_limit"],
             records=(_record(),),
             bundle_bytes=payload,
+            family_preflight=reduce_candidate_family_preflight(
+                (_record(),),
+                CandidateFamilyPreflightConfig(
+                    query_width=1,
+                    configured_families=("forward",),
+                    target_aware_families=(),
+                ),
+            ),
         )
 
 
@@ -112,9 +122,11 @@ def test_candidate_benchmark_card_requires_build_and_reuses_retained_result_on_u
     assert not app.exception
     assert app.session_state["benchmark_records_calls"] == [{"state_key": "state-1", "candidate_limit": 123}]
     assert app.session_state["benchmark_export_calls"] == [{"state_key": "state-1"}]
-    assert len(app.get("plotly_chart")) == 6
+    assert len(app.get("plotly_chart")) == 8
     titles = [json.loads(chart.proto.spec)["layout"]["title"]["text"] for chart in app.get("plotly_chart")]
     assert titles == [
+        "State × family applicability and selected survival",
+        "Applicable family attempted → valid → selected funnels",
         "Candidate family attempted → valid → selected funnel",
         "Candidate family survival",
         "Candidate support (target-normalized ground plane)",
@@ -134,14 +146,14 @@ def test_candidate_benchmark_card_requires_build_and_reuses_retained_result_on_u
     assert not app.exception
     assert app.session_state["benchmark_records_calls"] == []
     assert app.session_state["benchmark_export_calls"] == []
-    assert len(app.get("plotly_chart")) == 6
+    assert len(app.get("plotly_chart")) == 8
 
 
 def test_candidate_benchmark_card_rejects_retained_result_after_identity_replacement(tmp_path: Path) -> None:
     app = _app(tmp_path).run()
     next(button for button in app.button if button.label == "Build candidate benchmark").click()
     app = app.run()
-    assert len(app.get("plotly_chart")) == 6
+    assert len(app.get("plotly_chart")) == 8
 
     app.session_state["candidate_benchmark_build_result"] = replace(
         app.session_state["candidate_benchmark_build_result"],

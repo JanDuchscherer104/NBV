@@ -24,6 +24,19 @@ Candidate support has several distinct meanings:
 Invalid targets or actions remain masks and reason codes. They are never
 fabricated low-RRI or zero-Q labels.
 
+`candidate_benchmark.py` also owns the single candidate-family preflight
+reducer consumed by the info CLI, campaign admission, Plotly figures, and the
+stored-rollout panel. Its root floor is resolved and persisted as
+`max(12, ceil(0.25 * Nq))`; this total-support test is separate from the
+versioned family floor. Applicable families require selected support, while
+inapplicable cells remain visible and non-failing and unknown legacy
+applicability fails closed for deployment. Direct target-root-gain variation is
+tested only over rows with valid oracle labels and reports its exact
+denominator. Candidate-only Phase A evidence therefore reports `flat_gain` as
+unavailable rather than inferring utility from geometry. Passing this preflight
+does not authorize broad generation: the later hash-bound issue-120/WP18 gate
+remains mandatory.
+
 ## Generate and Inspect
 
 Run from `aria_nbv/`:
@@ -90,6 +103,7 @@ mask.
 | `qh_geometry` | Stored relative-pose composition into actor tensors. |
 | `read_model` | Presentation-free typed projections. |
 | `inspection` / `reporting` | Rollout-owned read-only summaries, evidence tables, validation, and compatibility strata. |
+| `candidate_benchmark` / `candidate_support_plotting` | Immutable candidate evidence, canonical family preflight, and presentation-free Plotly construction. |
 | `s2_analysis` | Validated S² reducer configuration, strict store acquisition, and evidence digests. |
 | `s2_plotting` | Canonical target-frame S² Plotly encoding shared by Streamlit and immutable report export. |
 | `audits` | Provenance, validity, path, entropy, and order diagnostics. |

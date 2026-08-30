@@ -9,6 +9,7 @@ import plotly.express as px
 import streamlit as st
 
 from ....rollouts.candidate_support_plotting import candidate_benchmark_figures as _candidate_benchmark_figures
+from ....rollouts.candidate_support_plotting import candidate_family_preflight_figures
 from ...scientific_labels import TheoryReferences
 from .candidate_generation import (
     _render_candidate_aggregate_breakdowns,
@@ -95,6 +96,46 @@ def _render_candidate_benchmark_card(session_handle: Any) -> None:
         retained.bundle_bytes,
         "candidate-benchmark.zip",
     )
+    if retained.family_preflight is not None:
+        gate = retained.family_preflight
+        status = "GO" if gate.go else "BLOCKED"
+        st.markdown(f"#### Candidate-family preflight: {status}")
+        st.caption(
+            f"Resolved root min_valid={gate.resolved_min_valid} for Nq={gate.query_width}; "
+            f"config SHA-256 `{gate.config_sha256}`."
+        )
+        if gate.blockers:
+            st.dataframe(
+                pd.DataFrame(
+                    [
+                        {
+                            "code": blocker.code.value,
+                            "state": blocker.state_key,
+                            "family": blocker.family,
+                            "detail": blocker.detail,
+                        }
+                        for blocker in gate.blockers
+                    ]
+                ),
+                hide_index=True,
+                width="stretch",
+            )
+        for figure in candidate_family_preflight_figures(gate):
+            _render_plot(
+                figure,
+                ScientificExplanation(
+                    question="Does every applicable proposal family survive the frozen Phase-A support gate?",
+                    answer="The heatmap distinguishes applicable, inapplicable, and unknown cells; the funnels retain attempted, actor-valid, and selected denominators.",
+                    sections=(
+                        ExplanationSection(
+                            "Gate semantics",
+                            "Root support, family collapse, target-family support, and oracle-label flat gain are separate typed outcomes.",
+                        ),
+                    ),
+                    evidence_role="derived training data",
+                    source_fields=("candidate_family_preflight",),
+                ),
+            )
     st.markdown("#### Candidate benchmark support")
     for figure in _candidate_benchmark_figures(
         retained.records,

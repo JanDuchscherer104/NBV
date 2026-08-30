@@ -10,7 +10,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
-from .candidate_benchmark import CandidateBenchmark
+from .candidate_benchmark import CandidateBenchmark, CandidateFamilyPreflight
 
 _BENCHMARK_FIGURE_TITLES = (
     "Candidate family attempted → valid → selected funnel",
@@ -443,4 +443,102 @@ def _candidate_resource_figure(records: tuple[CandidateBenchmark, ...]) -> go.Fi
     return figure
 
 
-__all__ = ["candidate_benchmark_figures", "candidate_ground_support_figure", "candidate_support_figures"]
+def candidate_family_preflight_figures(result: CandidateFamilyPreflight) -> tuple[go.Figure, go.Figure]:
+    """Plot applicability-aware survival and per-family stage funnels.
+
+    Applicable cells encode selected/attempted survival. Inapplicable cells use
+    an explicit ``N/A`` annotation and unknown legacy applicability uses ``?``;
+    neither is silently mapped to zero support. Hover data retains exact
+    attempted, valid, selected, denominator, and failure provenance.
+    """
+
+    rows = [
+        {
+            "state": state,
+            "family": cell.family,
+            "applicable": cell.applicable,
+            "attempted": cell.attempted,
+            "valid": cell.valid,
+            "selected": cell.selected,
+            "denominator": cell.denominator,
+            "support_failure": cell.support_failure or "",
+            "survival": None if cell.applicable is not True or cell.attempted == 0 else cell.selected / cell.attempted,
+            "label": "N/A"
+            if cell.applicable is False
+            else "?"
+            if cell.applicable is None
+            else "0"
+            if cell.attempted == 0
+            else f"{cell.selected / cell.attempted:.0%}",
+        }
+        for state, cell in result.cells
+    ]
+    frame = pd.DataFrame(rows)
+    states = sorted(frame["state"].unique()) if not frame.empty else []
+    families = sorted(frame["family"].unique()) if not frame.empty else []
+    heatmap = go.Figure()
+    if rows:
+        indexed = frame.set_index(["state", "family"])
+        z = [[indexed.loc[(state, family), "survival"] for family in families] for state in states]
+        text = [[indexed.loc[(state, family), "label"] for family in families] for state in states]
+        custom = [
+            [
+                [
+                    indexed.loc[(state, family), "applicable"],
+                    indexed.loc[(state, family), "attempted"],
+                    indexed.loc[(state, family), "valid"],
+                    indexed.loc[(state, family), "selected"],
+                    indexed.loc[(state, family), "denominator"],
+                    indexed.loc[(state, family), "support_failure"],
+                ]
+                for family in families
+            ]
+            for state in states
+        ]
+        heatmap.add_trace(
+            go.Heatmap(
+                x=families,
+                y=states,
+                z=z,
+                text=text,
+                texttemplate="%{text}",
+                customdata=custom,
+                zmin=0,
+                zmax=1,
+                colorbar={"title": "selected / attempted"},
+                hovertemplate=(
+                    "state=%{y}<br>family=%{x}<br>applicable=%{customdata[0]}"
+                    "<br>attempted=%{customdata[1]}<br>valid=%{customdata[2]}"
+                    "<br>selected=%{customdata[3]}<br>denominator=%{customdata[4]}"
+                    "<br>support failure=%{customdata[5]}<extra></extra>"
+                ),
+            )
+        )
+    else:
+        heatmap.add_annotation(text="No candidate-family cells", x=0.5, y=0.5, showarrow=False)
+    heatmap.update_layout(title="State × family applicability and selected survival")
+
+    funnel_rows = [
+        {"family": cell.family, "stage": stage, "count": count, "state": state}
+        for state, cell in result.cells
+        if cell.applicable is True
+        for stage, count in (("attempted", cell.attempted), ("valid", cell.valid), ("selected", cell.selected))
+    ]
+    funnel = px.bar(
+        pd.DataFrame(funnel_rows, columns=("family", "stage", "count", "state")),
+        x="family",
+        y="count",
+        color="stage",
+        facet_row="state" if funnel_rows else None,
+        barmode="group",
+        title="Applicable family attempted → valid → selected funnels",
+    )
+    return heatmap, funnel
+
+
+__all__ = [
+    "candidate_benchmark_figures",
+    "candidate_family_preflight_figures",
+    "candidate_ground_support_figure",
+    "candidate_support_figures",
+]
