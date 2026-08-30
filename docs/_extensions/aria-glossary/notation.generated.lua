@@ -671,9 +671,9 @@ return {
       thesis_list = false,
     },
     ["action.candidate_center_world"] = {
-      tex = "r_i\\sim\\mathcal{U}(0.25,1.1),\\quad \\boldsymbol{c}_i^w=\\boldsymbol{T}_r^w(r_i\\boldsymbol{d}_i^{k(i)})",
+      tex = "r_i\\sim\\mathcal{U}(r_{\\min}^{k(i)},r_{\\max}^{k(i)}),\\quad \\boldsymbol{c}_i^w=\\boldsymbol{T}_r^w(r_i\\boldsymbol{d}_i^{k(i)})",
       typst = "#eqs.action.candidate_center_world",
-      description = "",
+      description = "Family-conditioned candidate radius and world-frame center.",
       thesis_list = false,
     },
     ["action.candidate_shell"] = {

@@ -50,7 +50,7 @@
       )
     $,
     candidate_center_world: $
-      r_i ~ cal(U)(0.25, 1.1),
+      r_i ~ cal(U)(r_"min"^(k(i)), r_"max"^(k(i))),
       quad
       bold(c)_i^w = bold(T)_r^w (r_i bold(d)_i^(k(i)))
     $,
