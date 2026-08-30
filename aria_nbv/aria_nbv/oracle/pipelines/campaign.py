@@ -27,8 +27,16 @@ from typing import Any, ClassVar, Protocol, cast
 from pydantic import BaseModel, Field, ValidationInfo, field_validator, model_validator
 
 from ...rollouts.candidate_benchmark import (
+    CandidateBenchmark,
+    CandidateFamilyCounts,
+    CandidateFamilyPhaseAEvidence,
     CandidateFamilyPreflight,
+    CandidateFamilyPreflightConfig,
+    benchmark_from_sampling_result,
     candidate_family_preflight_from_reader,
+    canonical_json_bytes,
+    reduce_candidate_family_preflight,
+    sha256_bytes,
 )
 from ...utils import TargetConfig
 from ...utils.config_paths import resolve_cache_artifact_dir
@@ -62,6 +70,33 @@ def write_json_atomic(path: Path, payload: Any, *, indent: int | None = None) ->
 def _claim_hash(payload: dict[str, Any]) -> str:
     """Hash claim identity with canonical key ordering."""
     return stable_msgspec_hash({key: payload[key] for key in sorted(payload)})
+
+
+def _phase_a_failure_record(
+    *,
+    scene_key: str,
+    state_key: str,
+    family_positions: Mapping[str, str],
+    target_families: frozenset[str],
+    failure: str,
+) -> CandidateBenchmark:
+    """Keep a failed source row explicit without fabricating candidate values."""
+
+    return CandidateBenchmark(
+        state_key=state_key,
+        scene_key=scene_key,
+        families=tuple(
+            CandidateFamilyCounts(
+                family=family,
+                applicable=False if family in target_families and "target:unavailable" in state_key else True,
+                reason=failure,
+                support_failure=failure,
+            )
+            for family in family_positions
+        ),
+        provenance={"phase_a_source_failure": failure},
+        lineage={"family_identity": "writer_config", "selection_semantics": "final_valid_action_shell"},
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -970,6 +1005,150 @@ class CudaRolloutCampaign:
         return candidate_family_preflight_from_reader(
             reader,
             require_known_applicability=True,
+        )
+
+    def candidate_family_phase_a(
+        self,
+        writer_config: Any,
+        source_manifest: Any,
+        *,
+        source_manifest_sha256: str,
+    ) -> CandidateFamilyPhaseAEvidence:
+        """Generate the unchanged single-root Phase-A control without labels.
+
+        This adapter deepens the existing campaign source-target preflight. It
+        applies the reviewed source manifest, uses the writer's existing target
+        task sampler and candidate mixture, and stops before any target scorer,
+        renderer, replay policy, or reward label is constructed. The resulting
+        full shells are reduced through the same rollout-domain preflight used
+        by stores, CLI serialization, plots, and Streamlit.
+
+        Args:
+            writer_config: Canonical `RolloutDatasetWriterConfig` for the run.
+            source_manifest: Reviewed ordered 100-scene source manifest.
+            source_manifest_sha256: SHA-256 of the exact manifest file bytes.
+
+        Returns:
+            Hash-ready benchmark records and the canonical go/no-go decision.
+        """
+
+        from ...data_handling.vin_store.dataset import VinOfflineSample
+        from ...pose_generation.types import CandidateGenerationRuntimeContext, CandidatePositionMode
+        from ..target_selection import OracleTargetTaskSampler
+        from .rollout_dataset import RolloutDatasetWriter
+
+        dataset = writer_config.source.setup_target()
+        if dataset is None:
+            raise RuntimeError("candidate Phase-A requires a VIN offline dataset")
+        RolloutDatasetWriter._apply_source_manifest(
+            dataset,
+            source_manifest,
+            sample_keys=writer_config.sample_keys,
+        )
+        source_rows = writer_config.selected_source_manifest_rows(source_manifest)
+        if len(dataset) != len(source_rows):
+            raise ValueError("candidate Phase-A dataset/manifest row count mismatch")
+
+        sampler = OracleTargetTaskSampler(writer_config.oracle_target_task_sampler)
+        generator = writer_config.candidate_mixture.setup_target()
+        component_positions: dict[str, str] = {}
+        target_families: list[str] = []
+        forward_family = "forward_local"
+        for component in writer_config.candidate_mixture.components:
+            assert component.position_mode is not None
+            component_positions[component.name] = component.position_mode.value
+            if component.paired_view_mode is not None:
+                paired_name = f"{component.name}__paired_{component.paired_view_mode.value}"
+                component_positions[paired_name] = component.position_mode.value
+            if component.position_mode in {
+                CandidatePositionMode.TARGET_BEARING_LOCAL,
+                CandidatePositionMode.LATERAL_TARGET_BYPASS,
+                CandidatePositionMode.TARGET_ORBIT,
+            }:
+                target_families.append(component.name)
+                if component.paired_view_mode is not None:
+                    target_families.append(paired_name)
+            if component.position_mode is CandidatePositionMode.FORWARD_LOCAL:
+                forward_family = component.name
+
+        records: list[CandidateBenchmark] = []
+        excluded: dict[str, str] = {}
+        for source_row, sample in zip(source_rows, dataset, strict=True):
+            if not isinstance(sample, VinOfflineSample):
+                raise TypeError("candidate Phase-A requires source.return_format='sample'")
+            if str(sample.sample_key) != source_row.sample_key:
+                raise ValueError("candidate Phase-A source-row identity mismatch")
+            target_result = sampler.sample(sample)
+            if not target_result.selected_rows:
+                reason = "no_geometry_valid_target_task" if target_result.rows else "no_target_task"
+                excluded[source_row.sample_key] = reason
+                records.append(
+                    _phase_a_failure_record(
+                        scene_key=source_row.scene_id,
+                        state_key=f"source:{source_row.sample_key}/target:unavailable",
+                        family_positions=component_positions,
+                        target_families=frozenset(target_families),
+                        failure=reason,
+                    )
+                )
+                continue
+            target = target_result.selected_rows[0]
+            state_key = f"source:{source_row.sample_key}/target:{target.target_id}"
+            if sample.efm_snippet_view is None or not sample.efm_snippet_view.has_mesh:
+                excluded[source_row.sample_key] = "missing_snippet_or_mesh"
+                records.append(
+                    _phase_a_failure_record(
+                        scene_key=source_row.scene_id,
+                        state_key=state_key,
+                        family_positions=component_positions,
+                        target_families=frozenset(target_families),
+                        failure="missing_snippet_or_mesh",
+                    )
+                )
+                continue
+            result = generator.generate_from_typed_sample(
+                sample.efm_snippet_view,
+                runtime_context=CandidateGenerationRuntimeContext(descriptor=target.descriptor),
+            )
+            records.append(
+                benchmark_from_sampling_result(
+                    result,
+                    scene_key=source_row.scene_id,
+                    state_key=state_key,
+                    family_positions=component_positions,
+                    target_center_world=target.descriptor.center_world,
+                    provenance={
+                        "sample_key": source_row.sample_key,
+                        "target_id": target.target_id,
+                        "target_source": str(target_result.source or "unknown"),
+                    },
+                )
+            )
+
+        config = CandidateFamilyPreflightConfig(
+            query_width=writer_config.candidate_mixture.total_count,
+            configured_families=tuple(component_positions),
+            target_aware_families=tuple(target_families),
+            forward_family=forward_family,
+            require_known_applicability=True,
+        )
+        preflight = reduce_candidate_family_preflight(records, config)
+        implementation_revision = subprocess.check_output(
+            ["git", "rev-parse", "HEAD"],
+            text=True,
+            cwd=Path(__file__).resolve().parents[4],
+        ).strip()
+        return CandidateFamilyPhaseAEvidence(
+            source_manifest_sha256=source_manifest_sha256,
+            source_store_manifest_hash=str(source_manifest.source_manifest_hash),
+            writer_config_sha256=sha256_bytes(canonical_json_bytes(writer_config.model_dump_jsonable())),
+            implementation_revision=implementation_revision,
+            source_row_count=len(source_rows),
+            scene_count=len({record.scene_key for record in records}),
+            target_state_count=sum("target:unavailable" not in record.state_key for record in records),
+            excluded_source_rows=excluded,
+            records=tuple(records),
+            preflight=preflight,
         )
 
     def admit_broad_generation(

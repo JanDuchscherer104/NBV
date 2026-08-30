@@ -37,6 +37,14 @@ unavailable rather than inferring utility from geometry. Passing this preflight
 does not authorize broad generation: the later hash-bound issue-120/WP18 gate
 remains mandatory.
 
+`benchmark_from_sampling_result` is the candidate-only Phase-A seam. It copies
+the generator's full-shell component lineage, hard-valid mask, rule reason
+bitsets, and available continuous margins, while assigning no oracle labels or
+policy-selected transition. Its family `selected` counts mean compact final
+action-shell membership, exactly as in the store-backed reducer. The campaign
+preflight serializes these same benchmark records and reducer output into one
+content-hashed evidence JSON; it does not reinterpret candidate support.
+
 ## Generate and Inspect
 
 Run from `aria_nbv/`:

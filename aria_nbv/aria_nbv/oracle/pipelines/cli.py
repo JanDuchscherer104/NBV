@@ -19,6 +19,7 @@ from typing import Annotated, Any
 import click
 import typer
 
+from ...data_handling.vin_store.dataset import VinOfflineDatasetConfig
 from ...rollouts.manifest import RolloutStoreInvocation
 from ...rollouts.shard_manifest import load_rollout_shard_entry, read_rollout_source_manifest
 from ...utils.cli_format import cli_console, key_value_panel
@@ -26,9 +27,16 @@ from ...utils.config_paths import resolve_config_toml_path
 from ...utils.fingerprints import stable_config_hash, stable_msgspec_hash
 from ...utils.typer_cli import run_typer_app
 from ..target_selection import ORACLE_TARGET_TASK_SOURCE
-from .campaign import CampaignEvent, CampaignWorkerResult, CudaRolloutCampaignConfig, write_json_atomic
+from .campaign import (
+    CampaignEvent,
+    CampaignPlan,
+    CampaignWorkerResult,
+    CudaRolloutCampaign,
+    CudaRolloutCampaignConfig,
+    write_json_atomic,
+)
 from .offline_vin import VinOfflineWriterConfig
-from .rollout_dataset import RolloutDatasetWriterConfig, VinOfflineDatasetConfig
+from .rollout_dataset import RolloutDatasetWriterConfig
 from .shards import (
     RolloutShardOwnershipConflictError,
     plan_rollout_source_manifest,
@@ -52,11 +60,14 @@ def campaign_main(argv: list[str] | None = None) -> None:
     run_typer_app(campaign_app, raw, prog_name="nbv-rollout-campaign")
 
 
-def _campaign(config_path: Path):
-    return CudaRolloutCampaignConfig.from_toml(resolve_config_toml_path(config_path)).setup_target()
+def _campaign(config_path: Path) -> CudaRolloutCampaign:
+    campaign = CudaRolloutCampaignConfig.from_toml(resolve_config_toml_path(config_path)).setup_target()
+    if campaign is None:
+        raise RuntimeError("campaign configuration did not instantiate a campaign")
+    return campaign
 
 
-def _writer_config(campaign):
+def _writer_config(campaign: CudaRolloutCampaign) -> RolloutDatasetWriterConfig | None:
     path = campaign.config.writer_config_path
     if path is None:
         return None
@@ -73,7 +84,11 @@ def _source_config_from_writer_toml(config_path: Path) -> VinOfflineDatasetConfi
     return VinOfflineDatasetConfig.model_validate(source_payload)
 
 
-def _validate_plan_digests(campaign, plan, writer_cfg) -> str:
+def _validate_plan_digests(
+    campaign: CudaRolloutCampaign,
+    plan: CampaignPlan,
+    writer_cfg: RolloutDatasetWriterConfig | None,
+) -> str:
     """Reject stale campaign or writer inputs before any progress is persisted."""
     has_config_hash = hasattr(plan, "config_hash")
     expected_config_hash = getattr(plan, "config_hash", "")
@@ -89,7 +104,7 @@ def _validate_plan_digests(campaign, plan, writer_cfg) -> str:
     return current_writer_hash
 
 
-def _require_smoke_evidence(campaign, plan) -> dict[str, Any]:
+def _require_smoke_evidence(campaign: CudaRolloutCampaign, plan: CampaignPlan) -> dict[str, Any]:
     """Require the structured, validated smoke result before execution."""
     try:
         evidence = campaign.smoke_evidence(plan)
@@ -139,22 +154,21 @@ def campaign_plan(
             expected_hash=planned.admission_audit_hash,
         )
         campaign.write_plan(planned)
-        event_identity = {
-            "campaign_id": campaign.config.campaign_id,
-            "plan_hash": planned.plan_hash,
-            "config_hash": planned.config_hash,
-            "writer_config_hash": planned.writer_config_hash,
-            "source_manifest_hash": planned.source_manifest_hash,
-        }
         existing = campaign.read_events(plan=planned)
         prefix = [event.kind for event in existing[:2]]
         if not existing:
-            campaign.append_event(
-                CampaignEvent("source_selection", timestamp=campaign.utc_now().isoformat(), **event_identity)
-            )
-            campaign.append_event(
-                CampaignEvent("plan_ready", timestamp=campaign.utc_now().isoformat(), **event_identity)
-            )
+            for kind in ("source_selection", "plan_ready"):
+                campaign.append_event(
+                    CampaignEvent(
+                        kind,
+                        timestamp=campaign.utc_now().isoformat(),
+                        campaign_id=campaign.config.campaign_id,
+                        plan_hash=planned.plan_hash,
+                        config_hash=planned.config_hash,
+                        writer_config_hash=planned.writer_config_hash,
+                        source_manifest_hash=planned.source_manifest_hash,
+                    )
+                )
         elif prefix != ["source_selection", "plan_ready"]:
             raise typer.BadParameter("campaign planning ledger prefix is not idempotently reusable")
         campaign.write_status(campaign.status(planned, stage="planned"))
@@ -167,8 +181,24 @@ def campaign_plan(
 
 
 @campaign_app.command("preflight")
-def campaign_preflight(config_path: Annotated[Path, typer.Option("--config-path")]) -> None:
-    """Run the CUDA availability gate."""
+def campaign_preflight(
+    config_path: Annotated[Path, typer.Option("--config-path")],
+    family_phase_a_output: Annotated[
+        Path | None,
+        typer.Option(
+            "--family-phase-a-output",
+            help="Optional immutable no-label candidate-family evidence JSON.",
+        ),
+    ] = None,
+    source_store: Annotated[
+        Path | None,
+        typer.Option(
+            "--source-store",
+            help="Explicit local VIN source-store path for Phase-A; basename must match the manifest.",
+        ),
+    ] = None,
+) -> None:
+    """Run CUDA checks and optionally the canonical 100-scene family gate."""
     campaign = _campaign(config_path)
     writer_cfg = _writer_config(campaign)
     try:
@@ -178,6 +208,39 @@ def campaign_preflight(config_path: Annotated[Path, typer.Option("--config-path"
         )
     except (RuntimeError, ValueError, OSError) as exc:
         raise typer.BadParameter(str(exc)) from None
+    if family_phase_a_output is not None:
+        if writer_cfg is None or writer_cfg.source_manifest_path is None:
+            raise typer.BadParameter("family Phase-A requires the canonical writer source manifest")
+        manifest_path = Path(writer_cfg.source_manifest_path)
+        manifest_bytes = manifest_path.read_bytes()
+        manifest = read_rollout_source_manifest(manifest_path)
+        if source_store is not None:
+            resolved_source_store = source_store.expanduser().resolve()
+            if resolved_source_store.name != Path(manifest.source_store_dir).name:
+                raise typer.BadParameter("Phase-A source-store basename does not match the reviewed manifest")
+            if not resolved_source_store.is_dir():
+                raise typer.BadParameter("Phase-A source store is missing or not a directory")
+            source_store_config = writer_cfg.source.store.model_copy(update={"store_dir": resolved_source_store})
+            source_config = writer_cfg.source.model_copy(update={"store": source_store_config})
+            writer_cfg = writer_cfg.model_copy(update={"source": source_config})
+        try:
+            evidence = campaign.candidate_family_phase_a(
+                writer_cfg,
+                manifest,
+                source_manifest_sha256=hashlib.sha256(manifest_bytes).hexdigest(),
+            )
+        except (RuntimeError, ValueError, OSError, TypeError) as exc:
+            raise typer.BadParameter(str(exc)) from None
+        payload = evidence.to_payload()
+        write_json_atomic(family_phase_a_output.expanduser().resolve(), payload, indent=2)
+        typer.echo(
+            "candidate family Phase-A "
+            f"go={str(evidence.preflight.go).lower()} "
+            f"artifact_sha256={payload['artifact_sha256']} "
+            f"path={family_phase_a_output.expanduser().resolve()}"
+        )
+        if not evidence.preflight.go:
+            raise typer.Exit(2)
     typer.echo("cuda preflight passed")
 
 

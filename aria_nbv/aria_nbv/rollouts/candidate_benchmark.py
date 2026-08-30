@@ -20,14 +20,18 @@ from dataclasses import asdict, dataclass, field
 from enum import StrEnum
 from pathlib import Path
 from types import MappingProxyType
-from typing import Any, Literal, cast
+from typing import TYPE_CHECKING, Any, Literal, cast
 
 import numpy as np
 import pandas as pd
 
+if TYPE_CHECKING:
+    from ..pose_generation.types import CandidateSamplingResult
+
 SCHEMA_ID = "aria-nbv-candidate-benchmark-v1"
 CANDIDATE_SUPPORT_METRICS_REVISION = 1
 FAMILY_PREFLIGHT_SCHEMA_ID = "aria-nbv-candidate-family-preflight-v1"
+FAMILY_PHASE_A_SCHEMA_ID = "aria-nbv-candidate-family-phase-a-evidence-v1"
 FAMILY_SUPPORT_FLOOR_REVISION = "family-support-floor-v1"
 FLAT_GAIN_REVISION = "flat-gain-range-v1"
 MANIFEST_NAME = "manifest.json"
@@ -300,6 +304,53 @@ class CandidateFamilyPreflight:
 
 
 @dataclass(frozen=True, slots=True)
+class CandidateFamilyPhaseAEvidence:
+    """Immutable no-label Phase-A benchmark and canonical gate result."""
+
+    source_manifest_sha256: str
+    source_store_manifest_hash: str
+    writer_config_sha256: str
+    implementation_revision: str
+    source_row_count: int
+    scene_count: int
+    target_state_count: int
+    excluded_source_rows: Mapping[str, str]
+    records: tuple["CandidateBenchmark", ...]
+    preflight: CandidateFamilyPreflight
+
+    def __post_init__(self) -> None:
+        for name in ("source_manifest_sha256", "source_store_manifest_hash", "writer_config_sha256"):
+            if not re.fullmatch(r"[0-9a-f]{64}", getattr(self, name)):
+                raise ValueError(f"{name} must be a SHA-256 identity")
+        if self.source_row_count < 1 or self.scene_count < 1 or self.target_state_count < 0:
+            raise ValueError("Phase-A evidence counts are invalid")
+        if self.preflight.flat_gain.available or self.preflight.flat_gain.denominator != 0:
+            raise ValueError("Phase-A evidence must not contain oracle reward labels")
+        object.__setattr__(self, "excluded_source_rows", MappingProxyType(dict(self.excluded_source_rows)))
+
+    def to_payload(self) -> dict[str, Any]:
+        """Serialize records and the one reducer result with a content hash."""
+
+        payload = {
+            "schema_id": FAMILY_PHASE_A_SCHEMA_ID,
+            "source_manifest_sha256": self.source_manifest_sha256,
+            "source_store_manifest_hash": self.source_store_manifest_hash,
+            "writer_config_sha256": self.writer_config_sha256,
+            "implementation_revision": self.implementation_revision,
+            "source_row_count": self.source_row_count,
+            "scene_count": self.scene_count,
+            "target_state_count": self.target_state_count,
+            "excluded_source_rows": dict(self.excluded_source_rows),
+            "oracle_labels_included": False,
+            "records": [record.to_record() for record in self.records],
+            "preflight": self.preflight.to_payload(),
+            "broad_generation_admitted": False,
+            "broad_generation_blocker": "broad_generation_blocked_pending_wp18",
+        }
+        return {**payload, "artifact_sha256": sha256_bytes(canonical_json_bytes(payload))}
+
+
+@dataclass(frozen=True, slots=True)
 class CandidatePoint:
     """One persisted candidate row in the target-aligned proposal-support frame."""
 
@@ -457,6 +508,143 @@ class CandidateBenchmark:
             "lineage": _json_field(self.lineage),
             "points": [asdict(point) for point in self.points],
         }
+
+
+def benchmark_from_sampling_result(
+    result: "CandidateSamplingResult",
+    *,
+    scene_key: str,
+    state_key: str,
+    family_positions: Mapping[str, str],
+    target_center_world: Iterable[float],
+    provenance: Mapping[str, str] | None = None,
+) -> CandidateBenchmark:
+    """Reduce one generated full shell without scoring or rendering it.
+
+    The sampling result is the authoritative attempted-row table. Its compact
+    valid mask defines final-shell ``selected`` counts for the family gate;
+    there is no policy-selected transition in this Phase-A path. Rule reason
+    bitsets and continuous margins are copied only when the generator produced
+    them, so missing diagnostics remain unavailable rather than inferred.
+
+    Args:
+        result: Full-shell candidate-generation result with component lineage.
+        scene_key: Stable source-scene identity.
+        state_key: Stable source-sample and target identity.
+        family_positions: Config-owned component-to-position-mode mapping.
+        target_center_world: Target centre used by the candidate generator.
+        provenance: Optional immutable source/config identities.
+
+    Returns:
+        Presentation-free benchmark record consumable by the canonical family
+        preflight reducer, serializer, plots, campaign gate, and Streamlit.
+
+    Raises:
+        ValueError: If full-shell family lineage or tensor alignment is absent.
+    """
+
+    import torch
+
+    from .trace import INVALID_REASON_CODES, _candidate_invalid_reasons
+
+    mask_valid = result.mask_valid.detach().to(device="cpu", dtype=torch.bool).reshape(-1)
+    shell_count = int(mask_valid.numel())
+    if result.component_name is None or len(result.component_name) != shell_count:
+        raise ValueError("Phase-A candidate evidence requires full-shell component_name lineage.")
+    if result.shell_offsets_ref is None or result.shell_offsets_ref.reshape(-1, 3).shape[0] != shell_count:
+        raise ValueError("Phase-A candidate evidence requires aligned full-shell reference offsets.")
+
+    reason_bitset, primary_reason = _candidate_invalid_reasons(result)
+    reason_bitset = reason_bitset.detach().to(device="cpu").reshape(-1)
+    primary_reason = primary_reason.detach().to(device="cpu").reshape(-1)
+    reason_names = {int(code): name for name, code in INVALID_REASON_CODES.items()}
+    offsets_ref = result.shell_offsets_ref.detach().to(device="cpu", dtype=torch.float32).reshape(-1, 3)
+    target_world = torch.as_tensor(tuple(target_center_world), dtype=torch.float32).reshape(1, 3)
+    target_ref = result.reference_pose.inverse().transform(target_world.to(result.reference_pose.t.device))
+    target_ref = target_ref.detach().to(device="cpu", dtype=torch.float32).reshape(3)
+    normalization = max(float(torch.linalg.norm(target_ref).item()), 1.0e-6)
+    coordinates_tensor = offsets_ref / normalization
+    target_relative_tensor = (offsets_ref - target_ref.reshape(1, 3)) / normalization
+
+    shell_rotations = result.shell_poses.R.detach().to(device="cpu", dtype=torch.float32).reshape(-1, 3, 3)
+    reference_rotation = result.reference_pose.R.detach().to(device="cpu", dtype=torch.float32).reshape(3, 3)
+    forward_world = shell_rotations[:, :, 2]
+    forward_ref = forward_world @ reference_rotation
+    forward_ref = forward_ref / torch.linalg.norm(forward_ref, dim=1, keepdim=True).clamp_min(1.0e-8)
+
+    family_indices: dict[str, list[int]] = {}
+    for index, family in enumerate(result.component_name):
+        family_indices.setdefault(str(family), []).append(index)
+    missing = sorted(set(family_indices) - set(family_positions))
+    if missing:
+        raise ValueError(f"Phase-A candidate evidence has unconfigured component lineage: {missing!r}.")
+
+    margin_sources = {
+        "free_space_margin_m": "free_space_margin_m",
+        "mesh_distance_m": "min_distance_to_mesh",
+        "path_min_clearance_m": "path_min_clearance_m",
+        "target_pixel_margin_px": "target_pixel_margin_px",
+    }
+    families: list[CandidateFamilyCounts] = []
+    for family in family_positions:
+        indices = family_indices.get(family, [])
+        index_tensor = torch.as_tensor(indices, dtype=torch.int64)
+        valid_count = int(mask_valid[index_tensor].sum().item()) if indices else 0
+        invalid_indices = [index for index in indices if not bool(mask_valid[index])]
+        failures: dict[str, int] = {}
+        for index in invalid_indices:
+            reason = reason_names.get(int(primary_reason[index].item()), f"reason_{int(primary_reason[index].item())}")
+            failures[reason] = failures.get(reason, 0) + 1
+        first_failure = min(failures, key=lambda name: (-failures[name], name)) if failures else None
+        margins: dict[str, float] = {}
+        for public_name, extra_name in margin_sources.items():
+            value = result.extras.get(extra_name)
+            if not isinstance(value, torch.Tensor) or value.reshape(-1).numel() != shell_count or not indices:
+                continue
+            selected = value.detach().to(device="cpu", dtype=torch.float32).reshape(-1)[index_tensor]
+            finite = selected[torch.isfinite(selected)]
+            if finite.numel():
+                margins[public_name] = float(finite.min().item())
+        families.append(
+            CandidateFamilyCounts(
+                family=family,
+                applicable=True,
+                attempted=len(indices),
+                valid=valid_count,
+                selected=valid_count,
+                denominator=len(indices),
+                invalid_reason_bitsets=tuple(sorted({int(reason_bitset[index].item()) for index in invalid_indices})),
+                first_failure=first_failure,
+                margins=margins,
+            )
+        )
+
+    coordinates = tuple(_coordinate3(row) for row in coordinates_tensor.tolist())
+    points = tuple(
+        CandidatePoint(
+            candidate_id=index,
+            xyz=coordinates[index],
+            family=str(result.component_name[index]),
+            position=family_positions[str(result.component_name[index])],
+            actor_valid=bool(mask_valid[index]),
+            selected=False,
+            state_key=state_key,
+            target_relative_xyz=_coordinate3(target_relative_tensor[index].tolist()),
+            view_direction_xyz=_coordinate3(forward_ref[index].tolist()),
+        )
+        for index in range(shell_count)
+    )
+    return CandidateBenchmark(
+        state_key=state_key,
+        scene_key=scene_key,
+        families=tuple(families),
+        geometry={"candidate_count": float(shell_count), "root_target_distance_m": normalization},
+        provenance=dict(provenance or {}),
+        candidate_ids=tuple(range(shell_count)),
+        coordinates=coordinates,
+        lineage={"family_identity": "component_name", "selection_semantics": "final_valid_action_shell"},
+        points=points,
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -1520,6 +1708,7 @@ __all__ = [
     "CandidateBenchmark",
     "CandidateBenchmarkBundle",
     "CandidateBenchmarkSource",
+    "CandidateFamilyPhaseAEvidence",
     "CandidateFamilyPreflight",
     "CandidateFamilyPreflightConfig",
     "CandidateFamilyCounts",
@@ -1528,6 +1717,7 @@ __all__ = [
     "CandidateSupportFailure",
     "FlatGainOutcome",
     "candidate_support_metrics",
+    "benchmark_from_sampling_result",
     "candidate_family_preflight_from_reader",
     "canonical_json_bytes",
     "circular_minimum_covering_span_deg",

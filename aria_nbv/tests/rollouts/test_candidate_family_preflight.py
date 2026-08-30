@@ -2,12 +2,19 @@
 
 from __future__ import annotations
 
+import pytest
+import torch
+from efm3d.aria.camera import CameraTW
+from efm3d.aria.pose import PoseTW
+
+from aria_nbv.pose_generation.types import CandidateSamplingResult
 from aria_nbv.rollouts.candidate_benchmark import (
     CandidateBenchmark,
     CandidateFamilyCounts,
     CandidateFamilyPreflightConfig,
     CandidatePoint,
     CandidateSupportFailure,
+    benchmark_from_sampling_result,
     reduce_candidate_family_preflight,
 )
 from aria_nbv.rollouts.candidate_support_plotting import candidate_family_preflight_figures
@@ -118,3 +125,50 @@ def test_preflight_figures_encode_applicability_and_all_three_stages() -> None:
     heatmap, funnel = candidate_family_preflight_figures(result)
     assert set(heatmap.data[0].text[0]) == {"20%", "N/A", "?"}
     assert {trace.name for trace in funnel.data} == {"attempted", "valid", "selected"}
+
+
+def test_sampling_result_reducer_preserves_full_shell_reasons_and_margins() -> None:
+    shell_poses = PoseTW.from_Rt(
+        torch.eye(3).repeat(3, 1, 1),
+        torch.tensor([[0.0, 0.0, 1.0], [1.0, 0.0, 1.0], [0.0, 1.0, 1.0]]),
+    )
+    views = CameraTW.from_surreal(
+        width=torch.tensor([64.0]),
+        height=torch.tensor([64.0]),
+        type_str="Pinhole",
+        params=torch.tensor([[60.0, 60.0, 32.0, 32.0]]),
+        gain=torch.zeros(1),
+        exposure_s=torch.zeros(1),
+        valid_radius=torch.full((1,), 64.0),
+        T_camera_rig=PoseTW.from_matrix3x4(torch.eye(3, 4).reshape(1, 3, 4)),
+    )
+    result = CandidateSamplingResult(
+        views=views,
+        reference_pose=PoseTW.from_Rt(torch.eye(3), torch.zeros(3)),
+        mask_valid=torch.tensor([True, False, False]),
+        masks={
+            "FreeSpaceRule": torch.tensor([True, False, True]),
+            "MinDistanceToMeshRule": torch.tensor([True, False, False]),
+        },
+        shell_poses=shell_poses,
+        shell_offsets_ref=shell_poses.t,
+        component_name=("forward_local", "target_bearing_local", "target_bearing_local"),
+        extras={
+            "free_space_margin_m": torch.tensor([0.4, -0.2, 0.3]),
+            "min_distance_to_mesh": torch.tensor([0.5, 0.1, 0.05]),
+        },
+    )
+    record = benchmark_from_sampling_result(
+        result,
+        scene_key="scene",
+        state_key="state",
+        family_positions={"forward_local": "forward_local", "target_bearing_local": "target_bearing_local"},
+        target_center_world=(0.0, 0.0, 2.0),
+    )
+    forward, target = record.families
+    assert (forward.attempted, forward.valid, forward.selected) == (1, 1, 1)
+    assert (target.attempted, target.valid, target.selected) == (2, 0, 0)
+    assert target.invalid_reason_bitsets
+    assert target.first_failure in {"POSE_OUT_OF_EXTENT", "CLEARANCE_TOO_SMALL"}
+    assert target.margins == pytest.approx({"free_space_margin_m": -0.2, "mesh_distance_m": 0.05})
+    assert all(point.oracle_label is False and point.selected is False for point in record.points)

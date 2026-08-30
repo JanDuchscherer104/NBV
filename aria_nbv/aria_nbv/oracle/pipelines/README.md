@@ -28,6 +28,24 @@ uv run nbv-build-rollouts \
   --dry-run
 ```
 
+The same campaign preflight command can materialize the no-label Phase-A
+candidate-family evidence without constructing an oracle scorer, renderer,
+replay policy, or reward label:
+
+```sh
+uv run nbv-rollout-campaign preflight \
+  --config-path ../.configs/build_rollouts_v1_cuda_campaign.toml \
+  --source-store /path/to/vin_offline_rollout_campaign100_v10_rebuilt \
+  --family-phase-a-output ../docs/contents/evidence/candidate_family_phase_a_wp02.json
+```
+
+The explicit source path is local acquisition only: its basename must match
+the reviewed source manifest. The emitted JSON binds the manifest bytes,
+source-store manifest identity, complete writer configuration, implementation
+revision, every full candidate shell, and the canonical family gate. A failed
+gate is still written and exits with status 2. Broad rollout generation stays
+blocked until the independent WP18 artifact is present.
+
 ## Composition Boundaries
 
 | Module | Responsibility |

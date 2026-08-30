@@ -169,6 +169,52 @@ def test_internal_preflight_uses_current_writer_store_for_foreign_manifest_path(
     )
 
 
+def test_campaign_preflight_writes_same_phase_a_evidence_payload(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    manifest_path = tmp_path / "source.json"
+    manifest_path.write_text('{"source":"fixture"}\n', encoding="utf-8")
+    output_path = tmp_path / "phase-a.json"
+    captured: dict[str, Any] = {}
+
+    class _Evidence:
+        preflight = SimpleNamespace(go=True)
+
+        @staticmethod
+        def to_payload() -> dict[str, Any]:
+            return {"artifact_sha256": "a" * 64, "preflight": {"go": True}}
+
+    campaign = SimpleNamespace(
+        config=SimpleNamespace(writer_config_path=tmp_path / "writer.toml"),
+        preflight=lambda **_kwargs: None,
+        candidate_family_phase_a=lambda writer, manifest, **kwargs: (
+            captured.update(writer=writer, manifest=manifest, **kwargs) or _Evidence()
+        ),
+    )
+    writer = SimpleNamespace(source_manifest_path=manifest_path)
+    manifest = SimpleNamespace(rows=(1,))
+    monkeypatch.setattr(rollout_cli, "_campaign", lambda _path: campaign)
+    monkeypatch.setattr(rollout_cli, "_writer_config", lambda _campaign: writer)
+    monkeypatch.setattr(rollout_cli, "read_rollout_source_manifest", lambda _path: manifest)
+
+    result = runner.invoke(
+        rollout_cli.campaign_app,
+        [
+            "preflight",
+            "--config-path",
+            str(tmp_path / "campaign.toml"),
+            "--family-phase-a-output",
+            str(output_path),
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert json.loads(output_path.read_text(encoding="utf-8")) == _Evidence.to_payload()
+    assert captured["writer"] is writer and captured["manifest"] is manifest
+    assert len(captured["source_manifest_sha256"]) == 64
+    assert "candidate family Phase-A go=true" in result.output
+
+
 def test_build_rollouts_rejects_partial_shard_arguments(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     config_path = tmp_path / "rollouts.toml"
     config_path.write_text("max_samples = 1\n", encoding="utf-8")
