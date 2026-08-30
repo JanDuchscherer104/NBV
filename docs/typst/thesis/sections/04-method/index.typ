@@ -22,11 +22,14 @@ none has yet passed a frozen comparative evaluation.
 
 The value query distinguishes factual remaining budget $b_t$ from requested
 residual horizon $h$. The executable scorer admits the joint triangular domain
-$1 <= h <= b_t$, but the present recursive and exact-$Q_2$ evidence occupies
-the factual diagonal $h=b_t$; it does not establish off-diagonal training
-support. Dense one-step labels anchor $Q_1$; factual selected
-transitions provide the only admissible recursive path to $Q_h$ for $h>1$.
-Exact horizon two is consequently the first epistemic test of learned
+$1 <= h <= b_t$. Dense one-step labels support $(b_t,1)$ across realized
+budgets, whereas recursive supervision for $h>1$ follows the factual diagonal
+$h=b_t$; exact $Q_2$ is executable only at $(b_t,h)=(2,2)$ and its held-out
+receipt remains pending. Current bundles record trained horizons rather than
+budget--horizon pairs, and deployed inference requests $h=b_t$ behind a
+trained-horizon gate. A pair-bound gate is therefore required before any
+off-diagonal $h>1$ query can be promoted beyond the syntactic scorer
+interface. Exact horizon two remains the first epistemic test of learned
 lookahead: it checks whether recursion recovers a target that can be computed
 without trusting a learned longer-horizon continuation. Passing that test is
 necessary but not sufficient for a policy claim, which additionally requires

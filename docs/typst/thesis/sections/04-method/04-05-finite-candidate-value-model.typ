@@ -70,11 +70,14 @@ zero in executable tensors denotes padding and is never a learned query.
 Dense labels train $h=1$ for every hard-valid candidate. For $h>1$, only the
 factual selected action has a successor observation, so recursive supervision
 is necessarily narrower. The current recursive construction and exact-$Q_2$
-receipt populate the factual diagonal $h=b_t$; the implemented ability to query
-$h<b_t$ is not evidence that those off-diagonal pairs were trained. A bundle
-must therefore record realized support over pairs $(b_t,h)$ and reject any
-requested pair that lacks frozen training and evaluation evidence. A wide
-syntactic interface is not evidence of wide learned capability.
+surface populate the factual diagonal $h=b_t$, with exact $Q_2$ executable at
+$(b_t,h)=(2,2)$ but its held-out receipt still pending. Dense $Q_1$ additionally
+supports $(b_t,1)$ across realized budgets. Current bundles record trained
+horizons rather than realized pairs, while deployed online inference requests
+the diagonal and applies that horizon gate. Before any off-diagonal $h>1$
+query is exposed, the bundle and runtime must add pair-bound training and
+evaluation evidence and reject unsupported pairs. A wide syntactic interface
+is not evidence of wide learned capability.
 
 === Direct continuous objective
 

@@ -82,9 +82,12 @@ inherits the `S0-pose` sufficiency limitation identified above.
 The maximum horizon $H_"max"$ binds data, model, and checkpoint. Remaining
 budget records the factual state; $h$ selects a requested return within the
 joint support domain $1 <= h <= b_t <= H_"max"$. Omitting $h$ selects the
-factual diagonal $h=b_t$. The scorer can execute shorter off-diagonal queries,
-but the current fitted recursion and exact-$Q_2$ receipt support only diagonal
-training claims. A syntactically valid query still fails closed if its
-$(b_t,h)$ pair lacks manifest-bound training and evaluation evidence. The
-public interface scores one scalar horizon at a time and preserves candidate
-order in its $[B,S,N_q]$ output.
+factual diagonal $h=b_t$. Dense $Q_1$ supervision realizes $(b_t,1)$ across
+observed budgets, while recursive $h>1$ supervision follows the diagonal and
+exact $Q_2$ is executable at $(2,2)$ with its held-out receipt still pending.
+The current bundle records trained horizons, not pair-level support. Deployed
+online inference requests only $h=b_t$ and rejects horizons absent from that
+bundle. The scorer can execute shorter off-diagonal queries syntactically, but
+a manifest-bound pair gate is required before promoted off-diagonal $h>1$
+inference. The public interface scores one scalar horizon at a time and
+preserves candidate order in its $[B,S,N_q]$ output.
