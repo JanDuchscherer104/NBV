@@ -18,7 +18,7 @@ touched_owner_paths:
   - scripts/tests/test_typst_authoring_hygiene.py
 codex_thread: codex://threads/01a04e7a-ee77-7950-909c-61d1e1cb45b4
 repo_object_format: sha1
-repo_head: 943c991ab73f480f7a77abecb722976f42325903
+repo_head: b45c8fc48c46b34fb864050ba872e126ae3653a5
 repo_branch: "codex/issue-186-thesis-evidence-gates"
 worktree_kind: linked
 ---
@@ -45,17 +45,17 @@ Audited the issue against the live base, separated edits by canonical narrative 
 ## Commits
 - [c4f88bacbf70db489309b4b36480e6124dbde8a9](https://github.com/JanDuchscherer104/ARIA-NBV/commit/c4f88bacbf70db489309b4b36480e6124dbde8a9) — final narrative-spine and Foundations layer with the observed-target core gate, exact contribution locators, gap-closure admissibility, and synchronized PDF
 - [66d1d5687c25b797f0e839fa21efde73639e456d](https://github.com/JanDuchscherer104/ARIA-NBV/commit/66d1d5687c25b797f0e839fa21efde73639e456d) — final experimental-world layer with explicit sampling-intervention failure semantics, family-conditioned candidate radii, and synchronized PDF
-- [bfc8dabcf47e073959d3bf96bb62475e9b64e19c](https://github.com/JanDuchscherer104/ARIA-NBV/commit/bfc8dabcf47e073959d3bf96bb62475e9b64e19c) — final selected finite-horizon Method layer with implementation-faithful inputs, literal deployed horizon support, its 27-table guard, and synchronized PDF
-- [943c991ab73f480f7a77abecb722976f42325903](https://github.com/JanDuchscherer104/ARIA-NBV/commit/943c991ab73f480f7a77abecb722976f42325903) — final evidence-stage repair before this debrief, with fail-closed decisions, population-bound actor-protocol evidence, uncertainty-bearing calibration, sidecar-resolved exact Q2 and recovery contracts, and an explicit learned gap-closure estimability rule
+- [9b618d23d8cd36f7fe324c834dfe80208a3acfe7](https://github.com/JanDuchscherer104/ARIA-NBV/commit/9b618d23d8cd36f7fe324c834dfe80208a3acfe7) — final selected finite-horizon Method layer with implementation-faithful inputs, literal deployed horizon support, its 27-table guard, synchronized PDF, and the canonical candidate-pose-context notation record required by live-owner validation
+- [b45c8fc48c46b34fb864050ba872e126ae3653a5](https://github.com/JanDuchscherer104/ARIA-NBV/commit/b45c8fc48c46b34fb864050ba872e126ae3653a5) — final evidence-stage repair before this debrief, with fail-closed decisions, population-bound actor-protocol evidence, uncertainty-bearing calibration, sidecar-resolved exact Q2 and recovery contracts, and an explicit learned gap-closure estimability rule
 
 ## Verification
-- `make glossary`: passed with 57 terms, 110 symbols, and 122 equations.
+- `make glossary`: passed with 57 terms, 111 symbols, and 123 equations.
 - `make thesis-literature-provenance`: 31 tests passed.
 - `make typst-authoring-contract`: 21 tests passed with the current-main publication-table inventory of 26.
 - `make thesis-marker-contract`, `make thesis-pdf-ci`, `make thesis-pdf`, and `git diff --check`: passed.
 - `make thesis-report-data-contract`: passed, including explicit false-versus-true gate-decision fixtures; focused pose-generation tests passed with the silent sampler fallback removed.
-- The regression and scientific-review passes covered every changed submission-facing Typst source against merge-base `fae1b1b08e31978fd16234d1f32f090738ad0403` and current main `8f35426cabf4b88425f05ed4701ea49ad69f3c9d`; fifteen accepted findings were patched and rechecked.
-- Rendered-page review covered the changed Chapter 1--8 ranges, the standalone evidence-gate figure, and the preserved candidate-orbit development pages. It found and repaired one duplicate RQ2 heading and two current-main process labels; the repaired 126-page evidence-stage PDF has no clipping, overlap, broken table, unreadable figure, or orphaned chapter page in the affected ranges.
+- The regression and scientific-review passes covered every changed submission-facing Typst source against merge-base `8f35426cabf4b88425f05ed4701ea49ad69f3c9d` and current main `c59fead0d473ea1a1b87e5b1f6c76330c8a9d33e`; fifteen accepted findings and the hosted live-owner notation regression were patched and rechecked.
+- Rendered-page review covered the changed Chapter 1--8 ranges, the standalone evidence-gate figure, and the preserved candidate-orbit development pages. It found and repaired one duplicate RQ2 heading and two current-main process labels; the repaired 127-page evidence-stage PDF has no clipping, overlap, broken table, unreadable figure, or orphaned chapter page in the affected ranges.
 - Submission-mode compilation remained correctly blocked because no explicit confirmatory thesis-data artifact was supplied. The work promotes no empirical-result claim.
 
 ## Canonical Owner Impact
