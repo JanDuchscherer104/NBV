@@ -13,7 +13,7 @@ touched_owner_paths:
   - docs/typst/thesis/main.pdf
 codex_thread: codex://threads/01a04e7a-ee77-7950-909c-61d1e1cb45b4
 repo_object_format: sha1
-repo_head: 05660415b671e8750bfd5399c0e22e626701c7b5
+repo_head: 03df283df79a8367349a0799d5178f195f962ebd
 repo_branch: "codex/issue-186-slam-theory"
 worktree_kind: linked
 ---
@@ -32,13 +32,13 @@ Screened the 669-page public release at revision `c9d50ef410bf1a280b33a70854592f
 - The scientific review found no Handbook-derived claim escalation, actor/oracle leakage, estimand drift, mathematical inconsistency, or unsupported result.
 
 ## Commits
-- [a7919aed66c8a5c199c955bb614499c043dac509](https://github.com/JanDuchscherer104/ARIA-NBV/commit/a7919aed66c8a5c199c955bb614499c043dac509) — source registration, chapter citations, and theoretical Introduction framing
-- [05660415b671e8750bfd5399c0e22e626701c7b5](https://github.com/JanDuchscherer104/ARIA-NBV/commit/05660415b671e8750bfd5399c0e22e626701c7b5) — regenerated 127-page thesis PDF after the final narrative-stack scientific-review repairs
+- [12d06cef5cf656943910ced1d61e2a75e77ed907](https://github.com/JanDuchscherer104/ARIA-NBV/commit/12d06cef5cf656943910ced1d61e2a75e77ed907) — source registration, chapter citations, and theoretical Introduction framing
+- [03df283df79a8367349a0799d5178f195f962ebd](https://github.com/JanDuchscherer104/ARIA-NBV/commit/03df283df79a8367349a0799d5178f195f962ebd) — regenerated 127-page thesis PDF after the final narrative-stack scientific-review repairs
 
 ## Verification
 - Literature manifest parsing resolved all 53 rows; both Handbook citation keys join the registered repository identity.
 - `make thesis-literature-provenance typst-authoring-contract thesis-marker-contract thesis-pdf-ci`: passed with 31 provenance and 21 authoring tests.
-- The full docs verification command passed with 57 glossary terms, 111 symbols, 122 equations, 50 API-doc tests, and a complete Quarto render.
+- The full docs verification command passed with 57 glossary terms, 111 symbols, 123 equations, 50 API-doc tests, and a complete Quarto render.
 - Poppler review of the Introduction, all regression owners, and the preserved current-main development pages found no clipping, overlap, broken table, unreadable figure, or damaged hierarchy in the final 127-page PDF.
 
 ## Canonical Owner Impact
