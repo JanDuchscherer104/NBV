@@ -68,13 +68,15 @@ universal absence.
 one-step and finite-horizon candidate scoring without privileged target
 geometry, oracle labels, or unselected candidate renders at decision time?*
 
-Ground-truth target tasks remain restricted to task construction, supervision,
-and evaluation. The actor-facing protocol must account for how the target
-instruction, candidate support, hard validity mask, selected state update, and
-scorer inputs are produced. The scorer receives only the declared target
-descriptor, causal egocentric evidence, remaining budget, and requested horizon;
-evaluation separately audits matching failures, ranking and calibration, and
-actor/oracle leakage.
+Ground-truth target tasks may define supervision, evaluation, and a separately
+reported privileged `V0/GT` task-construction sanity control; they do not satisfy
+the core RQ3 gate. The core learned comparison requires an observation-derived
+target instruction and matching path (`V1/observed`) in addition to actor-visible
+candidate support, hard validity, selected-state updates, and scorer inputs.
+Until that route exists, the core actor-visible comparison remains unavailable.
+The scorer then receives only the declared target descriptor, causal egocentric
+evidence, remaining budget, and requested horizon; evaluation separately audits
+matching failures, ranking and calibration, and actor/oracle leakage.
 
 ==== RQ4 — Candidate, replay, and population support <ssec:rq4>
 

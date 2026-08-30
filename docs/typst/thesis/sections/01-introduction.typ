@@ -102,9 +102,10 @@ The thesis operationalizes this evaluation through four scientific functions:
   recursion, and learned-control endpoint gap closure in that order.
 
 // evidence:
-// - measurement and information boundary -> docs/typst/thesis/sections/03-oracle-and-data-generation/
-// - relational finite-horizon value -> docs/typst/thesis/sections/02-foundations/02-04-finite-horizon-value-learning.typ, docs/typst/thesis/sections/04-method/04-05-finite-candidate-value-model.typ
-// - sequential evidence gates -> docs/typst/thesis/sections/05-experimental-design/
+// - one-step, finite-horizon, and endpoint estimands -> docs/typst/thesis/sections/01-research-questions.typ:9-61, docs/typst/thesis/sections/03-oracle-and-data-generation/03-02-target-task-and-rri-labels.typ:28-40
+// - end-to-end actor/oracle information boundary -> docs/typst/thesis/sections/03-oracle-and-data-generation/03-01-state-and-visibility.typ:22-30,94-110
+// - relational finite-horizon value -> docs/typst/thesis/sections/02-foundations/02-04-finite-horizon-value-learning.typ:30-45,76-82
+// - ordered scientific evidence gates -> docs/typst/thesis/sections/05-experimental-design/05-02-learning-objective-and-replay-evidence.typ:31-50, docs/typst/thesis/sections/05-experimental-design/05-03-policy-comparison-and-failure-interpretation.typ:15-42
 
 Before model capacity becomes the main question, the evidence needed to define
 the learning problem must itself be identifiable. The outcome must be
