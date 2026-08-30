@@ -19,7 +19,7 @@ touched_owner_paths:
   - scripts/tests/test_typst_report_data_contract.py
 codex_thread: codex://threads/01a04fd9-0c7c-7813-a9c5-dc49f2f867a6
 repo_object_format: sha1
-repo_head: fb31b12cbc7fb92acb9f4f203395ced99d50407e
+repo_head: c8880786c7ea9456672a06188330102fa0b09a22
 repo_branch: "codex/thesis-figure-qh-evidence-gates"
 worktree_kind: linked
 ---
@@ -68,6 +68,11 @@ reviews until zero P0--P2 findings remained.
   aggregation, source, cross-family lineage, and incomplete bundles; measured
   headroom non-pass retains endpoint estimates but makes ratio evidence
   unavailable and its decision not decided.
+- Final exact-head review found one further P2: a malformed string or integer
+  decision could be interpreted as a measured non-pass. The central decision
+  helper and all non-contracted gate families now require boolean values;
+  explicit negative fixtures preserve malformed decisions as unavailable and
+  not decided.
 
 ## Commits
 
@@ -75,6 +80,7 @@ reviews until zero P0--P2 findings remained.
 - https://github.com/JanDuchscherer104/ARIA-NBV/commit/f1ddfdef8f37c287158fdfa8501a729c2e1089fc
 - https://github.com/JanDuchscherer104/ARIA-NBV/commit/72a1136a11e4fe751893ad606fcc923882e7ecb3
 - https://github.com/JanDuchscherer104/ARIA-NBV/commit/fb31b12cbc7fb92acb9f4f203395ced99d50407e
+- https://github.com/JanDuchscherer104/ARIA-NBV/commit/c8880786c7ea9456672a06188330102fa0b09a22
 
 ## Verification
 
