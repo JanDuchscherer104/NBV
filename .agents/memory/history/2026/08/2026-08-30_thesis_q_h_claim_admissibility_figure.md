@@ -10,16 +10,19 @@ touched_owner_paths:
   - docs/typst/thesis/experiment_data.typ
   - docs/typst/thesis/figures/qh_learning_evidence_loop.typ
   - docs/typst/thesis/sections/05-experimental-design/index.typ
+  - docs/typst/thesis/sections/05-experimental-design/05-01-objectives-and-hypotheses.typ
+  - docs/typst/thesis/sections/05-experimental-design/05-02-learning-objective-and-replay-evidence.typ
   - docs/typst/thesis/sections/05-experimental-design/05-03-policy-comparison-and-failure-interpretation.typ
   - docs/typst/thesis/sections/06-results.typ
   - docs/typst/thesis/sections/07-discussion.typ
   - docs/typst/thesis/sections/08-conclusion.typ
   - docs/typst/thesis/tests/evidence_gate_state.typ
+  - docs/typst/thesis/tests/learning_gate_evidence_contract.typ
   - docs/typst/thesis/tests/recovery_evidence_contract.typ
   - scripts/tests/test_typst_report_data_contract.py
 codex_thread: codex://threads/01a04fd9-0c7c-7813-a9c5-dc49f2f867a6
 repo_object_format: sha1
-repo_head: b09b32fd5d71ba1d58ac3a635095565f4563eb82
+repo_head: 56122614724bd73787cd816483dd51f67b4ef15f
 repo_branch: "codex/thesis-figure-qh-evidence-gates"
 worktree_kind: linked
 ---
@@ -82,6 +85,20 @@ reviews until zero P0--P2 findings remained.
   with the endpoint means that define them. The canonical owner now verifies
   the headroom difference and recovered-headroom fraction numerically before
   admission; inconsistent point-value fixtures are rejected.
+- Two further exact-head findings showed that candidate-support decisions and
+  Q1/Q2 learned-gate payloads could carry malformed values, metadata, or
+  denominators. Their canonical contracts now bind every metric and decision
+  to typed values, explicit ranges, fixed units and aggregations, positive
+  populations, and one immutable confirmatory sidecar.
+- Adjacent regression review then closed the same fail-open class for study
+  population and metric repeatability. Population counts are integer and
+  scene-bound. Repeatability binds discrepancy, declared tolerance, repeat
+  count, frozen decision-rule identity, and the exact boolean comparison under
+  one source. A measured tolerance non-pass remains evidence; inconsistent
+  decisions are unavailable.
+- Analysis provenance now resolves to exactly one complete confirmatory
+  sidecar row with a valid identifier, digest, format, and name/path identity;
+  empty, unknown, malformed, or duplicate bindings fail closed.
 
 ## Commits
 
@@ -92,6 +109,7 @@ reviews until zero P0--P2 findings remained.
 - https://github.com/JanDuchscherer104/ARIA-NBV/commit/c8880786c7ea9456672a06188330102fa0b09a22
 - https://github.com/JanDuchscherer104/ARIA-NBV/commit/1190e5e7bc4863f46221edee20a693198a23a9ae
 - https://github.com/JanDuchscherer104/ARIA-NBV/commit/b09b32fd5d71ba1d58ac3a635095565f4563eb82
+- https://github.com/JanDuchscherer104/ARIA-NBV/commit/56122614724bd73787cd816483dd51f67b4ef15f
 
 ## Verification
 
@@ -104,6 +122,10 @@ and visual reviews each approved with zero P0--P2 findings. After the recovery-
 contract repair, two fresh independent reviews again approved with zero P0--P2.
 The derived-identity repair received another independent exact-candidate
 approval with zero P0--P2.
+The final admission-contract candidate additionally passed adversarial
+population, repeatability, support, Q1, Q2, sidecar-uniqueness, and decision-
+identity mutations. Two independent reviews approved it with zero P0--P2, and
+the focused Q_H model/certification suite passed all 72 tests.
 
 ## Canonical Owner Impact
 
