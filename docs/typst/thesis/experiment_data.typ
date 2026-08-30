@@ -32,6 +32,75 @@
   "selected.path_length_m.p95",
 )
 
+#let paired-interval-method = "scene_clustered_percentile_bootstrap_95"
+#let recovery-ratio-definition = "ratio_of_paired_scene_mean_differences"
+#let endpoint-evidence-facts = (
+  "policy.endpoint_gain.oracle_one_step.mean",
+  "policy.endpoint_gain.oracle_one_step.ci_low",
+  "policy.endpoint_gain.oracle_one_step.ci_high",
+  "policy.endpoint_gain.oracle_lookahead.mean",
+  "policy.endpoint_gain.oracle_lookahead.ci_low",
+  "policy.endpoint_gain.oracle_lookahead.ci_high",
+  "policy.endpoint_gain.learned_q.mean",
+  "policy.endpoint_gain.learned_q.ci_low",
+  "policy.endpoint_gain.learned_q.ci_high",
+  "policy.endpoint_gain.interval_method",
+  "policy.endpoint_gain.n_scenes",
+  "policy.endpoint_gain.cohort_sha256",
+)
+#let endpoint-evidence-contract = (
+  (key: "policy.endpoint_gain.oracle_one_step.mean", aggregation: "paired_scene_endpoint_gain", unit: "fraction", value_kind: "number"),
+  (key: "policy.endpoint_gain.oracle_one_step.ci_low", aggregation: "paired_scene_endpoint_gain", unit: "fraction", value_kind: "number"),
+  (key: "policy.endpoint_gain.oracle_one_step.ci_high", aggregation: "paired_scene_endpoint_gain", unit: "fraction", value_kind: "number"),
+  (key: "policy.endpoint_gain.oracle_lookahead.mean", aggregation: "paired_scene_endpoint_gain", unit: "fraction", value_kind: "number"),
+  (key: "policy.endpoint_gain.oracle_lookahead.ci_low", aggregation: "paired_scene_endpoint_gain", unit: "fraction", value_kind: "number"),
+  (key: "policy.endpoint_gain.oracle_lookahead.ci_high", aggregation: "paired_scene_endpoint_gain", unit: "fraction", value_kind: "number"),
+  (key: "policy.endpoint_gain.learned_q.mean", aggregation: "paired_scene_endpoint_gain", unit: "fraction", value_kind: "number"),
+  (key: "policy.endpoint_gain.learned_q.ci_low", aggregation: "paired_scene_endpoint_gain", unit: "fraction", value_kind: "number"),
+  (key: "policy.endpoint_gain.learned_q.ci_high", aggregation: "paired_scene_endpoint_gain", unit: "fraction", value_kind: "number"),
+  (key: "policy.endpoint_gain.interval_method", aggregation: "analysis_identity", unit: "identity", value_kind: "string"),
+  (key: "policy.endpoint_gain.n_scenes", aggregation: "count", unit: "count", value_kind: "integer"),
+  (key: "policy.endpoint_gain.cohort_sha256", aggregation: "cohort_binding_sha256", unit: "sha256", value_kind: "string"),
+)
+#let headroom-evidence-facts = (
+  "policy.paired_scene_endpoint.effect",
+  "policy.paired_scene_endpoint.ci_low",
+  "policy.paired_scene_endpoint.ci_high",
+  "policy.paired_scene_endpoint.interval_method",
+  "policy.paired_scene_endpoint.n_scenes",
+  "policy.paired_scene_endpoint.cohort_sha256",
+  "headroom_gate.passed",
+)
+#let headroom-evidence-contract = (
+  (key: "policy.paired_scene_endpoint.effect", aggregation: "paired_scene_mean_difference", unit: "fraction", value_kind: "number"),
+  (key: "policy.paired_scene_endpoint.ci_low", aggregation: "paired_scene_mean_difference", unit: "fraction", value_kind: "number"),
+  (key: "policy.paired_scene_endpoint.ci_high", aggregation: "paired_scene_mean_difference", unit: "fraction", value_kind: "number"),
+  (key: "policy.paired_scene_endpoint.interval_method", aggregation: "analysis_identity", unit: "identity", value_kind: "string"),
+  (key: "policy.paired_scene_endpoint.n_scenes", aggregation: "count", unit: "count", value_kind: "integer"),
+  (key: "policy.paired_scene_endpoint.cohort_sha256", aggregation: "cohort_binding_sha256", unit: "sha256", value_kind: "string"),
+  (key: "headroom_gate.passed", aggregation: "paired_scene_decision", unit: "bool", value_kind: "boolean"),
+)
+#let recovery-evidence-facts = (
+  "policy.q_recovery.fraction",
+  "policy.q_recovery.ci_low",
+  "policy.q_recovery.ci_high",
+  "policy.q_recovery.ratio_definition",
+  "policy.q_recovery.interval_method",
+  "policy.q_recovery.n_scenes",
+  "policy.q_recovery.cohort_sha256",
+  "policy.q_recovery.passed",
+)
+#let recovery-evidence-contract = (
+  (key: "policy.q_recovery.fraction", aggregation: "paired_scene_ratio_of_mean_differences", unit: "fraction", value_kind: "number"),
+  (key: "policy.q_recovery.ci_low", aggregation: "paired_scene_ratio_of_mean_differences", unit: "fraction", value_kind: "number"),
+  (key: "policy.q_recovery.ci_high", aggregation: "paired_scene_ratio_of_mean_differences", unit: "fraction", value_kind: "number"),
+  (key: "policy.q_recovery.ratio_definition", aggregation: "analysis_identity", unit: "identity", value_kind: "string"),
+  (key: "policy.q_recovery.interval_method", aggregation: "analysis_identity", unit: "identity", value_kind: "string"),
+  (key: "policy.q_recovery.n_scenes", aggregation: "count", unit: "count", value_kind: "integer"),
+  (key: "policy.q_recovery.cohort_sha256", aggregation: "cohort_binding_sha256", unit: "sha256", value_kind: "string"),
+  (key: "policy.q_recovery.passed", aggregation: "paired_scene_decision", unit: "bool", value_kind: "boolean"),
+)
+
 #let status-report-tables = ("facts", "runtime_storage", "failures", "sidecars")
 
 #let default-thesis-report-path = "/typst/thesis/data/report-bundle-fixture.json"
@@ -116,6 +185,49 @@
   })
 }
 
+#let report-store-facts-have-provenance(
+  report,
+  store-id,
+  keys,
+  required-fragment: none,
+) = {
+  keys.all(key => {
+    let matches = report.tables.facts.rows.filter(
+      row => row.store_id == store-id and row.key == key,
+    )
+    matches.len() == 1 and {
+      let source = matches.first().source
+      type(source) == str and source.len() > 0 and (
+        required-fragment == none or source.contains(required-fragment)
+      )
+    }
+  })
+}
+
+#let report-store-facts-share-value(report, store-id, keys) = {
+  let rows = keys.map(key => {
+    let matches = report.tables.facts.rows.filter(
+      row => row.store_id == store-id and row.key == key,
+    )
+    if matches.len() == 1 { matches.first() } else { none }
+  })
+  rows.all(row => row != none and row.value != none) and rows.all(
+    row => row.value == rows.first().value,
+  )
+}
+
+#let report-store-facts-share-source(report, store-id, keys) = {
+  let rows = keys.map(key => {
+    let matches = report.tables.facts.rows.filter(
+      row => row.store_id == store-id and row.key == key,
+    )
+    if matches.len() == 1 { matches.first() } else { none }
+  })
+  rows.all(
+    row => row != none and type(row.source) == str and row.source.len() > 0,
+  ) and rows.all(row => row.source == rows.first().source)
+}
+
 #let evidence-gate-state(
   evidence-available,
   decision-passed,
@@ -126,6 +238,26 @@
     evidence_available: evidence-available,
     gate_passed: gate-passed,
     claim_admissible: prerequisites-passed and gate-passed,
+  )
+}
+
+#let conditional-ratio-gate-state(
+  raw-evidence-available,
+  denominator-admissible,
+  ratio-contract-available,
+  decision-passed,
+  remaining-prerequisites-passed: true,
+) = {
+  let ratio-evidence-available = raw-evidence-available and denominator-admissible and ratio-contract-available
+  let state = evidence-gate-state(
+    ratio-evidence-available,
+    decision-passed,
+    prerequisites-passed: remaining-prerequisites-passed,
+  )
+  (
+    raw_evidence_available: raw-evidence-available,
+    ratio_evidence_available: ratio-evidence-available,
+    state: state,
   )
 }
 
@@ -146,6 +278,20 @@
   matches.first()
 }
 
+#let report-value-matches-kind(value, value-kind) = {
+  if value-kind == "number" {
+    type(value) == int or type(value) == float
+  } else if value-kind == "integer" {
+    type(value) == int
+  } else if value-kind == "string" {
+    type(value) == str
+  } else if value-kind == "boolean" {
+    type(value) == bool
+  } else {
+    false
+  }
+}
+
 #let report-store-facts-match-contract(report, store-id, contracts, expected-n) = {
   contracts.all(contract => {
     let matches = report.tables.facts.rows.filter(
@@ -153,9 +299,137 @@
     )
     matches.len() == 1 and {
       let row = matches.first()
-      row.value != none and row.n == expected-n and row.aggregation == contract.aggregation
+      let expected-unit = contract.at("unit", default: none)
+      let expected-kind = contract.at("value_kind", default: none)
+      row.value != none and row.n == expected-n and row.aggregation == contract.aggregation and (
+        expected-unit == none or row.at("unit", default: none) == expected-unit
+      ) and (
+        expected-kind == none or report-value-matches-kind(row.value, expected-kind)
+      )
     }
   })
+}
+
+#let report-store-fact-values-match(report, store-id, expected-values) = {
+  expected-values.all(expected => {
+    let matches = report.tables.facts.rows.filter(
+      row => row.store_id == store-id and row.key == expected.key,
+    )
+    matches.len() == 1 and matches.first().value == expected.value
+  })
+}
+
+#let report-store-interval-is-ordered(report, store-id, low-key, high-key) = {
+  let low-matches = report.tables.facts.rows.filter(
+    row => row.store_id == store-id and row.key == low-key,
+  )
+  let high-matches = report.tables.facts.rows.filter(
+    row => row.store_id == store-id and row.key == high-key,
+  )
+  low-matches.len() == 1 and high-matches.len() == 1 and {
+    let low = low-matches.first().value
+    let high = high-matches.first().value
+    report-value-matches-kind(low, "number") and report-value-matches-kind(
+      high,
+      "number",
+    ) and low <= high
+  }
+}
+
+#let report-store-fact-is-sha256(report, store-id, key) = {
+  let matches = report.tables.facts.rows.filter(
+    row => row.store_id == store-id and row.key == key,
+  )
+  matches.len() == 1 and {
+    let value = matches.first().value
+    type(value) == str and value.match(regex("^[0-9a-f]{64}$")) != none
+  }
+}
+
+#let report-store-analysis-family-valid(
+  report,
+  store-id,
+  facts,
+  contract,
+  expected-n,
+  expected-values: (),
+  interval-pairs: (),
+  digest-keys: (),
+  required-source-fragment: none,
+) = {
+  report-store-facts-match-contract(
+    report,
+    store-id,
+    contract,
+    expected-n,
+  ) and report-store-fact-values-match(
+    report,
+    store-id,
+    expected-values,
+  ) and interval-pairs.all(pair => report-store-interval-is-ordered(
+    report,
+    store-id,
+    pair.low,
+    pair.high,
+  )) and digest-keys.all(key => report-store-fact-is-sha256(
+    report,
+    store-id,
+    key,
+  )) and report-store-facts-have-provenance(
+    report,
+    store-id,
+    facts,
+    required-fragment: required-source-fragment,
+  ) and report-store-facts-share-source(report, store-id, facts)
+}
+
+#let report-store-endpoint-evidence-valid(report, store-id, expected-n) = {
+  report-store-analysis-family-valid(
+    report,
+    store-id,
+    endpoint-evidence-facts,
+    endpoint-evidence-contract,
+    expected-n,
+    expected-values: ((key: "policy.endpoint_gain.interval_method", value: paired-interval-method),),
+    interval-pairs: (
+      (low: "policy.endpoint_gain.oracle_one_step.ci_low", high: "policy.endpoint_gain.oracle_one_step.ci_high"),
+      (low: "policy.endpoint_gain.oracle_lookahead.ci_low", high: "policy.endpoint_gain.oracle_lookahead.ci_high"),
+      (low: "policy.endpoint_gain.learned_q.ci_low", high: "policy.endpoint_gain.learned_q.ci_high"),
+    ),
+    digest-keys: ("policy.endpoint_gain.cohort_sha256",),
+    required-source-fragment: "|sidecar:",
+  )
+}
+
+#let report-store-headroom-evidence-valid(report, store-id, expected-n) = {
+  report-store-analysis-family-valid(
+    report,
+    store-id,
+    headroom-evidence-facts,
+    headroom-evidence-contract,
+    expected-n,
+    expected-values: ((key: "policy.paired_scene_endpoint.interval_method", value: paired-interval-method),),
+    interval-pairs: ((low: "policy.paired_scene_endpoint.ci_low", high: "policy.paired_scene_endpoint.ci_high"),),
+    digest-keys: ("policy.paired_scene_endpoint.cohort_sha256",),
+    required-source-fragment: "|sidecar:",
+  )
+}
+
+#let report-store-recovery-evidence-valid(report, store-id, expected-n) = {
+  report-store-analysis-family-valid(
+    report,
+    store-id,
+    recovery-evidence-facts,
+    recovery-evidence-contract,
+    expected-n,
+    expected-values: (
+      (key: "policy.q_recovery.ratio_definition", value: recovery-ratio-definition),
+      (key: "policy.q_recovery.interval_method", value: paired-interval-method),
+    ),
+    interval-pairs: ((low: "policy.q_recovery.ci_low", high: "policy.q_recovery.ci_high"),),
+    digest-keys: ("policy.q_recovery.cohort_sha256",),
+    required-source-fragment: "|sidecar:",
+  )
 }
 
 #let short-store-label(report, store-id) = {

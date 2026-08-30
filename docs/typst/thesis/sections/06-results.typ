@@ -1,6 +1,6 @@
 = Results <sec:thesis-results>
 
-#import "../experiment_data.typ": thesis-report-settings, load-thesis-report, report-store-fact, report-store-facts-match-contract, report-stores-have-facts, report-stores-decision-passed, evidence-gate-state, short-store-label, format-report-value
+#import "../experiment_data.typ": thesis-report-settings, load-thesis-report, endpoint-evidence-facts, headroom-evidence-facts, recovery-evidence-facts, report-store-fact, report-store-facts-match-contract, report-store-endpoint-evidence-valid, report-store-headroom-evidence-valid, report-store-recovery-evidence-valid, report-store-facts-share-value, report-store-facts-share-source, report-stores-have-facts, report-stores-decision-passed, evidence-gate-state, conditional-ratio-gate-state, short-store-label, format-report-value
 #import "../draft_markers.typ": validation_todo
 #import "../../shared/tables.typ": publication-table, index-cell
 
@@ -49,17 +49,8 @@
   (key: "candidate-support.target-side-balance", aggregation: "state_then_scene_macro"),
   (key: "candidate-support.circular-orbit-span", aggregation: "state_then_scene_macro"),
 )
-#let headroom-facts = ("policy.paired_scene_endpoint.effect", "policy.paired_scene_endpoint.ci_low", "policy.paired_scene_endpoint.ci_high", "policy.paired_scene_endpoint.n_scenes", "headroom_gate.passed")
-#let headroom-contract = (
-  (key: "policy.paired_scene_endpoint.effect", aggregation: "paired_scene_mean_difference"),
-  (key: "policy.paired_scene_endpoint.ci_low", aggregation: "paired_scene_mean_difference"),
-  (key: "policy.paired_scene_endpoint.ci_high", aggregation: "paired_scene_mean_difference"),
-  (key: "policy.paired_scene_endpoint.n_scenes", aggregation: "count"),
-  (key: "headroom_gate.passed", aggregation: "paired_scene_decision"),
-)
 #let q1-facts = ("q1.ranking.pairwise_accuracy", "q1.calibration.mae", "q1.population.n_scenes", "q1.gate.passed")
 #let q2-facts = ("q2.exact.mae", "q2.exact.coverage", "q2.exact.n_independent_units", "q2.exact.passed")
-#let recovery-facts = ("policy.q_recovery.fraction", "policy.q_recovery.ci_low", "policy.q_recovery.ci_high", "policy.q_recovery.n_scenes", "policy.q_recovery.passed")
 #let resource-facts = ("runtime.wall_time_s", "runtime.peak_gpu_bytes", "storage.total_bytes")
 
 #let confirmatory-evidence = thesis_evidence_status == "confirmatory" and all-stores-valid
@@ -83,13 +74,32 @@
   report-stores-decision-passed(thesis_data, "candidate-support.gate.passed"),
 )
 #let shared-foundations-pass = measurement-state.claim_admissible and support-state.claim_admissible
-#let headroom-evidence-available = confirmatory-evidence and report-stores-have-facts(thesis_data, headroom-facts) and thesis_data.tables.stores.rows.all(store => {
-  let paired-scenes = report-store-fact(thesis_data, store.store_id, "policy.paired_scene_endpoint.n_scenes").value
-  paired-scenes != none and paired-scenes > 0 and report-store-facts-match-contract(
+#let endpoint-evidence-available = confirmatory-evidence and report-stores-have-facts(thesis_data, endpoint-evidence-facts, denominators: true) and thesis_data.tables.stores.rows.all(store => {
+  let endpoint-scenes = report-store-fact(thesis_data, store.store_id, "policy.endpoint_gain.n_scenes").value
+  type(endpoint-scenes) == int and endpoint-scenes > 0 and report-store-endpoint-evidence-valid(
     thesis_data,
     store.store_id,
-    headroom-contract,
-    paired-scenes,
+    endpoint-scenes,
+  )
+})
+#let headroom-evidence-available = endpoint-evidence-available and report-stores-have-facts(thesis_data, headroom-evidence-facts, denominators: true) and thesis_data.tables.stores.rows.all(store => {
+  let endpoint-scenes = report-store-fact(thesis_data, store.store_id, "policy.endpoint_gain.n_scenes").value
+  let headroom-scenes = report-store-fact(thesis_data, store.store_id, "policy.paired_scene_endpoint.n_scenes").value
+  endpoint-scenes != none and endpoint-scenes > 0 and headroom-scenes == endpoint-scenes and report-store-headroom-evidence-valid(
+    thesis_data,
+    store.store_id,
+    endpoint-scenes,
+  ) and report-store-facts-share-value(
+    thesis_data,
+    store.store_id,
+    (
+      "policy.endpoint_gain.cohort_sha256",
+      "policy.paired_scene_endpoint.cohort_sha256",
+    ),
+  ) and report-store-facts-share-source(
+    thesis_data,
+    store.store_id,
+    endpoint-evidence-facts + headroom-evidence-facts,
   )
 })
 #let headroom-state = evidence-gate-state(
@@ -109,13 +119,36 @@
   report-stores-decision-passed(thesis_data, "q2.exact.passed"),
   prerequisites-passed: q1-state.claim_admissible,
 )
-#let recovery-evidence-available = confirmatory-evidence and report-stores-have-facts(thesis_data, recovery-facts, denominators: true)
-#let recovery-state = evidence-gate-state(
-  recovery-evidence-available,
+#let recovery-contract-available = endpoint-evidence-available and headroom-evidence-available and report-stores-have-facts(thesis_data, recovery-evidence-facts, denominators: true) and thesis_data.tables.stores.rows.all(store => {
+  let endpoint-scenes = report-store-fact(thesis_data, store.store_id, "policy.endpoint_gain.n_scenes").value
+  let recovery-scenes = report-store-fact(thesis_data, store.store_id, "policy.q_recovery.n_scenes").value
+  endpoint-scenes != none and endpoint-scenes > 0 and recovery-scenes == endpoint-scenes and report-store-recovery-evidence-valid(
+    thesis_data,
+    store.store_id,
+    endpoint-scenes,
+  ) and report-store-facts-share-value(
+    thesis_data,
+    store.store_id,
+    (
+      "policy.endpoint_gain.cohort_sha256",
+      "policy.paired_scene_endpoint.cohort_sha256",
+      "policy.q_recovery.cohort_sha256",
+    ),
+  ) and report-store-facts-share-source(
+    thesis_data,
+    store.store_id,
+    endpoint-evidence-facts + headroom-evidence-facts + recovery-evidence-facts,
+  )
+})
+#let recovery-evidence = conditional-ratio-gate-state(
+  endpoint-evidence-available,
+  headroom-state.claim_admissible,
+  recovery-contract-available,
   report-stores-decision-passed(thesis_data, "policy.q_recovery.passed"),
-  prerequisites-passed: headroom-state.claim_admissible and q2-state.claim_admissible,
+  remaining-prerequisites-passed: q2-state.claim_admissible,
 )
-#let recovery-ratio-reportable = recovery-state.evidence_available and headroom-state.claim_admissible
+#let recovery-state = recovery-evidence.state
+#let recovery-ratio-reportable = recovery-evidence.ratio_evidence_available
 #let resource-available = confirmatory-evidence and report-stores-have-facts(thesis_data, resource-facts)
 
 The loaded report declares evidence class #emph(thesis_evidence_status). Schema
@@ -166,6 +199,13 @@ nor suppresses independently measured evidence on the other lane.
       (label: [Target-side balance], key: "candidate-support.target-side-balance", digits: 3),
       (label: [Circular orbit span], key: "candidate-support.circular-orbit-span", digits: 2),
       (label: [Support gate], key: "candidate-support.gate.passed", denominator-key: "study.population.scenes"),
+    )))
+  }
+  if endpoint-evidence-available {
+    families.push((label: [Matched endpoints], metrics: (
+      (label: [Oracle one-step gain], key: "policy.endpoint_gain.oracle_one_step.mean", low-key: "policy.endpoint_gain.oracle_one_step.ci_low", high-key: "policy.endpoint_gain.oracle_one_step.ci_high", denominator-key: "policy.endpoint_gain.n_scenes", digits: 3),
+      (label: [Oracle lookahead gain], key: "policy.endpoint_gain.oracle_lookahead.mean", low-key: "policy.endpoint_gain.oracle_lookahead.ci_low", high-key: "policy.endpoint_gain.oracle_lookahead.ci_high", denominator-key: "policy.endpoint_gain.n_scenes", digits: 3),
+      (label: [Learned-$Q$ gain], key: "policy.endpoint_gain.learned_q.mean", low-key: "policy.endpoint_gain.learned_q.ci_low", high-key: "policy.endpoint_gain.learned_q.ci_high", denominator-key: "policy.endpoint_gain.n_scenes", digits: 3),
     )))
   }
   if headroom-state.evidence_available {
@@ -335,13 +375,16 @@ nor suppresses independently measured evidence on the other lane.
   #if recovery-state.claim_admissible [admissible because both the oracle-
   headroom and learned-value lanes pass.] else [blocked by at least one lane or
   the recovery decision; the recorded endpoint observations remain auditable.]
-] else if recovery-state.evidence_available [
-  Matched endpoint observations and their recovery decision remain auditable,
-  but the recovered-headroom ratio is not reported because its meaningful-
-  headroom denominator is not admissible. The endpoint claim is blocked without
-  erasing those underlying observations.
+] else if endpoint-evidence-available [
+  Matched per-policy endpoint estimates and intervals remain auditable in
+  @tab:thesis-confirmatory-values, but the recovered-headroom ratio and its
+  decision are not reported because meaningful headroom is inadmissible or the
+  frozen ratio, interval, denominator, cohort, and provenance contract is
+  incomplete. The endpoint claim remains blocked without erasing those
+  underlying aggregated per-policy estimates.
 ] else [
-  The thesis has no complete matched endpoint-recovery estimate and decision.
+  The thesis has no complete independently evaluated matched per-policy endpoint
+  estimates. The recovered-headroom ratio and decision are therefore unavailable.
   Endpoint recovery additionally requires passed oracle-headroom and learned-
   value lanes; a result on either lane alone cannot answer RQ2.
 ]

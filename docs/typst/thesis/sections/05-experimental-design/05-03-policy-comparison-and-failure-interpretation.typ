@@ -39,8 +39,12 @@ target-quality gain. Crop, mesh, rendering, backprojection, fusion, point cap,
 and point--mesh metric identity are shared across policies. The analysis
 manifest freezes exclusions, within-scene aggregation, interval procedure,
 comparison family, meaningful headroom, and recovered-headroom threshold before
-learned-policy outcomes are inspected. Ratios are reported only when their
-headroom denominator passes the meaningful-effect gate.
+learned-policy outcomes are inspected. The confirmatory analysis records the
+three per-policy endpoint estimates and intervals before deriving either
+contrast, and binds their scene count, cohort identity, aggregation, interval
+method, and provenance to both the headroom and recovery facts. Ratios and their
+decisions are reported only when this contract is complete and their headroom
+denominator passes the meaningful-effect gate.
 
 #figure(
   publication-table(
