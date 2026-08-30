@@ -53,7 +53,7 @@
 })
 
 #let coarse = data.at("coarse")
-#let reduction-view = cetz.canvas(length: 12.4mm, padding: .12, {
+#let reduction-view = cetz.canvas(length: 13.2mm, padding: .12, {
   import cetz.draw: *
   let scale = (1.65, 3.15)
   let offset = (.2, .55)
@@ -63,39 +63,58 @@
     line(..corners, close: true, fill: mesh-fill, stroke: .55pt + mesh-edge)
   }
 
-  // A sparse, deterministic subset keeps endpoints traceable.  The JSON
-  // retains every exact witness produced by Trimesh.
-  for index in (0, 1, 2) {
-    let witness = coarse.at("point_to_face_witnesses").at(index)
-    line(
-      v2(witness.at("point"), scale: scale, offset: offset),
-      v2(witness.at("closest"), scale: scale, offset: offset),
-      stroke: 1.05pt + accuracy-color,
-    )
-  }
-  for index in (2, 3) {
-    let witness = coarse.at("face_to_point_witnesses").at(index)
-    line(
-      v2(witness.at("closest"), scale: scale, offset: offset),
-      v2(witness.at("point"), scale: scale, offset: offset),
-      stroke: (paint: completeness-color, thickness: 1pt, dash: "dashed"),
-    )
-  }
+  // One exact representative per direction makes the asymmetric reductions
+  // readable; the JSON retains every Trimesh witness used for verification.
+  let accuracy-witness = coarse.at("point_to_face_witnesses").at(0)
+  line(
+    v2(accuracy-witness.at("point"), scale: scale, offset: offset),
+    v2(accuracy-witness.at("closest"), scale: scale, offset: offset),
+    stroke: 1.35pt + accuracy-color,
+    mark: (end: ">", scale: .52),
+  )
+  let completeness-witness = coarse.at("face_to_point_witnesses").at(2)
+  line(
+    v2(completeness-witness.at("closest"), scale: scale, offset: offset),
+    v2(completeness-witness.at("point"), scale: scale, offset: offset),
+    stroke: (paint: completeness-color, thickness: 1.25pt, dash: "dashed"),
+    mark: (end: ">", scale: .52),
+  )
   for point in coarse.at("points") {
     circle(v2(point, scale: scale, offset: offset), radius: .065,
       fill: point-color, stroke: .35pt + white)
   }
-  content((.18, 2.88), text(size: 7.4pt, fill: accuracy-color, [solid: point $arrow$ triangle]), anchor: "west")
-  content((.18, 2.58), text(size: 7.4pt, fill: completeness-color, [dashed: triangle $arrow$ point]), anchor: "west")
+  content((.18, 2.96), text(size: 7.6pt, fill: accuracy-color, [solid: $bold(p) arrow$ nearest triangle]), anchor: "west")
+  content((.18, 2.62), text(size: 7.6pt, fill: completeness-color, [dashed: triangle $arrow$ nearest $bold(p)$]), anchor: "west")
 })
 
-#let tessellation-view(mesh, x-offset: 0) = {
-  let scale = (1.15, 2.15)
+#let tessellation-view(mesh, x-offset: 0, highlight-left: false) = {
+  let scale = (1.0, 2.15)
   let offset = (x-offset, .6)
   let verts = mesh.at("vertices").map(point => v2(point, scale: scale, offset: offset))
+  if highlight-left {
+    let weighted-region = mesh.at("left_region_outline").map(
+      point => v2(point, scale: scale, offset: offset),
+    )
+    cetz.draw.line(
+      ..weighted-region,
+      close: true,
+      fill: warning-color.lighten(88%),
+      stroke: (paint: warning-color, thickness: .55pt, dash: "dashed"),
+    )
+  }
   for face in mesh.at("faces") {
     let corners = face.map(index => verts.at(index))
     cetz.draw.line(..corners, close: true, fill: mesh-fill, stroke: .38pt + mesh-edge)
+  }
+  if highlight-left {
+    let weighted-region = mesh.at("left_region_outline").map(
+      point => v2(point, scale: scale, offset: offset),
+    )
+    cetz.draw.line(
+      ..weighted-region,
+      close: true,
+      stroke: (paint: warning-color, thickness: .65pt, dash: "dashed"),
+    )
   }
   for point in mesh.at("points") {
     cetz.draw.circle(v2(point, scale: scale, offset: offset), radius: .045,
@@ -103,15 +122,17 @@
   }
 }
 
-#let comparison-view = cetz.canvas(length: 10.2mm, padding: .12, {
+#let comparison-view = cetz.canvas(length: 10.8mm, padding: .12, {
   import cetz.draw: *
   tessellation-view(coarse, x-offset: .15)
-  tessellation-view(data.at("refined"), x-offset: 3.35)
-  content((1.45, 3.0), text(size: 7.5pt, weight: "bold", [4 faces]), anchor: "center")
-  content((4.65, 3.0), text(size: 7.5pt, weight: "bold", [40 faces]), anchor: "center")
-  content((1.45, .28), text(size: 7pt,
+  tessellation-view(data.at("refined"), x-offset: 3.10, highlight-left: true)
+  content((1.25, 3.08), text(size: 7.5pt, weight: "bold", [4 equal-area]), anchor: "center")
+  content((4.25, 3.08), text(size: 7.5pt, weight: "bold", [40 non-uniform]), anchor: "center")
+  content((3.60, 2.73), text(size: 6.9pt, fill: warning-color,
+    [left region: #data.at("refined").at("left_region_face_count")/#data.at("refined").at("face_count") equal-weight faces]), anchor: "center")
+  content((1.25, .24), text(size: 7.2pt,
     [$D_(M arrow P) = $#coarse.at("completeness_display") $ "m"^2$]), anchor: "center")
-  content((4.65, .28), text(size: 7pt, fill: warning-color,
+  content((4.25, .24), text(size: 7.2pt, fill: warning-color,
     [$D_(M arrow P) = $#data.at("refined").at("completeness_display") $ "m"^2$]), anchor: "center")
 })
 
@@ -128,23 +149,31 @@
   ),
   panel(
     [B. Two directional reductions],
-    [the same point set and triangle table induce different witness sets],
+    [the arrows reverse which population contributes summands],
     [
       #align(center, reduction-view)
-      #text(size: 7.7pt)[Only five representative segments are drawn; the implementation reduces over every point and every face.]
+      #text(size: 7.7pt)[One exact witness is shown per direction; the implementation reduces over every point or every face.]
     ],
   ),
   panel(
     [C. Controlled tessellation check],
-    [same planar support and points; only the face table changes],
+    [same planar surface + same points; only tessellation changes],
     [
       #align(center, comparison-view)
-      #text(size: 7.7pt)[The equal-face completeness estimate changes because non-uniform refinement changes the number of equally weighted summands. Accuracy remains #coarse.at("accuracy_display") $ "m"^2$ in both fixtures.]
+      #text(size: 7.7pt)[The left region contributes #data.at("refined").at("left_region_face_count") of #data.at("refined").at("face_count") equally weighted face summands.]
     ],
   ),
 )
 
-#v(1.6mm)
-#align(center, text(size: 7.4pt, fill: muted)[
-  Controlled validity fixture computed by the repository's PyTorch3D metric and exact Trimesh closest-point witnesses; it is not an ASE performance result.
-])
+#v(1.8mm)
+#block(
+  width: 100%,
+  inset: (x: 2.4mm, y: 1.5mm),
+  fill: rgb("#f5f7f9"),
+  stroke: (left: 1.3pt + warning-color),
+  [
+    #text(size: 8pt, weight: "bold")[Controlled conclusion.]
+    #h(1mm)
+    #text(size: 7.8pt)[$D_(P arrow M) = $#coarse.at("accuracy_display") $ "m"^2$ in both; $D_(M arrow P)$: #coarse.at("completeness_display") $arrow.r$ #data.at("refined").at("completeness_display") $ "m"^2$ after retessellation.]
+  ],
+)
