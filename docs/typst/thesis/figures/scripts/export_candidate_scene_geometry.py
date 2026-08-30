@@ -66,6 +66,15 @@ OBLIQUE_CROP_PX = (245, 150, 1255, 750)
 VALID_SUPPORT_SAMPLES = 8
 VALID_SUPPORT_MARGIN_PX = 0.25
 HISTORY_ROWS = (0, 10)
+SAMPLING_BASIS = np.asarray(
+    [
+        [0.0, -1.0, 0.0, 0.0],
+        [1.0, 0.0, 0.0, 0.0],
+        [0.0, 0.0, 1.0, 0.0],
+        [0.0, 0.0, 0.0, 1.0],
+    ],
+    dtype=np.float64,
+)
 BOX_EDGES = (
     (0, 1),
     (1, 3),
@@ -326,6 +335,22 @@ def _load_camera_and_rgb_history(
     return camera, np.stack(device_history), np.stack(rgb_history)
 
 
+def _assert_sampling_root_matches_history(
+    device_history: np.ndarray, root_matrix: np.ndarray
+) -> np.ndarray:
+    """Assert that the raw shard and rollout share the canonical sampling root."""
+
+    expected_sampling_root = _pose_matrix(device_history[-1]) @ SAMPLING_BASIS
+    np.testing.assert_allclose(
+        expected_sampling_root,
+        root_matrix,
+        atol=2e-5,
+        rtol=2e-5,
+        err_msg="raw camera history and rollout root do not share a pinned sample",
+    )
+    return expected_sampling_root
+
+
 def _valid_support_outline_camera(camera: CameraTW, *, depth_m: float) -> np.ndarray:
     """Unproject an all-valid polygon inside the fisheye calibration domain."""
 
@@ -521,9 +546,10 @@ def main() -> None:
         np.float64
     )
     target_corners = _obb_corners(target_pose, target_extents)
-    camera, _, history_poses = _load_camera_and_rgb_history(
+    camera, device_history, history_poses = _load_camera_and_rgb_history(
         args.raw_shard.expanduser().resolve()
     )
+    _assert_sampling_root_matches_history(device_history, _pose_matrix(rollout_pose))
 
     mesh = _crop_mesh(args.mesh)
     renderer = _scene_renderer(mesh, width_px=1500, height_px=920)

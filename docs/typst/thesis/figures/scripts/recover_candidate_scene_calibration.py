@@ -31,6 +31,7 @@ from export_candidate_scene_geometry import (
     HISTORY_ROWS,
     RAW_SHARD_RELATIVE,
     SNIPPET_ID,
+    _assert_sampling_root_matches_history,
     _calibrated_frustum_segments,
     _crop_oblique_raster,
     _load_camera_and_rgb_history,
@@ -74,15 +75,6 @@ GENERIC_LOCAL = np.asarray(
         [0.60, -0.45, 1.0],
         [0.60, 0.45, 1.0],
         [-0.60, 0.45, 1.0],
-    ],
-    dtype=np.float64,
-)
-SAMPLING_BASIS = np.asarray(
-    [
-        [0.0, -1.0, 0.0, 0.0],
-        [1.0, 0.0, 0.0, 0.0],
-        [0.0, 0.0, 1.0, 0.0],
-        [0.0, 0.0, 0.0, 1.0],
     ],
     dtype=np.float64,
 )
@@ -202,9 +194,8 @@ def _recover(
     )
 
     camera, device_history, rgb_history = _load_camera_and_rgb_history(raw_shard)
-    expected_sampling_root = _pose_matrix(device_history[-1]) @ SAMPLING_BASIS
-    np.testing.assert_allclose(
-        expected_sampling_root, root_matrix, atol=2e-5, rtol=2e-5
+    expected_sampling_root = _assert_sampling_root_matches_history(
+        device_history, root_matrix
     )
     sampling_rotation_error = _rotation_distance_deg(
         expected_sampling_root[:3, :3], root_matrix[:3, :3]
