@@ -61,9 +61,9 @@ scientific, visual, and reproducibility verification.
 - A subsequent rereview found that the primary exporter did not prove the raw
   camera shard and rollout store shared one sampling root. A single frame-owner
   assertion now gates both primary and recovery exports before rendering.
-- Semantic roles remain distinct in color and grayscale: neutral mesh, purple
-  dashed history/frusta, orange double-line OBB, family-shaped shell markers,
-  and black/gold selection.
+- Semantic roles remain distinct in color and grayscale: neutral mesh, solid
+  purple physical trajectory, teal dashed historical frusta, orange double-line
+  OBB, family-shaped shell markers, and black/gold selection.
 
 ## Commits
 
@@ -71,6 +71,7 @@ scientific, visual, and reproducibility verification.
 - https://github.com/JanDuchscherer104/ARIA-NBV/commit/fe651e06093f242d8c0b62a3bcd5b193df3ae7a7
 - https://github.com/JanDuchscherer104/ARIA-NBV/commit/6eb42262924ce2b60c475a8de10a709eb0708254
 - https://github.com/JanDuchscherer104/ARIA-NBV/commit/e13253c546859bad18e890842d6cfceba3360848
+- https://github.com/JanDuchscherer104/ARIA-NBV/commit/5d5add406f74625f0a10f6edfe9b01fea2337645
 
 ## Verification
 
