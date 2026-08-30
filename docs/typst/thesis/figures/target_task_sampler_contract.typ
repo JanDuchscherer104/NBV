@@ -45,7 +45,7 @@
   line((.42, 6.20), (19.55, 6.20), stroke: .48pt + rule)
 
   // One sparse population rail: construct, classify, sample, persist.
-  heading(.42, [GT input], [padded OBB tensor])
+  heading(.42, [Latest GT slice], [last nonempty · padded])
   dot(.62, 3.70, [$e_0$])
   dot(1.34, 3.70, [$e_1$])
   dot(2.06, 3.70, [$e_2$])
@@ -57,13 +57,13 @@
   dot(5.26, 3.70, [$e_1$], role: "invalid")
   dot(6.10, 3.70, [$e_2$], role: "eligible")
 
-  heading(7.82, [Eligible rows], [geometry gate · $cal(V)_s$], tint: eligible)
+  heading(7.82, [Eligible rows], [geometry gate · $cal(R)_s^"geom"$], tint: eligible)
   dot(8.04, 3.70, [$e_0$], role: "eligible")
   dot(8.92, 3.70, [$e_2$], role: "eligible")
 
   heading(11.32, [Seeded cap], [uniform draw], tint: selected)
   content((12.44, 3.78), text(size: 8.1pt, weight: "bold")[$pi_"seed"$], anchor: "center")
-  content((12.44, 3.32), text(size: 8pt)[$K' = min(K, abs(cal(V)_s))$], anchor: "center")
+  content((12.44, 3.32), text(size: 8pt)[$K' = min(K, abs(cal(R)_s^"geom"))$], anchor: "center")
 
   heading(15.02, [Emit selected rows], [`selected_rows` + provenance], tint: selected)
   dot(15.24, 3.70, [$e_2$], role: "selected")
@@ -77,8 +77,9 @@
   // Invalid rows remain in the audit table but cannot enter support.
   line((5.26, 3.45), (5.26, 2.24), stroke: (paint: invalid, thickness: .70pt, dash: "dashed"), mark: (end: ">", scale: .48))
   content((5.26, 1.98), align(center, text(size: 7.45pt, fill: invalid)[invalid geometry\
-  audit only; excluded from $cal(V)_s$]), anchor: "north")
+  audit only; excluded from $cal(R)_s^"geom"$]), anchor: "north")
 
   // The exact admission predicate is the only secondary annotation.
+  content((.42, .82), text(size: 7.45pt, fill: muted)[all-padding block $arrow.r$ no task rows], anchor: "west")
   content((7.70, .82), text(size: 8pt)[$g(e) = op("finite")(bold(B)_e) and op("finite")(bold(l)_e) and min(bold(l)_e) > 0$], anchor: "west")
 })
