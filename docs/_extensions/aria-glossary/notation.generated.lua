@@ -916,6 +916,12 @@ return {
       description = "Per-state count of hard-valid candidates before reward or training masks; rows, with padded rows excluded.",
       thesis_list = true,
     },
+    ["model.candidate_pose_context"] = {
+      tex = "\\boldsymbol{h}_{t,i}^{\\mathrm{phys}}=\\operatorname{PhysicalProj}(\\operatorname{concat}(\\operatorname{PoseEnc}(\\boldsymbol{T}_{r\\leftarrow c_i}),\\operatorname{PoseEnc}(\\boldsymbol{T}_{c_t\\leftarrow c_i}),\\boldsymbol{\\Phi}_t^{\\mathrm{scene}}))",
+      typst = "#eqs.model.candidate_pose_context",
+      description = "Candidate-local physical token from root/current-relative candidate poses and compact root evidence.",
+      thesis_list = false,
+    },
     ["model.candidate_row_features"] = {
       tex = "\\boldsymbol{x}_{t,i}=\\operatorname{ValueQueryProj}(\\operatorname{concat}(\\boldsymbol{h}_{t,i}^{\\mathrm{phys}},\\operatorname{PoseEnc}(\\boldsymbol{T}_{c_i\\leftarrow e})))",
       typst = "#eqs.model.candidate_row_features",

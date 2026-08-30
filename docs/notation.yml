@@ -1186,6 +1186,12 @@ equations:
     description: 'Selected target token from root-relative pose and metric OBB extents.'
     thesis_list: false
     order: 9999
+  model.candidate_pose_context:
+    tex: '\boldsymbol{h}_{t,i}^{\mathrm{phys}}=\operatorname{PhysicalProj}(\operatorname{concat}(\operatorname{PoseEnc}(\boldsymbol{T}_{r\leftarrow c_i}),\operatorname{PoseEnc}(\boldsymbol{T}_{c_t\leftarrow c_i}),\boldsymbol{\Phi}_t^{\mathrm{scene}}))'
+    typst: '#eqs.model.candidate_pose_context'
+    description: 'Candidate-local physical token from root/current-relative candidate poses and compact root evidence.'
+    thesis_list: false
+    order: 9999
   model.qh_frozen_interface:
     tex: 'f_\theta(s_t^{\mathrm{S0-pose}},\boldsymbol{T}_{r\leftarrow e},\boldsymbol{a}_e,\{q_{t,i}\}_{i=1}^{N_q},h)\to(\{Q_{h,\theta,e,i}^{\mathrm{cond}}\}_{i=1}^{N_q},\{\ell_{t,i}^{\mathrm{feas}}\}_{i=1}^{N_q})'
     typst: '#eqs.model.qh_frozen_interface'
