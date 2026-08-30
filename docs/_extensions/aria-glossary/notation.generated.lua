@@ -59,7 +59,7 @@ return {
     ["entity.q_recovery"] = {
       tex = "\\eta_Q",
       typst = "#symb.entity.q_recovery",
-      description = "Fraction of oracle lookahead gain recovered by the Q policy.",
+      description = "Fraction of oracle-lookahead-over-oracle-one-step endpoint headroom recovered by the Q policy.",
       thesis_list = true,
     },
     ["entity.return_h"] = {
@@ -791,7 +791,7 @@ return {
       thesis_list = false,
     },
     ["entity.q_recovery"] = {
-      tex = "\\eta_Q=(J_e^{(H)}(\\pi_Q)-J_e^{(H)}(\\pi_{\\mathrm{learned-1}}))/(J_e^{(H)}(\\pi_{\\mathrm{oracle-look}})-J_e^{(H)}(\\pi_{\\mathrm{learned-1}})+\\varepsilon)",
+      tex = "\\eta_Q=(J_e^{(H)}(\\pi_Q)-J_e^{(H)}(\\pi_{\\mathrm{oracle-1}}))/(J_e^{(H)}(\\pi_{\\mathrm{oracle-look}})-J_e^{(H)}(\\pi_{\\mathrm{oracle-1}}))",
       typst = "#eqs.entity.q_recovery",
       description = "",
       thesis_list = false,

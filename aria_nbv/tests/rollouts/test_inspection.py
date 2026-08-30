@@ -2621,8 +2621,8 @@ def test_oracle_headroom_uses_exact_roles_and_raw_denominators() -> None:
     included = {row["contrast"]: row for row in evidence["contrast_rows"] if row["status"] == "included"}
     assert included["delta_look"]["value"] == pytest.approx(4.0)
     assert included["delta_Q"]["value"] == pytest.approx(3.0)
-    assert included["eta_Q"]["headroom_denominator"] == pytest.approx(6.0)
-    assert included["eta_Q"]["value"] == pytest.approx(0.5)
+    assert included["eta_Q_proxy"]["headroom_denominator"] == pytest.approx(4.0)
+    assert included["eta_Q_proxy"]["value"] == pytest.approx(0.25)
     assert all(
         row["eligible_count"] == row["included_count"] + row["excluded_count"] for row in evidence["summary_rows"]
     )
@@ -2631,6 +2631,15 @@ def test_oracle_headroom_uses_exact_roles_and_raw_denominators() -> None:
     assert len(evidence["role_disposition_rows"]) == len(rows) * 3
     assert all("raw_row_id" in row for row in evidence["role_disposition_rows"])
     assert included["delta_look"]["role_treatments"]["oracle_lookahead"]["branch_schedule"] == "oracle_lookahead"
+
+    alternate_learned_rows = [
+        {**row, "final_cumulative_target_root_gain": 5.5} if row["policy"] == "learned_one_step" else row
+        for row in rows
+    ]
+    alternate = oracle_headroom_evidence(alternate_learned_rows)
+    alternate_included = {row["contrast"]: row for row in alternate["contrast_rows"] if row["status"] == "included"}
+    assert alternate_included["delta_Q"]["value"] == pytest.approx(1.5)
+    assert alternate_included["eta_Q_proxy"]["value"] == pytest.approx(0.25)
 
     alias_only = [{**rows[0], "policy": "unsupported", "branch_schedule": "unsupported", "rollout_recipe": "q_h"}]
     aliased = exact_policy_role_rows(alias_only)
@@ -2749,8 +2758,8 @@ def test_oracle_headroom_excludes_duplicate_roles_and_weak_eta_only() -> None:
     by_contrast = {row["contrast"]: row for row in weak["contrast_rows"]}
     assert by_contrast["delta_look"]["status"] == "included"
     assert by_contrast["delta_Q"]["status"] == "included"
-    assert by_contrast["eta_Q"]["status"] == "excluded"
-    assert by_contrast["eta_Q"]["exclusion_reason"] == "nonpositive_or_weak_headroom"
+    assert by_contrast["eta_Q_proxy"]["status"] == "excluded"
+    assert by_contrast["eta_Q_proxy"]["exclusion_reason"] == "nonpositive_or_weak_headroom"
 
     duplicate = oracle_headroom_evidence(
         weak_rows
@@ -2804,10 +2813,13 @@ def test_oracle_headroom_malformed_identity_closes_exclusion_arithmetic() -> Non
     summaries = {item["contrast"]: item for item in evidence["summary_rows"]}
     assert summaries["delta_look"]["excluded_count"] == 2
     assert summaries["delta_Q"]["excluded_count"] == 0
-    assert summaries["eta_Q"]["excluded_count"] == 0
-    assert {
-        item["status"] for item in evidence["role_disposition_rows"] if item["contrast"] in {"delta_Q", "eta_Q"}
-    } == {"not_applicable"}
+    assert summaries["eta_Q_proxy"]["excluded_count"] == 2
+    assert {item["status"] for item in evidence["role_disposition_rows"] if item["contrast"] == "delta_Q"} == {
+        "not_applicable"
+    }
+    assert {item["status"] for item in evidence["role_disposition_rows"] if item["contrast"] == "eta_Q_proxy"} == {
+        "excluded"
+    }
 
     partial_binding = oracle_headroom_evidence(
         [{**row, "source_sample_key": "sample-a", "campaign_id": "campaign", "plan_hash": None}]
@@ -2819,10 +2831,10 @@ def test_oracle_headroom_malformed_identity_closes_exclusion_arithmetic() -> Non
 @pytest.mark.parametrize(
     ("policy", "schedule", "applicable_contrasts"),
     [
-        ("oracle_greedy", "oracle_greedy", {"delta_look"}),
-        ("oracle_greedy", "oracle_lookahead", {"delta_look", "eta_Q"}),
-        ("learned_one_step", "learned_one_step", {"delta_Q", "eta_Q"}),
-        ("q_h", "q_h", {"delta_Q", "eta_Q"}),
+        ("oracle_greedy", "oracle_greedy", {"delta_look", "eta_Q_proxy"}),
+        ("oracle_greedy", "oracle_lookahead", {"delta_look", "eta_Q_proxy"}),
+        ("learned_one_step", "learned_one_step", {"delta_Q"}),
+        ("q_h", "q_h", {"delta_Q", "eta_Q_proxy"}),
     ],
 )
 def test_headroom_role_ledger_conserves_valid_plus_malformed_near_duplicates(

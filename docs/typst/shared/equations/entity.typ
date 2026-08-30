@@ -102,15 +102,13 @@
     (
     J_e^((H)) (pi_Q)
     -
-    J_e^((H)) (pi_"learned-1")
+    J_e^((H)) (pi_"oracle-1")
     )
     /
     (
     J_e^((H)) (pi_"oracle-look")
     -
-    J_e^((H)) (pi_"learned-1")
-    +
-    epsilon
+    J_e^((H)) (pi_"oracle-1")
     )
   $,
 )

@@ -127,7 +127,7 @@
   (key: "entity.endpoint_gain", tex: "J_e^{(H)}", description: "Endpoint reconstruction gain for target e over horizon H.", thesis_list: true, order: 620),
   (key: "entity.log_gain", tex: "J_{e,\\mathrm{log}}^{(H)}", description: "Log-scale endpoint reconstruction gain for target e.", thesis_list: true, order: 630),
   (key: "entity.lookahead_headroom", tex: "\\Delta_{\\mathrm{look}}", description: "Gain available to an oracle lookahead policy beyond one-step selection.", thesis_list: true, order: 640),
-  (key: "entity.q_recovery", tex: "\\eta_Q", description: "Fraction of oracle lookahead gain recovered by the Q policy.", thesis_list: true, order: 650),
+  (key: "entity.q_recovery", tex: "\\eta_Q", description: "Fraction of oracle-lookahead-over-oracle-one-step endpoint headroom recovered by the Q policy.", thesis_list: true, order: 650),
   (key: "entity.return_h", tex: "G_t^{(H)}", description: "Target-conditioned finite-horizon return.", thesis_list: true, order: 660),
   (key: "obs.depth", tex: "\\boldsymbol{D}", description: "Depth observation sequence.", thesis_list: true, order: 670),
   (key: "obs.face_normal", tex: "\\boldsymbol{n}", description: "Per-point or per-face normal observation.", thesis_list: true, order: 680),

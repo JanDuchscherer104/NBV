@@ -3443,7 +3443,26 @@ def oracle_headroom_evidence(
     *,
     threshold: float = 1e-8,
 ) -> dict[str, Any]:
-    """Return exact-role diagnostic endpoint contrasts with honest exclusions."""
+    r"""Return exact-role diagnostic endpoint contrasts with honest exclusions.
+
+    Theory:
+        ``delta_look`` compares oracle lookahead with one-step oracle greedy,
+        while ``delta_Q`` separately compares finite-horizon and one-step
+        learned policies. ``eta_Q_proxy`` applies the RQ2 recovery baseline to
+        persisted target-root-gain diagnostics:
+
+        $$
+        \widetilde{\eta}_{Q,\mathrm{root}} =
+        \frac{G_{\mathrm{root}}(\pi_Q)-G_{\mathrm{root}}(\pi_{\mathrm{oracle-1}})}
+             {G_{\mathrm{root}}(\pi_{\mathrm{oracle-look}})
+              -G_{\mathrm{root}}(\pi_{\mathrm{oracle-1}})}.
+        $$
+
+        $G_{\mathrm{root}}$ is ``final_cumulative_target_root_gain``, not an
+        independently evaluated endpoint. Canonical $\eta_Q$ remains reserved
+        for matched $J_e^{(H)}$ endpoint evaluation. The proxy remains
+        unavailable when its denominator does not exceed ``threshold``.
+    """
 
     if threshold <= 0.0:
         raise ValueError("threshold must be positive.")
@@ -3490,7 +3509,7 @@ def oracle_headroom_evidence(
     contrast_specs = {
         "delta_look": ("oracle_one_step", "oracle_lookahead"),
         "delta_Q": ("learned_one_step", "q_h"),
-        "eta_Q": ("learned_one_step", "q_h", "oracle_lookahead"),
+        "eta_Q_proxy": ("oracle_one_step", "q_h", "oracle_lookahead"),
     }
     contrast_rows: list[dict[str, Any]] = []
     role_disposition_rows: list[dict[str, Any]] = []
@@ -3545,11 +3564,11 @@ def oracle_headroom_evidence(
             elif reason is None and contrast == "delta_Q":
                 value = values["q_h"] - values["learned_one_step"]
             elif reason is None:
-                denominator = values["oracle_lookahead"] - values["learned_one_step"]
+                denominator = values["oracle_lookahead"] - values["oracle_one_step"]
                 if denominator <= threshold:
                     reason = "nonpositive_or_weak_headroom"
                 else:
-                    value = (values["q_h"] - values["learned_one_step"]) / denominator
+                    value = (values["q_h"] - values["oracle_one_step"]) / denominator
             evidence_row = next(iter(selected.values()), rows[0])
             relevant_rows = [row for row in rows if row.get("semantic_role") in roles]
             contrast_rows.append(
