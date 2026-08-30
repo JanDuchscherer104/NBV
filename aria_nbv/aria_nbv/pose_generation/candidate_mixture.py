@@ -43,6 +43,7 @@ from pydantic import Field, model_validator
 from ..data_handling import EfmSnippetView
 from ..utils import BaseConfig, TargetConfig
 from .candidate_generation import CandidateViewGenerator, CandidateViewGeneratorConfig
+from .geometry import PreparedMeshQuery
 from .types import (
     CandidateGenerationRuntimeContext,
     CandidatePositionMode,
@@ -466,10 +467,16 @@ class CandidateMixtureViewGeneratorConfig(TargetConfig["CandidateMixtureViewGene
 
 
 class CandidateMixtureViewGenerator:
-    """Generate a fixed-size candidate table from multiple sampling families."""
+    """Generate a fixed-size candidate table from multiple sampling families.
+
+    The generator retains one safely versioned prepared mesh query across
+    requests. Each request lends that query to every component as request-local
+    state, including paired-view components, without extending its lifetime.
+    """
 
     def __init__(self, config: CandidateMixtureViewGeneratorConfig) -> None:
         self.config = config
+        self._mesh_query: PreparedMeshQuery | None = None
 
     def generate_from_typed_sample(
         self,
@@ -533,6 +540,18 @@ class CandidateMixtureViewGenerator:
         component_names: list[str] = []
         from ..rollouts.replay.policy import derive_component_seed
 
+        mesh_query = None
+        if self.config.base.requires_mesh_query:
+            mesh_query = PreparedMeshQuery.acquire(
+                self._mesh_query,
+                mesh_verts,
+                mesh_faces,
+                device=self.config.device,
+                dtype=reference_pose.t.dtype,
+                mesh=gt_mesh,
+            )
+            self._mesh_query = mesh_query if mesh_query.is_persistently_reusable else None
+
         pair_base = 0
 
         def append_component(
@@ -588,7 +607,7 @@ class CandidateMixtureViewGenerator:
             component_cfg = self._component_config(
                 component, component_index, runtime_context=runtime_context, component_seed=component_seed
             )
-            result = CandidateViewGenerator(component_cfg).generate(
+            result = CandidateViewGenerator(component_cfg, mesh_query=mesh_query).generate(
                 reference_pose=reference_pose,
                 gt_mesh=gt_mesh,
                 mesh_verts=mesh_verts,
@@ -633,7 +652,7 @@ class CandidateMixtureViewGenerator:
                     runtime_context=runtime_context,
                     component_seed=paired_seed,
                 )
-                paired_result = CandidateViewGenerator(paired_cfg).generate_from_centers(
+                paired_result = CandidateViewGenerator(paired_cfg, mesh_query=mesh_query).generate_from_centers(
                     reference_pose=reference_pose,
                     centers_world=result.shell_poses.t.reshape(-1, 3),
                     offsets_ref=result.shell_offsets_ref,

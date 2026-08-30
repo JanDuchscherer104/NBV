@@ -68,6 +68,7 @@ from .candidate_generation_rules import (
     PathCollisionRule,
     Rule,
 )
+from .geometry import PreparedMeshQuery
 from .orientations import OrientationBuilder
 from .positional_sampling import PositionSampler
 from .types import (
@@ -310,6 +311,12 @@ class CandidateViewGeneratorConfig(TargetConfig["CandidateViewGenerator"]):
         """Return the candidate azimuth span in radians."""
         return radians(self.delta_azimuth_deg)
 
+    @property
+    def requires_mesh_query(self) -> bool:
+        """Return whether an enabled pruning rule needs prepared mesh state."""
+
+        return self.min_distance_to_mesh > 0 or (self.ensure_collision_free and self.step_clearance > 0)
+
 
 def _gravity_align_pose(reference_pose: PoseTW, *, eps: float = 1e-6) -> PoseTW:
     """Return a gravity-aligned variant of ``reference_pose`` with identical translation.
@@ -408,15 +415,29 @@ class CandidateViewGenerator:
     * orientation construction via `OrientationBuilder`, and
     * rule-based pruning via `FreeSpaceRule`, `MinDistanceToMeshRule` and `PathCollisionRule`.
 
+    A persistent generator retains its most recent safely versioned prepared
+    mesh query across generation calls. A query supplied to the constructor is
+    request-local: the first generation call consumes it directly, then later
+    calls return to normal acquisition and invalidation.
+
     """
 
-    def __init__(self, config: CandidateViewGeneratorConfig):
+    def __init__(
+        self,
+        config: CandidateViewGeneratorConfig,
+        *,
+        mesh_query: PreparedMeshQuery | None = None,
+    ) -> None:
         self.config = config
         self.console = (
             Console.with_prefix(self.__class__.__name__)
             .set_verbosity(self.config.verbosity)
             .set_debug(self.config.is_debug)
         )
+        self._position_sampler = PositionSampler(config)
+        self._orientation_builder = OrientationBuilder(config)
+        self._mesh_query: PreparedMeshQuery | None = None
+        self._request_mesh_query = mesh_query
         self._rules: list[Rule] = self._build_default_rules(config)
 
     # ------------------------------------------------------------------ public
@@ -529,7 +550,7 @@ class CandidateViewGenerator:
         sampling_pose = _gravity_align_pose(reference_pose) if self.config.align_to_gravity else reference_pose
 
         with _maybe_seed(self.config.seed if seed is None else seed, device=torch.device(device)):
-            centers_world, offsets_ref = PositionSampler(self.config).sample(
+            centers_world, offsets_ref = self._position_sampler.sample(
                 sampling_pose,
             )
             return self._generate_for_centers(
@@ -599,7 +620,7 @@ class CandidateViewGenerator:
 
         device = self.config.device
         with _maybe_seed(seed, device=torch.device(device)):
-            shell_poses, view_dirs_delta = OrientationBuilder(self.config).build(
+            shell_poses, view_dirs_delta = self._orientation_builder.build(
                 sampling_pose,
                 centers_world,
             )
@@ -647,13 +668,40 @@ class CandidateViewGenerator:
             # frame used to construct positions.
             offsets_ref = reference_pose.inverse().transform(centers_world)
 
+        if self.config.requires_mesh_query:
+            if self._request_mesh_query is not None:
+                mesh_query = self._request_mesh_query
+                self._request_mesh_query = None
+                if not mesh_query.matches_request(
+                    mesh_verts,
+                    mesh_faces,
+                    device=device,
+                    dtype=centers_world.dtype,
+                    mesh=gt_mesh,
+                ):
+                    raise ValueError("Request-local PreparedMeshQuery does not match the supplied mesh contract.")
+            else:
+                mesh_query = PreparedMeshQuery.acquire(
+                    self._mesh_query,
+                    mesh_verts,
+                    mesh_faces,
+                    device=device,
+                    dtype=centers_world.dtype,
+                    mesh=gt_mesh,
+                )
+                self._mesh_query = mesh_query if mesh_query.is_persistently_reusable else None
+        else:
+            self._request_mesh_query = None
+            self._mesh_query = None
+            mesh_query = None
+
         ctx = CandidateContext(
             cfg=self.config,
             reference_pose=reference_pose,
             sampling_pose=sampling_pose,
             gt_mesh=gt_mesh,
-            mesh_verts=mesh_verts.to(device),
-            mesh_faces=mesh_faces.to(device),
+            mesh_verts=mesh_verts,
+            mesh_faces=mesh_faces,
             occupancy_extent=occupancy_extent.to(device),
             camera_calib_template=camera_calib_template.to(device),
             shell_poses=shell_poses,
@@ -664,6 +712,7 @@ class CandidateViewGenerator:
                 dtype=torch.bool,
                 device=device,
             ),
+            mesh_query=mesh_query,
             debug=jitter_debug,
         )
         if self.config.collect_debug_stats:

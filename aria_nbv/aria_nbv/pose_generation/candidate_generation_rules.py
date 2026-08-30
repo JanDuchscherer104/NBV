@@ -21,7 +21,7 @@ import trimesh  # type: ignore[import-untyped]
 
 from ..utils import Console
 from ..utils.frames import world_up_tensor
-from .geometry import point_mesh_distance
+from .geometry import bounded_ray_intersects_any, point_mesh_distance
 from .types import CandidateContext, CollisionBackend
 
 if TYPE_CHECKING:
@@ -94,12 +94,19 @@ class MinDistanceToMeshRule(RuleBase):
         backend = self.config.collision_backend
 
         if backend == CollisionBackend.P3D and ctx.mesh_verts is not None and ctx.mesh_faces is not None:
-            dist_t = point_mesh_distance(positions, ctx.mesh_verts, ctx.mesh_faces)
+            dist_t = (
+                ctx.mesh_query.point_distance(positions)
+                if ctx.mesh_query is not None
+                else point_mesh_distance(positions, ctx.mesh_verts, ctx.mesh_faces)
+            )
         else:
             try:
-                query = trimesh.proximity.ProximityQuery(ctx.gt_mesh)
-                dist_np = query.signed_distance(positions.detach().cpu().numpy())
-                dist_t = torch.from_numpy(dist_np).to(positions.device, positions.dtype).abs()
+                if ctx.mesh_query is not None:
+                    dist_t = ctx.mesh_query.signed_distance(positions)
+                else:
+                    query = trimesh.proximity.ProximityQuery(ctx.gt_mesh)
+                    dist_np = query.signed_distance(positions.detach().cpu().numpy())
+                    dist_t = torch.from_numpy(dist_np).to(positions.device, positions.dtype).abs()
             except ModuleNotFoundError:
                 verts = torch.as_tensor(ctx.gt_mesh.vertices, device=positions.device, dtype=torch.float32)
                 faces = torch.as_tensor(ctx.gt_mesh.faces, device=positions.device, dtype=torch.int64)
@@ -177,6 +184,8 @@ class PathCollisionRule(RuleBase):
 
         eligible = ctx.mask_valid.clone()
         eligible_indices = torch.nonzero(eligible, as_tuple=False).reshape(-1)
+        if eligible_indices.numel() == 0:
+            return
         if backend == CollisionBackend.P3D and ctx.mesh_verts is not None and ctx.mesh_faces is not None:
             steps = max(2, int(self.config.ray_subsample))
             t_vals = torch.linspace(0.0, 1.0, steps, device=targets.device, dtype=targets.dtype)
@@ -186,9 +195,11 @@ class PathCollisionRule(RuleBase):
                 t_vals.view(1, -1, 1) * eligible_dists.view(-1, 1, 1)
             )
             pts_flat = pts.reshape(-1, 3)
-            dists_pts = point_mesh_distance(pts_flat, ctx.mesh_verts, ctx.mesh_faces).view(
-                eligible_indices.shape[0], steps
-            )
+            dists_pts = (
+                ctx.mesh_query.point_distance(pts_flat)
+                if ctx.mesh_query is not None
+                else point_mesh_distance(pts_flat, ctx.mesh_verts, ctx.mesh_faces)
+            ).view(eligible_indices.shape[0], steps)
             min_clearance = dists_pts.min(dim=1).values
             collide = (dists_pts < self.config.step_clearance).any(dim=1)
             if ctx.cfg.collect_debug_stats:
@@ -209,15 +220,29 @@ class PathCollisionRule(RuleBase):
         origins_np = origin.expand_as(targets[eligible_indices]).detach().cpu().numpy()
         dirs_np = dirs_norm[eligible_indices].detach().cpu().numpy()
         max_dist = dists[eligible_indices].detach().cpu().numpy()
-        ray_engine = ctx.gt_mesh.ray
-        if backend == CollisionBackend.PYEMBREE and self._pyembree_available:
-            from trimesh.ray.ray_pyembree import RayMeshIntersector  # type: ignore
+        use_pyembree = backend == CollisionBackend.PYEMBREE and self._pyembree_available
+        if ctx.mesh_query is not None:
+            intersects = ctx.mesh_query.intersects_any(
+                origins_np,
+                dirs_np,
+                max_distance=max_dist,
+                use_pyembree=use_pyembree,
+            )
+        else:
+            ray_engine = ctx.gt_mesh.ray
+            if use_pyembree:
+                from trimesh.ray.ray_pyembree import RayMeshIntersector  # type: ignore
 
-            ray_engine = RayMeshIntersector(ctx.gt_mesh)
-        elif backend == CollisionBackend.PYEMBREE and not self._pyembree_available:
+                ray_engine = RayMeshIntersector(ctx.gt_mesh)
+            intersects = bounded_ray_intersects_any(
+                ray_engine,
+                origins_np,
+                dirs_np,
+                max_distance=max_dist,
+            )
+        if backend == CollisionBackend.PYEMBREE and not self._pyembree_available:
             self.warn_once("pyembree not available; falling back to trimesh ray engine.")
 
-        intersects = ray_engine.intersects_any(origins_np, dirs_np, multiple_hits=False, max_distance=max_dist)
         collide = torch.from_numpy(intersects).to(ctx.mask_valid.device)
         if ctx.cfg.collect_debug_stats:
             evaluated = torch.zeros_like(eligible)

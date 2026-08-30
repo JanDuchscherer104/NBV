@@ -182,6 +182,323 @@ def test_paired_variants_keep_original_component_id() -> None:
     assert result.gaze_variant_id.tolist() == [0, 0, 1, 1, -1, -1]
 
 
+def test_mixture_prepares_mesh_query_once_for_all_components(monkeypatch: pytest.MonkeyPatch) -> None:
+    import aria_nbv.pose_generation.candidate_mixture as mixture_module
+
+    prepared: list[object] = []
+
+    class FakePreparedMeshQuery:
+        is_persistently_reusable = True
+
+        def __init__(self, *_args, **_kwargs) -> None:
+            prepared.append(self)
+
+        @classmethod
+        def acquire(cls, current, *args, **kwargs):
+            return current if current is not None else cls(*args, **kwargs)
+
+        def matches(self, *_args, **_kwargs) -> bool:
+            return True
+
+        def matches_request(self, *_args, **_kwargs) -> bool:
+            return True
+
+        def point_distance(self, points: torch.Tensor) -> torch.Tensor:
+            return torch.ones(points.shape[0], device=points.device, dtype=points.dtype)
+
+    monkeypatch.setattr(mixture_module, "PreparedMeshQuery", FakePreparedMeshQuery)
+    cfg = CandidateMixtureViewGeneratorConfig(
+        base=_base_cfg().model_copy(update={"min_distance_to_mesh": 0.1}),
+        components=[
+            CandidateMixtureComponentConfig(name="forward", count=2, strategy=ViewDirectionMode.FORWARD_RIG),
+            CandidateMixtureComponentConfig(name="away", count=2, strategy=ViewDirectionMode.RADIAL_AWAY),
+        ],
+    )
+
+    result = _run_generate(cfg)
+
+    assert result.mask_valid.shape[0] == 4
+    assert len(prepared) == 1
+
+
+def test_single_generator_rejects_request_query_from_another_mesh() -> None:
+    from aria_nbv.pose_generation.geometry import PreparedMeshQuery
+
+    cfg = _base_cfg().model_copy(update={"min_distance_to_mesh": 0.1, "num_samples": 1})
+    target_mesh, target_verts, target_faces = _mesh_triplet(cfg.device)
+    other_mesh = trimesh.creation.box(extents=(1.0, 1.0, 1.0))
+    other_mesh.apply_translation((10.0, 0.0, 0.0))
+    other_verts = torch.from_numpy(other_mesh.vertices).to(dtype=torch.float32, device=cfg.device)
+    other_faces = torch.from_numpy(other_mesh.faces).to(dtype=torch.int64, device=cfg.device)
+    query = PreparedMeshQuery(
+        other_verts,
+        other_faces,
+        device=cfg.device,
+        dtype=torch.float32,
+        mesh=other_mesh,
+    )
+    generator = CandidateViewGenerator(cfg, mesh_query=query)
+
+    with pytest.raises(ValueError, match="does not match the supplied mesh contract"):
+        generator.generate(
+            reference_pose=_identity_pose(device=cfg.device),
+            gt_mesh=target_mesh,
+            mesh_verts=target_verts,
+            mesh_faces=target_faces,
+            camera_calib_template=_dummy_camera(cfg.device),
+            occupancy_extent=torch.tensor(
+                [-10.0, 10.0, -10.0, 10.0, -10.0, 10.0],
+                dtype=torch.float32,
+                device=cfg.device,
+            ),
+        )
+
+
+def test_single_generator_discards_unused_injected_query() -> None:
+    from aria_nbv.pose_generation.geometry import PreparedMeshQuery
+
+    cfg = _base_cfg().model_copy(update={"num_samples": 1})
+    mesh, verts, faces = _mesh_triplet(cfg.device)
+    leaf = verts.detach().clone().requires_grad_()
+    query = PreparedMeshQuery(leaf * 1.0, faces, device=cfg.device, dtype=torch.float32, mesh=mesh)
+    generator = CandidateViewGenerator(cfg, mesh_query=query)
+
+    generator.generate(
+        reference_pose=_identity_pose(device=cfg.device),
+        gt_mesh=mesh,
+        mesh_verts=verts,
+        mesh_faces=faces,
+        camera_calib_template=_dummy_camera(cfg.device),
+        occupancy_extent=torch.tensor(
+            [-10.0, 10.0, -10.0, 10.0, -10.0, 10.0],
+            dtype=torch.float32,
+            device=cfg.device,
+        ),
+    )
+
+    assert generator._request_mesh_query is None
+    assert generator._mesh_query is None
+
+
+def test_mixture_skips_mesh_preparation_when_collision_clearance_is_disabled(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import aria_nbv.pose_generation.candidate_mixture as mixture_module
+
+    class UnexpectedPreparedMeshQuery:
+        @classmethod
+        def acquire(cls, *_args, **_kwargs):
+            raise AssertionError("disabled collision clearance must not prepare mesh state")
+
+    monkeypatch.setattr(mixture_module, "PreparedMeshQuery", UnexpectedPreparedMeshQuery)
+    cfg = CandidateMixtureViewGeneratorConfig(
+        base=_base_cfg().model_copy(
+            update={
+                "ensure_collision_free": True,
+                "step_clearance": 0.0,
+                "collect_debug_stats": True,
+            }
+        ),
+        components=[
+            CandidateMixtureComponentConfig(name="forward", count=2, strategy=ViewDirectionMode.FORWARD_RIG),
+            CandidateMixtureComponentConfig(name="away", count=2, strategy=ViewDirectionMode.RADIAL_AWAY),
+        ],
+    )
+
+    result = _run_generate(cfg)
+
+    assert result.mask_valid.shape[0] == 4
+
+
+def test_mixture_reuses_inference_mesh_within_each_request_only(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from aria_nbv.pose_generation.geometry import PreparedMeshQuery
+
+    prepared: list[PreparedMeshQuery] = []
+    original_init = PreparedMeshQuery.__init__
+
+    def counting_init(self: PreparedMeshQuery, *args: object, **kwargs: object) -> None:
+        original_init(self, *args, **kwargs)
+        prepared.append(self)
+
+    monkeypatch.setattr(PreparedMeshQuery, "__init__", counting_init)
+    cfg = CandidateMixtureViewGeneratorConfig(
+        base=_base_cfg().model_copy(update={"min_distance_to_mesh": 0.1}),
+        components=[
+            CandidateMixtureComponentConfig(
+                name="forward",
+                count=2,
+                view_mode=ViewDirectionMode.RADIAL_AWAY,
+                paired_view_mode=ViewDirectionMode.FORWARD_RIG,
+            ),
+            CandidateMixtureComponentConfig(name="away", count=2, strategy=ViewDirectionMode.RADIAL_AWAY),
+        ],
+    )
+    generator = CandidateMixtureViewGenerator(cfg)
+
+    with torch.inference_mode():
+        mesh, verts, faces = _mesh_triplet(cfg.device)
+        kwargs = {
+            "reference_pose": _identity_pose(device=cfg.device),
+            "gt_mesh": mesh,
+            "mesh_verts": verts,
+            "mesh_faces": faces,
+            "camera_calib_template": _dummy_camera(cfg.device),
+            "occupancy_extent": torch.tensor(
+                [-10.0, 10.0, -10.0, 10.0, -10.0, 10.0],
+                dtype=torch.float32,
+            ),
+            "runtime_context": CandidateGenerationRuntimeContext(descriptor=_descriptor()),
+        }
+        first_result = generator.generate(**kwargs)
+        first_query = generator._mesh_query
+        assert len(prepared) == 1
+        second_result = generator.generate(**kwargs)
+
+    assert first_result.mask_valid.shape[0] == second_result.mask_valid.shape[0] == 6
+    assert len(prepared) == 2
+    assert first_query is None
+    assert generator._mesh_query is None
+
+
+def test_mixture_normalizes_mesh_once_across_components(monkeypatch: pytest.MonkeyPatch) -> None:
+    cfg = CandidateMixtureViewGeneratorConfig(
+        base=_base_cfg().model_copy(update={"min_distance_to_mesh": 0.1}),
+        components=[
+            CandidateMixtureComponentConfig(
+                name="paired",
+                count=2,
+                view_mode=ViewDirectionMode.RADIAL_AWAY,
+                paired_view_mode=ViewDirectionMode.FORWARD_RIG,
+            ),
+            CandidateMixtureComponentConfig(name="ordinary", count=2, strategy=ViewDirectionMode.RADIAL_AWAY),
+        ],
+    )
+    mesh, verts, faces = _mesh_triplet(cfg.device)
+    transfer_calls = {"verts": 0, "faces": 0}
+    original_to = torch.Tensor.to
+
+    def counting_to(self: torch.Tensor, *args: object, **kwargs: object) -> torch.Tensor:
+        if self is verts:
+            transfer_calls["verts"] += 1
+        elif self is faces:
+            transfer_calls["faces"] += 1
+        return original_to(self, *args, **kwargs)
+
+    monkeypatch.setattr(torch.Tensor, "to", counting_to)
+    result = CandidateMixtureViewGenerator(cfg).generate(
+        reference_pose=_identity_pose(device=cfg.device),
+        gt_mesh=mesh,
+        mesh_verts=verts,
+        mesh_faces=faces,
+        camera_calib_template=_dummy_camera(cfg.device),
+        occupancy_extent=torch.tensor(
+            [-10.0, 10.0, -10.0, 10.0, -10.0, 10.0],
+            dtype=torch.float32,
+            device=cfg.device,
+        ),
+        runtime_context=CandidateGenerationRuntimeContext(descriptor=_descriptor()),
+    )
+
+    assert result.mask_valid.shape[0] == 6
+    assert transfer_calls == {"verts": 1, "faces": 1}
+
+
+def test_single_generator_does_not_retain_inference_query() -> None:
+    cfg = _base_cfg().model_copy(update={"min_distance_to_mesh": 0.1, "num_samples": 1})
+    generator = CandidateViewGenerator(cfg)
+
+    with torch.inference_mode():
+        mesh, verts, faces = _mesh_triplet(cfg.device)
+        generator.generate(
+            reference_pose=_identity_pose(device=cfg.device),
+            gt_mesh=mesh,
+            mesh_verts=verts,
+            mesh_faces=faces,
+            camera_calib_template=_dummy_camera(cfg.device),
+            occupancy_extent=torch.tensor(
+                [-10.0, 10.0, -10.0, 10.0, -10.0, 10.0],
+                dtype=torch.float32,
+                device=cfg.device,
+            ),
+        )
+
+    assert generator._mesh_query is None
+
+
+def test_single_generator_rebuilds_p3d_cache_after_inference(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    observed_triangles: list[torch.Tensor] = []
+
+    def fake_point_face_distance(
+        points: torch.Tensor,
+        _points_first_idx: torch.Tensor,
+        triangles: torch.Tensor,
+        _triangles_first_idx: torch.Tensor,
+        _max_points: int,
+        _min_triangle_area: float,
+    ) -> torch.Tensor:
+        observed_triangles.append(triangles)
+        return torch.ones(points.shape[0], dtype=points.dtype, device=points.device)
+
+    monkeypatch.setattr(
+        "pytorch3d.loss.point_mesh_distance.point_face_distance",
+        fake_point_face_distance,
+    )
+    cfg = _base_cfg().model_copy(update={"min_distance_to_mesh": 0.1, "num_samples": 1})
+    generator = CandidateViewGenerator(cfg)
+    mesh, verts, faces = _mesh_triplet(cfg.device)
+    kwargs = {
+        "reference_pose": _identity_pose(device=cfg.device),
+        "gt_mesh": mesh,
+        "mesh_verts": verts,
+        "mesh_faces": faces,
+        "camera_calib_template": _dummy_camera(cfg.device),
+        "occupancy_extent": torch.tensor(
+            [-10.0, 10.0, -10.0, 10.0, -10.0, 10.0],
+            dtype=torch.float32,
+            device=cfg.device,
+        ),
+    }
+
+    with torch.inference_mode():
+        generator.generate(**kwargs)
+    retained_query = generator._mesh_query
+    generator.generate(**kwargs)
+
+    assert retained_query is not None
+    assert generator._mesh_query is retained_query
+    assert len(observed_triangles) == 2
+    assert observed_triangles[0].is_inference()
+    assert not observed_triangles[1].is_inference()
+
+
+def test_single_generator_does_not_retain_autograd_mesh_source() -> None:
+    cfg = _base_cfg().model_copy(update={"min_distance_to_mesh": 0.1, "num_samples": 1})
+    generator = CandidateViewGenerator(cfg)
+    mesh, verts, faces = _mesh_triplet(cfg.device)
+    leaf = verts.detach().clone().requires_grad_()
+    mesh_verts = leaf * 1.0
+
+    generator.generate(
+        reference_pose=_identity_pose(device=cfg.device),
+        gt_mesh=mesh,
+        mesh_verts=mesh_verts,
+        mesh_faces=faces,
+        camera_calib_template=_dummy_camera(cfg.device),
+        occupancy_extent=torch.tensor(
+            [-10.0, 10.0, -10.0, 10.0, -10.0, 10.0],
+            dtype=torch.float32,
+            device=cfg.device,
+        ),
+    )
+
+    assert mesh_verts.grad_fn is not None
+    assert generator._mesh_query is None
+
+
 def test_paired_seed_is_derived_from_resolved_component_seed_for_direct_and_replay(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

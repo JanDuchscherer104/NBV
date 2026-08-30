@@ -35,6 +35,7 @@ if TYPE_CHECKING:
     from trimesh import Trimesh  # type: ignore[import-untyped]
 
     from .candidate_generation import CandidateViewGeneratorConfig
+    from .geometry import PreparedMeshQuery
 
 
 class SamplingStrategy(StrEnum):
@@ -153,10 +154,10 @@ class CandidateContext:
     """Oracle ASE mesh in world-frame metres, used only for candidate validity."""
 
     mesh_verts: torch.Tensor
-    """World-frame mesh vertices ``Tensor[\"V 3\", float]`` in metres."""
+    """Source-device world-frame mesh vertices ``Tensor[\"V 3\", float]`` in metres."""
 
     mesh_faces: torch.Tensor
-    """Triangle vertex indices ``Tensor[\"F 3\", int64]`` into `mesh_verts`."""
+    """Source-device triangle indices ``Tensor[\"F 3\", int64]`` into `mesh_verts`."""
 
     occupancy_extent: torch.Tensor
     """World bounds ``Tensor[\"6\", float]`` ordered xmin/xmax/ymin/ymax/zmin/zmax."""
@@ -175,6 +176,9 @@ class CandidateContext:
 
     mask_valid: torch.Tensor
     """Cumulative action-validity mask ``Tensor[\"N\", bool]`` over the full shell."""
+
+    mesh_query: "PreparedMeshQuery | None" = None
+    """Prepared mesh-query state shared by distance and collision rules."""
 
     rule_masks: dict[str, torch.Tensor] = field(default_factory=dict)
     """Named cumulative validity masks, each ``Tensor[\"N\", bool]``."""
