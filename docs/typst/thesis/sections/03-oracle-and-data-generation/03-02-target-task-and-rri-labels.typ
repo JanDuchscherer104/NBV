@@ -30,17 +30,18 @@ For target $e$, the oracle computes the target-cropped point--mesh error defined
 
 === Target Selection
 
-The implemented sampler does not match actor proposals to @ground-truth:short objects. It enumerates the non-padding @ground-truth:short OBB rows in a snippet, accepts rows with finite positive geometry, and applies seeded uniform sampling without replacement up to the configured per-snippet cap. Thus the stored `matched` status currently means geometry-valid @ground-truth:short task row, not successful proposal-to-identity association. IoU, ambiguity-gap, visibility, and support thresholds are absent from this admission rule.
+The implemented sampler never starts from actor proposals. It removes padding and constructs `rows` from every remaining @ground-truth:short OBB, preserving source indices and audit fields, including confidence and geometry status. It then derives an eligible subset whose full OBB payload and extents are finite and whose extents are strictly positive, and applies seeded uniform sampling without replacement up to the configured per-snippet cap. Thus the stored `matched` status currently means geometry-valid @ground-truth:short task row, not successful proposal-to-identity association. Confidence, IoU, ambiguity-gap, visibility, support, headroom, and utility do not gate this sampling step.
 
 #figure(
   align(center, image(
     "../../figures/target_task_sampler_contract.pdf",
     width: 100%,
   )),
-  caption: [Implemented oracle target-task sampler. Geometry-valid @ground-truth:short OBB rows form the task pool, and seeded uniform sampling without replacement applies the manifest-defined cap. Rollout scoring later decides whether the selected crop is evaluable. No actor proposal, IoU match, visibility gate, or support gate is used.],
+  alt: "A left-to-right population flow begins with a padded ground-truth OBB tensor. Padding is removed before the complete rows table is constructed. The rows table retains illustrative finite positive-geometry and invalid-geometry examples with source indices and audit fields. A finite positive-extent predicate derives eligible rows; one eligible example remains unsampled. Seeded uniform sampling without replacement, capped by the smaller of K and the valid-row count, produces selected rows. Actor proposals and utility evidence do not gate sampler admission; later scorer-evidence checks remain outside the depicted sampler.",
+  caption: [Oracle target-task sampler. The audit table retains invalid and eligible non-padding @ground-truth:short rows; the seeded cap acts only on geometry-eligible rows. This privileged population construction neither matches actor observations nor evaluates task utility; scorer-evidence checks occur downstream.],
 ) <fig:oracle-target-task-sampler-contract>
 
-The sampler bounds rollout cost without pre-filtering on headroom. Candidate scoring may subsequently invalidate the task when its mesh crop, current support, or rendered evidence is unusable; otherwise near-solved and negative-gain targets remain scientifically informative. A later actor-visible protocol must introduce proposal identity and observation-quality diagnostics as a separate selection stage rather than retroactively interpreting the present oracle fields as measurements.
+Downstream scoring may invalidate a selected task when its mesh crop, current support, or rendered evidence is unusable. Near-solved and negative-gain tasks otherwise remain scientifically informative because sampler membership encodes neither headroom nor utility. A later actor-visible protocol must introduce proposal identity and observation-quality diagnostics rather than reinterpret these oracle fields as measurements.
 
 === Observed-Target Admission
 
