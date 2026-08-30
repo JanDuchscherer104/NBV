@@ -32,8 +32,9 @@ detached textual conclusion. The replacement
 two complete beam-retained paths across explicit time planes, and a ring to
 mark the highest-ranked retained path. A dotted cross terminates an invalid row.
 A single-bar dashed stub denotes a valid row outside branch factor two that
-remains in the full candidate shell; a double-bar dashed stub denotes an
-expanded path removed by beam width two. The chapter owner now states that the
+remains in the full candidate shell; a double-bar dashed trajectory reaches
+the next time plane before beam-width removal, matching append-then-prune
+execution. The chapter owner now states that the
 highest-ranked chain's first action can differ from one-step greedy, while both
 solid paths persist. Its caption and alternative text scope the constructed
 ordering to target-root gain at `h=2`, `gamma=1` and explicitly reject measured
@@ -41,6 +42,7 @@ or learned-policy interpretations.
 
 ## Commits
 - [c9ced24f2037376539f16f9c7cccc1fd33393f63](https://github.com/JanDuchscherer104/ARIA-NBV/commit/c9ced24f2037376539f16f9c7cccc1fd33393f63)
+- [a2895290bf5babf6d789919c843a4b10f43357d9](https://github.com/JanDuchscherer104/ARIA-NBV/commit/a2895290bf5babf6d789919c843a4b10f43357d9)
 
 ## Verification
 - standalone CeTZ 0.5.2 compile: pass, one `160 x 72 mm` page
