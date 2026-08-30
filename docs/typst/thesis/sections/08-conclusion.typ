@@ -9,12 +9,17 @@ from utility, causal selected-transition replay, a scalar-horizon fitted-value
 method, and a sequential evaluation from measurement validity to endpoint
 recovery.
 
-The current evidence does not yet answer RQ2. Metric repeatability, the held-out
-target and action population, and actor-visible immediate-value recovery remain
-unestablished; without those premises, neither oracle-lookahead headroom nor
-learned exact-$Q_2$ and endpoint recovery are interpretable. Online interaction
-and continuous control remain extensions of the setting rather than missing
-parts of this evaluation.
+The current evidence answers the four core research questions only at the level
+of implemented study design. For RQ1, the target-cropped endpoint objective is
+specified, but confirmatory repeatability has not established it as an
+admissible comparison metric. For RQ2, neither meaningful equal-budget oracle
+headroom nor learned endpoint-gap closure is established. For RQ3, the declared
+actor-visible protocol and scorer are executable, but held-out target matching,
+input-identity and leakage audits, scene-clustered uncertainty, ranking, and
+calibration remain unestablished. For RQ4, candidate, replay, and validity
+diagnostics exist, but no validated held-out scene--target population passes the
+frozen support rule. These are unresolved answers, not negative empirical
+results.
 
 Training-source rollouts establish that the pipeline reaches mesh rendering,
 target-specific oracle scoring, selected-action replay, and the fitted-value
@@ -22,11 +27,12 @@ interface; renderer memory limits the evaluated scale. These observations
 justify an auditable method and study design, not policy superiority, a
 population effect, deployment readiness, or a scale estimate.
 
-The eventual conclusion is determined by the first failed gate. Unstable
-measurement blocks planning claims; inadequate support blocks population
-claims; negligible headroom is a setup-specific negative result; failed
-actor-visible $Q_1$ or exact $Q_2$ localizes a learning prerequisite; and stable
-headroom without endpoint recovery is a bounded learned-policy failure. This
-ordering preserves informative negative outcomes without extending them beyond
-the frozen finite-candidate experiment.
-
+The eventual conclusion follows the prerequisite graph rather than a single
+undifferentiated score. Unstable measurement blocks policy comparison;
+inadequate support blocks population claims; a failed actor protocol blocks
+actor-visible interpretation; negligible headroom is a setup-specific negative
+result; and failed $Q_1$, exact $Q_2$, or endpoint recovery progressively
+narrows—but does not uniquely identify—the learned-control limitation. RQ5 and
+RQ6 remain conditional extensions: online interaction and continuous control
+change the evidence, action, safety, and cost assumptions and are not missing
+parts of the present offline finite-candidate evaluation.

@@ -1,4 +1,4 @@
-#import "../experiment_data.typ": load-thesis-report, report-fact, report-store-fact, report-store-facts-match-contract, format-report-value
+#import "../experiment_data.typ": load-thesis-report, report-fact, report-store-fact, report-store-gate-passed, report-store-facts-match-contract, format-report-value
 
 #let data-path = sys.inputs.at(
   "aria-thesis-data",
@@ -40,5 +40,23 @@
 #assert(
   not report-store-facts-match-contract(report, "synthetic-nonscientific-fixture", wrong-aggregation, 2),
   message: "incorrect aggregation identity must not satisfy the scene-level contract",
+)
+#let gate-report = (
+  tables: (
+    facts: (
+      rows: (
+        (store_id: "store-a", key: "gate.false", value: false),
+        (store_id: "store-a", key: "gate.true", value: true),
+      ),
+    ),
+  ),
+)
+#assert(
+  not report-store-gate-passed(gate-report, "store-a", "gate.false"),
+  message: "an explicit false decision must fail a gate rather than count as available",
+)
+#assert(
+  report-store-gate-passed(gate-report, "store-a", "gate.true"),
+  message: "only an explicit true decision may pass a gate",
 )
 Missing: #format-report-value(missing-value)

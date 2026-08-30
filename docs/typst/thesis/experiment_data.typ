@@ -109,6 +109,13 @@
   matches.first()
 }
 
+#let report-store-gate-passed(report, store-id, key) = {
+  let matches = report.tables.facts.rows.filter(
+    row => row.store_id == store-id and row.key == key,
+  )
+  matches.len() == 1 and matches.first().value == true
+}
+
 #let report-store-facts-match-contract(report, store-id, contracts, expected-n) = {
   contracts.all(contract => {
     let matches = report.tables.facts.rows.filter(

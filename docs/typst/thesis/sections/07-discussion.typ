@@ -31,15 +31,18 @@ than the policy. Stable support with negligible oracle headroom means that the
 frozen candidate generator, horizon, and metric expose little exploitable
 non-myopic structure; it does not imply universal myopia.
 
-If meaningful headroom exists, actor-visible $Q_1$ tests whether the declared
-information state contains enough immediate target signal. Failure there
-directs attention to target association, leakage, representation support, or
-calibration before long-horizon architecture. Passing $Q_1$ but failing exact
-$Q_2$ localizes the first non-myopic defect to successor coverage, state
-aliasing, recursive targets, or bootstrap estimation. Only after those gates
-pass does failed endpoint recovery become evidence about planning under the
-admitted model and replay support. Even then, the endpoint estimate alone does
-not identify which representation or optimization mechanism failed.
+The actor-protocol audit is interpretable independently of oracle headroom: it
+tests target matching, the complete actor-input path, and actor--oracle leakage.
+Conditional on that audit, actor-visible $Q_1$ evaluates whether the selected
+learner recovers immediate target value from the declared information state.
+Failure does not by itself show that the state lacks signal; model
+misspecification, optimization, capacity, and finite-sample error remain viable
+explanations alongside target association, representation support, and
+calibration. Passing $Q_1$ but failing exact $Q_2$ narrows the diagnostic to
+successor coverage, state aliasing, recursive targets, or bootstrap estimation.
+Only after those prerequisites pass does failed endpoint recovery become
+evidence about planning under the admitted model and replay support. Even then,
+the endpoint estimate alone does not identify the failed mechanism.
 
 This logic also disciplines positive outcomes. Exact $Q_2$ would validate the
 first recursive prediction on its admitted support, not the complete policy.
@@ -95,9 +98,10 @@ oracle stability and headroom, train the matched controls, and only then
 interpret architectural differences. The registry preserves concrete follow-up
 hypotheses without presenting them as validated conclusions.
 
-The conceptual contribution is consequently an identifiability structure for
-target-specific view planning. View value is relational, invalidity is distinct
-from utility, privileged support is distinct from actor visibility, and each
-scientific claim is attached to the earliest evidence gate capable of
-falsifying it. That structure remains useful whether the eventual policy result
-is positive, negative, or blocked.
+The conceptual contribution is consequently a diagnostic admissibility
+structure for target-specific view planning. View value is relational,
+invalidity is distinct from utility, privileged support is distinct from actor
+visibility, and each scientific claim is attached to the evidence and
+prerequisites required to admit it. This structure narrows alternative
+explanations without claiming causal identification and remains useful whether
+the eventual policy result is positive, negative, or blocked.

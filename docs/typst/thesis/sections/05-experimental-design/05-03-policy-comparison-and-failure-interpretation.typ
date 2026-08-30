@@ -28,7 +28,7 @@ planner depth differs.
       [$pi_"learned-1"$], [actor-visible], [$H$], [learned myopic control],
       [$pi_"oracle-1"$], [oracle immediate gain], [$H$], [one-step oracle-greedy comparator],
       [$pi_"oracle-look"$], [bounded oracle lookahead], [$H$], [privileged bounded-lookahead reference],
-      [$pi_Q$], [actor-visible], [$H$], [finite-horizon recovery policy],
+      [$pi_Q$], [actor-visible], [$H$], [learned finite-horizon gap-closure policy],
     ),
   ),
   caption: [Matched policy roles. Oracle access defines a privileged reference, not a deployable upper bound; every row retains the same acquisition budget.],
@@ -38,9 +38,11 @@ The primary estimand is the paired per-scene difference in fixed-budget endpoint
 target-quality gain. Crop, mesh, rendering, backprojection, fusion, point cap,
 and point--mesh metric identity are shared across policies. The analysis
 manifest freezes exclusions, within-scene aggregation, interval procedure,
-comparison family, meaningful headroom, and recovered-headroom threshold before
-learned-policy outcomes are inspected. Ratios are reported only when their
-headroom denominator passes the meaningful-effect gate.
+comparison family, meaningful headroom, and learned-control gap-closure
+threshold before learned-policy outcomes are inspected. The gap-closure ratio
+is reported only after oracle headroom passes the meaningful-effect gate, but
+its denominator remains the actor-visible learned-myopic-to-oracle-lookahead
+endpoint gap rather than oracle headroom above oracle greedy.
 
 #figure(
   publication-table(
@@ -50,23 +52,24 @@ headroom denominator passes the meaningful-effect gate.
     rows: (
       [measurement], [the oracle outcome is not stable enough for comparison], [anything about planning, learning, or support], [repair and repeat the frozen metric protocol],
       [population / action support], [the requested estimand lacks an adequate study or action population], [zero utility or policy failure], [report exclusions, family survival, horizon coverage, and resource failures],
+      [actor protocol], [target matching, actor-input identity, or the leakage boundary failed], [absence of task signal or model inadequacy], [repair and repeat the failed protocol audit],
       [oracle headroom], [no meaningful non-myopic structure was detected in the frozen setup], [universal myopia or model inadequacy], [change support or horizon only in a separately declared study],
-      [actor-visible $Q_1$], [the available actor information does not recover immediate target value], [a specifically long-horizon failure], [audit target matching, leakage, calibration, and state support],
+      [actor-visible $Q_1$], [the evaluated learner does not recover immediate target value under the admitted protocol], [absence of signal or a specifically long-horizon failure], [separate model class, optimization, capacity, sample size, calibration, and state support],
       [exact $Q_2$], [the first learned recursion is unsupported or inaccurate], [endpoint planning value or a need for more architecture], [separate coverage, $Q_1$ error, successor linkage, and bootstrap error],
-      [endpoint recovery], [the admitted learned policy does not recover prespecified headroom], [which mechanism failed], [stratify by support, target observability, replay coverage, and state aliasing],
+      [endpoint gap closure], [the admitted learned policy does not close the prespecified endpoint gap], [which mechanism failed], [stratify by support, target observability, replay coverage, and state aliasing],
     ),
   ),
-  caption: [Failure-attribution matrix. Interpretation stops at the first failed gate; downstream architecture stories remain hypotheses.],
+  caption: [Failure-attribution matrix. Interpretation stops at the earliest failed prerequisite for each claim; downstream architecture stories remain hypotheses.],
 ) <tab:thesis-failure-attribution>
 
 #validation_todo(
-  [Populate the six gates in order. Missing upstream evidence blocks downstream quantities rather than becoming a zero result.],
+  [Populate all seven evidence stages. Missing or failed prerequisites block downstream admission while their own measured outcomes remain reportable.],
   source: [confirmatory report bundle and exact-Q2 receipt],
   gate: [artifact-backed Results chapter],
 )
 
 #decision_todo(
-  [Freeze aggregation, interval level, comparison family, meaningful headroom, and recovery threshold in the resolved analysis manifest.],
+  [Freeze aggregation, interval level, comparison family, meaningful headroom, and learned-control gap-closure threshold in the resolved analysis manifest.],
   source: [confirmatory analysis plan],
   gate: [analysis freeze before outcome inspection],
 )
@@ -76,4 +79,3 @@ Renderer out-of-memory events can motivate batching and resource measurement,
 but they cannot support or refute candidate utility, oracle headroom, or policy
 quality. Likewise, a policy that cannot continue remains in the paired analysis
 with no further gain rather than disappearing from the denominator.
-

@@ -6,7 +6,7 @@
 == Population, Estimands, and Gate Order
 
 #validation_todo(
-  [Preregister the eligible population, exclusions, scene aggregation, independent-run structure, uncertainty interval, meaningful headroom, recovery fraction, and comparison family before inspecting confirmatory outcomes.],
+  [Preregister the eligible population, exclusions, scene aggregation, independent-run structure, uncertainty interval, meaningful headroom, learned-control gap-closure fraction, and comparison family before inspecting confirmatory outcomes.],
   source: [experiment manifest and analysis specification],
   gate: [immutable analysis plan plus matched held-out policy table],
 )
@@ -58,37 +58,42 @@ observation-derived descriptor and an audit of its matching and failure
 population. The same boundary excludes unselected candidate renders and
 oracle-derived labels from decision-time input.
 
-The evidence sequence in @fig:qh-learning-evidence-loop answers the research
-questions in a fixed order:
+The evidence graph in @fig:qh-learning-evidence-loop answers the research
+questions through seven stages. After population and action support are
+established, actor-protocol validity and oracle headroom form independently
+reportable branches; they meet again only when endpoint recovery is interpreted:
 
 1. *Measurement validity (RQ1):* freeze crop, render, fusion, and point--mesh
    metric identity; show repeatability within a declared tolerance.
 2. *Population and action support (part of RQ4):* establish scene-disjoint
    target-task coverage, candidate-family survival, hard validity, and acquisition
    feasibility with exact denominators.
-3. *Oracle headroom (first half of RQ2):* compare bounded lookahead with
+3. *Actor-visible protocol (RQ3):* audit target matching, the complete
+   actor-input identity, and actor--oracle leakage without using policy headroom.
+4. *Oracle headroom (first half of RQ2):* compare bounded lookahead with
    one-step oracle greedy under the same acquisition budget,
 
    $
      #eqs.entity.lookahead_headroom
    $
 
-4. *Actor-visible $Q_1$ (RQ3 and RQ4):* evaluate target-conditioned one-step
-   ranking, calibration, target matching, and dense-label replay coverage without
-   privileged actor input.
-5. *Exact $Q_2$ (RQ2 and RQ4):* measure held-out two-step error, factual-successor
+5. *Actor-visible $Q_1$ (RQ3 and RQ4):* under the admitted protocol, evaluate
+   target-conditioned one-step ranking, scene-clustered uncertainty,
+   calibration, and dense-label replay coverage.
+6. *Exact $Q_2$ (RQ2 and RQ4):* measure held-out two-step error, factual-successor
    coverage, and horizon support against the finite-support target.
-6. *Endpoint recovery (second half of RQ2):* only after meaningful headroom,
-   estimate the prespecified recovered fraction
+7. *Endpoint gap closure (second half of RQ2):* only after meaningful headroom
+   and admitted learned-value prerequisites, estimate the prespecified
+   learned-myopic-to-oracle-lookahead gap-closure fraction
 
    $
      #eqs.entity.q_recovery
    $
 
-   from matched endpoint oracle evaluation.
+   from matched endpoint oracle evaluation. Its denominator is distinct from
+   oracle-lookahead headroom above oracle greedy.
 
 RQ5 and RQ6 are evaluated only if the offline finite-candidate evidence justifies
-extending the action or interaction setting. This ordering prevents an attractive
-downstream policy estimate from compensating for an unstable metric, an
-unsupported action set, privileged actor input, or failed recursion.
-
+extending the action or interaction setting. This dependency graph prevents an
+attractive downstream policy estimate from compensating for an unstable metric,
+an unsupported action set, privileged actor input, or failed recursion.

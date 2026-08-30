@@ -1,11 +1,12 @@
 = Experimental Design <sec:thesis-experimental-design>
 
-The experiment is a sequence of admissibility gates rather than one aggregate
-model score. Measurement must be stable before a population can be interpreted;
-population and action support must exist before oracle headroom can be measured;
-headroom must be meaningful before learned recovery is relevant. The learned
-path then separates actor-visible one-step value, exact two-step recursion, and
-fixed-budget endpoint recovery. Each stage has its own population, estimate,
+The experiment is a graph of admissibility gates rather than one aggregate
+model score. Measurement and population/action support are prerequisites for
+policy comparison. After support is established, the actor-protocol audit is
+reported independently of oracle headroom; actor-visible one-step value and
+exact two-step recursion follow the protocol branch, while meaningful headroom
+follows the oracle branch. Both branches are required before fixed-budget
+endpoint gap closure is admitted. Each stage has its own population, estimate,
 uncertainty, and stopping rule.
 
 #figure(
@@ -13,7 +14,7 @@ uncertainty, and stopping rule.
     "../../figures/qh_learning_evidence_loop.pdf",
     width: 100%,
   )),
-  caption: [Evidence-gated claim path. The first failed gate determines the admissible interpretation; later quantities remain unavailable rather than being treated as zero or pooled into a composite score.],
+  caption: [Evidence-gated claim graph. A failed stage retains its own measured outcome but blocks claims that depend on it; missing evidence remains unavailable rather than becoming zero.],
 ) <fig:qh-learning-evidence-loop>
 
 #include "05-01-objectives-and-hypotheses.typ"
