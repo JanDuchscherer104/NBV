@@ -639,18 +639,16 @@ def benchmarks_from_reader(
             first_failure = (
                 min(first_failures, key=lambda reason: (-first_failures[reason], reason)) if first_failures else None
             )
-            margins = {
-                name: min(values)
-                for name in (
-                    "free_space_margin_m",
-                    "mesh_distance_m",
-                    "path_min_clearance_m",
-                    "target_pixel_margin_px",
-                )
-                if (
-                    values := [_finite_value(row.get(name)) for row in rows if _finite_value(row.get(name)) is not None]
-                )
-            }
+            margins: dict[str, float] = {}
+            for name in (
+                "free_space_margin_m",
+                "mesh_distance_m",
+                "path_min_clearance_m",
+                "target_pixel_margin_px",
+            ):
+                values = _finite_values(rows, name)
+                if values:
+                    margins[name] = min(values)
             families.append(
                 CandidateFamilyCounts(
                     family=family,
@@ -790,6 +788,17 @@ def _consistent_optional_bool(rows: Iterable[Mapping[str, Any]], name: str) -> b
 def _consistent_optional_text(rows: Iterable[Mapping[str, Any]], name: str) -> str | None:
     values = {str(row[name]) for row in rows if row.get(name) is not None}
     return next(iter(values)) if len(values) == 1 else None
+
+
+def _finite_values(rows: Iterable[Mapping[str, Any]], name: str) -> list[float]:
+    """Return only persisted finite diagnostic scalars for one cell."""
+
+    values = []
+    for row in rows:
+        value = _finite_value(row.get(name))
+        if value is not None:
+            values.append(value)
+    return values
 
 
 def _legacy_coordinate(row: Mapping[str, Any]) -> tuple[float, float, float]:

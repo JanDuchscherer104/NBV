@@ -60,8 +60,12 @@ def _record(
     )
 
 
-def _config(width: int = 60, **kwargs: object) -> CandidateFamilyPreflightConfig:
-    return CandidateFamilyPreflightConfig(query_width=width, configured_families=FAMILIES, **kwargs)
+def _config(width: int = 60, *, require_known_applicability: bool = True) -> CandidateFamilyPreflightConfig:
+    return CandidateFamilyPreflightConfig(
+        query_width=width,
+        configured_families=FAMILIES,
+        require_known_applicability=require_known_applicability,
+    )
 
 
 def test_root_threshold_resolves_and_persists_exact_boundary() -> None:

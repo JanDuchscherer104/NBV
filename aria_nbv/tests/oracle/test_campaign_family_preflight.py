@@ -7,13 +7,14 @@ import pytest
 from aria_nbv.oracle.pipelines.campaign import CudaRolloutCampaign, CudaRolloutCampaignConfig
 from aria_nbv.rollouts.candidate_benchmark import (
     CandidateBenchmark,
+    CandidateFamilyPreflight,
     CandidateFamilyCounts,
     CandidateFamilyPreflightConfig,
     reduce_candidate_family_preflight,
 )
 
 
-def _passing_result():
+def _passing_result() -> CandidateFamilyPreflight:
     record = CandidateBenchmark(
         state_key="state",
         scene_key="scene",
