@@ -34,7 +34,12 @@ from .data_handling.qh_contracts import (
 from .data_handling.qh_data.batching import QhObjectiveProfile
 from .data_handling.vin_store.format import VinOfflineIndexRecord, VinOfflineManifest
 from .data_handling.vin_store.store import OFFLINE_DATASET_VERSION, VinOfflineStoreConfig, VinOfflineStoreReader
-from .data_handling.vin_store.target_inventory import inspect_target_inventory
+from .data_handling.vin_store.target_inventory import (
+    TargetInventoryAcquisitionIdentity,
+    TargetInventoryReport,
+    build_target_inventory_report,
+    inspect_target_inventory,
+)
 from .dataset_topology import discover_vin_store_dirs
 from .oracle.pipelines.shard_promotion import promotion_metadata_validation_error, read_promotion_marker_json
 from .rollouts.inspection import (
@@ -234,6 +239,45 @@ class DatasetBundleSelection:
             raise ValueError("The VIN root store cannot also be selected as a rollout store.")
         object.__setattr__(self, "root_store", root)
         object.__setattr__(self, "rollout_stores", rollouts)
+
+
+@dataclass(frozen=True, slots=True)
+class DatasetBundleDeepRequest:
+    """Complete generation-bound request for the opt-in deep bundle scan."""
+
+    selection: DatasetBundleSelection
+    generation: DatasetBundleGeneration
+
+    def digest(self) -> str:
+        """Return the deterministic cache and retained-state identity."""
+
+        payload = {
+            "selection": {
+                "root_store": self.selection.root_store.as_posix(),
+                "rollout_stores": [path.as_posix() for path in self.selection.rollout_stores],
+            },
+            "generation": _generation_json(self.generation),
+        }
+        return sha256(json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+
+
+@dataclass(frozen=True, slots=True)
+class DatasetBundleDeepStatistics:
+    """Frozen deep-scan statistics and its already-acquired inventory report."""
+
+    statistics: FrozenJsonObject
+    target_inventory: TargetInventoryReport
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.statistics, FrozenJsonObject):
+            object.__setattr__(self, "statistics", _freeze_object(self.statistics))
+
+    def to_jsonable(self) -> dict[str, Any]:
+        """Return a fresh full app/export projection without reacquiring evidence."""
+
+        payload = self.statistics.to_jsonable()
+        payload["root_target_inventory_report"] = self.target_inventory.to_jsonable()
+        return payload
 
 
 def discover_dataset_bundle_candidates(cache_root: Path) -> DatasetBundleDiscovery:
@@ -693,8 +737,14 @@ class QhStageReadiness:
     max_horizon: int
     """Largest realized chain length in the stage."""
 
-    provenance: dict[str, Any]
+    provenance: FrozenJsonObject
     """Actor and rollout identities reported by the validated dataset."""
+
+    def __post_init__(self) -> None:
+        """Freeze compatibility inputs so retained evidence has no mutable leaves."""
+
+        if not isinstance(self.provenance, FrozenJsonObject):
+            object.__setattr__(self, "provenance", _freeze_object(self.provenance))
 
 
 @dataclass(frozen=True, slots=True)
@@ -736,13 +786,13 @@ class QhCorpusReadiness:
     stages: tuple[QhStageReadiness, ...]
     """Train, validation, and test rows in stable order."""
 
-    contract: dict[str, Any] | None
+    contract: FrozenJsonObject | None
     """Homogeneous horizon-independent Q_H data contract."""
 
-    actor_contract: dict[str, Any] | None
+    actor_contract: FrozenJsonObject | None
     """Exact named actor contract used to construct every stage."""
 
-    loader_settings: dict[str, int | bool | str]
+    loader_settings: FrozenJsonObject
     """Deterministic DataLoader settings used for admission and preview."""
 
     scene_disjoint: bool | None
@@ -750,6 +800,14 @@ class QhCorpusReadiness:
 
     storage: tuple[NormalizedStorageMetric, ...]
     """Persisted bytes normalized by physical and Q_H factual denominators."""
+
+    def __post_init__(self) -> None:
+        """Freeze compatibility inputs so this cached product is deeply immutable."""
+
+        for name in ("contract", "actor_contract", "loader_settings"):
+            value = getattr(self, name)
+            if value is not None and not isinstance(value, FrozenJsonObject):
+                object.__setattr__(self, name, _freeze_object(value))
 
     def to_jsonable(self) -> dict[str, Any]:
         """Return presentation-neutral readiness evidence."""
@@ -770,13 +828,13 @@ class QhCorpusReadiness:
                     "trainable_candidate_count": row.trainable_candidate_count,
                     "scene_ids": list(row.scene_ids),
                     "max_horizon": row.max_horizon,
-                    "provenance": _plain_value(row.provenance),
+                    "provenance": row.provenance.to_jsonable(),
                 }
                 for row in self.stages
             ],
-            "contract": _plain_value(self.contract),
-            "actor_contract": _plain_value(self.actor_contract),
-            "loader_settings": _plain_value(self.loader_settings),
+            "contract": None if self.contract is None else self.contract.to_jsonable(),
+            "actor_contract": None if self.actor_contract is None else self.actor_contract.to_jsonable(),
+            "loader_settings": self.loader_settings.to_jsonable(),
             "scene_disjoint": self.scene_disjoint,
             "storage": [
                 {
@@ -810,6 +868,61 @@ class QhReadinessContract:
 
 
 @dataclass(frozen=True, slots=True)
+class QhReadinessRequest:
+    """Complete immutable request for one Q_H corpus-readiness acquisition.
+
+    This is deliberately the cache-key boundary: the selected bundle, its
+    replacement-sensitive generation, the named scientific contract, and every
+    loader control which can affect the result travel together.
+    """
+
+    selection: DatasetBundleSelection
+    generation: DatasetBundleGeneration
+    contract: QhReadinessContract
+    batch_size: int = 1
+    seed: int = 0
+
+    def digest(self) -> str:
+        """Return the complete deterministic retained-state and cache identity."""
+
+        payload = {
+            "selection": {
+                "root_store": self.selection.root_store.as_posix(),
+                "rollout_stores": [path.as_posix() for path in self.selection.rollout_stores],
+            },
+            "generation": _generation_json(self.generation),
+            "contract": {
+                "experiment_profile": self.contract.experiment_profile,
+                "root_evl_profile": self.contract.root_evl_profile,
+                "selected_observation_protocol": self.contract.selected_observation_protocol,
+                "objective_profile": self.contract.objective_profile,
+            },
+            "batch_size": self.batch_size,
+            "seed": self.seed,
+        }
+        return sha256(json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+
+
+@dataclass(frozen=True, slots=True)
+class QhPreviewRequest:
+    """Complete immutable request for one bounded Q_H chain/batch preview."""
+
+    readiness: QhReadinessRequest
+    stage: Stage = Stage.TRAIN
+    chain_index: int = 0
+
+    def digest(self) -> str:
+        """Return the complete deterministic retained-state and cache identity."""
+
+        payload = {
+            "readiness": self.readiness.digest(),
+            "stage": self.stage.value,
+            "chain_index": self.chain_index,
+        }
+        return sha256(json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+
+
+@dataclass(frozen=True, slots=True)
 class QhBatchPreview:
     """Bounded evidence from one selected chain and one actual DataLoader batch."""
 
@@ -819,22 +932,22 @@ class QhBatchPreview:
     selected_chain_index: int
     """Requested zero-based dataset index."""
 
-    selected_chain_key: dict[str, Any]
+    selected_chain_key: FrozenJsonObject
     """CPU-only source identity for the directly read chain."""
 
     selected_chain_steps: int
     """Realized state count in the directly read chain."""
 
-    batch_chain_keys: tuple[dict[str, Any], ...]
+    batch_chain_keys: tuple[FrozenJsonObject, ...]
     """CPU-only identities collated by the actual DataLoader."""
 
     batch_step_counts: tuple[int, ...]
     """Realized chain lengths before time-axis padding."""
 
-    shapes: dict[str, tuple[int, ...]]
+    shapes: FrozenJsonObject
     """Principal actor and supervision tensor shapes."""
 
-    dtypes: dict[str, str]
+    dtypes: FrozenJsonObject
     """Principal actor and supervision tensor dtypes."""
 
     step_padding_count: int
@@ -849,18 +962,29 @@ class QhBatchPreview:
     trainable_candidate_count: int
     """Persisted label-supported candidate entries in the batch."""
 
+    def __post_init__(self) -> None:
+        """Freeze compatibility inputs so this cached product is deeply immutable."""
+
+        for name in ("selected_chain_key", "batch_chain_keys", "shapes", "dtypes"):
+            value = getattr(self, name)
+            if name == "batch_chain_keys":
+                frozen = tuple(item if isinstance(item, FrozenJsonObject) else _freeze_object(item) for item in value)
+                object.__setattr__(self, name, frozen)
+            elif not isinstance(value, FrozenJsonObject):
+                object.__setattr__(self, name, _freeze_object(value))
+
     def to_jsonable(self) -> dict[str, Any]:
         """Return JSON-compatible chain and collation evidence."""
 
         return {
             "stage": self.stage.value,
             "selected_chain_index": self.selected_chain_index,
-            "selected_chain_key": self.selected_chain_key,
+            "selected_chain_key": self.selected_chain_key.to_jsonable(),
             "selected_chain_steps": self.selected_chain_steps,
-            "batch_chain_keys": list(self.batch_chain_keys),
+            "batch_chain_keys": [key.to_jsonable() for key in self.batch_chain_keys],
             "batch_step_counts": list(self.batch_step_counts),
-            "shapes": {name: list(shape) for name, shape in self.shapes.items()},
-            "dtypes": self.dtypes,
+            "shapes": self.shapes.to_jsonable(),
+            "dtypes": self.dtypes.to_jsonable(),
             "step_padding_count": self.step_padding_count,
             "candidate_padding_count": self.candidate_padding_count,
             "action_count": self.action_count,
@@ -870,14 +994,20 @@ class QhBatchPreview:
 
 def prepare_dataset_bundle_export(
     evidence: DatasetBundleEvidence,
-    deep_statistics: Mapping[str, Any] | None = None,
+    deep_statistics: DatasetBundleDeepStatistics | Mapping[str, Any] | None = None,
     qh_readiness: QhCorpusReadiness | None = None,
     qh_preview: QhBatchPreview | None = None,
 ) -> bytes:
     """Serialize the already acquired Training Dataset products exactly once."""
 
     payload = evidence.to_jsonable()
-    payload["deep_statistics"] = None if deep_statistics is None else dict(deep_statistics)
+    payload["deep_statistics"] = (
+        None
+        if deep_statistics is None
+        else deep_statistics.to_jsonable()
+        if isinstance(deep_statistics, DatasetBundleDeepStatistics)
+        else dict(deep_statistics)
+    )
     payload["q_h_readiness"] = None if qh_readiness is None else qh_readiness.to_jsonable()
     payload["q_h_batch_preview"] = None if qh_preview is None else qh_preview.to_jsonable()
     return (json.dumps(payload, indent=2, sort_keys=True) + "\n").encode()
@@ -899,6 +1029,26 @@ def build_qh_corpus_readiness(
     Trainer, writer, or mutable store handle.
     """
 
+    return inspect_qh_readiness(
+        QhReadinessRequest(
+            selection=selection,
+            generation=capture_dataset_bundle_generation(selection.root_store, selection.rollout_stores)[1],
+            contract=contract,
+            batch_size=batch_size,
+            seed=seed,
+        )
+    )
+
+
+def inspect_qh_readiness(request: QhReadinessRequest) -> QhCorpusReadiness:
+    """Acquire Q_H readiness for one complete, generation-bound request."""
+
+    _assert_qh_request_matches_generation(request)
+    assert_dataset_bundle_generation_current(request.generation)
+    selection = request.selection
+    contract = request.contract
+    batch_size = request.batch_size
+    seed = request.seed
     loader_settings: dict[str, int | bool | str] = {
         "batch_size": batch_size,
         "num_workers": 0,
@@ -908,45 +1058,56 @@ def build_qh_corpus_readiness(
         "objective_profile": contract.objective_profile,
     }
     if batch_size < 1:
-        return _blocked_qh_readiness(selection, loader_settings, "Q_H batch_size must be positive.")
+        return _finished_qh_readiness(
+            request, _blocked_qh_readiness(selection, loader_settings, "Q_H batch_size must be positive.")
+        )
     light = build_dataset_bundle_summary(selection, validate_rollouts=False)
     blocking = tuple(finding.message for finding in light.findings if finding.severity == "blocking")
     if blocking:
-        return _blocked_qh_readiness(selection, loader_settings, *blocking)
+        return _finished_qh_readiness(request, _blocked_qh_readiness(selection, loader_settings, *blocking))
     if not selection.rollout_stores:
-        return _blocked_qh_readiness(selection, loader_settings, "Select at least one rollout store.")
+        return _finished_qh_readiness(
+            request, _blocked_qh_readiness(selection, loader_settings, "Select at least one rollout store.")
+        )
 
     promotion_blockers = _qh_promotion_blockers(selection)
     if promotion_blockers:
-        return _blocked_qh_readiness(selection, loader_settings, *promotion_blockers)
+        return _finished_qh_readiness(request, _blocked_qh_readiness(selection, loader_settings, *promotion_blockers))
 
     try:
         datasets, data_module = _build_qh_data_module(selection, contract=contract, batch_size=batch_size, seed=seed)
         stage_rows = tuple(_qh_stage_readiness(stage, datasets.get(stage)) for stage in _QH_STAGES)
+    except DatasetBundleGenerationChangedError:
+        raise
     except Exception as exc:
-        return _blocked_qh_readiness(selection, loader_settings, f"{type(exc).__name__}: {exc}")
+        return _finished_qh_readiness(
+            request, _blocked_qh_readiness(selection, loader_settings, f"{type(exc).__name__}: {exc}")
+        )
 
     data_contract = {
         field.name: getattr(data_module.train_dataset.contract, field.name)
         for field in fields(data_module.train_dataset.contract)
     }
     storage = _normalized_qh_storage(light, stage_rows)
-    return QhCorpusReadiness(
+    result = QhCorpusReadiness(
         selection=selection,
         verdict="Ready",
         blockers=(),
         stages=stage_rows,
-        contract=data_contract,
-        actor_contract={
-            "experiment_profile": data_module.train_dataset.actor_state_contract.experiment_profile,
-            "root_evl_profile": data_module.train_dataset.actor_state_contract.root_evl_profile,
-            "selected_observation_protocol": data_module.train_dataset.actor_state_contract.selected_observation_protocol,
-            "actor_manifest_hash": data_module.actor_state_contract_hash,
-        },
-        loader_settings=loader_settings,
+        contract=_freeze_object(_plain_value(data_contract)),
+        actor_contract=_freeze_object(
+            {
+                "experiment_profile": data_module.train_dataset.actor_state_contract.experiment_profile,
+                "root_evl_profile": data_module.train_dataset.actor_state_contract.root_evl_profile,
+                "selected_observation_protocol": data_module.train_dataset.actor_state_contract.selected_observation_protocol,
+                "actor_manifest_hash": data_module.actor_state_contract_hash,
+            }
+        ),
+        loader_settings=_freeze_object(loader_settings),
         scene_disjoint=True,
         storage=storage,
     )
+    return _finished_qh_readiness(request, result)
 
 
 def _qh_promotion_blockers(selection: DatasetBundleSelection) -> tuple[str, ...]:
@@ -1057,15 +1218,42 @@ def preview_qh_batch(
 ) -> QhBatchPreview:
     """Read one selected chain and collate one batch through the real loader."""
 
-    normalized_stage = Stage.from_str(stage) if isinstance(stage, str) else stage
+    return inspect_qh_preview(
+        QhPreviewRequest(
+            readiness=QhReadinessRequest(
+                selection=selection,
+                generation=capture_dataset_bundle_generation(selection.root_store, selection.rollout_stores)[1],
+                contract=contract,
+                batch_size=batch_size,
+                seed=seed,
+            ),
+            stage=Stage.from_str(stage) if isinstance(stage, str) else stage,
+            chain_index=chain_index,
+        )
+    )
+
+
+def inspect_qh_preview(request: QhPreviewRequest) -> QhBatchPreview:
+    """Acquire one preview for a complete, generation-bound request."""
+
+    readiness = request.readiness
+    selection = readiness.selection
+    _assert_qh_request_matches_generation(readiness)
+    assert_dataset_bundle_generation_current(readiness.generation)
+    normalized_stage = request.stage
     promotion_blockers = _qh_promotion_blockers(selection)
     if promotion_blockers:
         raise ValueError("; ".join(promotion_blockers))
-    datasets, data_module = _build_qh_data_module(selection, contract=contract, batch_size=batch_size, seed=seed)
+    datasets, data_module = _build_qh_data_module(
+        selection,
+        contract=readiness.contract,
+        batch_size=readiness.batch_size,
+        seed=readiness.seed,
+    )
     dataset = datasets.get(normalized_stage)
     if dataset is None:
         raise ValueError(f"Q_H stage {normalized_stage.value!r} contains no chains.")
-    chain = dataset[chain_index]
+    chain = dataset[request.chain_index]
     loader = {
         Stage.TRAIN: data_module.train_dataloader,
         Stage.VAL: data_module.val_dataloader,
@@ -1083,20 +1271,36 @@ def preview_qh_batch(
         "label_mask": batch.supervision.label_mask,
         "candidate_reward": batch.supervision.candidate_reward,
     }
-    return QhBatchPreview(
+    result = QhBatchPreview(
         stage=normalized_stage,
-        selected_chain_index=chain_index,
-        selected_chain_key=_qh_key_row(chain.key),
+        selected_chain_index=request.chain_index,
+        selected_chain_key=_freeze_object(_qh_key_row(chain.key)),
         selected_chain_steps=chain.num_steps,
-        batch_chain_keys=tuple(_qh_key_row(key) for key in batch.keys),
+        batch_chain_keys=tuple(_freeze_object(_qh_key_row(key)) for key in batch.keys),
         batch_step_counts=tuple(int(value) for value in batch.num_steps.tolist()),
-        shapes={name: tuple(int(axis) for axis in tensor.shape) for name, tensor in tensors.items()},
-        dtypes={name: str(tensor.dtype) for name, tensor in tensors.items()},
+        shapes=_freeze_object({name: [int(axis) for axis in tensor.shape] for name, tensor in tensors.items()}),
+        dtypes=_freeze_object({name: str(tensor.dtype) for name, tensor in tensors.items()}),
         step_padding_count=int((~batch.actor.step_mask).sum().item()),
         candidate_padding_count=int((~batch.actor.candidate_mask).sum().item()),
         action_count=int(batch.actor.action_mask.sum().item()),
         trainable_candidate_count=int(batch.supervision.label_mask.sum().item()),
     )
+    assert_dataset_bundle_generation_current(readiness.generation)
+    return result
+
+
+def _assert_qh_request_matches_generation(request: QhReadinessRequest) -> None:
+    """Reject a request whose explicit selection disagrees with its generation."""
+
+    if request.selection != _selection_from_generation(request.generation):
+        raise ValueError("Q_H request selection does not match its DatasetBundleGeneration.")
+
+
+def _finished_qh_readiness(request: QhReadinessRequest, result: QhCorpusReadiness) -> QhCorpusReadiness:
+    """Return an acquired readiness product only after the final generation guard."""
+
+    assert_dataset_bundle_generation_current(request.generation)
+    return result
 
 
 _QH_STAGES = (Stage.TRAIN, Stage.VAL, Stage.TEST)
@@ -1162,7 +1366,7 @@ def _qh_stage_readiness(stage: Stage, dataset: Any | None) -> QhStageReadiness:
     """Inspect one configured dataset through its public chain interface."""
 
     if dataset is None:
-        return QhStageReadiness(stage, False, 0, 0, 0, (), 0, {})
+        return QhStageReadiness(stage, False, 0, 0, 0, (), 0, _freeze_object({}))
     state_count = 0
     trainable_candidate_count = 0
     realized_max_horizon = 0
@@ -1179,7 +1383,7 @@ def _qh_stage_readiness(stage: Stage, dataset: Any | None) -> QhStageReadiness:
         trainable_candidate_count=trainable_candidate_count,
         scene_ids=tuple(sorted(dataset.scenes)),
         max_horizon=realized_max_horizon,
-        provenance=_plain_value(dataset.provenance),
+        provenance=_freeze_object(_plain_value(dataset.provenance)),
     )
 
 
@@ -1258,7 +1462,7 @@ def _blocked_qh_readiness(
         stages=(),
         contract=None,
         actor_contract=None,
-        loader_settings=loader_settings,
+        loader_settings=_freeze_object(loader_settings),
         scene_disjoint=None,
         storage=(),
     )
@@ -1423,7 +1627,42 @@ def _build_dataset_bundle_summary_unchecked(request: DatasetBundleSummaryRequest
     )
 
 
+def inspect_dataset_bundle_deep(request: DatasetBundleDeepRequest) -> DatasetBundleDeepStatistics:
+    """Acquire one generation-bound deep statistics and target-inventory product."""
+
+    _assert_deep_request_matches_generation(request)
+    assert_dataset_bundle_generation_current(request.generation)
+    inventory = inspect_target_inventory(request.selection.root_store)
+    report = build_target_inventory_report(
+        inventory,
+        acquisition=TargetInventoryAcquisitionIdentity(
+            identity_version=request.generation.identity_version,
+            generation_digest=request.generation.generation_digest,
+            request_digest=request.digest(),
+        ),
+    )
+    statistics = _build_dataset_bundle_deep_statistics(request.selection, inventory.to_jsonable())
+    assert_dataset_bundle_generation_current(request.generation)
+    return DatasetBundleDeepStatistics(_freeze_object(statistics), report)
+
+
+def _assert_deep_request_matches_generation(request: DatasetBundleDeepRequest) -> None:
+    """Reject a deep request whose selection differs from its generation."""
+
+    if request.selection != _selection_from_generation(request.generation):
+        raise ValueError("DatasetBundleDeepRequest selection does not match its DatasetBundleGeneration.")
+
+
 def compute_dataset_bundle_deep_statistics(selection: DatasetBundleSelection) -> dict[str, Any]:
+    """Compatibility facade returning the historical deep-statistics projection."""
+
+    _selection, generation = capture_dataset_bundle_generation(selection.root_store, selection.rollout_stores)
+    return inspect_dataset_bundle_deep(DatasetBundleDeepRequest(selection, generation)).statistics.to_jsonable()
+
+
+def _build_dataset_bundle_deep_statistics(
+    selection: DatasetBundleSelection, root_target_inventory: dict[str, Any]
+) -> dict[str, Any]:
     """Scan compatible rollout arrays for distributions and unique target tasks.
 
     Compatibility is re-evaluated from lightweight lineage first. Blocked
@@ -1437,7 +1676,6 @@ def compute_dataset_bundle_deep_statistics(selection: DatasetBundleSelection) ->
     """
 
     light = build_dataset_bundle_summary(selection, validate_rollouts=False)
-    root_target_inventory = inspect_target_inventory(selection.root_store)
     root_target_scan = scan_root_gt_obb_target_opportunities(selection.root_store)
     stores: list[dict[str, Any]] = []
     unique_targets: set[tuple[str, int, str]] = set()
@@ -1505,7 +1743,7 @@ def compute_dataset_bundle_deep_statistics(selection: DatasetBundleSelection) ->
             "rollout_stores": [path.as_posix() for path in selection.rollout_stores],
         },
         "stores": stores,
-        "root_target_inventory": root_target_inventory.to_jsonable(),
+        "root_target_inventory": root_target_inventory,
         "root_gt_obb_target_opportunities": root_target_scan,
         "aggregate": {
             "root_gt_obb_target_opportunities": root_target_scan["target_opportunity_count"],
@@ -2217,6 +2455,8 @@ def _verdict(findings: list[DatasetBundleFinding]) -> DatasetBundleVerdict:
 
 __all__ = [
     "DatasetBundleDiscovery",
+    "DatasetBundleDeepRequest",
+    "DatasetBundleDeepStatistics",
     "DatasetBundleEvidence",
     "DatasetBundleEntryFingerprint",
     "DatasetBundleFinding",
@@ -2230,6 +2470,8 @@ __all__ = [
     "NormalizedStorageMetric",
     "QhBatchPreview",
     "QhCorpusReadiness",
+    "QhPreviewRequest",
+    "QhReadinessRequest",
     "QhReadinessContract",
     "QhStageReadiness",
     "assert_dataset_bundle_generation_current",
@@ -2239,6 +2481,9 @@ __all__ = [
     "compute_dataset_bundle_deep_statistics",
     "discover_dataset_bundle_candidates",
     "inspect_dataset_bundle",
+    "inspect_dataset_bundle_deep",
+    "inspect_qh_preview",
+    "inspect_qh_readiness",
     "prepare_dataset_bundle_export",
     "preview_qh_batch",
     "scan_root_gt_obb_target_opportunities",

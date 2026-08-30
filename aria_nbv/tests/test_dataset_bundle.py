@@ -27,18 +27,28 @@ from aria_nbv.data_handling.vin_store.format import (
 from aria_nbv.data_handling.vin_store.store import OFFLINE_DATASET_VERSION
 from aria_nbv.data_handling.vin_store.views import VinSnippetView
 from aria_nbv.dataset_bundle import (
+    DatasetBundleDeepRequest,
+    DatasetBundleDeepStatistics,
     DatasetBundleGenerationChangedError,
     DatasetBundleSelection,
     DatasetBundleSummaryRequest,
     FrozenJsonArray,
     FrozenJsonObject,
+    QhBatchPreview,
+    QhCorpusReadiness,
+    QhPreviewRequest,
     QhReadinessContract,
+    QhReadinessRequest,
+    QhStageReadiness,
     assert_dataset_bundle_generation_current,
     build_dataset_bundle_summary,
     build_qh_corpus_readiness,
     capture_dataset_bundle_generation,
     compute_dataset_bundle_deep_statistics,
     inspect_dataset_bundle,
+    inspect_dataset_bundle_deep,
+    inspect_qh_preview,
+    inspect_qh_readiness,
     preview_qh_batch,
     scan_root_gt_obb_target_opportunities,
 )
@@ -427,6 +437,223 @@ _QH_CONTRACT = QhDataContract(
     actor_store_version=str(OFFLINE_DATASET_VERSION),
 )
 _QH_READINESS_CONTRACT = QhReadinessContract("qh_cf0_v1", "evl_v1", "none", "legacy_selected_rows_v1")
+
+
+def test_deep_request_rejects_selection_generation_mismatch_before_inventory_acquisition(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    selected_root = tmp_path / "selected"
+    generated_root = tmp_path / "generated"
+    selected_root.mkdir()
+    generated_root.mkdir()
+    selection = DatasetBundleSelection(selected_root)
+    _other_selection, generation = capture_dataset_bundle_generation(generated_root, ())
+    monkeypatch.setattr(
+        dataset_bundle,
+        "inspect_target_inventory",
+        lambda _root: pytest.fail("target inventory acquired for a mismatched deep request"),
+    )
+
+    with pytest.raises(ValueError, match="selection does not match"):
+        inspect_dataset_bundle_deep(DatasetBundleDeepRequest(selection, generation))
+
+
+def test_deep_inspection_acquires_one_inventory_builds_its_report_and_post_checks_generation(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    from aria_nbv.data_handling.vin_store.target_inventory import inspect_target_inventory
+
+    root, _source_hash = _write_root_store(tmp_path)
+    selection, generation = capture_dataset_bundle_generation(root, ())
+    inventory = inspect_target_inventory(root)
+    inventory_acquisitions = 0
+    generation_checks = 0
+
+    def acquire_inventory(_root: Path) -> Any:
+        nonlocal inventory_acquisitions
+        inventory_acquisitions += 1
+        return inventory
+
+    def check_generation(_generation: Any) -> None:
+        nonlocal generation_checks
+        generation_checks += 1
+
+    monkeypatch.setattr(dataset_bundle, "inspect_target_inventory", acquire_inventory)
+    monkeypatch.setattr(dataset_bundle, "assert_dataset_bundle_generation_current", check_generation)
+    monkeypatch.setattr(
+        dataset_bundle,
+        "_build_dataset_bundle_deep_statistics",
+        lambda _selection, _inventory: {"aggregate": {"status": "available"}},
+    )
+
+    request = DatasetBundleDeepRequest(selection, generation)
+    result = inspect_dataset_bundle_deep(request)
+
+    assert inventory_acquisitions == 1
+    assert generation_checks == 2
+    assert result.target_inventory.inventory is inventory
+    expected_acquisition = {
+        "identity_version": generation.identity_version,
+        "generation_digest": generation.generation_digest,
+        "request_digest": request.digest(),
+    }
+    assert result.target_inventory.to_jsonable()["acquisition"] == expected_acquisition
+    assert json.loads(result.target_inventory.export_bytes())["acquisition"] == expected_acquisition
+
+
+def test_qh_request_digests_cover_every_scientific_and_compute_control(tmp_path: Path) -> None:
+    first_root = tmp_path / "first"
+    second_root = tmp_path / "second"
+    first_root.mkdir()
+    second_root.mkdir()
+    first_selection, first_generation = capture_dataset_bundle_generation(first_root, ())
+    second_selection, second_generation = capture_dataset_bundle_generation(second_root, ())
+    base = QhReadinessRequest(first_selection, first_generation, _QH_READINESS_CONTRACT, batch_size=2, seed=7)
+    contract_variants = (
+        replace(_QH_READINESS_CONTRACT, experiment_profile="qh_cfplus_gt_depth_v1"),
+        replace(_QH_READINESS_CONTRACT, root_evl_profile="none"),
+        replace(_QH_READINESS_CONTRACT, selected_observation_protocol="cf_gt"),
+        replace(_QH_READINESS_CONTRACT, objective_profile="qh_dense_valid_fitted_q_v1"),
+    )
+    variants = (
+        replace(base, selection=second_selection),
+        replace(base, generation=second_generation),
+        *(replace(base, contract=contract) for contract in contract_variants),
+        replace(base, batch_size=3),
+        replace(base, seed=8),
+    )
+
+    assert all(variant.digest() != base.digest() for variant in variants)
+    assert len({variant.digest() for variant in variants}) == len(variants)
+
+    preview = QhPreviewRequest(base, stage=Stage.TRAIN, chain_index=0)
+    assert QhPreviewRequest(base, stage=Stage.VAL, chain_index=0).digest() != preview.digest()
+    assert QhPreviewRequest(base, stage=Stage.TRAIN, chain_index=1).digest() != preview.digest()
+    assert QhPreviewRequest(replace(base, seed=8), stage=Stage.TRAIN, chain_index=0).digest() != preview.digest()
+
+
+def test_qh_inspections_reject_selection_generation_mismatch_before_dataset_construction(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    selected_root = tmp_path / "selected"
+    generated_root = tmp_path / "generated"
+    selected_root.mkdir()
+    generated_root.mkdir()
+    selection = DatasetBundleSelection(selected_root)
+    _other_selection, generation = capture_dataset_bundle_generation(generated_root, ())
+    request = QhReadinessRequest(selection, generation, _QH_READINESS_CONTRACT)
+    monkeypatch.setattr(
+        dataset_bundle,
+        "build_dataset_bundle_summary",
+        lambda *_args, **_kwargs: pytest.fail("bundle inspection ran for a mismatched Q_H request"),
+    )
+    monkeypatch.setattr(
+        dataset_bundle,
+        "_build_qh_data_module",
+        lambda *_args, **_kwargs: pytest.fail("Q_H dataset construction ran for a mismatched request"),
+    )
+
+    with pytest.raises(ValueError, match="selection does not match"):
+        inspect_qh_readiness(request)
+    with pytest.raises(ValueError, match="selection does not match"):
+        inspect_qh_preview(QhPreviewRequest(request))
+
+
+def test_blocked_qh_readiness_propagates_post_acquisition_generation_change(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "root"
+    root.mkdir()
+    selection, generation = capture_dataset_bundle_generation(root, ())
+    checks = 0
+
+    def generation_guard(_generation: Any) -> None:
+        nonlocal checks
+        checks += 1
+        if checks == 2:
+            raise DatasetBundleGenerationChangedError(generation, generation)
+
+    monkeypatch.setattr(dataset_bundle, "assert_dataset_bundle_generation_current", generation_guard)
+
+    with pytest.raises(DatasetBundleGenerationChangedError):
+        inspect_qh_readiness(QhReadinessRequest(selection, generation, _QH_READINESS_CONTRACT, batch_size=0))
+    assert checks == 2
+
+
+def test_qh_and_deep_products_are_recursively_immutable_with_fresh_json_projections(
+    tmp_path: Path,
+) -> None:
+    from aria_nbv.data_handling.vin_store.target_inventory import (
+        build_target_inventory_report,
+        inspect_target_inventory,
+    )
+
+    root, _source_hash = _write_root_store(tmp_path)
+    selection = DatasetBundleSelection(root)
+    stage = QhStageReadiness(
+        Stage.TRAIN,
+        True,
+        1,
+        1,
+        1,
+        ("scene",),
+        1,
+        cast(FrozenJsonObject, {"nested": {"rows": [1]}}),
+    )
+    readiness = QhCorpusReadiness(
+        selection,
+        "Ready",
+        (),
+        (stage,),
+        cast(FrozenJsonObject, {"nested": {"values": [1]}}),
+        cast(FrozenJsonObject, {"profile": {"name": "fixture"}}),
+        cast(FrozenJsonObject, {"batch_size": 1, "nested": {"seed": [7]}}),
+        True,
+        (),
+    )
+    preview = QhBatchPreview(
+        Stage.TRAIN,
+        0,
+        cast(FrozenJsonObject, {"source": {"rows": [1]}}),
+        1,
+        (cast(FrozenJsonObject, {"batch": {"rows": [1]}}),),
+        (1,),
+        cast(FrozenJsonObject, {"actor": [1, 2]}),
+        cast(FrozenJsonObject, {"actor": "torch.float32"}),
+        0,
+        0,
+        1,
+        1,
+    )
+    inventory = inspect_target_inventory(root)
+    report = build_target_inventory_report(inventory)
+    deep = DatasetBundleDeepStatistics(cast(FrozenJsonObject, {"aggregate": {"counts": [1]}}), report)
+
+    with pytest.raises(TypeError):
+        readiness.loader_settings["batch_size"] = 2  # type: ignore[index]
+    with pytest.raises(TypeError):
+        cast(FrozenJsonObject, stage.provenance["nested"])["rows"] = ()  # type: ignore[index]
+    with pytest.raises(TypeError):
+        cast(FrozenJsonObject, preview.selected_chain_key["source"])["rows"] = ()  # type: ignore[index]
+    with pytest.raises(TypeError):
+        cast(FrozenJsonObject, deep.statistics["aggregate"])["counts"] = ()  # type: ignore[index]
+    with pytest.raises(AttributeError):
+        report.inventory = inventory  # type: ignore[misc]
+
+    readiness_json = readiness.to_jsonable()
+    preview_json = preview.to_jsonable()
+    deep_json = deep.to_jsonable()
+    readiness_json["loader_settings"]["nested"]["seed"].append(8)
+    preview_json["selected_chain_key"]["source"]["rows"].append(2)
+    deep_json["aggregate"]["counts"].append(2)
+
+    assert readiness.to_jsonable()["loader_settings"]["nested"]["seed"] == [7]
+    assert preview.to_jsonable()["selected_chain_key"]["source"]["rows"] == [1]
+    assert deep.to_jsonable()["aggregate"]["counts"] == [1]
 
 
 def _qh_chain(*, scene: str, steps: int, width: int, offset: int) -> QhChain:
