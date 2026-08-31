@@ -159,10 +159,10 @@
 #let candidate-support-benchmark-schema = "candidate_support_benchmark_plan_v2"
 #let q1-decision-rule = "ranking_gte_minimum_and_ci_low_gt_chance_and_calibration_mae_lte_maximum_v1"
 #let q1-analysis-receipt-name = "q1-actor-analysis-v3"
-#let q1-protocol-receipt-name = "q1-actor-protocol-audit-v6"
-#let q1-protocol-receipt-schema = "actor_visible_q1_protocol_receipt_v6"
-#let q1-population-benchmark-name = "q1-population-benchmark-v1"
-#let q1-population-benchmark-schema = "q1_population_benchmark_v1"
+#let q1-protocol-receipt-name = "q1-actor-protocol-audit-v7"
+#let q1-protocol-receipt-schema = "actor_visible_q1_protocol_receipt_v7"
+#let q1-population-benchmark-name = "q1-population-benchmark-v2"
+#let q1-population-benchmark-schema = "q1_population_benchmark_v2"
 #let q1-bundle-manifest-name = "manifest.json"
 #let q1-scene-role = "held_out_scene_v1"
 #let q1-target-source-protocol = "observation_derived_actor_visible_target_v1"
@@ -1059,6 +1059,39 @@
   if matches.len() == 1 { matches.first() } else { none }
 }
 
+// Bundle manifests identify their canonical JSON payload with the embedded
+// manifest_sha256, while report sidecar metadata independently identifies the
+// serialized file bytes. Preserve both identities instead of conflating them.
+#let report-confirmatory-sidecar-by-embedded-digest(
+  report,
+  digest,
+  embedded-key,
+  required-name: none,
+) = {
+  let matches = report.tables.at(
+    "sidecars",
+    default: (rows: ()),
+  ).rows.filter(sidecar => {
+    let path-valid = type(sidecar.path) == str and sidecar.path.len() > 0
+    let name-valid = type(sidecar.name) == str and path-valid and sidecar.path == sidecar.name
+    let file-digest-valid = type(sidecar.sha256) == str and report-sha256-value-valid(
+      sidecar.sha256,
+    )
+    let identity-valid = name-valid and file-digest-valid and sidecar.sidecar_id == canonical-sidecar-id(
+      sidecar.name,
+      sidecar.sha256,
+    )
+    let index = report-sidecar-value-index(report, sidecar.sidecar_id)
+    let embedded-digest = report-sidecar-indexed-value-or-none(index, embedded-key)
+    embedded-digest == digest and report-sha256-value-valid(
+      embedded-digest,
+    ) and name-valid and (
+      required-name == none or sidecar.name == required-name
+    ) and identity-valid and sidecar.format in ("json", "jsonl") and sidecar.status == "confirmatory"
+  })
+  if matches.len() == 1 { matches.first() } else { none }
+}
+
 #let report-sidecar-record-prefixes(index, collection, identity-field) = {
   let pattern = regex("^" + collection + "\\[[0-9]+\\]\\." + identity-field + "$")
   index.rows.values().filter(
@@ -1757,9 +1790,10 @@
   let bundle-sidecar = if bundle-manifest != none and report-sha256-value-valid(
     bundle-manifest.value,
   ) {
-    report-confirmatory-sidecar-by-digest(
+    report-confirmatory-sidecar-by-embedded-digest(
       report,
       bundle-manifest.value,
+      "manifest_sha256",
       required-name: q1-bundle-manifest-name,
     )
   } else { none }
@@ -1769,11 +1803,12 @@
   )
   let bundle-value(key) = report-sidecar-indexed-value-or-none(bundle-index, key)
   let bundle-manifest-rows = bundle-index.rows.values().filter(
-    row => row.key.match(regex("^identity\\.ordered_test_store_manifests\\[[0-9]+\\]$")) != none,
+    row => row.key.match(regex("^identity\\.ordered_store_manifests\\.test\\[[0-9]+\\]$")) != none,
   ).sorted(key: row => row.key)
   let bundle-manifests = bundle-manifest-rows.map(report-sidecar-row-value-or-none)
-  let frozen-population-digest = bundle-value("identity.q1_population_benchmark_sha256")
-  let frozen-provenance-digest = bundle-value("identity.q1_test_provenance_sha256")
+  let frozen-population-digest = bundle-value("identity.dataset_payload_sha256s.test")
+  let frozen-provenance-digest = bundle-value("identity.dataset_provenance_payload_sha256s.test")
+  let population-benchmark-digest = value("population_benchmark_sha256")
   let header-valid = bundle-manifest != none and report-sha256-value-valid(
     bundle-manifest.value,
   ) and bundle-sidecar != none and report-sha256-value-valid(
@@ -1782,7 +1817,7 @@
     "bundle_manifest_sha256",
   ) == bundle-manifest.value and value("test_population_sha256") == frozen-population-digest and value(
     "test_provenance_sha256",
-  ) == frozen-provenance-digest and (
+  ) == frozen-provenance-digest and report-sha256-value-valid(population-benchmark-digest) and (
     "actor_manifest_payload_sha256",
     "implementation_contract_payload_sha256",
     "actor_state_contract_payload_sha256",
@@ -1820,7 +1855,7 @@
   // the observed audit receipt. The audit header binds it by digest.
   let benchmark-sidecar = report-confirmatory-sidecar-by-digest(
     report,
-    frozen-population-digest,
+    population-benchmark-digest,
     required-name: q1-population-benchmark-name,
   )
   if benchmark-sidecar == none { return false }
@@ -1841,6 +1876,8 @@
   ) == "confirmatory" and benchmark-value(
     "bundle_manifest_sha256",
   ) == bundle-manifest.value and benchmark-value(
+    "test_population_sha256",
+  ) == frozen-population-digest and benchmark-value(
     "test_provenance_sha256",
   ) == frozen-provenance-digest and benchmark-manifests == bundle-manifests and benchmark-manifests == manifests
   if not benchmark-header-valid { return false }
@@ -2665,9 +2702,10 @@
   let value(key) = report-sidecar-indexed-value-or-none(receipt-index, key)
   let bundle-digest = value("bundle_manifest_sha256")
   let bundle-sidecar = if report-sha256-value-valid(bundle-digest) {
-    report-confirmatory-sidecar-by-digest(
+    report-confirmatory-sidecar-by-embedded-digest(
       report,
       bundle-digest,
+      "manifest_sha256",
       required-name: q1-bundle-manifest-name,
     )
   } else { none }

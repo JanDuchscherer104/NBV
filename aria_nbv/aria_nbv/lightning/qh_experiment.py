@@ -64,7 +64,9 @@ _IDENTITY_FIELDS = {
     "learning_contract_payload_sha256",
     "geometry_contract_hash",
     "datasets",
+    "dataset_payload_sha256s",
     "dataset_provenance",
+    "dataset_provenance_payload_sha256s",
     "ordered_store_manifests",
     "ordered_store_paths",
     "warm_start_parent_manifest_sha256",
@@ -777,6 +779,12 @@ class QhExperiment:
         identity = dict(identity)
         identity["actor_state_contract_payload_sha256"] = _json_payload_hash(identity["actor_state_contract"])
         identity["learning_contract_payload_sha256"] = _json_payload_hash(identity["learning_contract"])
+        identity["dataset_payload_sha256s"] = {
+            stage: _json_payload_hash(payload) for stage, payload in identity["datasets"].items()
+        }
+        identity["dataset_provenance_payload_sha256s"] = {
+            stage: _json_payload_hash(payload) for stage, payload in identity["dataset_provenance"].items()
+        }
         manifest: dict[str, Any] = {
             "schema_version": QH_INFERENCE_BUNDLE_SCHEMA_VERSION,
             "scorer_type": "TargetFiniteHorizonScorer",
@@ -989,7 +997,9 @@ class QhExperiment:
             )
             artifacts = manifest["artifacts"]
             datasets = identity["datasets"]
+            dataset_payload_sha256s = identity["dataset_payload_sha256s"]
             dataset_provenance = identity["dataset_provenance"]
+            dataset_provenance_payload_sha256s = identity["dataset_provenance_payload_sha256s"]
             ordered_store_manifests = identity["ordered_store_manifests"]
             ordered_store_paths = identity["ordered_store_paths"]
         except (KeyError, TypeError, ValueError) as error:
@@ -1073,11 +1083,18 @@ class QhExperiment:
         if set(datasets) != {"train", "validation", "test"}:
             raise ValueError("Q_H bundle must bind train, validation, and test dataset configs.")
         if (
-            set(dataset_provenance) != set(datasets)
+            set(dataset_payload_sha256s) != set(datasets)
+            or set(dataset_provenance) != set(datasets)
+            or set(dataset_provenance_payload_sha256s) != set(datasets)
             or set(ordered_store_manifests) != set(datasets)
             or set(ordered_store_paths) != set(datasets)
         ):
             raise ValueError("Q_H bundle dataset provenance stages are incomplete.")
+        for stage in datasets:
+            if dataset_payload_sha256s[stage] != _json_payload_hash(datasets[stage]):
+                raise ValueError(f"Q_H bundle {stage} dataset payload digest does not match its payload.")
+            if dataset_provenance_payload_sha256s[stage] != _json_payload_hash(dataset_provenance[stage]):
+                raise ValueError(f"Q_H bundle {stage} provenance payload digest does not match its payload.")
         if isinstance(identity["seed"], bool) or not isinstance(identity["seed"], int):
             raise ValueError("Q_H bundle seed identity must be one integer.")
         warm_start_identity = identity["warm_start_parent_manifest_sha256"]

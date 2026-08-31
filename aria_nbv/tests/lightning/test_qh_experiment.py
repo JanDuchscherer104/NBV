@@ -202,7 +202,7 @@ def test_qh_bundle_round_trip_preserves_values_and_ranking(tmp_path) -> None:
         identity=identity,
         artifact_hashes=_stub_artifacts(bundle_dir),
     )
-    assert manifest["schema_version"] == "qh-inference-bundle-v2"
+    assert manifest["schema_version"] == "qh-inference-bundle-v3"
     assert (
         manifest["identity"]["actor_state_contract_payload_sha256"]
         == hashlib.sha256(
@@ -585,6 +585,8 @@ def test_qh_bundle_strict_load_rejects_missing_state_key(tmp_path) -> None:
         ("missing_seed", "identity fields"),
         ("actor_payload_digest_drift", "actor-state contract payload digest"),
         ("learning_payload_digest_drift", "learning contract payload digest"),
+        ("dataset_payload_digest_drift", "dataset payload digest"),
+        ("dataset_provenance_payload_digest_drift", "provenance payload digest"),
         ("action_mask_drift", "action-mask semantics"),
         ("representation_drift", "representation semantics"),
     ],
@@ -603,6 +605,10 @@ def test_qh_bundle_rejects_recorded_identity_mutation(tmp_path, mutation: str, m
         manifest["identity"]["actor_state_contract_payload_sha256"] = "0" * 64
     elif mutation == "learning_payload_digest_drift":
         manifest["identity"]["learning_contract_payload_sha256"] = "0" * 64
+    elif mutation == "dataset_payload_digest_drift":
+        manifest["identity"]["dataset_payload_sha256s"]["test"] = "0" * 64
+    elif mutation == "dataset_provenance_payload_digest_drift":
+        manifest["identity"]["dataset_provenance_payload_sha256s"]["test"] = "0" * 64
     elif mutation == "action_mask_drift":
         manifest["identity"]["action_mask_semantics"] = "actor_observed_action_mask_v1"
     elif mutation == "representation_drift":
@@ -949,6 +955,18 @@ def test_qh_fit_publishes_new_bundle_and_hashed_receipts(tmp_path) -> None:
     assert not (result.bundle.bundle_path / "resume.ckpt").exists()
     assert runtime.scorer.training is False
     training_receipt = json.loads(result.training_receipt_path.read_text(encoding="utf-8"))
+    bundle_manifest = json.loads((result.bundle.bundle_path / "manifest.json").read_text(encoding="utf-8"))
+    for stage in ("train", "validation", "test"):
+        assert bundle_manifest["identity"]["dataset_payload_sha256s"][stage] == hashlib.sha256(
+            json.dumps(bundle_manifest["identity"]["datasets"][stage], sort_keys=True, separators=(",", ":")).encode(
+                "utf-8"
+            )
+        ).hexdigest()
+        assert bundle_manifest["identity"]["dataset_provenance_payload_sha256s"][stage] == hashlib.sha256(
+            json.dumps(
+                bundle_manifest["identity"]["dataset_provenance"][stage], sort_keys=True, separators=(",", ":")
+            ).encode("utf-8")
+        ).hexdigest()
     assert training_receipt["warm_start_parent_manifest_sha256"] is None
     assert "test_loss" not in training_receipt
     assert training_receipt["target_descriptor_identity"] == {

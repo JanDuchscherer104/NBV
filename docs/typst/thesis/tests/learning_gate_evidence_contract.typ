@@ -4,16 +4,19 @@
 #let digest-b = "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
 #let protocol-digest = "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
 #let q1-audit-digest = "edededededededededededededededededededededededededededededededed"
-#let q1-population-digest = "8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d"
+#let q1-population-digest = "8c8c8c8c8c8c8c8c8c8c8c8c8c8c8c8c8c8c8c8c8c8c8c8c8c8c8c8c8c8c8c8c"
+#let q1-population-benchmark-digest = "8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d"
 #let q1-multi-audit-digest = "e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7"
-#let q1-multi-population-digest = "8e8e8e8e8e8e8e8e8e8e8e8e8e8e8e8e8e8e8e8e8e8e8e8e8e8e8e8e8e8e8e8e"
+#let q1-multi-population-digest = "8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f"
+#let q1-multi-population-benchmark-digest = "8e8e8e8e8e8e8e8e8e8e8e8e8e8e8e8e8e8e8e8e8e8e8e8e8e8e8e8e8e8e8e8e"
 #let support-digest = "1212121212121212121212121212121212121212121212121212121212121212"
 #let measurement-digest = "3434343434343434343434343434343434343434343434343434343434343434"
 #let measurement-benchmark = "3636363636363636363636363636363636363636363636363636363636363636"
 #let q2-receipt-digest = "4545454545454545454545454545454545454545454545454545454545454545"
 #let q2-receipt-name = "exact-q2-certification.json"
 #let qh-bundle-manifest = "8181818181818181818181818181818181818181818181818181818181818181"
-#let qh-bundle-sidecar = canonical-sidecar-id(q1-bundle-manifest-name, qh-bundle-manifest)
+#let qh-bundle-file-digest = "8282828282828282828282828282828282828282828282828282828282828282"
+#let qh-bundle-sidecar = canonical-sidecar-id(q1-bundle-manifest-name, qh-bundle-file-digest)
 #let store-manifest = "5555555555555555555555555555555555555555555555555555555555555555"
 #let store-manifest-b = "5656565656565656565656565656565656565656565656565656565656565656"
 #let support-benchmark = "6666666666666666666666666666666666666666666666666666666666666666"
@@ -23,9 +26,9 @@
 #let sidecar-b = canonical-sidecar-id("other", digest-b)
 #let protocol-sidecar = canonical-sidecar-id(q1-analysis-receipt-name, protocol-digest)
 #let q1-audit-sidecar = canonical-sidecar-id(q1-protocol-receipt-name, q1-audit-digest)
-#let q1-population-sidecar = canonical-sidecar-id(q1-population-benchmark-name, q1-population-digest)
+#let q1-population-sidecar = canonical-sidecar-id(q1-population-benchmark-name, q1-population-benchmark-digest)
 #let q1-multi-audit-sidecar = canonical-sidecar-id(q1-protocol-receipt-name, q1-multi-audit-digest)
-#let q1-multi-population-sidecar = canonical-sidecar-id(q1-population-benchmark-name, q1-multi-population-digest)
+#let q1-multi-population-sidecar = canonical-sidecar-id(q1-population-benchmark-name, q1-multi-population-benchmark-digest)
 #let support-sidecar = canonical-sidecar-id(candidate-support-receipt-name, support-digest)
 #let support-benchmark-sidecar = canonical-sidecar-id(candidate-support-benchmark-name, support-benchmark)
 #let measurement-sidecar = canonical-sidecar-id(measurement-protocol-receipt-name, measurement-digest)
@@ -60,14 +63,14 @@
 #let support-source = "analysis/candidate-support-attempts.json|sidecar:" + support-sidecar
 #let measurement-source = "analysis/oracle-measurement-repeatability.json|sidecar:" + measurement-sidecar
 #let sidecars = (
-  (sidecar_id: qh-bundle-sidecar, path: q1-bundle-manifest-name, name: q1-bundle-manifest-name, sha256: qh-bundle-manifest, format: "json", status: "confirmatory"),
+  (sidecar_id: qh-bundle-sidecar, path: q1-bundle-manifest-name, name: q1-bundle-manifest-name, sha256: qh-bundle-file-digest, format: "json", status: "confirmatory"),
   (sidecar_id: sidecar-a, path: "qh-gates", name: "qh-gates", sha256: digest-a, format: "json", status: "confirmatory"),
   (sidecar_id: sidecar-b, path: "other", name: "other", sha256: digest-b, format: "json", status: "confirmatory"),
   (sidecar_id: protocol-sidecar, path: q1-analysis-receipt-name, name: q1-analysis-receipt-name, sha256: protocol-digest, format: "json", status: "confirmatory"),
   (sidecar_id: q1-audit-sidecar, path: q1-protocol-receipt-name, name: q1-protocol-receipt-name, sha256: q1-audit-digest, format: "json", status: "confirmatory"),
-  (sidecar_id: q1-population-sidecar, path: q1-population-benchmark-name, name: q1-population-benchmark-name, sha256: q1-population-digest, format: "json", status: "confirmatory"),
+  (sidecar_id: q1-population-sidecar, path: q1-population-benchmark-name, name: q1-population-benchmark-name, sha256: q1-population-benchmark-digest, format: "json", status: "confirmatory"),
   (sidecar_id: q1-multi-audit-sidecar, path: q1-protocol-receipt-name, name: q1-protocol-receipt-name, sha256: q1-multi-audit-digest, format: "json", status: "confirmatory"),
-  (sidecar_id: q1-multi-population-sidecar, path: q1-population-benchmark-name, name: q1-population-benchmark-name, sha256: q1-multi-population-digest, format: "json", status: "confirmatory"),
+  (sidecar_id: q1-multi-population-sidecar, path: q1-population-benchmark-name, name: q1-population-benchmark-name, sha256: q1-multi-population-benchmark-digest, format: "json", status: "confirmatory"),
   (sidecar_id: support-sidecar, path: candidate-support-receipt-name, name: candidate-support-receipt-name, sha256: support-digest, format: "json", status: "confirmatory"),
   (sidecar_id: support-benchmark-sidecar, path: candidate-support-benchmark-name, name: candidate-support-benchmark-name, sha256: support-benchmark, format: "json", status: "confirmatory"),
   (sidecar_id: measurement-sidecar, path: measurement-protocol-receipt-name, name: measurement-protocol-receipt-name, sha256: measurement-digest, format: "json", status: "confirmatory"),
@@ -231,6 +234,7 @@
   store-manifests: (store-manifest,),
 ) = {
   let envelope = (
+    typed-sidecar-row(qh-bundle-sidecar, "manifest_sha256", qh-bundle-manifest),
     typed-sidecar-row(qh-bundle-sidecar, "scorer_config_hash", "8484848484848484848484848484848484848484848484848484848484848484"),
     typed-sidecar-row(qh-bundle-sidecar, "scorer_config.experiment_profile", "qh_cf0_v1"),
     typed-sidecar-row(qh-bundle-sidecar, "module_config.experiment_profile", "qh_cf0_v1"),
@@ -247,20 +251,15 @@
     typed-sidecar-row(qh-bundle-sidecar, "identity.actor_state_contract.root_evl_profile", "evl_v1"),
     typed-sidecar-row(qh-bundle-sidecar, "identity.actor_state_contract.selected_observation_protocol", "none"),
     missing-sidecar-row(qh-bundle-sidecar, "identity.actor_state_contract.geometry_contract_hash"),
-    typed-sidecar-row(qh-bundle-sidecar, "identity.q1_population_benchmark_sha256", population-digest),
-    typed-sidecar-row(qh-bundle-sidecar, "identity.q1_test_provenance_sha256", provenance-digest),
+    typed-sidecar-row(qh-bundle-sidecar, "identity.dataset_payload_sha256s.test", population-digest),
+    typed-sidecar-row(qh-bundle-sidecar, "identity.dataset_provenance_payload_sha256s.test", provenance-digest),
   )
-  let q1-manifests = store-manifests.enumerate().map(((index, manifest)) => typed-sidecar-row(
-    qh-bundle-sidecar,
-    "identity.ordered_test_store_manifests[" + str(index) + "]",
-    manifest,
-  ))
   let bundle-manifests = store-manifests.enumerate().map(((index, manifest)) => typed-sidecar-row(
     qh-bundle-sidecar,
     "identity.ordered_store_manifests.test[" + str(index) + "]",
     manifest,
   ))
-  envelope + q1-manifests + bundle-manifests
+  envelope + bundle-manifests
 }
 #let q1-fixture-roster(store-manifests, overlap-scenes: false) = {
   let targets = store-manifests.enumerate().map(((store-index, _)) => range(5).map(scene-index => (
@@ -310,6 +309,7 @@
 #let q1-population-benchmark-sidecar-value-rows(
   sidecar-id: q1-population-sidecar,
   bundle-manifest: qh-bundle-manifest,
+  population-digest: q1-population-digest,
   provenance-digest: "8383838383838383838383838383838383838383838383838383838383838383",
   store-manifests: (store-manifest,),
   overlap-scenes: false,
@@ -351,6 +351,7 @@
     typed-sidecar-row(sidecar-id, "logical_name", q1-population-benchmark-name),
     typed-sidecar-row(sidecar-id, "status", "confirmatory"),
     typed-sidecar-row(sidecar-id, "bundle_manifest_sha256", bundle-manifest),
+    typed-sidecar-row(sidecar-id, "test_population_sha256", population-digest),
     typed-sidecar-row(sidecar-id, "test_provenance_sha256", provenance-digest),
     typed-sidecar-row(sidecar-id, "roster_sha256", sha256-hex(roster-payload)),
   )
@@ -405,6 +406,7 @@
 #let q1-audit-sidecar-value-rows(
   sidecar-id: q1-audit-sidecar,
   population-digest: q1-population-digest,
+  population-benchmark-digest: q1-population-benchmark-digest,
   store-manifests: (store-manifest,),
   overlap-scenes: false,
 ) = {
@@ -416,6 +418,7 @@
     typed-sidecar-row(sidecar-id, "schema_version", q1-protocol-receipt-schema),
     typed-sidecar-row(sidecar-id, "bundle_manifest_sha256", qh-bundle-manifest),
     typed-sidecar-row(sidecar-id, "test_population_sha256", population-digest),
+    typed-sidecar-row(sidecar-id, "population_benchmark_sha256", population-benchmark-digest),
     typed-sidecar-row(sidecar-id, "test_provenance_sha256", "8383838383838383838383838383838383838383838383838383838383838383"),
     typed-sidecar-row(sidecar-id, "bound_contract.actor_manifest_payload_sha256", qh-bundle-manifest),
     typed-sidecar-row(sidecar-id, "bound_contract.implementation_contract_payload_sha256", implementation-contract),
@@ -1977,6 +1980,36 @@
   values
 }
 #assert(report-store-q1-evidence-valid(report(q1-rows()), "store-a"))
+#assert(not report-store-q1-evidence-valid(report(
+  q1-rows(),
+  q1-bundle-values: omit-sidecar-value(q1-bundle-manifest-sidecar-value-rows(), "manifest_sha256"),
+), "store-a"))
+#assert(not report-store-q1-evidence-valid(report(
+  q1-rows(),
+  q1-bundle-values: mutate-sidecar-value(
+    q1-bundle-manifest-sidecar-value-rows(),
+    "identity.dataset_payload_sha256s.test",
+    digest-b,
+  ),
+), "store-a"))
+#assert(not report-store-q1-evidence-valid(report(
+  q1-rows(),
+  q1-audit-values: mutate-sidecar-value(q1-audit-values, "population_benchmark_sha256", digest-b),
+), "store-a"))
+#assert(not report-store-q1-evidence-valid(report(
+  q1-rows(),
+  q1-population-values: mutate-sidecar-value(
+    q1-population-benchmark-sidecar-value-rows(),
+    "test_population_sha256",
+    digest-b,
+  ),
+), "store-a"))
+#assert(not report-store-q1-evidence-valid(report(
+  q1-rows(),
+  sidecar-rows: sidecars.map(sidecar => if sidecar.sidecar_id == qh-bundle-sidecar {
+    sidecar + (sha256: digest-b,)
+  } else { sidecar }),
+), "store-a"))
 #for mutation in (
   (key: "candidates[0].prediction", value: 1.0),
   (key: "candidates[0].prediction", value: "0.7"),
@@ -2025,7 +2058,7 @@
   q1-rows(),
   q1-bundle-values: mutate-sidecar-value(
     q1-bundle-manifest-sidecar-value-rows(),
-    "identity.q1_population_benchmark_sha256",
+    "identity.dataset_payload_sha256s.test",
     digest-b,
   ),
 ), "store-a"))
@@ -2033,7 +2066,7 @@
   q1-rows(),
   q1-bundle-values: mutate-sidecar-value(
     q1-bundle-manifest-sidecar-value-rows(),
-    "identity.q1_test_provenance_sha256",
+    "identity.dataset_provenance_payload_sha256s.test",
     digest-b,
   ),
 ), "store-a"))
@@ -2475,10 +2508,12 @@
 #let q1-multi-audit-values = q1-audit-sidecar-value-rows(
   sidecar-id: q1-multi-audit-sidecar,
   population-digest: q1-multi-population-digest,
+  population-benchmark-digest: q1-multi-population-benchmark-digest,
   store-manifests: (store-manifest, store-manifest-b),
 )
 #let q1-multi-population-values = q1-population-benchmark-sidecar-value-rows(
   sidecar-id: q1-multi-population-sidecar,
+  population-digest: q1-multi-population-digest,
   store-manifests: (store-manifest, store-manifest-b),
 )
 #let q1-two-store-base = report(
@@ -2510,10 +2545,12 @@
   q1-audit-values: q1-audit-sidecar-value-rows(
     sidecar-id: q1-multi-audit-sidecar,
     population-digest: q1-multi-population-digest,
+    population-benchmark-digest: q1-multi-population-benchmark-digest,
     store-manifests: (store-manifest-b, store-manifest),
   ),
   q1-population-values: q1-population-benchmark-sidecar-value-rows(
     sidecar-id: q1-multi-population-sidecar,
+    population-digest: q1-multi-population-digest,
     store-manifests: (store-manifest-b, store-manifest),
   ),
   q1-bundle-values: q1-bundle-manifest-sidecar-value-rows(
@@ -2575,11 +2612,13 @@
   q1-audit-values: q1-audit-sidecar-value-rows(
     sidecar-id: q1-multi-audit-sidecar,
     population-digest: q1-multi-population-digest,
+    population-benchmark-digest: q1-multi-population-benchmark-digest,
     store-manifests: (store-manifest, store-manifest-b),
     overlap-scenes: true,
   ),
   q1-population-values: q1-population-benchmark-sidecar-value-rows(
     sidecar-id: q1-multi-population-sidecar,
+    population-digest: q1-multi-population-digest,
     store-manifests: (store-manifest, store-manifest-b),
     overlap-scenes: true,
   ),
@@ -2678,6 +2717,9 @@
 #assert(not report-stores-q1-evidence-valid(q1-two-store-source-mismatch))
 
 #assert(report-store-q2-evidence-valid(q2-report(), "store-a"))
+#assert(not report-store-q2-evidence-valid(q2-report(
+  bundle-values: omit-sidecar-value(q1-bundle-manifest-sidecar-value-rows(), "manifest_sha256"),
+), "store-a"))
 #let q2-contract-values = q2-certification-sidecar-value-rows()
 #for mutation in (
   (key: "bound_contract.learning_contract_hash", value: "8585858585858585858585858585858585858585858585858585858585858585"),

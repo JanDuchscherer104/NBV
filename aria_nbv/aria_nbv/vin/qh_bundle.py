@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from .models.target_finite_horizon import TargetFiniteHorizonScorer
 
-QH_INFERENCE_BUNDLE_SCHEMA_VERSION = "qh-inference-bundle-v2"
+QH_INFERENCE_BUNDLE_SCHEMA_VERSION = "qh-inference-bundle-v3"
 
 
 @dataclass(frozen=True, slots=True)
