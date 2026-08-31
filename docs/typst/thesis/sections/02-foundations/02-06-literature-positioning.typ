@@ -50,14 +50,16 @@ relevant view lies outside candidate support.
 // - @NextBestSense-strong2024 -> docs/literature/tex-src/arXiv-Next-Best-Sense/ms.tex:190-217, docs/literature/tex-src/arXiv-Next-Best-Sense/ms.tex:420-429 (scene-model color-depth information gain, feasible candidate views, execution fallback, and background exploration)
 // - @ObjectCentricNBV-jeong2026 -> docs/literature/tex-src/arXiv-Instance-NBV/ver3_rpm/3_method_ver3_rpm.tex:54-86, docs/literature/tex-src/arXiv-Instance-NBV/ver3_rpm/3_method_ver3_rpm.tex:123-139, docs/literature/tex-src/arXiv-Instance-NBV/ver3_rpm/3_method_ver3_rpm.tex:249-258 (object features, target-aware information gain, and target gate)
 
-The comparison exposes three tensions. The *objective tension* is that coverage
-and information criteria reward proxies for reconstruction, whereas VIN-NBV
-evaluates realized reconstruction error @SCONE-guedon2022 @FisherRF-jiang2024
-@VIN-NBV-frahm2025. The *temporal tension* is that sequential policies represent
-history and delayed reward, but the reviewed examples optimize coverage rather
+The comparison yields two requirements for the value definition. First,
+*utility alignment* requires the score to reflect the endpoint of interest:
+coverage and information criteria reward proxies for reconstruction, whereas
+VIN-NBV evaluates realized reconstruction error @SCONE-guedon2022
+@FisherRF-jiang2024 @VIN-NBV-frahm2025. Second, *temporal dependence* requires
+the score to represent delayed consequences. Sequential policies retain history
+and optimize delayed reward, but the reviewed examples optimize coverage rather
 than the reconstruction quality of a requested target @GenNBV-chen2024
-@Hestia-lu2026. Direct quality, target conditioning, and sequentiality are thus
-established separately under different assumptions.
+@Hestia-lu2026. Existing work therefore establishes direct quality, target
+conditioning, and sequentiality separately under different assumptions.
 
 // evidence:
 // - @SCONE-guedon2022 -> docs/literature/tex-src/arXiv-SCONE/camera_ready_1_intro.tex:24-26 (coverage objective)
@@ -66,14 +68,14 @@ established separately under different assumptions.
 // - @GenNBV-chen2024 -> docs/literature/tex-src/arXiv-GenNBV/3-Method.tex:18-25, docs/literature/tex-src/arXiv-GenNBV/3-Method.tex:77-101 (history-conditioned sequential coverage policy)
 // - @Hestia-lu2026 -> docs/literature/tex-src/arXiv-Hestia/sec/3_method.tex:30-58, docs/literature/tex-src/arXiv-Hestia/sec/3_method.tex:70-93 (directional history and coverage reward)
 
-The *support/state tension* is that a sequential objective is meaningful only
-relative to the actions that can be proposed and the causal information retained
-after acting. PB-NBV constrains proposal support, Hestia changes the state through
-directional history and endpoint repair, and Next Best Sense separates feasible
-candidates from execution fallback @PB-NBV-jia2025 @Hestia-lu2026
-@NextBestSense-strong2024. Even a perfect scorer cannot exploit a view outside
-its support, and a longer horizon cannot recover a distinction erased from the
-state.
+A third requirement is *support/state adequacy*: valuable actions must be
+available, and the causal state must retain the consequences needed to value
+later actions. PB-NBV constrains proposal support; Hestia carries directional
+history while separately repairing infeasible endpoints; and Next Best Sense
+distinguishes feasible candidates from execution fallback @PB-NBV-jia2025
+@Hestia-lu2026 @NextBestSense-strong2024. Even a perfect scorer cannot exploit a
+view outside its support, and a longer horizon cannot recover a distinction
+erased from the state.
 
 // evidence:
 // - @PB-NBV-jia2025 -> docs/literature/tex-src/arXiv-PB-NBV/sections/method.tex:21-45 (camera- and reachability-conditioned candidate support)
@@ -81,14 +83,14 @@ state.
 // - @NextBestSense-strong2024 -> docs/literature/tex-src/arXiv-Next-Best-Sense/ms.tex:211-217 (fallback after inverse-kinematics or trajectory-planning failure)
 // - @Hestia-lu2026 -> docs/literature/tex-src/arXiv-Hestia/sec/3_method.tex:30-58, docs/literature/tex-src/arXiv-Hestia/sec/3_method.tex:70-93 (directional history and state update)
 
-This thesis evaluates the bounded conjunction left by those tensions: whether a
-finite-candidate policy can improve endpoint reconstruction quality for a
+This thesis studies these requirements jointly within a bounded setting: whether
+a finite-candidate policy can improve endpoint reconstruction quality for a
 specified target by valuing more than the next observation, using an egocentric
 geometric information state @VIN-NBV-frahm2025 @EFM3D-straub2024
-@FixedHorizonTD-deAsis2020. No reviewed work establishes that conjunction, and
-the literature cannot establish that the available actor state is sufficient or
-that non-myopic headroom exists in this setting. Those remain the empirical
-questions of the thesis.
+@FixedHorizonTD-deAsis2020. No reviewed work establishes this conjunction, and
+the literature cannot determine whether the available actor state is sufficient
+or whether non-myopic headroom exists in this setting. Those remain empirical
+questions for the thesis.
 
 // evidence:
 // - @VIN-NBV-frahm2025 -> docs/literature/tex-src/arXiv-VIN-NBV/sec/3_methods.tex:36-44, docs/literature/tex-src/arXiv-VIN-NBV/sec/3_methods.tex:78-92 (direct reconstruction-improvement precedent)
@@ -101,7 +103,7 @@ update, and a continuation rule. The thesis does not generalize this bounded
 relation to exhaustive novelty priority, continuous control, actor-visible
 target discovery, closed-loop motion execution, or natural human movement
 @GenNBV-chen2024 @Hestia-lu2026 @NextBestSense-strong2024
-@projectaria-engel2023. Chapter 3 now makes the bounded relation operational by
+@projectaria-engel2023. Chapter 3 makes the bounded relation operational by
 separating observable state from the privileged geometry used to construct
 tasks and evaluate outcomes.
 
