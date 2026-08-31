@@ -45,6 +45,10 @@ candidate; all three P2 consistency findings were corrected before commit.
   historical anchors remain resolvable without retaining a second status view.
 - `test_thesis_roadmap_contract.py` fails on stale review dates, invalid schema
   or chronology, broken evidence pointers, metadata drift, or revived M1 usage.
+- A hosted P1 review caught an over-pruning regression: the old roadmap's
+  HM/FK07/PRIMUSS release checklist had no public replacement. The checklist is
+  now structured in `roadmap.toml`, rendered compactly, and tied to an official
+  source baseline plus a freeze-time recheck.
 
 ## Commits
 

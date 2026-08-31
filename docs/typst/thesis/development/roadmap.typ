@@ -159,7 +159,7 @@
 
   #heading(level: 2, numbering: none)[Maintenance contract] <ssec:roadmap-maintenance>
   `roadmap.toml` is the single owner for the snapshot, dates, states,
-  dependencies, blockers, and evidence pointers rendered above. Update it at
+  dependencies, blockers, release checks, and evidence pointers rendered above. Update it at
   least every #roadmap.meta.review_cadence_days days and whenever a gate changes
   state. `make thesis-roadmap-contract` rejects stale review dates, broken
   dependencies, missing local evidence pointers, divergence from the thesis
@@ -171,6 +171,24 @@
   they show exact milestones and the consequential dependency chain without a
   second diagram data model. A date-dense Gantt can be reconsidered only if this
   compact projection no longer answers the planning question.
+
+  #heading(level: 2, numbering: none)[HM/FK07 release gate] <ssec:release-gate>
+  #block[
+    #set text(size: 9pt)
+    These checks are human-owned and apply to the exact final candidate and the
+    author's authenticated records; the repository cannot satisfy them by itself.
+    #for check in roadmap.release_checks [
+      - *#check.id — #check.title:* #check.body
+    ]
+
+    Official baseline checked
+    #roadmap.release_baseline.checked_at.display("[day padding:none] [month repr:long] [year]"):
+    #for (index, source) in roadmap.release_sources.enumerate() {
+      link(source.url)[#source.title]
+      if index < roadmap.release_sources.len() - 1 { [, ] } else { [.] }
+    }
+    #roadmap.release_baseline.recheck
+  ]
 
   #heading(level: 2, numbering: none)[Freeze and submission] <ssec:freeze>
   By #roadmap.meta.complete_by.display("[day padding:none] [month repr:long] [year]"),

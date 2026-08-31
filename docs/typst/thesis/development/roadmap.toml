@@ -6,6 +6,26 @@ current_milestone = "P1"
 complete_by = 2026-11-30
 submission_date = 2027-01-07
 
+[release_baseline]
+checked_at = 2026-08-31
+recheck = "At the full-draft freeze, recheck the official versions and the individually assigned instructions in authenticated PRIMUSS records."
+
+[[release_sources]]
+title = "HM examination regulations"
+url = "https://hm.edu/studium_1/im_studium/mein_studium/recht/verordnungen_satzungen.de.html"
+
+[[release_sources]]
+title = "FK07 thesis process"
+url = "https://cs.hm.edu/studierende/abschlussarbeiten.de.html"
+
+[[release_sources]]
+title = "PRIMUSS registration guide"
+url = "https://mediapool.hm.edu/media/fk07/fk07_lokal/fk07_dokumentenpool/studium_8/abschlussarbeiten_21/Anleitung_Anmeldung_Abschlussarbeit_Stand_29.09.2025.pdf"
+
+[[release_sources]]
+title = "PRIMUSS submission guide"
+url = "https://mediapool.hm.edu/media/fk07/fk07_lokal/fk07_dokumentenpool/studium_8/abschlussarbeiten_21/Anleitung_Abgabe_Abschlussarbeit_Stand_29.09.2025.pdf"
+
 [[snapshot]]
 kind = "done"
 title = "Pilot infrastructure"
@@ -162,6 +182,36 @@ evidence = [
   "aria_nbv/tests/rendering",
   "aria_nbv/tests/oracle",
 ]
+
+[[release_checks]]
+id = "R1"
+title = "Applicable rules"
+body = "Confirm the individually assigned programme and SPO version in PRIMUSS; public reading versions establish only the current baseline."
+
+[[release_checks]]
+id = "R2"
+title = "Registration record"
+body = "Retain the PRIMUSS confirmation, official start date, individual deadline, assigned examiners, supervisor-specific form requirements, and requested attachments."
+
+[[release_checks]]
+id = "R3"
+title = "Exact upload set"
+body = "Before the individual deadline, verify the exact final PDF and every PRIMUSS-marked mandatory document or attachment. A repository build, digest, or upload alone is not submission evidence."
+
+[[release_checks]]
+id = "R4"
+title = "Conditional paper copy"
+body = "Provide an identical paper copy only if the examiner or authenticated PRIMUSS record requires one under the current FK07 process."
+
+[[release_checks]]
+id = "R5"
+title = "Final-PDF review"
+body = "Check the declaration and AI/tool disclosure in the exact PDF prepared for upload; confirm any mandatory signature or attachment against the authenticated record."
+
+[[release_checks]]
+id = "R6"
+title = "Submission closure"
+body = "Finalize with the PRIMUSS action “Abschlussarbeit abgeben”, retain the authenticated timestamp, and archive the exact submitted PDF; only that receipt closes the gate."
 
 [[blockers]]
 id = "B2"

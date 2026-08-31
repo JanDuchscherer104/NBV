@@ -131,6 +131,20 @@ def main() -> None:
     assert complete_by < submission_date
     assert submission_date == _submission_date_from_metadata()
 
+    release_baseline = roadmap["release_baseline"]
+    _require_keys(release_baseline, {"checked_at", "recheck"}, "release baseline")
+    assert isinstance(release_baseline["checked_at"], date)
+    assert release_baseline["checked_at"] <= reviewed_at
+    assert release_baseline["recheck"]
+
+    release_sources = roadmap["release_sources"]
+    assert isinstance(release_sources, list) and release_sources
+    for source in release_sources:
+        _require_keys(source, {"title", "url"}, "release source")
+        assert source["url"].startswith(
+            ("https://hm.edu/", "https://cs.hm.edu/", "https://mediapool.hm.edu/")
+        )
+
     snapshot = roadmap["snapshot"]
     assert isinstance(snapshot, list)
     assert len(snapshot) == len(EXPECTED_SNAPSHOT_KINDS)
@@ -186,6 +200,15 @@ def main() -> None:
             blocker["id"],
         )
         assert set(blocker["affects"]) <= set(milestone_ids)
+
+    release_checks = roadmap["release_checks"]
+    assert isinstance(release_checks, list) and len(release_checks) == 6
+    release_check_ids = [check["id"] for check in release_checks]
+    assert len(release_check_ids) == len(set(release_check_ids)), (
+        "duplicate release-check IDs"
+    )
+    for check in release_checks:
+        _require_keys(check, {"id", "title", "body"}, check["id"])
 
     evidence_records = [*snapshot, *milestones, *blockers]
     for record in evidence_records:
