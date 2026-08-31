@@ -1,22 +1,29 @@
-#import "../experiment_data.typ": candidate-support-benchmark-name, candidate-support-benchmark-schema, candidate-support-decision-rule, candidate-support-receipt-name, candidate-support-receipt-schema, measurement-benchmark-name, measurement-benchmark-schema, measurement-protocol-receipt-name, measurement-protocol-receipt-schema, measurement-rank-direction, measurement-rank-tie-policy, paired-interval-method, q1-decision-rule, q1-pairwise-chance, q1-protocol-receipt-name, q1-protocol-receipt-schema, q1-scene-role, q1-target-source-protocol, q2-decision-rule, repeatability-decision-rule, report-store-population-evidence-valid, report-store-measurement-evidence-valid, report-store-candidate-support-evidence-valid, report-store-q1-evidence-valid, report-store-q2-evidence-valid
+#import "../experiment_data.typ": candidate-support-benchmark-name, candidate-support-benchmark-schema, candidate-support-decision-rule, candidate-support-receipt-name, candidate-support-receipt-schema, canonical-sidecar-id, measurement-benchmark-name, measurement-benchmark-schema, measurement-protocol-receipt-name, measurement-protocol-receipt-schema, measurement-rank-direction, measurement-rank-tie-policy, paired-interval-method, q1-decision-rule, q1-pairwise-chance, q1-protocol-receipt-name, q1-protocol-receipt-schema, q1-scene-role, q1-target-source-protocol, q2-certification-receipt-schema, q2-certification-schema, q2-decision-rule, q2-independent-unit-aggregation, q2-independent-unit-semantics, q2-selection-semantics, repeatability-decision-rule, report-store-population-evidence-valid, report-store-measurement-evidence-valid, report-store-candidate-support-evidence-valid, report-store-q1-evidence-valid, report-store-q2-evidence-valid, sha256-hex
 
-#let sidecar-a = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-#let sidecar-b = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
 #let digest-a = "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
 #let digest-b = "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
-#let protocol-sidecar = "1c562d9babd0f28634d46b6b1e1e4fe71f340625b51b35669944d28ff06dc7bf"
 #let protocol-digest = "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
-#let support-sidecar = "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
 #let support-digest = "1212121212121212121212121212121212121212121212121212121212121212"
-#let support-benchmark-sidecar = "1313131313131313131313131313131313131313131313131313131313131313"
-#let measurement-sidecar = "9999999999999999999999999999999999999999999999999999999999999999"
 #let measurement-digest = "3434343434343434343434343434343434343434343434343434343434343434"
-#let measurement-benchmark-sidecar = "3535353535353535353535353535353535353535353535353535353535353535"
 #let measurement-benchmark = "3636363636363636363636363636363636363636363636363636363636363636"
+#let q2-receipt-digest = "4545454545454545454545454545454545454545454545454545454545454545"
+#let q2-receipt-name = "exact-q2-certification.json"
 #let store-manifest = "5555555555555555555555555555555555555555555555555555555555555555"
 #let support-benchmark = "6666666666666666666666666666666666666666666666666666666666666666"
 #let support-config = "7777777777777777777777777777777777777777777777777777777777777777"
 #let measurement-config = "8888888888888888888888888888888888888888888888888888888888888888"
+#let sidecar-a = canonical-sidecar-id("qh-gates", digest-a)
+#let sidecar-b = canonical-sidecar-id("other", digest-b)
+#let protocol-sidecar = canonical-sidecar-id(q1-protocol-receipt-name, protocol-digest)
+#let support-sidecar = canonical-sidecar-id(candidate-support-receipt-name, support-digest)
+#let support-benchmark-sidecar = canonical-sidecar-id(candidate-support-benchmark-name, support-benchmark)
+#let measurement-sidecar = canonical-sidecar-id(measurement-protocol-receipt-name, measurement-digest)
+#let measurement-benchmark-sidecar = canonical-sidecar-id(measurement-benchmark-name, measurement-benchmark)
+#let q2-receipt-sidecar = canonical-sidecar-id(q2-receipt-name, q2-receipt-digest)
+#assert.eq(
+  sidecar-a,
+  "fdef765defe4ed1e5e5b8fec6f60711aa762d3f9ae1eb5d773248178ac8df985",
+)
 #let measurement-input = "abababababababababababababababababababababababababababababababab"
 #let measurement-input-b = "bcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbc"
 #let measurement-artifacts = (
@@ -45,6 +52,7 @@
   (sidecar_id: support-benchmark-sidecar, path: candidate-support-benchmark-name, name: candidate-support-benchmark-name, sha256: support-benchmark, format: "json", status: "confirmatory"),
   (sidecar_id: measurement-sidecar, path: measurement-protocol-receipt-name, name: measurement-protocol-receipt-name, sha256: measurement-digest, format: "json", status: "confirmatory"),
   (sidecar_id: measurement-benchmark-sidecar, path: measurement-benchmark-name, name: measurement-benchmark-name, sha256: measurement-benchmark, format: "json", status: "confirmatory"),
+  (sidecar_id: q2-receipt-sidecar, path: q2-receipt-name, name: q2-receipt-name, sha256: q2-receipt-digest, format: "json", status: "confirmatory"),
 )
 #let fact(key, value, unit, n, aggregation, source: source) = (
   store_id: "store-a",
@@ -77,6 +85,50 @@
   } else {
     assert(false, message: "unsupported synthetic sidecar value")
   }
+}
+#let missing-sidecar-row(sidecar-id, key) = (
+  sidecar_id: sidecar-id,
+  key: key,
+  value_bool: none,
+  value_int: none,
+  value_float: none,
+  value_text: none,
+  value_type: "null",
+  is_missing: true,
+)
+#let q2-aggregate-sidecar-value-rows(
+  prefix,
+  row-count,
+  absolute-error,
+  relative-error,
+  tolerance,
+  minimum-rows,
+) = {
+  let within = absolute-error <= tolerance
+  let support-met = row-count >= minimum-rows
+  let nullable = if row-count == 0 {
+    (
+      missing-sidecar-row(q2-receipt-sidecar, prefix + ".within_tolerance_fraction"),
+      missing-sidecar-row(q2-receipt-sidecar, prefix + ".mean_absolute_error"),
+      missing-sidecar-row(q2-receipt-sidecar, prefix + ".root_mean_squared_error"),
+      missing-sidecar-row(q2-receipt-sidecar, prefix + ".max_absolute_error"),
+      missing-sidecar-row(q2-receipt-sidecar, prefix + ".max_relative_error"),
+    )
+  } else {
+    (
+      typed-sidecar-row(q2-receipt-sidecar, prefix + ".within_tolerance_fraction", if within { 1.0 } else { 0.0 }),
+      typed-sidecar-row(q2-receipt-sidecar, prefix + ".mean_absolute_error", absolute-error),
+      typed-sidecar-row(q2-receipt-sidecar, prefix + ".root_mean_squared_error", absolute-error),
+      typed-sidecar-row(q2-receipt-sidecar, prefix + ".max_absolute_error", absolute-error),
+      typed-sidecar-row(q2-receipt-sidecar, prefix + ".max_relative_error", relative-error),
+    )
+  }
+  (
+    typed-sidecar-row(q2-receipt-sidecar, prefix + ".factual_selected_action_exact_q2_row_count", row-count),
+    typed-sidecar-row(q2-receipt-sidecar, prefix + ".within_tolerance_count", if within { row-count } else { 0 }),
+    typed-sidecar-row(q2-receipt-sidecar, prefix + ".minimum_support_met", support-met),
+    typed-sidecar-row(q2-receipt-sidecar, prefix + ".tolerance_passed", support-met and within),
+  ) + nullable
 }
 #let analysis-sidecar-value-rows(sidecar-id, logical-name, rows) = {
   let envelope = (
@@ -194,6 +246,13 @@
     typed-sidecar-row(row.sidecar_id, row.key, replacement)
   } else { row })
 }
+
+#let mutate-sidecar-value(sidecar-value-rows, key, replacement) = sidecar-value-rows.map(
+  row => if row.key == key { typed-sidecar-row(row.sidecar_id, key, replacement) } else { row },
+)
+#let clone-sidecar-prefix(sidecar-value-rows, source-prefix, target-prefix) = sidecar-value-rows.filter(
+  row => row.key.starts-with(source-prefix),
+).map(row => row + (key: row.key.replace(source-prefix, target-prefix),))
 
 #let population-rows(
   scene-count-value: 5,
@@ -537,7 +596,7 @@
   count-value: 5,
   row-n: 5,
   mae-value: 0.1,
-  coverage-value: 0.9,
+  coverage-value: 1.0,
   coverage-unit: "fraction",
   coverage-aggregation: "selected_chain_fraction",
   minimum-support-stratum-rows: 2,
@@ -553,6 +612,7 @@
   source: source,
   gate-source: source,
 ) = (
+  fact("q2.exact.certification_receipt_sha256", q2-receipt-digest, "sha256", row-n, "receipt_binding_sha256", source: source),
   fact("q2.exact.mae", mae-value, "root_normalized_return", row-n, "independent_unit_macro", source: source),
   fact("q2.exact.coverage", coverage-value, coverage-unit, row-n, coverage-aggregation, source: source),
   fact("q2.exact.minimum_support_stratum_rows", minimum-support-stratum-rows, "count", row-n, "support_stratum_minimum", source: source),
@@ -567,6 +627,318 @@
   fact("q2.exact.rule", rule, "identity", row-n, "analysis_identity", source: source),
   fact("q2.exact.passed", passed, "bool", row-n, "all_units_v1", source: gate-source),
 )
+
+#let q2-certification-sidecar-value-rows(
+  population-count: 5,
+  row-counts: (2, 2, 2, 2, 2),
+  error: 0.1,
+  exact-target: 1.0,
+  absolute-tolerance: 0.11,
+  relative-tolerance: 0.0,
+  coverage-minimum: 0.8,
+  minimum-independent-units: 5,
+  minimum-unit-rows: 1,
+  ordered-test-manifests: (store-manifest,),
+) = {
+  let selected-count = row-counts.len()
+  let coverage = selected-count / population-count
+  let absolute-error = calc.abs(error)
+  let relative-error = absolute-error / calc.max(calc.abs(exact-target), 0.00000011920928955078125)
+  let tolerance = absolute-tolerance + relative-tolerance * calc.abs(exact-target)
+  let maximum-excess = absolute-error - tolerance
+  let minimum-support = row-counts.sorted().first()
+  let minimum-rows = minimum-support
+  let selection-pass = coverage >= coverage-minimum
+  let support-pass = minimum-support >= 1
+  let unit-pass = selected-count >= minimum-independent-units and minimum-rows >= minimum-unit-rows and maximum-excess <= 0
+  let overall-pass = selection-pass and support-pass and unit-pass
+  let ordered-manifest-json = "[" + ordered-test-manifests.map(
+    manifest => "\"" + manifest + "\"",
+  ).join(",") + "]"
+  let ordered-manifest-digest = sha256-hex(ordered-manifest-json)
+  let candidate-config = "9292929292929292929292929292929292929292929292929292929292929292"
+  let rollout-config = "9393939393939393939393939393939393939393939393939393939393939393"
+  let envelope = (
+    typed-sidecar-row(q2-receipt-sidecar, "schema_version", q2-certification-receipt-schema),
+    typed-sidecar-row(q2-receipt-sidecar, "bundle_manifest_sha256", "8181818181818181818181818181818181818181818181818181818181818181"),
+    typed-sidecar-row(q2-receipt-sidecar, "test_population_sha256", "8282828282828282828282828282828282828282828282828282828282828282"),
+    typed-sidecar-row(q2-receipt-sidecar, "test_provenance_sha256", "8383838383838383838383838383838383838383838383838383838383838383"),
+    typed-sidecar-row(q2-receipt-sidecar, "bound_contract.scorer_config_hash", "8484848484848484848484848484848484848484848484848484848484848484"),
+    typed-sidecar-row(q2-receipt-sidecar, "bound_contract.learning_contract_hash", "8585858585858585858585858585858585858585858585858585858585858585"),
+    typed-sidecar-row(q2-receipt-sidecar, "bound_contract.actor_state_contract_hash", "8686868686868686868686868686868686868686868686868686868686868686"),
+    typed-sidecar-row(q2-receipt-sidecar, "bound_contract.geometry_contract_hash", "8787878787878787878787878787878787878787878787878787878787878787"),
+    typed-sidecar-row(q2-receipt-sidecar, "bound_contract.learning_contract.objective_profile", "qh_dense_valid_fitted_q_v1"),
+    typed-sidecar-row(q2-receipt-sidecar, "exact_q2.schema_version", q2-certification-schema),
+    typed-sidecar-row(q2-receipt-sidecar, "exact_q2.evidence_semantics.quantity", "learned_recursive_q2_target_error_against_factual_dense_successor_control"),
+    typed-sidecar-row(q2-receipt-sidecar, "exact_q2.evidence_semantics.implementation_recursion_parity", false),
+    typed-sidecar-row(q2-receipt-sidecar, "exact_q2.evidence_semantics.endpoint_policy_evidence", false),
+    typed-sidecar-row(q2-receipt-sidecar, "exact_q2.evidence_semantics.longer_horizon_claim", false),
+    typed-sidecar-row(q2-receipt-sidecar, "exact_q2.spec.absolute_tolerance", absolute-tolerance),
+    typed-sidecar-row(q2-receipt-sidecar, "exact_q2.spec.relative_tolerance", relative-tolerance),
+    typed-sidecar-row(q2-receipt-sidecar, "exact_q2.spec.minimum_independent_units", minimum-independent-units),
+    typed-sidecar-row(q2-receipt-sidecar, "exact_q2.spec.minimum_exact_rows_per_independent_unit", minimum-unit-rows),
+    typed-sidecar-row(q2-receipt-sidecar, "exact_q2.spec.independent_unit_aggregation", q2-independent-unit-aggregation),
+    typed-sidecar-row(q2-receipt-sidecar, "exact_q2.spec.minimum_population_coverage", coverage-minimum),
+    typed-sidecar-row(q2-receipt-sidecar, "exact_q2.population_census.selection_semantics", q2-selection-semantics),
+    typed-sidecar-row(q2-receipt-sidecar, "exact_q2.population_census.population_chain_count", population-count),
+    typed-sidecar-row(q2-receipt-sidecar, "exact_q2.population_census.selected_chain_count", selected-count),
+    typed-sidecar-row(q2-receipt-sidecar, "exact_q2.population_census.selected_chain_fraction", coverage),
+    typed-sidecar-row(q2-receipt-sidecar, "exact_q2.population_census.independent_unit_semantics", q2-independent-unit-semantics),
+    typed-sidecar-row(q2-receipt-sidecar, "exact_q2.selection_coverage_passed", selection-pass),
+    typed-sidecar-row(q2-receipt-sidecar, "exact_q2.support_coverage_passed", support-pass),
+    typed-sidecar-row(q2-receipt-sidecar, "exact_q2.learned_recursion_passed", overall-pass),
+  )
+  let manifest-roster = ordered-test-manifests.enumerate().map(((index, manifest)) => typed-sidecar-row(
+    q2-receipt-sidecar,
+    "bound_contract.ordered_test_store_manifests[" + str(index) + "]",
+    manifest,
+  ))
+  let selected = row-counts.enumerate().map(((scene-index, row-count)) => {
+    let prefix = "exact_q2.selected_chain_support[" + str(scene-index) + "]"
+    (
+      typed-sidecar-row(q2-receipt-sidecar, prefix + ".selection_rank", scene-index),
+      typed-sidecar-row(q2-receipt-sidecar, prefix + ".dataset_index", scene-index),
+      typed-sidecar-row(q2-receipt-sidecar, prefix + ".identity.store_index", 0),
+      typed-sidecar-row(q2-receipt-sidecar, prefix + ".identity.rollout_row_id", scene-index),
+      typed-sidecar-row(q2-receipt-sidecar, prefix + ".identity.source_sample_index", scene-index),
+      typed-sidecar-row(q2-receipt-sidecar, prefix + ".identity.scene_id", "scene-" + str(scene-index)),
+      typed-sidecar-row(q2-receipt-sidecar, prefix + ".identity.target_row_id", scene-index),
+      typed-sidecar-row(q2-receipt-sidecar, prefix + ".identity.configured_horizon", 2),
+      typed-sidecar-row(q2-receipt-sidecar, prefix + ".identity.candidate_width_min", 4),
+      typed-sidecar-row(q2-receipt-sidecar, prefix + ".identity.candidate_width_max", 4),
+      typed-sidecar-row(q2-receipt-sidecar, prefix + ".identity.candidate_config_hash", candidate-config),
+      typed-sidecar-row(q2-receipt-sidecar, prefix + ".identity.rollout_config_hash", rollout-config),
+      typed-sidecar-row(q2-receipt-sidecar, prefix + ".identity.selection_policy", "oracle-lookahead"),
+      typed-sidecar-row(q2-receipt-sidecar, prefix + ".independent_unit.ordered_store_manifest_sha256", ordered-manifest-digest),
+      typed-sidecar-row(q2-receipt-sidecar, prefix + ".independent_unit.scene_id", "scene-" + str(scene-index)),
+      typed-sidecar-row(q2-receipt-sidecar, prefix + ".factual_state_count", 3),
+      typed-sidecar-row(q2-receipt-sidecar, prefix + ".states_with_materialized_successors_count", 2),
+      typed-sidecar-row(q2-receipt-sidecar, prefix + ".states_with_complete_hard_valid_successor_labels_count", 2),
+      typed-sidecar-row(q2-receipt-sidecar, prefix + ".factual_selected_action_exact_q2_row_count", row-count),
+    )
+  }).flatten()
+  let rows = row-counts.enumerate().map(((scene-index, row-count)) => range(
+    row-count,
+  ).map(step-index => {
+    let row-index = row-counts.slice(0, scene-index).sum(default: 0) + step-index
+    let prefix = "exact_q2.factual_selected_action_exact_q2_rows[" + str(row-index) + "]"
+    (
+      typed-sidecar-row(q2-receipt-sidecar, prefix + ".dataset_index", scene-index),
+      typed-sidecar-row(q2-receipt-sidecar, prefix + ".selection_rank", scene-index),
+      typed-sidecar-row(q2-receipt-sidecar, prefix + ".store_index", 0),
+      typed-sidecar-row(q2-receipt-sidecar, prefix + ".rollout_row_id", scene-index),
+      typed-sidecar-row(q2-receipt-sidecar, prefix + ".source_sample_index", scene-index),
+      typed-sidecar-row(q2-receipt-sidecar, prefix + ".scene_id", "scene-" + str(scene-index)),
+      typed-sidecar-row(q2-receipt-sidecar, prefix + ".ordered_store_manifest_sha256", ordered-manifest-digest),
+      typed-sidecar-row(q2-receipt-sidecar, prefix + ".independent_unit.ordered_store_manifest_sha256", ordered-manifest-digest),
+      typed-sidecar-row(q2-receipt-sidecar, prefix + ".independent_unit.scene_id", "scene-" + str(scene-index)),
+      typed-sidecar-row(q2-receipt-sidecar, prefix + ".target_row_id", scene-index),
+      typed-sidecar-row(q2-receipt-sidecar, prefix + ".step_index", step-index),
+      typed-sidecar-row(q2-receipt-sidecar, prefix + ".configured_horizon", 2),
+      typed-sidecar-row(q2-receipt-sidecar, prefix + ".requested_horizon", 2),
+      typed-sidecar-row(q2-receipt-sidecar, prefix + ".candidate_config_hash", candidate-config),
+      typed-sidecar-row(q2-receipt-sidecar, prefix + ".rollout_config_hash", rollout-config),
+      typed-sidecar-row(q2-receipt-sidecar, prefix + ".selection_policy", "oracle-lookahead"),
+      typed-sidecar-row(q2-receipt-sidecar, prefix + ".current_candidate_count", 4),
+      typed-sidecar-row(q2-receipt-sidecar, prefix + ".successor_backup_count", 4),
+      typed-sidecar-row(q2-receipt-sidecar, prefix + ".candidate_branch_bin", "2-4"),
+      typed-sidecar-row(q2-receipt-sidecar, prefix + ".selected_index", 0),
+      typed-sidecar-row(q2-receipt-sidecar, prefix + ".recursive_target", exact-target + error),
+      typed-sidecar-row(q2-receipt-sidecar, prefix + ".exact_target", exact-target),
+      typed-sidecar-row(q2-receipt-sidecar, prefix + ".absolute_error", absolute-error),
+      typed-sidecar-row(q2-receipt-sidecar, prefix + ".relative_error", relative-error),
+      typed-sidecar-row(q2-receipt-sidecar, prefix + ".tolerance", tolerance),
+      typed-sidecar-row(q2-receipt-sidecar, prefix + ".within_tolerance", absolute-error <= tolerance),
+    )
+  }).flatten()).flatten()
+  let population-summary = (
+    typed-sidecar-row(q2-receipt-sidecar, "exact_q2.population_census.candidate_branch_bins[0]", 1),
+    typed-sidecar-row(q2-receipt-sidecar, "exact_q2.population_census.candidate_branch_bins[1]", 4),
+    typed-sidecar-row(q2-receipt-sidecar, "exact_q2.population_census.candidate_branch_bins[2]", 8),
+    typed-sidecar-row(q2-receipt-sidecar, "exact_q2.population_census.candidate_branch_bins[3]", 16),
+    typed-sidecar-row(q2-receipt-sidecar, "exact_q2.population_census.candidate_branch_bins[4]", 32),
+    typed-sidecar-row(q2-receipt-sidecar, "exact_q2.population_census.candidate_branch_bins[5]", 64),
+    typed-sidecar-row(q2-receipt-sidecar, "exact_q2.population_census.near_exhaustive", selected-count == population-count),
+    typed-sidecar-row(q2-receipt-sidecar, "exact_q2.population_census.eligible_scene_count", selected-count),
+    typed-sidecar-row(q2-receipt-sidecar, "exact_q2.population_census.eligible_target_count", selected-count),
+    typed-sidecar-row(q2-receipt-sidecar, "exact_q2.population_census.eligible_chain_count", population-count),
+    typed-sidecar-row(q2-receipt-sidecar, "exact_q2.population_census.independent_unit_count", selected-count),
+  )
+  let census = row-counts.enumerate().map(((scene-index, row-count)) => {
+    let prefix = "exact_q2.population_census.strata[" + str(scene-index) + "]"
+    let stratum-population = 1 + if scene-index == 0 { population-count - selected-count } else { 0 }
+    (
+      typed-sidecar-row(q2-receipt-sidecar, prefix + ".stratum.scene_id", "scene-" + str(scene-index)),
+      typed-sidecar-row(q2-receipt-sidecar, prefix + ".stratum.store_index", 0),
+      typed-sidecar-row(q2-receipt-sidecar, prefix + ".stratum.target_row_id", scene-index),
+      typed-sidecar-row(q2-receipt-sidecar, prefix + ".stratum.configured_horizon", 2),
+      typed-sidecar-row(q2-receipt-sidecar, prefix + ".stratum.candidate_branch_bin", "2-4"),
+      typed-sidecar-row(q2-receipt-sidecar, prefix + ".stratum.candidate_config_hash", candidate-config),
+      typed-sidecar-row(q2-receipt-sidecar, prefix + ".stratum.rollout_config_hash", rollout-config),
+      typed-sidecar-row(q2-receipt-sidecar, prefix + ".stratum.selection_policy", "oracle-lookahead"),
+      typed-sidecar-row(q2-receipt-sidecar, prefix + ".population_chain_count", stratum-population),
+      typed-sidecar-row(q2-receipt-sidecar, prefix + ".selected_chain_count", 1),
+      typed-sidecar-row(q2-receipt-sidecar, prefix + ".selected_chain_fraction", 1 / stratum-population),
+    )
+  }).flatten()
+  let support-aggregates = row-counts.enumerate().map(((scene-index, row-count)) => {
+    let prefix = "exact_q2.support_stratum_aggregates[" + str(scene-index) + "]"
+    (
+      typed-sidecar-row(q2-receipt-sidecar, prefix + ".stratum.scene_id", "scene-" + str(scene-index)),
+      typed-sidecar-row(q2-receipt-sidecar, prefix + ".stratum.store_index", 0),
+      typed-sidecar-row(q2-receipt-sidecar, prefix + ".stratum.target_row_id", scene-index),
+      typed-sidecar-row(q2-receipt-sidecar, prefix + ".stratum.configured_horizon", 2),
+      typed-sidecar-row(q2-receipt-sidecar, prefix + ".stratum.candidate_branch_bin", "2-4"),
+      typed-sidecar-row(q2-receipt-sidecar, prefix + ".stratum.candidate_config_hash", candidate-config),
+      typed-sidecar-row(q2-receipt-sidecar, prefix + ".stratum.rollout_config_hash", rollout-config),
+      typed-sidecar-row(q2-receipt-sidecar, prefix + ".stratum.selection_policy", "oracle-lookahead"),
+      typed-sidecar-row(q2-receipt-sidecar, prefix + ".selected_chain_count", 1),
+      typed-sidecar-row(q2-receipt-sidecar, prefix + ".chains_with_factual_selected_action_exact_q2_count", if row-count > 0 { 1 } else { 0 }),
+      typed-sidecar-row(q2-receipt-sidecar, prefix + ".factual_selected_action_exact_q2_row_count", row-count),
+    )
+  }).flatten()
+  let total-row-count = row-counts.sum()
+  let denominators = (
+    typed-sidecar-row(q2-receipt-sidecar, "exact_q2.evidence_denominators.factual_state_count", selected-count * 3),
+    typed-sidecar-row(q2-receipt-sidecar, "exact_q2.evidence_denominators.states_with_materialized_successors_count", selected-count * 2),
+    typed-sidecar-row(q2-receipt-sidecar, "exact_q2.evidence_denominators.states_with_complete_hard_valid_successor_labels_count", selected-count * 2),
+    typed-sidecar-row(q2-receipt-sidecar, "exact_q2.evidence_denominators.factual_selected_action_exact_q2_row_count", total-row-count),
+  )
+  let aggregate = q2-aggregate-sidecar-value-rows(
+    "exact_q2.aggregate",
+    total-row-count,
+    absolute-error,
+    relative-error,
+    tolerance,
+    1,
+  )
+  let stratum-aggregates = row-counts.enumerate().map(((scene-index, row-count)) => {
+    if row-count == 0 { () } else {
+      let aggregate-index = row-counts.slice(0, scene-index).filter(count => count > 0).len()
+      let prefix = "exact_q2.stratum_aggregates[" + str(aggregate-index) + "]"
+      (
+      typed-sidecar-row(q2-receipt-sidecar, prefix + ".stratum.scene_id", "scene-" + str(scene-index)),
+      typed-sidecar-row(q2-receipt-sidecar, prefix + ".stratum.store_index", 0),
+      typed-sidecar-row(q2-receipt-sidecar, prefix + ".stratum.target_row_id", scene-index),
+      typed-sidecar-row(q2-receipt-sidecar, prefix + ".stratum.candidate_branch_bin", "2-4"),
+      typed-sidecar-row(q2-receipt-sidecar, prefix + ".stratum.candidate_config_hash", candidate-config),
+      typed-sidecar-row(q2-receipt-sidecar, prefix + ".stratum.rollout_config_hash", rollout-config),
+      typed-sidecar-row(q2-receipt-sidecar, prefix + ".stratum.selection_policy", "oracle-lookahead"),
+      typed-sidecar-row(q2-receipt-sidecar, prefix + ".stratum.configured_horizon", 2),
+      ) + q2-aggregate-sidecar-value-rows(
+        prefix,
+        row-count,
+        absolute-error,
+        relative-error,
+        tolerance,
+        1,
+      )
+    }
+  }).flatten()
+  let unit-aggregates = row-counts.enumerate().map(((scene-index, row-count)) => {
+    let prefix = "exact_q2.independent_unit_aggregates[" + str(scene-index) + "]"
+    let stratum-population = 1 + if scene-index == 0 { population-count - selected-count } else { 0 }
+    let error-aggregate = q2-aggregate-sidecar-value-rows(
+      prefix + ".error",
+      row-count,
+      absolute-error,
+      relative-error,
+      tolerance,
+      minimum-unit-rows,
+    )
+    (
+      typed-sidecar-row(q2-receipt-sidecar, prefix + ".independent_unit.ordered_store_manifest_sha256", ordered-manifest-digest),
+      typed-sidecar-row(q2-receipt-sidecar, prefix + ".independent_unit.scene_id", "scene-" + str(scene-index)),
+      typed-sidecar-row(q2-receipt-sidecar, prefix + ".population_chain_count", stratum-population),
+      typed-sidecar-row(q2-receipt-sidecar, prefix + ".selected_chain_count", 1),
+      typed-sidecar-row(q2-receipt-sidecar, prefix + ".admitted", true),
+      typed-sidecar-row(q2-receipt-sidecar, prefix + ".factual_state_count", 3),
+      typed-sidecar-row(q2-receipt-sidecar, prefix + ".states_with_materialized_successors_count", 2),
+      typed-sidecar-row(q2-receipt-sidecar, prefix + ".states_with_complete_hard_valid_successor_labels_count", 2),
+      typed-sidecar-row(q2-receipt-sidecar, prefix + ".factual_selected_action_exact_q2_row_count", row-count),
+      typed-sidecar-row(q2-receipt-sidecar, prefix + ".unit_gate_passed", row-count >= minimum-unit-rows and absolute-error <= tolerance),
+    ) + error-aggregate
+  }).flatten()
+  let supported-unit-count = row-counts.filter(count => count >= minimum-unit-rows).len()
+  let passing-unit-count = row-counts.filter(
+    count => count >= minimum-unit-rows and absolute-error <= tolerance,
+  ).len()
+  let minimum-units-met = supported-unit-count >= minimum-independent-units
+  let all-selected-pass = passing-unit-count == selected-count
+  let gate = (
+    typed-sidecar-row(q2-receipt-sidecar, "exact_q2.independent_unit_gate.independent_unit_semantics", q2-independent-unit-semantics),
+    typed-sidecar-row(q2-receipt-sidecar, "exact_q2.independent_unit_gate.aggregation", q2-independent-unit-aggregation),
+    typed-sidecar-row(q2-receipt-sidecar, "exact_q2.independent_unit_gate.population_independent_unit_count", selected-count),
+    typed-sidecar-row(q2-receipt-sidecar, "exact_q2.independent_unit_gate.selected_independent_unit_count", selected-count),
+    typed-sidecar-row(q2-receipt-sidecar, "exact_q2.independent_unit_gate.supported_independent_unit_count", supported-unit-count),
+    typed-sidecar-row(q2-receipt-sidecar, "exact_q2.independent_unit_gate.passing_independent_unit_count", passing-unit-count),
+    typed-sidecar-row(q2-receipt-sidecar, "exact_q2.independent_unit_gate.minimum_independent_units", minimum-independent-units),
+    typed-sidecar-row(q2-receipt-sidecar, "exact_q2.independent_unit_gate.minimum_exact_rows_per_independent_unit", minimum-unit-rows),
+    typed-sidecar-row(q2-receipt-sidecar, "exact_q2.independent_unit_gate.minimum_independent_units_met", minimum-units-met),
+    typed-sidecar-row(q2-receipt-sidecar, "exact_q2.independent_unit_gate.all_selected_units_passed", all-selected-pass),
+    typed-sidecar-row(q2-receipt-sidecar, "exact_q2.independent_unit_gate.passed", minimum-units-met and all-selected-pass),
+  )
+  envelope + manifest-roster + population-summary + census + selected + denominators + support-aggregates + rows + aggregate + stratum-aggregates + unit-aggregates + gate
+}
+
+#let q2-report(
+  population-count: 5,
+  row-counts: (2, 2, 2, 2, 2),
+  error: 0.1,
+  exact-target: 1.0,
+  absolute-tolerance: 0.11,
+  relative-tolerance: 0.0,
+  coverage-minimum: 0.8,
+  minimum-independent-units: 5,
+  minimum-unit-rows: 1,
+  ordered-test-manifests: (store-manifest,),
+  receipt-values: none,
+  sidecar-rows: sidecars,
+) = {
+  let selected-count = row-counts.len()
+  let coverage = selected-count / population-count
+  let absolute-error = calc.abs(error)
+  let tolerance = absolute-tolerance + relative-tolerance * calc.abs(exact-target)
+  let maximum-excess = absolute-error - tolerance
+  let minimum-support = row-counts.sorted().first()
+  let supported-counts = row-counts.filter(count => count > 0)
+  let mae = if supported-counts.len() > 0 { absolute-error } else { 0.0 }
+  let passed = coverage >= coverage-minimum and minimum-support >= 1 and selected-count >= minimum-independent-units and minimum-support >= minimum-unit-rows and maximum-excess <= 0
+  let facts = q2-rows(
+    count-value: selected-count,
+    row-n: selected-count,
+    mae-value: mae,
+    coverage-value: coverage,
+    minimum-support-stratum-rows: minimum-support,
+    minimum-unit-rows: minimum-support,
+    maximum-tolerance-excess: maximum-excess,
+    coverage-minimum: coverage-minimum,
+    minimum-independent-units: minimum-independent-units,
+    required-unit-rows: minimum-unit-rows,
+    absolute-tolerance: absolute-tolerance,
+    relative-tolerance: relative-tolerance,
+    passed: passed,
+  )
+  let receipt = if receipt-values == none {
+    q2-certification-sidecar-value-rows(
+      population-count: population-count,
+      row-counts: row-counts,
+      error: error,
+      exact-target: exact-target,
+      absolute-tolerance: absolute-tolerance,
+      relative-tolerance: relative-tolerance,
+      coverage-minimum: coverage-minimum,
+      minimum-independent-units: minimum-independent-units,
+      minimum-unit-rows: minimum-unit-rows,
+      ordered-test-manifests: ordered-test-manifests,
+    )
+  } else { receipt-values }
+  report(
+    facts,
+    sidecar-rows: sidecar-rows,
+    sidecar-value-rows: analysis-sidecar-value-rows(sidecar-a, "qh-gates", facts) + receipt,
+  )
+}
 
 #assert(report-store-candidate-support-evidence-valid(support-report(), "store-a"))
 #assert(report-store-candidate-support-evidence-valid(support-report(scene-mean: 1), "store-a"))
@@ -672,6 +1044,22 @@
     3,
   ),
 ), "store-a"))
+#let arbitrary-sidecar-id = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+#let valid-support-report = support-report()
+#let forged-support-report = (
+  tables: valid-support-report.tables + (
+    sidecars: (rows: valid-support-report.tables.sidecars.rows.map(sidecar => if sidecar.sidecar_id == support-benchmark-sidecar {
+      sidecar + (sidecar_id: arbitrary-sidecar-id,)
+    } else { sidecar }),),
+    sidecar_values: (rows: valid-support-report.tables.sidecar_values.rows.map(row => if row.sidecar_id == support-benchmark-sidecar {
+      row + (sidecar_id: arbitrary-sidecar-id,)
+    } else { row }),),
+  ),
+)
+#assert(not report-store-candidate-support-evidence-valid(
+  forged-support-report,
+  "store-a",
+))
 
 #assert(report-store-population-evidence-valid(report(population-rows()), "store-a"))
 #assert(not report-store-population-evidence-valid(report(population-rows(scene-count-value: "5")), "store-a"))
@@ -698,6 +1086,24 @@
     "qh-gates",
     population-baseline-rows,
   ).filter(row => row.key != "logical_name"),
+), "store-a"))
+#let forged-population-source = "analysis/qh-gates.json|sidecar:" + arbitrary-sidecar-id
+#let forged-population-rows = population-rows(source: forged-population-source)
+#assert(not report-store-population-evidence-valid(report(
+  forged-population-rows,
+  sidecar-rows: sidecars.filter(sidecar => sidecar.sidecar_id != sidecar-a) + ((
+    sidecar_id: arbitrary-sidecar-id,
+    path: "qh-gates",
+    name: "qh-gates",
+    sha256: digest-a,
+    format: "json",
+    status: "confirmatory",
+  ),),
+  sidecar-value-rows: analysis-sidecar-value-rows(
+    arbitrary-sidecar-id,
+    "qh-gates",
+    forged-population-rows,
+  ),
 ), "store-a"))
 
 #assert(report-store-measurement-evidence-valid(measurement-report(), "store-a"))
@@ -896,43 +1302,129 @@
 #assert(not report-store-q1-evidence-valid(report(q1-rows(source: "analysis/unbound.json", gate-source: "analysis/unbound.json")), "store-a"))
 #assert(not report-store-q1-evidence-valid(report(q1-rows(gate-source: "analysis/other.json|sidecar:" + sidecar-b)), "store-a"))
 
-#assert(report-store-q2-evidence-valid(report(q2-rows()), "store-a"))
-#assert(report-store-q2-evidence-valid(report(q2-rows(coverage-value: 0, minimum-support-stratum-rows: 0, minimum-unit-rows: 0, maximum-tolerance-excess: 0.1, passed: false)), "store-a"))
-#assert(report-store-q2-evidence-valid(report(q2-rows(coverage-value: 0.7, passed: false)), "store-a"))
-#assert(report-store-q2-evidence-valid(report(q2-rows(minimum-support-stratum-rows: 0, passed: false)), "store-a"))
-#assert(report-store-q2-evidence-valid(report(q2-rows(count-value: 4, row-n: 4, passed: false)), "store-a"))
-#assert(report-store-q2-evidence-valid(report(q2-rows(minimum-unit-rows: 0, passed: false)), "store-a"))
-#assert(report-store-q2-evidence-valid(report(q2-rows(maximum-tolerance-excess: 0.1, passed: false)), "store-a"))
-#assert(report-store-q2-evidence-valid(report(q2-rows(coverage-value: 0.8, maximum-tolerance-excess: 0)), "store-a"))
-#assert(not report-store-q2-evidence-valid(report(q2-rows(coverage-value: 0.7)), "store-a"))
-#assert(not report-store-q2-evidence-valid(report(q2-rows(minimum-support-stratum-rows: 0)), "store-a"))
-#assert(not report-store-q2-evidence-valid(report(q2-rows(count-value: 4, row-n: 4)), "store-a"))
-#assert(not report-store-q2-evidence-valid(report(q2-rows(minimum-unit-rows: 0)), "store-a"))
-#assert(not report-store-q2-evidence-valid(report(q2-rows(maximum-tolerance-excess: 0.1)), "store-a"))
-#assert(not report-store-q2-evidence-valid(report(q2-rows(coverage-value: 0, minimum-support-stratum-rows: 0, minimum-unit-rows: 0, maximum-tolerance-excess: 0.1)), "store-a"))
-#assert(not report-store-q2-evidence-valid(report(q2-rows(passed: false)), "store-a"))
-#assert(not report-store-q2-evidence-valid(report(q2-rows(coverage-minimum: 0)), "store-a"))
-#assert(not report-store-q2-evidence-valid(report(q2-rows(minimum-independent-units: 4)), "store-a"))
-#assert(not report-store-q2-evidence-valid(report(q2-rows(required-unit-rows: 0)), "store-a"))
-#assert(not report-store-q2-evidence-valid(report(q2-rows(absolute-tolerance: -0.01)), "store-a"))
-#assert(not report-store-q2-evidence-valid(report(q2-rows(relative-tolerance: -0.01)), "store-a"))
-#assert(not report-store-q2-evidence-valid(report(q2-rows(rule: "unfrozen_q2_rule")), "store-a"))
-#assert(not report-store-q2-evidence-valid(report(q2-rows(count-value: 4)), "store-a"))
-#assert(not report-store-q2-evidence-valid(report(q2-rows(mae-value: "0.1")), "store-a"))
-#assert(not report-store-q2-evidence-valid(report(q2-rows(mae-value: -0.1)), "store-a"))
-#assert(not report-store-q2-evidence-valid(report(q2-rows(coverage-value: 1.1)), "store-a"))
-#assert(not report-store-q2-evidence-valid(report(q2-rows(coverage-unit: "count")), "store-a"))
-#assert(not report-store-q2-evidence-valid(report(q2-rows(coverage-aggregation: "candidate_row_mean")), "store-a"))
-#assert(not report-store-q2-evidence-valid(report(q2-rows(source: "analysis/unbound.json", gate-source: "analysis/unbound.json")), "store-a"))
-#assert(not report-store-q2-evidence-valid(report(q2-rows(gate-source: "analysis/other.json|sidecar:" + sidecar-b)), "store-a"))
-#let q2-baseline-rows = q2-rows()
+#assert(report-store-q2-evidence-valid(q2-report(), "store-a"))
+#assert(report-store-q2-evidence-valid(q2-report(row-counts: (20, 20, 20, 20, 20)), "store-a"))
+#assert(report-store-q2-evidence-valid(q2-report(population-count: 10), "store-a"))
+#assert(report-store-q2-evidence-valid(q2-report(error: 0.2), "store-a"))
+#assert(report-store-q2-evidence-valid(q2-report(row-counts: (0, 2, 2, 2, 2)), "store-a"))
+#assert(report-store-q2-evidence-valid(q2-report(
+  exact-target: 0.0,
+  error: 0.00000001,
+  absolute-tolerance: 0.00000002,
+), "store-a"))
+#let q2-receipt-values = q2-certification-sidecar-value-rows()
+#assert(not report-store-q2-evidence-valid(q2-report(
+  sidecar-rows: sidecars.filter(sidecar => sidecar.sidecar_id != q2-receipt-sidecar),
+), "store-a"))
+#assert(not report-store-q2-evidence-valid(q2-report(
+  receipt-values: mutate-sidecar-value(q2-receipt-values, "schema_version", "qh-exact-q2-certification-receipt-v1"),
+), "store-a"))
+#assert(not report-store-q2-evidence-valid(q2-report(
+  receipt-values: mutate-sidecar-value(q2-receipt-values, "bundle_manifest_sha256", "invalid"),
+), "store-a"))
+#assert(not report-store-q2-evidence-valid(q2-report(
+  receipt-values: mutate-sidecar-value(q2-receipt-values, "exact_q2.evidence_semantics.implementation_recursion_parity", true),
+), "store-a"))
+#assert(not report-store-q2-evidence-valid(q2-report(
+  receipt-values: q2-receipt-values.filter(
+    row => row.key != "bound_contract.learning_contract.objective_profile",
+  ),
+), "store-a"))
+#assert(not report-store-q2-evidence-valid(q2-report(
+  receipt-values: mutate-sidecar-value(q2-receipt-values, "exact_q2.selected_chain_support[1].selection_rank", 0),
+), "store-a"))
+#let q2-out-of-range-store-values = q2-receipt-values.map(row => if row.key.ends-with(".store_index") {
+  typed-sidecar-row(row.sidecar_id, row.key, 99)
+} else { row })
+#assert(not report-store-q2-evidence-valid(q2-report(
+  receipt-values: q2-out-of-range-store-values,
+), "store-a"))
+#assert(not report-store-q2-evidence-valid(q2-report(
+  receipt-values: mutate-sidecar-value(q2-receipt-values, "exact_q2.factual_selected_action_exact_q2_rows[0].selection_rank", 99),
+), "store-a"))
+#assert(not report-store-q2-evidence-valid(q2-report(
+  receipt-values: mutate-sidecar-value(q2-receipt-values, "exact_q2.factual_selected_action_exact_q2_rows[0].absolute_error", 0.0),
+), "store-a"))
+#assert(not report-store-q2-evidence-valid(q2-report(
+  receipt-values: mutate-sidecar-value(q2-receipt-values, "exact_q2.factual_selected_action_exact_q2_rows[0].relative_error", 0.0),
+), "store-a"))
+#assert(not report-store-q2-evidence-valid(q2-report(
+  receipt-values: mutate-sidecar-value(q2-receipt-values, "exact_q2.learned_recursion_passed", false),
+), "store-a"))
+#assert(not report-store-q2-evidence-valid(q2-report(
+  receipt-values: q2-receipt-values.filter(row => not row.key.starts-with("exact_q2.aggregate.")),
+), "store-a"))
+#assert(not report-store-q2-evidence-valid(q2-report(
+  receipt-values: mutate-sidecar-value(q2-receipt-values, "exact_q2.aggregate.max_absolute_error", 0.0),
+), "store-a"))
+#assert(not report-store-q2-evidence-valid(q2-report(
+  receipt-values: q2-receipt-values.filter(row => not row.key.starts-with("exact_q2.independent_unit_aggregates[0].")),
+), "store-a"))
+#assert(not report-store-q2-evidence-valid(q2-report(
+  receipt-values: q2-receipt-values + clone-sidecar-prefix(
+    q2-receipt-values,
+    "exact_q2.independent_unit_aggregates[0]",
+    "exact_q2.independent_unit_aggregates[5]",
+  ),
+), "store-a"))
+#assert(not report-store-q2-evidence-valid(q2-report(
+  receipt-values: q2-receipt-values.filter(row => not row.key.starts-with("exact_q2.support_stratum_aggregates[0].")),
+), "store-a"))
+#assert(not report-store-q2-evidence-valid(q2-report(
+  receipt-values: q2-receipt-values + clone-sidecar-prefix(
+    q2-receipt-values,
+    "exact_q2.population_census.strata[0]",
+    "exact_q2.population_census.strata[5]",
+  ),
+), "store-a"))
+#assert(not report-store-q2-evidence-valid(q2-report(
+  receipt-values: q2-receipt-values.filter(
+    row => row.key != "bound_contract.ordered_test_store_manifests[0]",
+  ),
+), "store-a"))
+#assert(not report-store-q2-evidence-valid(q2-report(
+  receipt-values: q2-receipt-values + (
+    typed-sidecar-row(q2-receipt-sidecar, "bound_contract.ordered_test_store_manifests[1]", store-manifest),
+  ),
+), "store-a"))
+#let second-store-manifest = "5656565656565656565656565656565656565656565656565656565656565656"
+#let two-store-receipt-values = q2-certification-sidecar-value-rows(
+  ordered-test-manifests: (second-store-manifest, store-manifest),
+)
+#let two-store-base = q2-report(receipt-values: two-store-receipt-values)
+#let two-store-report = (
+  tables: two-store-base.tables + (
+    stores: (rows: (
+      (store_id: "store-a", manifest_sha256: store-manifest),
+      (store_id: "store-b", manifest_sha256: second-store-manifest),
+    ),),
+  ),
+)
+#assert(report-store-q2-evidence-valid(two-store-report, "store-a"))
+#let swapped-two-store-values = mutate-sidecar-value(
+  mutate-sidecar-value(
+    two-store-receipt-values,
+    "bound_contract.ordered_test_store_manifests[0]",
+    store-manifest,
+  ),
+  "bound_contract.ordered_test_store_manifests[1]",
+  second-store-manifest,
+)
+#let swapped-two-store-base = q2-report(receipt-values: swapped-two-store-values)
+#let swapped-two-store-report = (
+  tables: swapped-two-store-base.tables + (
+    stores: two-store-report.tables.stores,
+  ),
+)
+#assert(not report-store-q2-evidence-valid(swapped-two-store-report, "store-a"))
+#let q2-baseline-facts = q2-rows()
 #assert(not report-store-q2-evidence-valid(report(
-  q2-baseline-rows,
+  q2-baseline-facts,
   sidecar-value-rows: mutate-sidecar-fact-value(
-    analysis-sidecar-value-rows(sidecar-a, "qh-gates", q2-baseline-rows),
+    analysis-sidecar-value-rows(sidecar-a, "qh-gates", q2-baseline-facts),
     "q2.exact.coverage",
     0.7,
-  ),
+  ) + q2-receipt-values,
 ), "store-a"))
 
 Population, repeatability, candidate support, actor-visible one-step evidence,

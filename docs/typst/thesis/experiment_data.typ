@@ -1,6 +1,113 @@
 #let report-schema-version = "aria-nbv-thesis-report-v1"
 #let scientific-report-schema-version = "aria-nbv-report-bundle-v2"
 
+// Typst 0.14 has no native SHA-256 primitive. This small implementation keeps
+// the thesis admission boundary aligned with the Python report writer without
+// introducing a second package dependency or a weaker synthetic identifier.
+#let sha256-constants = (
+  0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
+  0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
+  0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
+  0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7, 0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967,
+  0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85,
+  0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
+  0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
+  0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2,
+)
+
+#let unsigned-32(value) = calc.rem(value, 0x100000000)
+#let rotate-right-32(value, shift) = value.bit-rshift(shift).bit-or(
+  unsigned-32(value.bit-lshift(32 - shift)),
+)
+#let hex-32(value) = {
+  let encoded = str(unsigned-32(value), base: 16)
+  "0" * (8 - encoded.len()) + encoded
+}
+
+#let sha256-hex(input) = {
+  let encoded = bytes(input)
+  let message = range(encoded.len()).map(index => encoded.at(index))
+  let bit-length = message.len() * 8
+  message.push(0x80)
+  while calc.rem(message.len(), 64) != 56 { message.push(0) }
+  for shift in range(8).rev() {
+    message.push(bit-length.bit-rshift(shift * 8).bit-and(0xff))
+  }
+
+  let hash = (
+    0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a,
+    0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19,
+  )
+  for offset in range(0, message.len(), step: 64) {
+    let words = range(16).map(index => {
+      let base = offset + index * 4
+      unsigned-32(
+        message.at(base).bit-lshift(24) +
+        message.at(base + 1).bit-lshift(16) +
+        message.at(base + 2).bit-lshift(8) +
+        message.at(base + 3)
+      )
+    })
+    for index in range(16, 64) {
+      let x = words.at(index - 15)
+      let y = words.at(index - 2)
+      let sigma-zero = rotate-right-32(x, 7).bit-xor(
+        rotate-right-32(x, 18),
+      ).bit-xor(x.bit-rshift(3))
+      let sigma-one = rotate-right-32(y, 17).bit-xor(
+        rotate-right-32(y, 19),
+      ).bit-xor(y.bit-rshift(10))
+      words.push(unsigned-32(
+        words.at(index - 16) + sigma-zero + words.at(index - 7) + sigma-one,
+      ))
+    }
+
+    let a = hash.at(0)
+    let b = hash.at(1)
+    let c = hash.at(2)
+    let d = hash.at(3)
+    let e = hash.at(4)
+    let f = hash.at(5)
+    let g = hash.at(6)
+    let h = hash.at(7)
+    for index in range(64) {
+      let sigma-one = rotate-right-32(e, 6).bit-xor(
+        rotate-right-32(e, 11),
+      ).bit-xor(rotate-right-32(e, 25))
+      let choice = e.bit-and(f).bit-xor(e.bit-not().bit-and(g))
+      let temp-one = unsigned-32(
+        h + sigma-one + choice + sha256-constants.at(index) + words.at(index),
+      )
+      let sigma-zero = rotate-right-32(a, 2).bit-xor(
+        rotate-right-32(a, 13),
+      ).bit-xor(rotate-right-32(a, 22))
+      let majority = a.bit-and(b).bit-xor(a.bit-and(c)).bit-xor(
+        b.bit-and(c),
+      )
+      let temp-two = unsigned-32(sigma-zero + majority)
+      h = g
+      g = f
+      f = e
+      e = unsigned-32(d + temp-one)
+      d = c
+      c = b
+      b = a
+      a = unsigned-32(temp-one + temp-two)
+    }
+    hash = (
+      unsigned-32(hash.at(0) + a), unsigned-32(hash.at(1) + b),
+      unsigned-32(hash.at(2) + c), unsigned-32(hash.at(3) + d),
+      unsigned-32(hash.at(4) + e), unsigned-32(hash.at(5) + f),
+      unsigned-32(hash.at(6) + g), unsigned-32(hash.at(7) + h),
+    )
+  }
+  hash.map(hex-32).join()
+}
+
+#let canonical-sidecar-id(logical-name, payload-sha256) = sha256-hex(
+  logical-name + "\u{0}" + payload-sha256,
+)
+
 #let required-report-columns = (
   stores: ("store_id", "name", "manifest_sha256", "validation_ok"),
   parameters: ("store_id", "key", "value_type", "is_missing"),
@@ -55,6 +162,12 @@
 #let q1-scene-role = "held_out_scene_v1"
 #let q1-target-source-protocol = "observation_derived_actor_visible_target_v1"
 #let q2-decision-rule = "all_units_support_and_rowwise_abs_plus_relative_tolerance_v1"
+#let q2-certification-receipt-schema = "qh-exact-q2-certification-receipt-v2"
+#let q2-certification-schema = "qh-exact-q2-certification-v2"
+#let q2-selection-semantics = "balanced-hash-within-scene-target-support-strata-v2"
+#let q2-independent-unit-semantics = "ordered-store-manifest-and-scene-v1"
+#let q2-independent-unit-aggregation = "all_units_v1"
+#let float32-epsilon = 0.00000011920928955078125
 #let recovery-decision-rule = "fraction_gte_minimum_and_ci_low_gt_zero_v1"
 #let derived-identity-abs-tolerance = 1e-10
 #let endpoint-evidence-facts = (
@@ -248,6 +361,7 @@
   (key: "q1.gate.passed", aggregation: "state_then_scene_decision", unit: "bool", value_kind: "boolean"),
 )
 #let q2-evidence-facts = (
+  "q2.exact.certification_receipt_sha256",
   "q2.exact.mae",
   "q2.exact.coverage",
   "q2.exact.minimum_support_stratum_rows",
@@ -263,6 +377,7 @@
   "q2.exact.passed",
 )
 #let q2-evidence-contract = (
+  (key: "q2.exact.certification_receipt_sha256", aggregation: "receipt_binding_sha256", unit: "sha256", value_kind: "string"),
   (key: "q2.exact.mae", aggregation: "independent_unit_macro", unit: "root_normalized_return", value_kind: "number", minimum: 0),
   (key: "q2.exact.coverage", aggregation: "selected_chain_fraction", unit: "fraction", value_kind: "number", minimum: 0, maximum: 1),
   (key: "q2.exact.minimum_support_stratum_rows", aggregation: "support_stratum_minimum", unit: "count", value_kind: "integer", minimum: 0),
@@ -418,9 +533,13 @@
                 let digest-valid = type(sidecar.sha256) == str and sidecar.sha256.match(
                   regex("^[0-9a-f]{64}$"),
                 ) != none
+                let identity-valid = name-valid and digest-valid and sidecar.sidecar_id == canonical-sidecar-id(
+                  sidecar.name,
+                  sidecar.sha256,
+                )
                 let format-valid = sidecar.format in ("json", "jsonl")
                 let status-valid = sidecar.status == "confirmatory"
-                path-valid and name-valid and digest-valid and format-valid and status-valid
+                path-valid and name-valid and digest-valid and identity-valid and format-valid and status-valid
               }
             }
           )
@@ -632,6 +751,24 @@
   expected,
 )
 
+#let report-sidecar-row-value-or-none(row) = if row == none or row.is_missing != false {
+  none
+} else if row.value_type == "bool" {
+  row.at("value_bool", default: none)
+} else if row.value_type == "int" {
+  row.at("value_int", default: none)
+} else if row.value_type == "float" {
+  row.at("value_float", default: none)
+} else if row.value_type == "str" {
+  row.at("value_text", default: none)
+} else {
+  none
+}
+
+#let report-sidecar-indexed-value-or-none(index, key) = report-sidecar-row-value-or-none(
+  report-sidecar-indexed-row-or-none(index, key),
+)
+
 #let report-store-fact-index(report) = {
   let rows = (:)
   let duplicates = ()
@@ -705,12 +842,20 @@
             }
           }
         }
+        let sidecar-digest-valid = type(sidecar.sha256) == str and sidecar.sha256.match(
+          regex("^[0-9a-f]{64}$"),
+        ) != none
+        let sidecar-identity-valid = type(logical-name) == str and sidecar-digest-valid and sidecar.sidecar_id == canonical-sidecar-id(
+          logical-name,
+          sidecar.sha256,
+        )
         let sidecar-valid = (
           type(sidecar.path) == str and sidecar.path.len() > 0,
           type(logical-name) == str and logical-name.len() > 0,
           sidecar.path == logical-name,
           sidecar.name == logical-name,
-          type(sidecar.sha256) == str and sidecar.sha256.match(regex("^[0-9a-f]{64}$")) != none,
+          sidecar-digest-valid,
+          sidecar-identity-valid,
           sidecar.format in ("json", "jsonl"),
           sidecar.status == "confirmatory",
         ).all(value => value)
@@ -766,17 +911,28 @@
   } else { none }
 }
 
-#let report-confirmatory-sidecar-by-digest(report, digest, required-name) = {
+#let report-confirmatory-sidecar-by-digest(
+  report,
+  digest,
+  required-name: none,
+) = {
   let matches = report.tables.at(
     "sidecars",
     default: (rows: ()),
-  ).rows.filter(sidecar => (
-    sidecar.sha256 == digest,
-    sidecar.path == required-name,
-    sidecar.name == required-name,
-    sidecar.format in ("json", "jsonl"),
-    sidecar.status == "confirmatory",
-  ).all(value => value))
+  ).rows.filter(sidecar => {
+    let path-valid = type(sidecar.path) == str and sidecar.path.len() > 0
+    let name-valid = type(sidecar.name) == str and path-valid and sidecar.path == sidecar.name
+    let digest-valid = type(sidecar.sha256) == str and report-sha256-value-valid(
+      sidecar.sha256,
+    )
+    let identity-valid = name-valid and digest-valid and sidecar.sidecar_id == canonical-sidecar-id(
+      sidecar.name,
+      sidecar.sha256,
+    )
+    sidecar.sha256 == digest and name-valid and (
+      required-name == none or sidecar.name == required-name
+    ) and identity-valid and sidecar.format in ("json", "jsonl") and sidecar.status == "confirmatory"
+  })
   if matches.len() == 1 { matches.first() } else { none }
 }
 
@@ -987,7 +1143,7 @@
   let benchmark-sidecar = report-confirmatory-sidecar-by-digest(
     report,
     benchmark-digest,
-    candidate-support-benchmark-name,
+    required-name: candidate-support-benchmark-name,
   )
   let benchmark-index = report-sidecar-value-index(
     report,
@@ -1142,7 +1298,7 @@
   let benchmark-sidecar = report-confirmatory-sidecar-by-digest(
     report,
     benchmark-digest,
-    measurement-benchmark-name,
+    required-name: measurement-benchmark-name,
   )
   let benchmark-index = report-sidecar-value-index(
     report,
@@ -1447,6 +1603,685 @@
   )
 }
 
+#let q2-candidate-branch-bin(width) = {
+  let bounds = (1, 4, 8, 16, 32, 64)
+  let lower = 1
+  for upper in bounds {
+    if width <= upper {
+      return if lower == upper { str(upper) } else { str(lower) + "-" + str(upper) }
+    }
+    lower = upper + 1
+  }
+  str(lower) + "+"
+}
+
+#let q2-values-equal(actual, expected) = if report-value-matches-kind(
+  actual,
+  "number",
+) and report-value-matches-kind(expected, "number") {
+  calc.abs(actual - expected) <= derived-identity-abs-tolerance
+} else {
+  actual == expected
+}
+
+#let q2-row-aggregate(rows, minimum-rows) = {
+  if rows.len() == 0 {
+    (
+      row-count: 0,
+      within-count: 0,
+      within-fraction: none,
+      mean-absolute-error: none,
+      root-mean-squared-error: none,
+      max-absolute-error: none,
+      max-relative-error: none,
+      minimum-support-met: false,
+      tolerance-passed: false,
+    )
+  } else {
+    let absolute = rows.map(row => row.absolute-error)
+    let relative = rows.map(row => row.relative-error)
+    let within-count = rows.filter(row => row.within).len()
+    let support-met = rows.len() >= minimum-rows
+    (
+      row-count: rows.len(),
+      within-count: within-count,
+      within-fraction: within-count / rows.len(),
+      mean-absolute-error: absolute.sum() / absolute.len(),
+      root-mean-squared-error: calc.sqrt(absolute.map(value => value * value).sum() / absolute.len()),
+      max-absolute-error: absolute.sorted().last(),
+      max-relative-error: relative.sorted().last(),
+      minimum-support-met: support-met,
+      tolerance-passed: support-met and within-count == rows.len(),
+    )
+  }
+}
+
+#let q2-sidecar-aggregate-matches(index, prefix, aggregate) = {
+  let expected = (
+    (suffix: "factual_selected_action_exact_q2_row_count", value: aggregate.row-count),
+    (suffix: "within_tolerance_count", value: aggregate.within-count),
+    (suffix: "within_tolerance_fraction", value: aggregate.within-fraction),
+    (suffix: "mean_absolute_error", value: aggregate.mean-absolute-error),
+    (suffix: "root_mean_squared_error", value: aggregate.root-mean-squared-error),
+    (suffix: "max_absolute_error", value: aggregate.max-absolute-error),
+    (suffix: "max_relative_error", value: aggregate.max-relative-error),
+    (suffix: "minimum_support_met", value: aggregate.minimum-support-met),
+    (suffix: "tolerance_passed", value: aggregate.tolerance-passed),
+  )
+  expected.all(item => {
+    let key = prefix + "." + item.suffix
+    let row = report-sidecar-indexed-row-or-none(index, key)
+    row != none and if item.value == none {
+      row.is_missing == true
+    } else {
+      row.is_missing == false and q2-values-equal(
+        report-sidecar-row-value-or-none(row),
+        item.value,
+      )
+    }
+  })
+}
+
+#let q2-support-key(chain) = (
+  chain.scene,
+  str(chain.store),
+  str(chain.target),
+  str(chain.horizon),
+  q2-candidate-branch-bin(chain.width-max),
+  chain.candidate-config,
+  chain.rollout-config,
+  chain.policy,
+).join("|")
+
+#let q2-row-stratum-key(row) = (
+  row.scene,
+  str(row.store),
+  str(row.target),
+  row.branch-bin,
+  row.candidate-config,
+  row.rollout-config,
+  row.policy,
+  str(row.horizon),
+).join("|")
+
+#let report-store-q2-certification-receipt-valid(report, store-id) = {
+  let fact-index = report-store-fact-index(report)
+  let receipt-row = report-store-indexed-row-or-none(
+    fact-index,
+    store-id,
+    "q2.exact.certification_receipt_sha256",
+  )
+  let receipt-digest = if receipt-row != none and report-sha256-value-valid(
+    receipt-row.value,
+  ) { receipt-row.value } else { "" }
+  let receipt-sidecar = report-confirmatory-sidecar-by-digest(
+    report,
+    receipt-digest,
+  )
+  let receipt-index = report-sidecar-value-index(
+    report,
+    if receipt-sidecar == none { "" } else { receipt-sidecar.sidecar_id },
+  )
+  let value(key) = report-sidecar-indexed-value-or-none(receipt-index, key)
+  let store-manifest = report-store-manifest-sha256(report, store-id)
+  let manifest-rows = receipt-index.rows.values().filter(
+    row => row.key.match(regex("^bound_contract\\.ordered_test_store_manifests\\[[0-9]+\\]$")) != none,
+  )
+  let manifest-values = range(manifest-rows.len()).map(index => value(
+    "bound_contract.ordered_test_store_manifests[" + str(index) + "]",
+  ))
+  let ordered-manifest-json = "[" + manifest-values.map(
+    manifest => "\"" + str(manifest) + "\"",
+  ).join(",") + "]"
+  let expected-ordered-manifest-digest = if manifest-values.all(
+    report-sha256-value-valid,
+  ) { sha256-hex(ordered-manifest-json) } else { "" }
+  let report-manifests = report.tables.stores.rows.map(
+    row => row.at("manifest_sha256", default: none),
+  )
+  let lineage-valid = receipt-sidecar != none and store-manifest != none and (
+    "bundle_manifest_sha256",
+    "test_population_sha256",
+    "test_provenance_sha256",
+    "bound_contract.scorer_config_hash",
+    "bound_contract.learning_contract_hash",
+    "bound_contract.actor_state_contract_hash",
+    "bound_contract.geometry_contract_hash",
+  ).all(key => report-sha256-value-valid(value(key))) and manifest-values.len() > 0 and manifest-values.all(
+    report-sha256-value-valid,
+  ) and manifest-values.dedup().len() == manifest-values.len() and report-manifests.all(
+    report-sha256-value-valid,
+  ) and manifest-values.sorted() == report-manifests.sorted() and manifest-values.contains(store-manifest)
+
+  let selected-prefixes = report-sidecar-record-prefixes(
+    receipt-index,
+    "exact_q2.selected_chain_support",
+    "selection_rank",
+  )
+  let row-prefixes = report-sidecar-record-prefixes(
+    receipt-index,
+    "exact_q2.factual_selected_action_exact_q2_rows",
+    "selection_rank",
+  )
+  let selected = selected-prefixes.map(prefix => (
+    prefix: prefix,
+    rank: value(prefix + ".selection_rank"),
+    dataset: value(prefix + ".dataset_index"),
+    store: value(prefix + ".identity.store_index"),
+    rollout: value(prefix + ".identity.rollout_row_id"),
+    source-sample: value(prefix + ".identity.source_sample_index"),
+    scene: value(prefix + ".identity.scene_id"),
+    target: value(prefix + ".identity.target_row_id"),
+    horizon: value(prefix + ".identity.configured_horizon"),
+    width-min: value(prefix + ".identity.candidate_width_min"),
+    width-max: value(prefix + ".identity.candidate_width_max"),
+    candidate-config: value(prefix + ".identity.candidate_config_hash"),
+    rollout-config: value(prefix + ".identity.rollout_config_hash"),
+    policy: value(prefix + ".identity.selection_policy"),
+    unit-manifest: value(prefix + ".independent_unit.ordered_store_manifest_sha256"),
+    unit-scene: value(prefix + ".independent_unit.scene_id"),
+    factual-states: value(prefix + ".factual_state_count"),
+    materialized-successors: value(prefix + ".states_with_materialized_successors_count"),
+    complete-successors: value(prefix + ".states_with_complete_hard_valid_successor_labels_count"),
+    exact-rows: value(prefix + ".factual_selected_action_exact_q2_row_count"),
+  ))
+  let selected-valid = selected.len() > 0 and selected.all(chain => (
+    type(chain.rank) == int and chain.rank >= 0,
+    type(chain.dataset) == int and chain.dataset >= 0,
+    type(chain.store) == int and chain.store >= 0 and chain.store < manifest-values.len(),
+    type(chain.rollout) == int and chain.rollout >= 0,
+    type(chain.source-sample) == int and chain.source-sample >= 0,
+    type(chain.scene) == str and chain.scene.len() > 0,
+    type(chain.target) == int and chain.target >= 0,
+    type(chain.horizon) == int and chain.horizon >= 1,
+    type(chain.width-min) == int and chain.width-min >= 1,
+    type(chain.width-max) == int and chain.width-max >= chain.width-min,
+    type(chain.candidate-config) == str and chain.candidate-config.len() > 0,
+    type(chain.rollout-config) == str and chain.rollout-config.len() > 0,
+    type(chain.policy) == str and chain.policy.len() > 0,
+    report-sha256-value-valid(chain.unit-manifest),
+    chain.unit-manifest == expected-ordered-manifest-digest,
+    chain.unit-scene == chain.scene,
+    (chain.factual-states, chain.materialized-successors, chain.complete-successors, chain.exact-rows).all(
+      count => type(count) == int and count >= 0,
+    ),
+  ).all(check => check)) and selected.map(chain => chain.rank).sorted() == range(
+    selected.len(),
+  ) and selected.map(
+    chain => str(chain.store) + "|" + str(chain.rollout),
+  ).dedup().len() == selected.len()
+  let selected-by-rank = (:)
+  for chain in selected {
+    if type(chain.rank) == int { selected-by-rank.insert(str(chain.rank), chain) }
+  }
+
+  let rows = row-prefixes.map(prefix => (
+    prefix: prefix,
+    rank: value(prefix + ".selection_rank"),
+    dataset: value(prefix + ".dataset_index"),
+    store: value(prefix + ".store_index"),
+    rollout: value(prefix + ".rollout_row_id"),
+    source-sample: value(prefix + ".source_sample_index"),
+    scene: value(prefix + ".scene_id"),
+    manifest: value(prefix + ".ordered_store_manifest_sha256"),
+    unit-manifest: value(prefix + ".independent_unit.ordered_store_manifest_sha256"),
+    unit-scene: value(prefix + ".independent_unit.scene_id"),
+    target: value(prefix + ".target_row_id"),
+    step: value(prefix + ".step_index"),
+    horizon: value(prefix + ".configured_horizon"),
+    requested-horizon: value(prefix + ".requested_horizon"),
+    candidate-config: value(prefix + ".candidate_config_hash"),
+    rollout-config: value(prefix + ".rollout_config_hash"),
+    policy: value(prefix + ".selection_policy"),
+    current-count: value(prefix + ".current_candidate_count"),
+    successor-count: value(prefix + ".successor_backup_count"),
+    branch-bin: value(prefix + ".candidate_branch_bin"),
+    selected-index: value(prefix + ".selected_index"),
+    recursive: value(prefix + ".recursive_target"),
+    exact: value(prefix + ".exact_target"),
+    absolute-error: value(prefix + ".absolute_error"),
+    relative-error: value(prefix + ".relative_error"),
+    tolerance: value(prefix + ".tolerance"),
+    within: value(prefix + ".within_tolerance"),
+  ))
+  let absolute-tolerance = value("exact_q2.spec.absolute_tolerance")
+  let relative-tolerance = value("exact_q2.spec.relative_tolerance")
+  let rows-valid = rows.len() > 0 and report-value-matches-kind(
+    absolute-tolerance,
+    "number",
+  ) and absolute-tolerance >= 0 and report-value-matches-kind(
+    relative-tolerance,
+    "number",
+  ) and relative-tolerance >= 0 and rows.all(row => {
+    let chain = if type(row.rank) == int {
+      selected-by-rank.at(str(row.rank), default: none)
+    } else { none }
+    let derived-absolute-error = if report-value-matches-kind(
+      row.recursive,
+      "number",
+    ) and report-value-matches-kind(row.exact, "number") {
+      calc.abs(row.recursive - row.exact)
+    } else { none }
+    let derived-tolerance = if report-value-matches-kind(row.exact, "number") {
+      absolute-tolerance + relative-tolerance * calc.abs(row.exact)
+    } else { none }
+    let derived-relative-error = if derived-absolute-error != none and report-value-matches-kind(
+      row.exact,
+      "number",
+    ) {
+      derived-absolute-error / calc.max(calc.abs(row.exact), float32-epsilon)
+    } else { none }
+    chain != none and (
+      row.dataset == chain.dataset,
+      row.store == chain.store,
+      row.rollout == chain.rollout,
+      row.source-sample == chain.source-sample,
+      row.scene == chain.scene,
+      row.manifest == chain.unit-manifest,
+      row.unit-manifest == chain.unit-manifest,
+      row.unit-scene == chain.scene,
+      row.target == chain.target,
+      row.horizon == chain.horizon,
+      row.candidate-config == chain.candidate-config,
+      row.rollout-config == chain.rollout-config,
+      row.policy == chain.policy,
+      type(row.step) == int and row.step >= 0,
+      row.requested-horizon == 2,
+      type(row.current-count) == int and row.current-count >= 1,
+      type(row.successor-count) == int and row.successor-count >= 1,
+      row.branch-bin == q2-candidate-branch-bin(row.successor-count),
+      type(row.selected-index) == int and row.selected-index >= 0 and row.selected-index < row.current-count,
+      derived-relative-error != none and q2-values-equal(row.relative-error, derived-relative-error),
+      derived-absolute-error != none and calc.abs(row.absolute-error - derived-absolute-error) <= derived-identity-abs-tolerance,
+      derived-tolerance != none and calc.abs(row.tolerance - derived-tolerance) <= derived-identity-abs-tolerance,
+      type(row.within) == bool and row.within == (derived-absolute-error <= derived-tolerance),
+    ).all(check => check)
+  }) and rows.map(
+    row => str(row.store) + "|" + str(row.rollout) + "|" + str(row.step),
+  ).dedup().len() == rows.len()
+
+  let selected-row-groups = (:)
+  let unit-row-groups = (:)
+  for row in rows {
+    if type(row.rank) == int {
+      let rank-key = str(row.rank)
+      selected-row-groups.insert(
+        rank-key,
+        selected-row-groups.at(rank-key, default: ()) + (row,),
+      )
+    }
+    if report-sha256-value-valid(row.unit-manifest) and type(row.unit-scene) == str {
+      let unit-key = row.unit-manifest + "|" + row.unit-scene
+      unit-row-groups.insert(
+        unit-key,
+        unit-row-groups.at(unit-key, default: ()) + (row,),
+      )
+    }
+  }
+  let chain-counts-valid = selected.all(chain => selected-row-groups.at(
+    str(chain.rank),
+    default: (),
+  ).len() == chain.exact-rows)
+  let selected-unit-keys = selected.map(
+    chain => chain.unit-manifest + "|" + chain.unit-scene,
+  ).dedup()
+  let selected-unit-chain-groups = (:)
+  for chain in selected {
+    let unit-key = chain.unit-manifest + "|" + chain.unit-scene
+    selected-unit-chain-groups.insert(
+      unit-key,
+      selected-unit-chain-groups.at(unit-key, default: ()) + (chain,),
+    )
+  }
+  let unit-row-counts = selected-unit-keys.map(
+    unit-key => unit-row-groups.at(unit-key, default: ()).len(),
+  )
+  let supported-unit-maes = selected-unit-keys.map(unit-key => unit-row-groups.at(
+    unit-key,
+    default: (),
+  )).filter(group => group.len() > 0).map(
+    group => group.map(row => row.absolute-error).sum() / group.len(),
+  )
+  let derived-mae = if supported-unit-maes.len() > 0 {
+    supported-unit-maes.sum() / supported-unit-maes.len()
+  } else { none }
+
+  let support-groups = (:)
+  let support-chain-groups = (:)
+  for chain in selected {
+    if type(chain.width-max) == int and chain.width-max >= 1 {
+      let support-key = q2-support-key(chain)
+      support-groups.insert(
+        support-key,
+        support-groups.at(support-key, default: 0) + chain.exact-rows,
+      )
+      support-chain-groups.insert(
+        support-key,
+        support-chain-groups.at(support-key, default: ()) + (chain,),
+      )
+    }
+  }
+  let row-stratum-groups = (:)
+  for row in rows {
+    let stratum-key = q2-row-stratum-key(row)
+    row-stratum-groups.insert(
+      stratum-key,
+      row-stratum-groups.at(stratum-key, default: ()) + (row,),
+    )
+  }
+  let population-chain-count = value("exact_q2.population_census.population_chain_count")
+  let selected-chain-count = value("exact_q2.population_census.selected_chain_count")
+  let reported-coverage = value("exact_q2.population_census.selected_chain_fraction")
+  let coverage-minimum = value("exact_q2.spec.minimum_population_coverage")
+  let minimum-units-required = value("exact_q2.spec.minimum_independent_units")
+  let minimum-unit-rows-required = value(
+    "exact_q2.spec.minimum_exact_rows_per_independent_unit",
+  )
+  let safe-minimum-units-required = if type(minimum-units-required) == int {
+    minimum-units-required
+  } else { 0 }
+  let safe-minimum-unit-rows-required = if type(minimum-unit-rows-required) == int {
+    minimum-unit-rows-required
+  } else { 0 }
+  let derived-coverage = if type(population-chain-count) == int and population-chain-count > 0 {
+    selected.len() / population-chain-count
+  } else { none }
+  let derived-minimum-support-rows = if support-groups.len() > 0 {
+    support-groups.values().sorted().first()
+  } else { none }
+  let derived-minimum-unit-rows = if unit-row-counts.len() > 0 {
+    unit-row-counts.sorted().first()
+  } else { none }
+  let derived-maximum-excess = if rows.len() > 0 {
+    rows.map(row => row.absolute-error - row.tolerance).sorted().last()
+  } else { none }
+  let derived-unit-pass = type(minimum-units-required) == int and type(
+    minimum-unit-rows-required,
+  ) == int and derived-minimum-unit-rows != none and derived-maximum-excess != none and (
+    selected-unit-keys.len() >= minimum-units-required,
+    derived-minimum-unit-rows >= minimum-unit-rows-required,
+    derived-maximum-excess <= 0,
+  ).all(check => check)
+  let derived-pass = derived-coverage != none and type(coverage-minimum) in (
+    int,
+    float,
+  ) and derived-minimum-support-rows != none and derived-unit-pass and (
+    derived-coverage >= coverage-minimum,
+    derived-minimum-support-rows >= 1,
+  ).all(check => check)
+
+  let census-prefixes = report-sidecar-record-prefixes(
+    receipt-index,
+    "exact_q2.population_census.strata",
+    "stratum.scene_id",
+  )
+  let census-strata = census-prefixes.map(prefix => (
+    prefix: prefix,
+    scene: value(prefix + ".stratum.scene_id"),
+    store: value(prefix + ".stratum.store_index"),
+    target: value(prefix + ".stratum.target_row_id"),
+    horizon: value(prefix + ".stratum.configured_horizon"),
+    branch-bin: value(prefix + ".stratum.candidate_branch_bin"),
+    candidate-config: value(prefix + ".stratum.candidate_config_hash"),
+    rollout-config: value(prefix + ".stratum.rollout_config_hash"),
+    policy: value(prefix + ".stratum.selection_policy"),
+    population: value(prefix + ".population_chain_count"),
+    selected: value(prefix + ".selected_chain_count"),
+    fraction: value(prefix + ".selected_chain_fraction"),
+  ))
+  let census-keys = census-strata.map(stratum => (
+    stratum.scene,
+    str(stratum.store),
+    str(stratum.target),
+    str(stratum.horizon),
+    stratum.branch-bin,
+    stratum.candidate-config,
+    stratum.rollout-config,
+    stratum.policy,
+  ).join("|"))
+  let census-valid = census-strata.len() > 0 and census-strata.all(stratum => {
+    let key = (
+      stratum.scene,
+      str(stratum.store),
+      str(stratum.target),
+      str(stratum.horizon),
+      stratum.branch-bin,
+      stratum.candidate-config,
+      stratum.rollout-config,
+      stratum.policy,
+    ).join("|")
+    let selected-count = support-chain-groups.at(key, default: ()).len()
+    type(stratum.scene) == str and stratum.scene.len() > 0 and type(
+      stratum.store,
+    ) == int and stratum.store >= 0 and stratum.store < manifest-values.len() and type(stratum.target) == int and stratum.target >= 0 and type(
+      stratum.horizon,
+    ) == int and stratum.horizon >= 1 and type(stratum.branch-bin) == str and stratum.branch-bin.len() > 0 and type(
+      stratum.candidate-config,
+    ) == str and stratum.candidate-config.len() > 0 and type(stratum.rollout-config) == str and stratum.rollout-config.len() > 0 and type(
+      stratum.policy,
+    ) == str and stratum.policy.len() > 0 and type(stratum.population) == int and stratum.population >= 1 and type(
+      stratum.selected,
+    ) == int and stratum.selected >= 0 and stratum.selected <= stratum.population and report-value-matches-kind(
+      stratum.fraction,
+      "number",
+    ) and stratum.selected == selected-count and q2-values-equal(
+      stratum.fraction,
+      stratum.selected / stratum.population,
+    )
+  }) and census-keys.dedup().len() == census-keys.len() and support-chain-groups.keys().all(
+    key => census-keys.contains(key),
+  ) and census-strata.map(stratum => stratum.population).sum(default: 0) == population-chain-count and census-strata.map(
+    stratum => stratum.selected,
+  ).sum(default: 0) == selected.len()
+  let census-scenes = census-strata.map(stratum => stratum.scene).dedup()
+  let census-targets = census-strata.map(
+    stratum => stratum.scene + "|" + str(stratum.target),
+  ).dedup()
+  let branch-bin-values = range(6).map(index => value(
+    "exact_q2.population_census.candidate_branch_bins[" + str(index) + "]",
+  ))
+  let census-summary-valid = branch-bin-values == (1, 4, 8, 16, 32, 64) and (
+    (key: "exact_q2.population_census.near_exhaustive", value: selected.len() == population-chain-count),
+    (key: "exact_q2.population_census.eligible_scene_count", value: census-scenes.len()),
+    (key: "exact_q2.population_census.eligible_target_count", value: census-targets.len()),
+    (key: "exact_q2.population_census.eligible_chain_count", value: population-chain-count),
+    (key: "exact_q2.population_census.independent_unit_count", value: census-scenes.len()),
+  ).all(expected => report-sidecar-indexed-value-matches(
+    receipt-index,
+    expected.key,
+    expected.value,
+  ))
+
+  let support-prefixes = report-sidecar-record-prefixes(
+    receipt-index,
+    "exact_q2.support_stratum_aggregates",
+    "stratum.scene_id",
+  )
+  let support-aggregate-keys = support-prefixes.map(prefix => (
+    value(prefix + ".stratum.scene_id"),
+    str(value(prefix + ".stratum.store_index")),
+    str(value(prefix + ".stratum.target_row_id")),
+    str(value(prefix + ".stratum.configured_horizon")),
+    value(prefix + ".stratum.candidate_branch_bin"),
+    value(prefix + ".stratum.candidate_config_hash"),
+    value(prefix + ".stratum.rollout_config_hash"),
+    value(prefix + ".stratum.selection_policy"),
+  ).join("|"))
+  let support-aggregates-valid = support-prefixes.len() == support-chain-groups.len() and support-aggregate-keys.dedup().len() == support-aggregate-keys.len() and support-aggregate-keys.sorted() == support-chain-groups.keys().sorted() and support-prefixes.enumerate().all(((index, prefix)) => {
+    let key = support-aggregate-keys.at(index)
+    let chains = support-chain-groups.at(key)
+    (
+      (key: prefix + ".selected_chain_count", value: chains.len()),
+      (key: prefix + ".chains_with_factual_selected_action_exact_q2_count", value: chains.filter(chain => chain.exact-rows > 0).len()),
+      (key: prefix + ".factual_selected_action_exact_q2_row_count", value: chains.map(chain => chain.exact-rows).sum(default: 0)),
+    ).all(expected => report-sidecar-indexed-value-matches(
+      receipt-index,
+      expected.key,
+      expected.value,
+    ))
+  })
+
+  let evidence-denominators-valid = (
+    (key: "factual_state_count", selector: chain => chain.factual-states),
+    (key: "states_with_materialized_successors_count", selector: chain => chain.materialized-successors),
+    (key: "states_with_complete_hard_valid_successor_labels_count", selector: chain => chain.complete-successors),
+    (key: "factual_selected_action_exact_q2_row_count", selector: chain => chain.exact-rows),
+  ).all(field => report-sidecar-indexed-value-matches(
+    receipt-index,
+    "exact_q2.evidence_denominators." + field.key,
+    selected.map(field.selector).sum(default: 0),
+  ))
+  let global-aggregate = q2-row-aggregate(rows, 1)
+  let aggregate-valid = q2-sidecar-aggregate-matches(
+    receipt-index,
+    "exact_q2.aggregate",
+    global-aggregate,
+  )
+
+  let stored-stratum-prefixes = report-sidecar-record-prefixes(
+    receipt-index,
+    "exact_q2.stratum_aggregates",
+    "stratum.scene_id",
+  )
+  let stored-stratum-keys = stored-stratum-prefixes.map(prefix => (
+    value(prefix + ".stratum.scene_id"),
+    str(value(prefix + ".stratum.store_index")),
+    str(value(prefix + ".stratum.target_row_id")),
+    value(prefix + ".stratum.candidate_branch_bin"),
+    value(prefix + ".stratum.candidate_config_hash"),
+    value(prefix + ".stratum.rollout_config_hash"),
+    value(prefix + ".stratum.selection_policy"),
+    str(value(prefix + ".stratum.configured_horizon")),
+  ).join("|"))
+  let stratum-aggregates-valid = stored-stratum-prefixes.len() == row-stratum-groups.len() and stored-stratum-keys.dedup().len() == stored-stratum-keys.len() and stored-stratum-keys.sorted() == row-stratum-groups.keys().sorted() and stored-stratum-prefixes.enumerate().all(((index, prefix)) => q2-sidecar-aggregate-matches(
+    receipt-index,
+    prefix,
+    q2-row-aggregate(row-stratum-groups.at(stored-stratum-keys.at(index)), 1),
+  ))
+
+  let ordered-unit-manifests = selected.map(chain => chain.unit-manifest).dedup()
+  let ordered-unit-manifest = if ordered-unit-manifests.len() == 1 {
+    ordered-unit-manifests.first()
+  } else { "" }
+  let population-unit-keys = census-scenes.map(
+    scene => ordered-unit-manifest + "|" + scene,
+  )
+  let unit-prefixes = report-sidecar-record-prefixes(
+    receipt-index,
+    "exact_q2.independent_unit_aggregates",
+    "independent_unit.scene_id",
+  )
+  let stored-unit-keys = unit-prefixes.map(prefix => value(
+    prefix + ".independent_unit.ordered_store_manifest_sha256",
+  ) + "|" + value(prefix + ".independent_unit.scene_id"))
+  let unit-aggregates-valid = ordered-unit-manifests.len() == 1 and unit-prefixes.len() == population-unit-keys.len() and stored-unit-keys.dedup().len() == stored-unit-keys.len() and stored-unit-keys.sorted() == population-unit-keys.sorted() and unit-prefixes.enumerate().all(((index, prefix)) => {
+    let unit-key = stored-unit-keys.at(index)
+    let scene = value(prefix + ".independent_unit.scene_id")
+    let population-count = census-strata.filter(
+      stratum => stratum.scene == scene,
+    ).map(stratum => stratum.population).sum(default: 0)
+    let chains = selected-unit-chain-groups.at(unit-key, default: ())
+    let unit-rows = unit-row-groups.at(unit-key, default: ())
+    let unit-aggregate = q2-row-aggregate(unit-rows, safe-minimum-unit-rows-required)
+    let admitted = chains.len() > 0
+    let expected-scalars = (
+      (key: prefix + ".population_chain_count", value: population-count),
+      (key: prefix + ".selected_chain_count", value: chains.len()),
+      (key: prefix + ".admitted", value: admitted),
+      (key: prefix + ".factual_state_count", value: chains.map(chain => chain.factual-states).sum(default: 0)),
+      (key: prefix + ".states_with_materialized_successors_count", value: chains.map(chain => chain.materialized-successors).sum(default: 0)),
+      (key: prefix + ".states_with_complete_hard_valid_successor_labels_count", value: chains.map(chain => chain.complete-successors).sum(default: 0)),
+      (key: prefix + ".factual_selected_action_exact_q2_row_count", value: chains.map(chain => chain.exact-rows).sum(default: 0)),
+      (key: prefix + ".unit_gate_passed", value: admitted and unit-aggregate.tolerance-passed),
+    )
+    expected-scalars.all(expected => report-sidecar-indexed-value-matches(
+      receipt-index,
+      expected.key,
+      expected.value,
+    )) and q2-sidecar-aggregate-matches(
+      receipt-index,
+      prefix + ".error",
+      unit-aggregate,
+    )
+  })
+  let supported-unit-count = selected-unit-keys.filter(
+    unit-key => unit-row-groups.at(unit-key, default: ()).len() >= safe-minimum-unit-rows-required,
+  ).len()
+  let passing-unit-count = selected-unit-keys.filter(unit-key => q2-row-aggregate(
+    unit-row-groups.at(unit-key, default: ()),
+    safe-minimum-unit-rows-required,
+  ).tolerance-passed).len()
+  let minimum-units-met = supported-unit-count >= safe-minimum-units-required
+  let all-selected-units-passed = selected-unit-keys.len() > 0 and passing-unit-count == selected-unit-keys.len()
+  let independent-gate-valid = (
+    (key: "exact_q2.independent_unit_gate.independent_unit_semantics", value: q2-independent-unit-semantics),
+    (key: "exact_q2.independent_unit_gate.aggregation", value: q2-independent-unit-aggregation),
+    (key: "exact_q2.independent_unit_gate.population_independent_unit_count", value: population-unit-keys.len()),
+    (key: "exact_q2.independent_unit_gate.selected_independent_unit_count", value: selected-unit-keys.len()),
+    (key: "exact_q2.independent_unit_gate.supported_independent_unit_count", value: supported-unit-count),
+    (key: "exact_q2.independent_unit_gate.passing_independent_unit_count", value: passing-unit-count),
+    (key: "exact_q2.independent_unit_gate.minimum_independent_units", value: minimum-units-required),
+    (key: "exact_q2.independent_unit_gate.minimum_exact_rows_per_independent_unit", value: minimum-unit-rows-required),
+    (key: "exact_q2.independent_unit_gate.minimum_independent_units_met", value: minimum-units-met),
+    (key: "exact_q2.independent_unit_gate.all_selected_units_passed", value: all-selected-units-passed),
+    (key: "exact_q2.independent_unit_gate.passed", value: minimum-units-met and all-selected-units-passed),
+  ).all(expected => report-sidecar-indexed-value-matches(
+    receipt-index,
+    expected.key,
+    expected.value,
+  ))
+  let facts-match = (
+    (key: "q2.exact.mae", value: derived-mae),
+    (key: "q2.exact.coverage", value: derived-coverage),
+    (key: "q2.exact.minimum_support_stratum_rows", value: derived-minimum-support-rows),
+    (key: "q2.exact.minimum_rows_per_independent_unit", value: derived-minimum-unit-rows),
+    (key: "q2.exact.maximum_tolerance_excess", value: derived-maximum-excess),
+    (key: "q2.exact.n_independent_units", value: selected-unit-keys.len()),
+    (key: "q2.exact.coverage.minimum", value: coverage-minimum),
+    (key: "q2.exact.minimum_independent_units", value: minimum-units-required),
+    (key: "q2.exact.minimum_rows_per_independent_unit.required", value: minimum-unit-rows-required),
+    (key: "q2.exact.absolute_tolerance", value: absolute-tolerance),
+    (key: "q2.exact.relative_tolerance", value: relative-tolerance),
+    (key: "q2.exact.passed", value: derived-pass),
+  ).all(expected => {
+    let row = report-store-indexed-row-or-none(fact-index, store-id, expected.key)
+    row != none and expected.value != none and if report-value-matches-kind(
+      expected.value,
+      "number",
+    ) and report-value-matches-kind(row.value, "number") {
+      calc.abs(row.value - expected.value) <= derived-identity-abs-tolerance
+    } else { row.value == expected.value }
+  })
+  let final-valid = lineage-valid and selected-valid and rows-valid and chain-counts-valid and census-valid and census-summary-valid and support-aggregates-valid and evidence-denominators-valid and aggregate-valid and stratum-aggregates-valid and unit-aggregates-valid and independent-gate-valid and type(
+    population-chain-count,
+  ) == int and population-chain-count >= selected.len() and selected-chain-count == selected.len() and report-value-matches-kind(
+    reported-coverage,
+    "number",
+  ) and derived-coverage != none and calc.abs(
+    reported-coverage - derived-coverage,
+  ) <= derived-identity-abs-tolerance and (
+    (key: "schema_version", value: q2-certification-receipt-schema),
+    (key: "exact_q2.schema_version", value: q2-certification-schema),
+    (key: "exact_q2.evidence_semantics.quantity", value: "learned_recursive_q2_target_error_against_factual_dense_successor_control"),
+    (key: "exact_q2.evidence_semantics.implementation_recursion_parity", value: false),
+    (key: "exact_q2.evidence_semantics.endpoint_policy_evidence", value: false),
+    (key: "exact_q2.evidence_semantics.longer_horizon_claim", value: false),
+    (key: "bound_contract.learning_contract.objective_profile", value: "qh_dense_valid_fitted_q_v1"),
+    (key: "exact_q2.population_census.selection_semantics", value: q2-selection-semantics),
+    (key: "exact_q2.population_census.independent_unit_semantics", value: q2-independent-unit-semantics),
+    (key: "exact_q2.spec.independent_unit_aggregation", value: q2-independent-unit-aggregation),
+    (key: "exact_q2.selection_coverage_passed", value: derived-coverage >= coverage-minimum),
+    (key: "exact_q2.support_coverage_passed", value: derived-minimum-support-rows >= 1),
+    (key: "exact_q2.independent_unit_gate.passed", value: derived-unit-pass),
+    (key: "exact_q2.learned_recursion_passed", value: derived-pass),
+  ).all(expected => report-sidecar-indexed-value-matches(
+    receipt-index,
+    expected.key,
+    expected.value,
+  )) and facts-match
+  final-valid
+}
+
 #let report-store-q2-evidence-valid(report, store-id) = {
   let coverage = report-store-number-value(report, store-id, "q2.exact.coverage")
   let minimum-support-rows = report-store-number-value(report, store-id, "q2.exact.minimum_support_stratum_rows")
@@ -1467,6 +2302,9 @@
     report,
     store-id,
     ((key: "q2.exact.rule", value: q2-decision-rule),),
+  ) and report-store-q2-certification-receipt-valid(
+    report,
+    store-id,
   ) and (
     coverage,
     minimum-support-rows,

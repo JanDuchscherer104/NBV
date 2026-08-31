@@ -1,9 +1,9 @@
-#import "../experiment_data.typ": conditional-ratio-gate-state, evidence-gate-state, endpoint-evidence-facts, headroom-evidence-facts, recovery-evidence-facts, headroom-decision-rule, paired-interval-method, recovery-decision-rule, recovery-interval-method, recovery-ratio-definition, report-store-endpoint-evidence-valid, report-store-headroom-evidence-valid, report-store-recovery-evidence-valid, report-store-headroom-identity-valid, report-store-recovery-identity-valid, report-store-fact, report-store-facts-share-source, report-store-facts-share-value, report-stores-have-facts
+#import "../experiment_data.typ": canonical-sidecar-id, conditional-ratio-gate-state, evidence-gate-state, endpoint-evidence-facts, headroom-evidence-facts, recovery-evidence-facts, headroom-decision-rule, paired-interval-method, recovery-decision-rule, recovery-interval-method, recovery-ratio-definition, report-store-endpoint-evidence-valid, report-store-headroom-evidence-valid, report-store-recovery-evidence-valid, report-store-headroom-identity-valid, report-store-recovery-identity-valid, report-store-fact, report-store-facts-share-source, report-store-facts-share-value, report-stores-have-facts
 
-#let sidecar-a = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-#let sidecar-b = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
 #let digest-a = "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
 #let digest-b = "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+#let sidecar-a = canonical-sidecar-id("paired-policy", digest-a)
+#let sidecar-b = canonical-sidecar-id("other", digest-b)
 #let source = "analysis/paired-policy.json|sidecar:" + sidecar-a
 #let sidecars = (
   (sidecar_id: sidecar-a, path: "paired-policy", name: "paired-policy", sha256: digest-a, format: "json", status: "confirmatory"),
