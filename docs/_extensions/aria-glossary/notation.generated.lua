@@ -302,6 +302,12 @@ return {
       description = "Valid action set available in state s_t.",
       thesis_list = true,
     },
+    ["rl.action_set_t"] = {
+      tex = "\\mathcal{A}_t",
+      typst = "#symb.rl.action_set_t",
+      description = "Finite feasible action set at rollout step t.",
+      thesis_list = true,
+    },
     ["rl.budget"] = {
       tex = "b_t",
       typst = "#symb.rl.budget",
