@@ -11,6 +11,7 @@ touched_owner_paths:
   - docs/typst/thesis/development/roadmap.typ
   - docs/typst/thesis/development/m1-contract-report.typ
   - scripts/tests/test_thesis_roadmap_contract.py
+  - scripts/tests/test_agent_governance_g002.py
   - Makefile
   - docs/AGENTS.md
 codex_thread: codex://threads/01a057bd-546e-7e52-b5e8-c21124664bc2
@@ -58,7 +59,9 @@ candidate; all three P2 consistency findings were corrected before commit.
   are legible and unclipped.
 - `make thesis-literature-provenance`: 31 tests passed.
 - `make check-agent-memory`, Ruff format/check, and `git diff --check`: passed.
-- The complete pre-push docs render passed. The separate strict Graphify-state
+- The complete pre-push docs render passed. The first hosted run exposed and
+  prompted correction of a stale scaffold assertion for the retired M5/M6
+  milestone wording. The separate strict Graphify-state
   hook could not initialize this new worktree because no registered ancestor had
   a query-admissible Graphify snapshot; hosted exact-head CI remains the final
   publication proof.
