@@ -153,3 +153,4 @@ RRI result, or permission for broad generation.
 - Final admission and evidence seam repair: `c0f7a1abea17e87d8a1a2c610db3dad0328c86c4`.
 - Self-describing v4 metadata reseal: `103c44a5299734df11a2f0a772a060972bb54a50`.
 - Presentation-free streaming preflight: `fcecdf5f2da0afd9aa25dae717f4ec52fefe0c6e`.
+- [Target-frame and paired-family review repair](https://github.com/JanDuchscherer104/ARIA-NBV/commit/daae03c94a75df5849562e2f10188d474b9ea94f)
