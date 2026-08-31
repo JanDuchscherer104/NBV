@@ -17,10 +17,12 @@ from aria_nbv.data_handling.qh_data import QhDataset
 from aria_nbv.data_handling.vin_store.format import VinOfflineIndexRecord
 from aria_nbv.oracle.pipelines.campaign import (
     CAMPAIGN_PLAN_SCHEMA_VERSION,
+    BroadGenerationAdmissionError,
     CampaignOutcome,
     CampaignProcessRunner,
     CampaignStatus,
     CampaignTimeoutError,
+    CampaignWorkerPurpose,
     CampaignWorkerResult,
     CampaignWorkUnit,
     CudaRolloutCampaign,
@@ -297,7 +299,9 @@ def _campaign(tmp_path):
     values = base.model_dump()
     values.update(expected_scene_count=2, profiles=base.profiles)
     config = CudaRolloutCampaignConfig.model_construct(**values)
-    return CudaRolloutCampaign(config)
+    campaign = CudaRolloutCampaign(config)
+    campaign.require_execution_admission = lambda: None
+    return campaign
 
 
 def _append_pre_run_prefix(campaign, plan):
@@ -1804,7 +1808,8 @@ def test_stale_smoke_evidence_is_rejected_without_overwriting(tmp_path):
     plan = campaign.plan([_row("s0", "k", "t"), _row("s1", "k1", "t1")], source_manifest_hash="source")
     evidence = tmp_path / "smoke-evidence.json"
     evidence.write_text(
-        '{"campaign_id":"cuda-rollouts-v1","plan_hash":"stale","config_hash":"x","work_unit_hash":"u"}\n'
+        '{"scope":"canonical_single_work_unit","campaign_id":"cuda-rollouts-v1","plan_hash":"stale",'
+        '"config_hash":"x","work_unit_hash":"u"}\n'
     )
     before = evidence.read_text()
     with pytest.raises(RuntimeError, match="stale"):
@@ -1834,6 +1839,7 @@ def test_smoke_evidence_rejects_forged_foreign_worker_identity(tmp_path):
     (tmp_path / "smoke-evidence.json").write_text(
         json.dumps(
             {
+                "scope": "canonical_single_work_unit",
                 "campaign_id": plan.campaign_id,
                 "plan_hash": plan.plan_hash,
                 "config_hash": plan.config_hash,
@@ -2694,6 +2700,7 @@ def test_direct_run_forwards_plan_and_writer_to_source_preflight(tmp_path, monke
     campaign = _campaign(tmp_path)
     config = campaign.config.model_copy(update={"writer_config_path": tmp_path / "writer.toml"})
     campaign = CudaRolloutCampaign(config)
+    campaign.require_execution_admission = lambda: None
     plan = campaign.plan([_row("s0", "k", "t"), _row("s1", "k1", "t1")], source_manifest_hash="source")
     captured = {}
 
@@ -2872,13 +2879,14 @@ def test_process_runner_real_hung_child_uses_term_then_kill_process_group():
 
 def test_work_unit_delegates_skip_to_shard_leaf(tmp_path):
     campaign = _campaign(tmp_path)
-    unit = campaign.plan(
+    plan = campaign.plan(
         [
             _row("s0", "k", "t"),
             _row("s1", "k1", "t1"),
         ],
         source_manifest_hash="source",
-    ).work_units[0]
+    )
+    unit = plan.work_units[0]
     calls = []
 
     def shard_runner(config, **kwargs):
@@ -2886,7 +2894,9 @@ def test_work_unit_delegates_skip_to_shard_leaf(tmp_path):
         return SimpleNamespace(skipped=True)
 
     result = campaign.run_work_unit(
+        plan,
         unit,
+        purpose=CampaignWorkerPurpose.SMOKE,
         writer_config="writer",
         shard_entry="entry",
         output_tmp=tmp_path / "tmp",
@@ -2895,3 +2905,30 @@ def test_work_unit_delegates_skip_to_shard_leaf(tmp_path):
     )
     assert result.skipped is True
     assert calls and calls[0][1]["shard_entry"] == "entry"
+
+
+def test_work_unit_leaf_rejects_broad_unit_before_runner_or_paths(tmp_path):
+    campaign = _campaign(tmp_path)
+    plan = campaign.plan(
+        [_row("s0", "k", "t"), _row("s1", "k1", "t1")],
+        source_manifest_hash="source",
+    )
+    calls = []
+    output_tmp = tmp_path / "tmp" / "blocked"
+    output_final = tmp_path / "shards" / "blocked"
+
+    with pytest.raises(BroadGenerationAdmissionError, match="pending_wp18"):
+        campaign.run_work_unit(
+            plan,
+            plan.work_units[0],
+            purpose=CampaignWorkerPurpose.CAMPAIGN,
+            writer_config="writer",
+            shard_entry="entry",
+            output_tmp=output_tmp,
+            output_final=output_final,
+            shard_runner=lambda *_args, **_kwargs: calls.append("called"),
+        )
+
+    assert calls == []
+    assert not output_tmp.exists()
+    assert not output_final.exists()

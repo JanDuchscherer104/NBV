@@ -9,6 +9,7 @@ import pytest
 from aria_nbv.rollouts.candidate_benchmark import (
     BINDING_KEYS,
     MULTI_STORE_BINDING_ALGORITHM,
+    SCHEMA_ID,
     CandidateFamilyCounts,
     aggregate_store_content_sha256,
     canonical_json_bytes,
@@ -58,7 +59,7 @@ def test_bundle_requires_parquet_engine_or_round_trips(tmp_path: Path) -> None:
             if key == "evidence_class"
             else "complete"
             if key == "completion"
-            else "aria-nbv-candidate-benchmark-v1"
+            else SCHEMA_ID
             if key == "schema_id"
             else "1"
             if key == "implementation_revision"

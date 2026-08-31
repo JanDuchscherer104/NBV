@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, cast
 
 import numpy as np
 from numpy.typing import NDArray
@@ -76,6 +76,7 @@ class StoredStep:
     selection_probabilities: NDArray[np.float32]
     mixture_ids: NDArray[np.int32]
     mixture_names: NDArray[np.str_]
+    gaze_variant_ids: NDArray[np.int8]
     sampler_probabilities: NDArray[np.float32]
     position_ids: NDArray[np.int32]
     position_names: NDArray[np.str_]
@@ -142,14 +143,14 @@ class StoredSelectedDepth:
 
 def decode_invalid_reason(reason: int | np.integer[Any]) -> str:
     """Return the frozen invalid-reason name for one numeric code."""
-    return _INVALID_REASON_NAMES.get(int(reason), f"reason_{int(reason)}")
+    return str(_INVALID_REASON_NAMES.get(int(reason), f"reason_{int(reason)}"))
 
 
 def decode_position_id(position_id: int | np.integer[Any]) -> str:
     """Return the frozen candidate-position name for one numeric id."""
 
     value = int(position_id)
-    return _POSITION_NAMES.get(value, "unknown" if value < 0 else f"position_{value}")
+    return str(_POSITION_NAMES.get(value, "unknown" if value < 0 else f"position_{value}"))
 
 
 def rollout_at(reader: RolloutZarrStoreReader, row_position: int) -> StoredRollout:
@@ -165,7 +166,7 @@ def rollout_at(reader: RolloutZarrStoreReader, row_position: int) -> StoredRollo
     rollout_row_id = int(rollout_ids[position])
     step_rollout_ids = np.asarray(steps["rollout_row_id"], dtype=np.int64).reshape(-1)
     step_indices = np.asarray(steps["step_index"], dtype=np.int64).reshape(-1)
-    step_positions = np.flatnonzero(step_rollout_ids == rollout_row_id).astype(np.int64)
+    step_positions: NDArray[np.int64] = np.flatnonzero(step_rollout_ids == rollout_row_id).astype(np.int64)
     if step_positions.size == 0:
         raise ValueError(f"Rollout row {rollout_row_id} has no step rows.")
     step_positions = step_positions[np.argsort(step_indices[step_positions], kind="stable")]
@@ -249,7 +250,7 @@ def _stored_rollout(
     position = int(row_position)
     scene_names, snippet_names, split_names, policy_names = dictionaries
 
-    def decoded(values: list[str], index: object) -> str:
+    def decoded(values: list[str], index: int | np.integer[Any]) -> str:
         value = int(index)
         return values[value] if 0 <= value < len(values) else ""
 
@@ -298,12 +299,17 @@ def rollout_steps(reader: RolloutZarrStoreReader, rollout: StoredRollout) -> tup
         row_positions = shell_index.positions_by_step.get(step_row_id, np.empty(0, dtype=np.int64)).copy()
 
         def take(group: Any, name: str, dtype: Any, positions: np.ndarray = row_positions) -> np.ndarray:
-            return np.asarray(group[name][positions], dtype=dtype)
+            return cast(np.ndarray, np.asarray(group[name][positions], dtype=dtype))
 
         selected_mask = take(candidates, "selected_mask", np.bool_)
         selected_matches = np.flatnonzero(selected_mask)
         selected_local_index = int(selected_matches[0]) if selected_matches.size else -1
         mixture_ids = take(candidates, "mixture_id", np.int32)
+        gaze_variant_ids = (
+            take(candidates, "gaze_variant_id", np.int8)
+            if "gaze_variant_id" in candidates
+            else np.full(row_positions.shape, -1, dtype=np.int8)
+        )
         position_ids = take(diagnostics, "position_id", np.int32)
         reason_ids = take(candidates, "primary_invalid_reason", np.uint16)
         steps.append(
@@ -332,7 +338,8 @@ def rollout_steps(reader: RolloutZarrStoreReader, rollout: StoredRollout) -> tup
                 scene_rri=take(candidates, "scene_rri", np.float32),
                 selection_probabilities=take(candidates, "selection_probabilities", np.float32),
                 mixture_ids=mixture_ids,
-                mixture_names=_candidate_mixture_names(reader, mixture_ids),
+                mixture_names=candidate_mixture_family_names(reader, mixture_ids, gaze_variant_ids),
+                gaze_variant_ids=gaze_variant_ids,
                 sampler_probabilities=take(candidates, "sampler_probability", np.float32),
                 position_ids=position_ids,
                 position_names=np.asarray([decode_position_id(value) for value in position_ids], dtype=np.str_),
@@ -350,13 +357,16 @@ def rollout_steps(reader: RolloutZarrStoreReader, rollout: StoredRollout) -> tup
     return tuple(steps)
 
 
-def _candidate_mixture_names(
+def candidate_mixture_family_names(
     reader: RolloutZarrStoreReader,
     mixture_ids: NDArray[np.int32],
+    gaze_variant_ids: NDArray[np.int8],
 ) -> NDArray[np.str_]:
-    """Decode persisted mixture ids using the writer's optional component names."""
+    """Decode base/paired family identity from config and persisted gaze provenance."""
 
-    component_names: dict[int, str] = {}
+    if mixture_ids.shape != gaze_variant_ids.shape:
+        raise ValueError("mixture and gaze-variant arrays must align")
+    component_names: dict[int, tuple[str, str | None]] = {}
     try:
         writer_config = reader.manifest().get("manifest", {}).get("generation", {}).get("writer_config")
         candidate_mixture = writer_config.get("candidate_mixture") if isinstance(writer_config, dict) else None
@@ -366,19 +376,32 @@ def _candidate_mixture_names(
                 if isinstance(component, dict):
                     name = component.get("name") or component.get("family") or component.get("position_mode")
                     if name is not None:
-                        component_names[index] = str(name)
+                        paired = component.get("paired_view_mode")
+                        paired_name = None if paired is None else f"{name}__paired_{paired}"
+                        component_names[index] = (str(name), paired_name)
     except (KeyError, TypeError, ValueError):
         component_names = {}
-    return np.asarray(
-        [
-            component_names.get(
-                int(value),
-                "unknown" if int(value) < 0 else f"component_{int(value)}",
-            )
-            for value in mixture_ids
-        ],
-        dtype=np.str_,
-    )
+    names = []
+    for mixture_id, gaze_variant_id in zip(mixture_ids.tolist(), gaze_variant_ids.tolist(), strict=True):
+        identity = component_names.get(int(mixture_id))
+        variant = int(gaze_variant_id)
+        if identity is None:
+            if variant >= 0:
+                raise ValueError("paired gaze family cannot be decoded without component provenance")
+            names.append("unknown" if int(mixture_id) < 0 else f"component_{int(mixture_id)}")
+            continue
+        base_name, paired_name = identity
+        if paired_name is None:
+            if variant >= 0:
+                raise ValueError(f"unpaired component {base_name!r} carries paired gaze provenance")
+            names.append(base_name)
+        elif variant == 0:
+            names.append(base_name)
+        elif variant == 1:
+            names.append(paired_name)
+        else:
+            raise ValueError(f"paired component {base_name!r} is missing canonical gaze-variant provenance")
+    return np.asarray(names, dtype=np.str_)
 
 
 def target_rows(reader: RolloutZarrStoreReader) -> tuple[StoredTarget, ...]:
@@ -393,7 +416,7 @@ def target_rows(reader: RolloutZarrStoreReader) -> tuple[StoredTarget, ...]:
     class_names = _string_dictionary(reader, "class_name")
     status_names = _string_dictionary(reader, "target_match_status")
 
-    def decoded(values: list[str], index: object) -> str:
+    def decoded(values: list[str], index: int | np.integer[Any]) -> str:
         value = int(index)
         return values[value] if 0 <= value < len(values) else ""
 
@@ -535,6 +558,7 @@ def _string_dictionary(reader: RolloutZarrStoreReader, name: str) -> list[str]:
 
 
 __all__ = (
-    "StoredRollout StoredSelectedDepth StoredStep StoredTarget decode_invalid_reason decode_position_id "
+    "StoredRollout StoredSelectedDepth StoredStep StoredTarget candidate_mixture_family_names "
+    "decode_invalid_reason decode_position_id "
     "rollout_at rollout_by_id rollout_rows rollout_steps selected_depth_for_step target_by_id target_rows"
 ).split()

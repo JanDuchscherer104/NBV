@@ -95,6 +95,9 @@ class RolloutStoreManifestContext:
     shard: dict[str, Any] | None = None
     """Optional rollout shard manifest entry for cluster generation runs."""
 
+    candidate_family_preflight: dict[str, Any] | None = None
+    """Complete persisted candidate-family policy for reader-backed gates."""
+
     @classmethod
     def programmatic(cls, *, writer_config: BaseConfig | None = None) -> "RolloutStoreManifestContext":
         """Build provenance context for a non-CLI rollout-store invocation.
@@ -109,6 +112,7 @@ class RolloutStoreManifestContext:
             invocation=RolloutStoreInvocation.programmatic(),
             runtime=collect_runtime_provenance(),
             shard=None,
+            candidate_family_preflight=_candidate_family_preflight_payload(writer_config),
         )
 
     @classmethod
@@ -126,6 +130,7 @@ class RolloutStoreManifestContext:
             invocation=RolloutStoreInvocation.from_cli(argv=argv, config_path=config_path),
             runtime=collect_runtime_provenance(),
             shard=None,
+            candidate_family_preflight=_candidate_family_preflight_payload(writer_config),
         )
 
     def to_jsonable(self) -> dict[str, Any]:
@@ -141,7 +146,18 @@ class RolloutStoreManifestContext:
             "invocation": self.invocation.to_jsonable(),
             "runtime": self.runtime,
             "shard": self.shard,
+            "candidate_family_preflight": self.candidate_family_preflight,
         }
+
+
+def _candidate_family_preflight_payload(writer_config: BaseConfig | None) -> dict[str, Any] | None:
+    """Persist a complete policy only for typed candidate-mixture writers."""
+
+    if writer_config is None or not hasattr(writer_config, "candidate_mixture"):
+        return None
+    from .candidate_benchmark import candidate_family_preflight_config_from_writer
+
+    return candidate_family_preflight_config_from_writer(writer_config).to_payload()
 
 
 def utc_timestamp() -> str:
@@ -188,7 +204,10 @@ def read_rollout_store_manifest(store_dir: Path | str) -> dict[str, Any]:
     """
 
     path = Path(store_dir).expanduser().resolve() / ROLLOUT_MANIFEST_FILENAME
-    return json.loads(path.read_text(encoding="utf-8"))
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        raise ValueError("rollout store manifest must contain a JSON object")
+    return payload
 
 
 def collect_runtime_provenance(*, cwd: Path | None = None) -> dict[str, Any]:

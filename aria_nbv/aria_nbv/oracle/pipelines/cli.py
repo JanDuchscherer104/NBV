@@ -19,6 +19,8 @@ from typing import Annotated, Any
 import click
 import typer
 
+from ...data_handling.vin_store.dataset import VinOfflineDatasetConfig
+from ...rollouts.candidate_benchmark import write_candidate_family_phase_a
 from ...rollouts.manifest import RolloutStoreInvocation
 from ...rollouts.shard_manifest import load_rollout_shard_entry, read_rollout_source_manifest
 from ...utils.cli_format import cli_console, key_value_panel
@@ -26,9 +28,18 @@ from ...utils.config_paths import resolve_config_toml_path
 from ...utils.fingerprints import stable_config_hash, stable_msgspec_hash
 from ...utils.typer_cli import run_typer_app
 from ..target_selection import ORACLE_TARGET_TASK_SOURCE
-from .campaign import CampaignEvent, CampaignWorkerResult, CudaRolloutCampaignConfig, write_json_atomic
+from .campaign import (
+    BroadGenerationAdmissionError,
+    CampaignEvent,
+    CampaignPlan,
+    CampaignWorkerPurpose,
+    CampaignWorkerResult,
+    CudaRolloutCampaign,
+    CudaRolloutCampaignConfig,
+    write_json_atomic,
+)
 from .offline_vin import VinOfflineWriterConfig
-from .rollout_dataset import RolloutDatasetWriterConfig, VinOfflineDatasetConfig
+from .rollout_dataset import RolloutDatasetWriterConfig
 from .shards import (
     RolloutShardOwnershipConflictError,
     plan_rollout_source_manifest,
@@ -52,11 +63,14 @@ def campaign_main(argv: list[str] | None = None) -> None:
     run_typer_app(campaign_app, raw, prog_name="nbv-rollout-campaign")
 
 
-def _campaign(config_path: Path):
-    return CudaRolloutCampaignConfig.from_toml(resolve_config_toml_path(config_path)).setup_target()
+def _campaign(config_path: Path) -> CudaRolloutCampaign:
+    campaign = CudaRolloutCampaignConfig.from_toml(resolve_config_toml_path(config_path)).setup_target()
+    if campaign is None:
+        raise RuntimeError("campaign configuration did not instantiate a campaign")
+    return campaign
 
 
-def _writer_config(campaign):
+def _writer_config(campaign: CudaRolloutCampaign) -> RolloutDatasetWriterConfig | None:
     path = campaign.config.writer_config_path
     if path is None:
         return None
@@ -73,7 +87,11 @@ def _source_config_from_writer_toml(config_path: Path) -> VinOfflineDatasetConfi
     return VinOfflineDatasetConfig.model_validate(source_payload)
 
 
-def _validate_plan_digests(campaign, plan, writer_cfg) -> str:
+def _validate_plan_digests(
+    campaign: CudaRolloutCampaign,
+    plan: CampaignPlan,
+    writer_cfg: RolloutDatasetWriterConfig | None,
+) -> str:
     """Reject stale campaign or writer inputs before any progress is persisted."""
     has_config_hash = hasattr(plan, "config_hash")
     expected_config_hash = getattr(plan, "config_hash", "")
@@ -89,13 +107,22 @@ def _validate_plan_digests(campaign, plan, writer_cfg) -> str:
     return current_writer_hash
 
 
-def _require_smoke_evidence(campaign, plan) -> dict[str, Any]:
+def _require_smoke_evidence(campaign: CudaRolloutCampaign, plan: CampaignPlan) -> dict[str, Any]:
     """Require the structured, validated smoke result before execution."""
     try:
         evidence = campaign.smoke_evidence(plan)
     except (RuntimeError, ValueError, OSError, json.JSONDecodeError, AttributeError) as exc:
         raise typer.BadParameter("current passing smoke evidence is required") from exc
     return evidence
+
+
+def _require_campaign_execution_admission(campaign: CudaRolloutCampaign) -> None:
+    """Fail closed before broad run/resume can read or mutate campaign state."""
+
+    try:
+        campaign.require_execution_admission()
+    except RuntimeError as exc:
+        raise typer.BadParameter(str(exc)) from exc
 
 
 @campaign_app.command("plan")
@@ -139,22 +166,21 @@ def campaign_plan(
             expected_hash=planned.admission_audit_hash,
         )
         campaign.write_plan(planned)
-        event_identity = {
-            "campaign_id": campaign.config.campaign_id,
-            "plan_hash": planned.plan_hash,
-            "config_hash": planned.config_hash,
-            "writer_config_hash": planned.writer_config_hash,
-            "source_manifest_hash": planned.source_manifest_hash,
-        }
         existing = campaign.read_events(plan=planned)
         prefix = [event.kind for event in existing[:2]]
         if not existing:
-            campaign.append_event(
-                CampaignEvent("source_selection", timestamp=campaign.utc_now().isoformat(), **event_identity)
-            )
-            campaign.append_event(
-                CampaignEvent("plan_ready", timestamp=campaign.utc_now().isoformat(), **event_identity)
-            )
+            for kind in ("source_selection", "plan_ready"):
+                campaign.append_event(
+                    CampaignEvent(
+                        kind,
+                        timestamp=campaign.utc_now().isoformat(),
+                        campaign_id=campaign.config.campaign_id,
+                        plan_hash=planned.plan_hash,
+                        config_hash=planned.config_hash,
+                        writer_config_hash=planned.writer_config_hash,
+                        source_manifest_hash=planned.source_manifest_hash,
+                    )
+                )
         elif prefix != ["source_selection", "plan_ready"]:
             raise typer.BadParameter("campaign planning ledger prefix is not idempotently reusable")
         campaign.write_status(campaign.status(planned, stage="planned"))
@@ -167,17 +193,75 @@ def campaign_plan(
 
 
 @campaign_app.command("preflight")
-def campaign_preflight(config_path: Annotated[Path, typer.Option("--config-path")]) -> None:
-    """Run the CUDA availability gate."""
+def campaign_preflight(
+    config_path: Annotated[Path, typer.Option("--config-path")],
+    family_phase_a_output: Annotated[
+        Path | None,
+        typer.Option(
+            "--family-phase-a-output",
+            help="Optional immutable no-render, no-reward-label Phase-A proposal-support evidence JSON.",
+        ),
+    ] = None,
+    source_store: Annotated[
+        Path | None,
+        typer.Option(
+            "--source-store",
+            help="Explicit local VIN source store; its native manifest must exactly match the reviewed manifest.",
+        ),
+    ] = None,
+) -> None:
+    """Run CUDA checks and optionally the canonical 100-scene family gate."""
     campaign = _campaign(config_path)
     writer_cfg = _writer_config(campaign)
+    if family_phase_a_output is not None and source_store is None:
+        raise typer.BadParameter("family Phase-A requires an explicit --source-store")
     try:
         campaign.preflight(
             nested_configs=(writer_cfg,) if writer_cfg is not None else (),
             writer_config_path=getattr(campaign.config, "writer_config_path", None),
+            source_store_path=source_store,
         )
     except (RuntimeError, ValueError, OSError) as exc:
         raise typer.BadParameter(str(exc)) from None
+    if family_phase_a_output is not None:
+        if writer_cfg is None or writer_cfg.source_manifest_path is None:
+            raise typer.BadParameter("family Phase-A requires the canonical writer source manifest")
+        manifest_path = Path(writer_cfg.source_manifest_path)
+        manifest_bytes = manifest_path.read_bytes()
+        manifest = read_rollout_source_manifest(manifest_path)
+        assert source_store is not None
+        resolved_source_store = source_store.expanduser().resolve()
+        if not resolved_source_store.is_dir():
+            raise typer.BadParameter("Phase-A source store is missing or not a directory")
+        source_store_config = writer_cfg.source.store.model_copy(update={"store_dir": resolved_source_store})
+        source_config = writer_cfg.source.model_copy(update={"store": source_store_config})
+        writer_cfg = writer_cfg.model_copy(update={"source": source_config})
+        try:
+            actual_manifest = plan_rollout_source_manifest(writer_cfg.source)
+        except (RuntimeError, ValueError, OSError, TypeError) as exc:
+            raise typer.BadParameter(f"Phase-A source-store validation failed: {exc}") from None
+        if actual_manifest.to_jsonable() != manifest.to_jsonable():
+            raise typer.BadParameter(
+                "Phase-A source store does not reproduce the reviewed native manifest, cache version, split, and rows"
+            )
+        try:
+            evidence = campaign.candidate_family_phase_a(
+                writer_cfg,
+                actual_manifest,
+                source_manifest_sha256=hashlib.sha256(manifest_bytes).hexdigest(),
+            )
+        except (RuntimeError, ValueError, OSError, TypeError) as exc:
+            raise typer.BadParameter(str(exc)) from None
+        payload = evidence.to_payload()
+        write_candidate_family_phase_a(family_phase_a_output, evidence)
+        typer.echo(
+            "candidate family Phase-A "
+            f"go={str(evidence.preflight.go).lower()} "
+            f"artifact_sha256={payload['artifact_sha256']} "
+            f"path={family_phase_a_output.expanduser().resolve()}"
+        )
+        if not evidence.preflight.go:
+            raise typer.BadParameter("candidate family Phase-A gate blocked broad generation")
     typer.echo("cuda preflight passed")
 
 
@@ -273,6 +357,7 @@ def campaign_run(
 ) -> None:
     """Start a foreground campaign after preflight (planning is supplied by API callers)."""
     campaign = _campaign(config_path)
+    _require_campaign_execution_admission(campaign)
     writer_cfg = _writer_config(campaign)
     plan = campaign.load_plan(plan_path)
     writer_hash = _validate_plan_digests(campaign, plan, writer_cfg)
@@ -299,6 +384,7 @@ def campaign_resume(
 ) -> None:
     """Resume a campaign through the Python campaign API."""
     campaign = _campaign(config_path)
+    _require_campaign_execution_admission(campaign)
     writer_cfg = _writer_config(campaign)
     plan = campaign.load_plan(plan_path)
     writer_hash = _validate_plan_digests(campaign, plan, writer_cfg)
@@ -321,6 +407,10 @@ def campaign_worker(
     plan_hash: Annotated[str, typer.Option("--plan-hash")],
     work_unit_hash: Annotated[str, typer.Option("--work-unit-hash")],
     plan_path: Annotated[Path, typer.Option("--plan-path")],
+    purpose: Annotated[
+        CampaignWorkerPurpose,
+        typer.Option("--purpose", help="Worker intent; broad campaigns permit only the canonical smoke unit."),
+    ] = CampaignWorkerPurpose.CAMPAIGN,
     writer_config_path: Annotated[Path | None, typer.Option("--writer-config-path")] = None,
 ) -> None:
     """Validate internal worker identity arguments and dispatch one unit."""
@@ -333,6 +423,10 @@ def campaign_worker(
     unit = next((item for item in plan.work_units if item.work_unit_hash == work_unit_hash), None)
     if unit is None:
         raise typer.BadParameter("work-unit hash is not present in plan")
+    try:
+        campaign.require_worker_admission(plan, unit, purpose=purpose)
+    except BroadGenerationAdmissionError as exc:
+        raise typer.BadParameter(str(exc)) from exc
     writer_path = writer_config_path or campaign.config.writer_config_path
     if writer_path is None:
         raise typer.BadParameter(
@@ -362,11 +456,15 @@ def campaign_worker(
         plan_path=plan_path,
     )
     try:
-        result = run_rollout_shard(
-            writer_cfg,
+        result = campaign.run_work_unit(
+            plan,
+            unit,
+            purpose=purpose,
+            writer_config=writer_cfg,
             shard_entry=entry,
             output_tmp=campaign.config.output_root / "tmp" / unit.work_unit_hash,
             output_final=campaign.config.output_root / "shards" / unit.work_unit_hash,
+            shard_runner=run_rollout_shard,
         )
     except RolloutShardOwnershipConflictError as exc:
         conflict = CampaignWorkerResult(
@@ -821,6 +919,7 @@ def _internal_preflight(
     plan_path: Path | None = None,
     writer_config_path: Path | None = None,
     expected_scene_count: int | None = None,
+    source_store_path: Path | None = None,
 ) -> int:
     """Run one named repository-owned preflight subprocess mode."""
     if stage == "cuda-rasterizer-preflight":
@@ -867,7 +966,13 @@ def _internal_preflight(
                     raise RuntimeError(
                         f"source-target preflight requires {expected_scene_count} scenes; found {scene_count}"
                     )
-            source_store = Path(writer_cfg.source.store.store_dir).expanduser().resolve()
+            source_store = (
+                Path(writer_cfg.source.store.store_dir).expanduser().resolve()
+                if source_store_path is None
+                else source_store_path.expanduser().resolve()
+            )
+            if source_store_path is not None and source_store.name != Path(manifest.source_store_dir).name:
+                raise RuntimeError("source-target preflight source store does not match the reviewed manifest")
             if not source_store.exists():
                 raise RuntimeError("source-target preflight source store is missing")
             if plan_path is not None:
@@ -907,12 +1012,16 @@ if __name__ == "__main__":
             if "--expected-scene-count" in sys.argv
             else None
         )
+        source_store_arg = (
+            Path(sys.argv[sys.argv.index("--source-store-path") + 1]) if "--source-store-path" in sys.argv else None
+        )
         raise SystemExit(
             _internal_preflight(
                 stage,
                 plan_path=plan_arg,
                 writer_config_path=writer_arg,
                 expected_scene_count=expected_arg,
+                source_store_path=source_store_arg,
             )
         )
     else:

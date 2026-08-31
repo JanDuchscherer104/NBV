@@ -19,7 +19,12 @@ from typer.testing import CliRunner
 
 from aria_nbv.configs import PathConfig
 from aria_nbv.oracle.pipelines import cli as rollout_cli
-from aria_nbv.oracle.pipelines.campaign import CampaignOutcome, CudaRolloutCampaignConfig
+from aria_nbv.oracle.pipelines.campaign import (
+    BroadGenerationAdmissionError,
+    CampaignOutcome,
+    CampaignWorkerPurpose,
+    CudaRolloutCampaignConfig,
+)
 from aria_nbv.oracle.pipelines.offline_vin import VinOfflineWriterConfig
 from aria_nbv.utils import BaseConfig
 from aria_nbv.utils.fingerprints import stable_config_hash, stable_msgspec_hash
@@ -167,6 +172,82 @@ def test_internal_preflight_uses_current_writer_store_for_foreign_manifest_path(
         )
         == 0
     )
+
+
+@pytest.mark.parametrize(("go", "expected_exit_code"), ((True, 0), (False, 2)))
+def test_campaign_preflight_writes_same_phase_a_evidence_payload(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, go: bool, expected_exit_code: int
+) -> None:
+    class _Copyable(SimpleNamespace):
+        def model_copy(self, *, update: dict[str, Any]) -> "_Copyable":
+            return _Copyable(**(vars(self) | update))
+
+    manifest_path = tmp_path / "source.json"
+    manifest_path.write_text('{"source":"fixture"}\n', encoding="utf-8")
+    output_path = tmp_path / "phase-a.json"
+    source_store = tmp_path / "source-store"
+    source_store.mkdir()
+    captured: dict[str, Any] = {}
+
+    class _Evidence:
+        preflight = SimpleNamespace(go=go)
+
+        @staticmethod
+        def to_payload() -> dict[str, Any]:
+            return {"artifact_sha256": "a" * 64, "preflight": {"go": go}}
+
+    campaign = SimpleNamespace(
+        config=SimpleNamespace(writer_config_path=tmp_path / "writer.toml"),
+        preflight=lambda **_kwargs: None,
+        candidate_family_phase_a=lambda writer, manifest, **kwargs: (
+            captured.update(writer=writer, manifest=manifest, **kwargs) or _Evidence()
+        ),
+    )
+    writer = _Copyable(
+        source_manifest_path=manifest_path,
+        source=_Copyable(store=_Copyable(store_dir=tmp_path / "configured-store")),
+    )
+    manifest_payload = {
+        "rows": [1],
+        "source_store_dir": "source-store",
+        "source_manifest_hash": "a" * 16,
+        "source_cache_version": "source-cache-v1",
+        "split_manifest_hash": "b" * 16,
+    }
+    manifest = SimpleNamespace(
+        rows=(1,),
+        source_store_dir="source-store",
+        source_manifest_hash="a" * 16,
+        source_cache_version="source-cache-v1",
+        split_manifest_hash="b" * 16,
+        to_jsonable=lambda: manifest_payload,
+    )
+    monkeypatch.setattr(rollout_cli, "_campaign", lambda _path: campaign)
+    monkeypatch.setattr(rollout_cli, "_writer_config", lambda _campaign: writer)
+    monkeypatch.setattr(rollout_cli, "read_rollout_source_manifest", lambda _path: manifest)
+    monkeypatch.setattr(rollout_cli, "plan_rollout_source_manifest", lambda _source: manifest)
+
+    result = runner.invoke(
+        rollout_cli.campaign_app,
+        [
+            "preflight",
+            "--config-path",
+            str(tmp_path / "campaign.toml"),
+            "--family-phase-a-output",
+            str(output_path),
+            "--source-store",
+            str(source_store),
+        ],
+    )
+
+    assert result.exit_code == expected_exit_code
+    assert json.loads(output_path.read_text(encoding="utf-8")) == _Evidence.to_payload()
+    assert captured["writer"].source.store.store_dir == source_store.resolve()
+    assert captured["manifest"] is manifest
+    assert len(captured["source_manifest_sha256"]) == 64
+    assert f"candidate family Phase-A go={str(go).lower()}" in result.output
+    if not go:
+        assert "candidate family Phase-A gate blocked broad generation" in result.output
 
 
 def test_build_rollouts_rejects_partial_shard_arguments(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -318,6 +399,9 @@ def test_campaign_run_and_resume_delegate_once(
     class _Campaign:
         config = SimpleNamespace(output_root=output_root, writer_config_path=None)
 
+        def require_execution_admission(self) -> None:
+            return None
+
         def load_plan(self, path: Any) -> Any:
             return SimpleNamespace(plan_hash="plan")
 
@@ -339,8 +423,33 @@ def test_campaign_run_and_resume_delegate_once(
     assert "preflight" not in calls
 
 
-def test_campaign_worker_binds_selected_unit_profile_hash(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+@pytest.mark.parametrize("command", ["run", "resume"])
+def test_campaign_broad_execution_blocks_before_plan_or_output_access(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, command: str
+) -> None:
+    class _Campaign:
+        config = SimpleNamespace(output_root=tmp_path / "must-not-exist", writer_config_path=None)
+
+        def require_execution_admission(self) -> None:
+            raise RuntimeError("broad_generation_blocked_pending_wp18")
+
+        def load_plan(self, _path: Any) -> Any:
+            pytest.fail("plan read occurred before broad-generation admission")
+
+    monkeypatch.setattr(rollout_cli, "_campaign", lambda _path: _Campaign())
+
+    result = runner.invoke(
+        rollout_cli.campaign_app,
+        [command, "--config-path", "cfg.toml", "--plan-path", "plan.json"],
+    )
+
+    assert result.exit_code == 2
+    assert "broad_generation_blocked_pending_wp18" in result.output
+    assert not (tmp_path / "must-not-exist").exists()
+
+
+def test_campaign_worker_cli_binds_smoke_purpose_and_selected_unit_profile_hash(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     @dataclass(frozen=True)
     class _Entry:
@@ -380,6 +489,9 @@ def test_campaign_worker_binds_selected_unit_profile_hash(
         def load_plan(self, _path: Any) -> Any:
             return plan
 
+        def require_worker_admission(self, _plan: Any, _unit: Any, *, purpose: Any) -> None:
+            seen["purpose"] = purpose.value
+
         def shard_entry_for_unit(self, _plan: Any, _unit: Any) -> Any:
             return _Entry()
 
@@ -389,6 +501,11 @@ def test_campaign_worker_binds_selected_unit_profile_hash(
 
         def preflight(self, **_kwargs: Any) -> Any:
             return None
+
+        def run_work_unit(self, actual_plan: Any, _unit: Any, *, purpose: Any, shard_runner: Any, **kwargs: Any) -> Any:
+            assert actual_plan is plan
+            seen["leaf_purpose"] = purpose.value
+            return shard_runner(kwargs["writer_config"], shard_entry=kwargs["shard_entry"])
 
     @dataclass(frozen=True)
     class _Result:
@@ -410,18 +527,84 @@ def test_campaign_worker_binds_selected_unit_profile_hash(
         ),
     )
 
-    rollout_cli.campaign_worker(
-        config_path=tmp_path / "campaign.toml",
-        plan_hash="plan",
-        work_unit_hash="unit",
-        plan_path=tmp_path / "plan.json",
+    result = runner.invoke(
+        rollout_cli.campaign_app,
+        [
+            "worker",
+            "--config-path",
+            str(tmp_path / "campaign.toml"),
+            "--plan-hash",
+            "plan",
+            "--work-unit-hash",
+            "unit",
+            "--plan-path",
+            str(tmp_path / "plan.json"),
+            "--purpose",
+            "smoke",
+        ],
     )
 
-    assert seen == {"profile_hash": selected_profile_hash, "shard_profile_hash": selected_profile_hash}
-    payload = json.loads(capsys.readouterr().out)
+    assert result.exit_code == 0
+    assert seen == {
+        "purpose": "smoke",
+        "leaf_purpose": "smoke",
+        "profile_hash": selected_profile_hash,
+        "shard_profile_hash": selected_profile_hash,
+    }
+    payload = json.loads(result.output)
     assert payload["outcome"] == "skipped"
     assert payload["validated"] is True
     assert payload["leaf_evidence"]["success_path"] == "success"
+
+
+def test_campaign_worker_broad_non_smoke_blocks_before_writer_or_output(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    unit = SimpleNamespace(work_unit_hash="unit")
+    plan = SimpleNamespace(plan_hash="plan", work_units=(unit,))
+
+    class _Campaign:
+        config = SimpleNamespace(output_root=tmp_path / "must-not-exist", writer_config_path=tmp_path / "writer.toml")
+
+        def load_plan(self, _path: Any) -> Any:
+            return plan
+
+        def require_worker_admission(self, _plan: Any, _unit: Any, *, purpose: Any) -> None:
+            assert purpose is CampaignWorkerPurpose.CAMPAIGN
+            raise BroadGenerationAdmissionError()
+
+    monkeypatch.setattr(rollout_cli, "_campaign", lambda _path: _Campaign())
+    monkeypatch.setattr(
+        "aria_nbv.oracle.pipelines.cli.RolloutDatasetWriterConfig.from_toml",
+        lambda _path: pytest.fail("writer loaded before broad worker admission"),
+    )
+
+    result = runner.invoke(
+        rollout_cli.campaign_app,
+        [
+            "worker",
+            "--config-path",
+            "campaign.toml",
+            "--plan-path",
+            "plan.json",
+            "--plan-hash",
+            "plan",
+            "--work-unit-hash",
+            "unit",
+        ],
+    )
+
+    assert result.exit_code == 2
+    assert "broad_generation_blocked_pending_wp18" in result.output
+    assert not (tmp_path / "must-not-exist").exists()
+
+
+def test_campaign_worker_help_exposes_explicit_purpose() -> None:
+    result = runner.invoke(rollout_cli.campaign_app, ["worker", "--help"])
+
+    assert result.exit_code == 0
+    assert "--purpose" in result.output
+    assert "canonical smoke unit" in result.output
 
 
 def test_campaign_plan_reads_rows_from_manifest_envelope(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
