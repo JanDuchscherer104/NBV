@@ -277,7 +277,7 @@
   qh_uncentered_residual: $
     Q_(h,theta,e,i)
     =
-    hat(r)_psi^e (#symb.rl.s_cf0, #symb.entity.target_desc, #symb.rl.candidate_qti)
+    hat(r)_psi^e (#symb.rl.s_cf0, #symb.entity.target_desc, #symb.oracle.candidate_qti)
     +
     delta_(theta,t,e,i)^h (cal(I)_(t,e), q_(t,i)),
     quad

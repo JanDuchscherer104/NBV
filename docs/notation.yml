@@ -650,6 +650,12 @@ symbols:
     description: 'Point set available at rollout step t.'
     thesis_list: true
     order: 720
+  rl.action_set_t:
+    tex: '\mathcal{A}_t'
+    typst: '#symb.rl.action_set_t'
+    description: 'Finite feasible action set at rollout step t.'
+    thesis_list: true
+    order: 725
   rl.candidate_table:
     tex: '\mathcal{Q}_t'
     typst: '#symb.rl.candidate_table'
