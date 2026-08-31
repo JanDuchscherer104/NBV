@@ -26,7 +26,7 @@ touched_owner_paths:
   - scripts/tests/test_typst_report_data_contract.py
 codex_thread: codex://threads/01a04fd9-0c7c-7813-a9c5-dc49f2f867a6
 repo_object_format: sha1
-repo_head: 87c907b39b72227c71c594f71b2f41e9bf8daeba
+repo_head: 8a6733b981d6429900b2082ab2d37d0f175511fb
 repo_branch: "codex/thesis-figure-qh-evidence-gates"
 worktree_kind: linked
 ---
@@ -195,6 +195,12 @@ reviews until zero P0--P2 findings remained.
   support remain measured outcomes: a census-present but globally unselected
   store and a selected zero-row stratum remain valid evidence, while a roster-
   only store outside the census is unavailable.
+- The closing candidate-support audit found that malformed string attempt
+  counts could reach the Boolean outcome comparison after earlier tuple checks
+  had evaluated. The final comparison now repeats the integer guards in its own
+  short-circuit expression. String and adjacent malformed-value fixtures reject
+  without aborting, while nonnegative valid counts, positive thresholds,
+  equality passage, and measured non-passes retain their intended semantics.
 
 ## Commits
 
@@ -215,6 +221,7 @@ reviews until zero P0--P2 findings remained.
 - https://github.com/JanDuchscherer104/ARIA-NBV/commit/6ba2e3fbb122b0ae51f10fd48fdec2289aab3a1f
 - https://github.com/JanDuchscherer104/ARIA-NBV/commit/4cea0ec3ea021aa04b7eadf8f78c318c4c1dbf6f
 - https://github.com/JanDuchscherer104/ARIA-NBV/commit/87c907b39b72227c71c594f71b2f41e9bf8daeba
+- https://github.com/JanDuchscherer104/ARIA-NBV/commit/8a6733b981d6429900b2082ab2d37d0f175511fb
 
 ## Verification
 
@@ -321,6 +328,16 @@ Independent contract and scientific reviewers approved exact two-source-file
 diff `d3ea8cdfcb01556d79a9e1b9dc97455b65851e865f8be3de5a72178314f4b381`
 with zero P0--P2 findings. Multi-store fixtures distinguish roster-only,
 census-present unselected, selected zero-support, and selected passing stores.
+The candidate-support count repair passed `make thesis-report-data-contract`,
+`make thesis-results-full-profile-render`, `make thesis-pdf-ci`,
+`make typst-authoring-contract`, `make thesis-pdf`, and `git diff --check`.
+The thesis remains 129 A4 pages and its PDF SHA-256 is
+`79fba4c0e79c7526226c393ae9cd7e338629421336848274d6cebc5b8caaa8e4`.
+Independent contract and scientific reviewers approved exact two-source-file
+diff `a8fe473689d008034d5e0ab42a5d6a2810db95647d2b08a644e157a3b36450f3`
+with zero P0--P2 findings. Fourteen dynamic malformed-value cases rejected
+without a Typst evaluation abort, including malformed identities, booleans,
+counts, thresholds, row metadata, receipt fields, and benchmark fields.
 
 ## Canonical Owner Impact
 
