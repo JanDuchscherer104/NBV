@@ -17,7 +17,7 @@ touched_owner_paths:
   - docs/contents/evidence/candidate_family_phase_a_wp02.json
 codex_thread: codex://threads/01a05281-f9f7-7f80-967e-4000d77aca81
 repo_object_format: sha1
-repo_head: 9da250a3492119b2aaf515152d9efc5be4a61ad6
+repo_head: 2baf7cf6b276b81c50d01d45b152016d7cf68033
 repo_branch: "codex/candidate-family-preflight"
 worktree_kind: linked
 ---
@@ -28,11 +28,13 @@ worktree_kind: linked
 
 WP02 froze one presentation-free candidate-family reducer for rollout-store
 preflight, campaign admission, plotting, and Streamlit. It separates the
-resolved root floor from the versioned family floor and treats no-label Phase A
-as incapable of establishing flat target-root gain. The existing campaign
-preflight command was extended to generate candidate shells directly from the
-reviewed 100-scene source manifest without constructing a scorer, renderer,
-replay policy, or oracle reward label.
+resolved root floor from the versioned family floor and treats Phase A as
+incapable of establishing flat target-root gain without reward labels. The
+existing campaign preflight command was extended to generate candidate shells
+directly from the reviewed 100-scene source manifest without constructing a
+scorer, renderer, replay policy, or reward label. This is a no-render,
+no-reward-label proposal-support audit with privileged GT target instruction
+and mesh validity, not an oracle-free path.
 
 ## Findings
 
@@ -46,19 +48,23 @@ unavailable with denominator zero. Broad rollout generation remains blocked
 both by this failed gate and by the independent WP18 requirement; issue #54
 must remain open.
 
-The canonical JSON has artifact SHA-256
-`78632654ffb1bdf8cc085874483547f090bb6013eab5264efe35a5628c39d356`
+The compact canonical JSON has artifact SHA-256
+`26d4ddefb007151d9975024478889fb0b3c30f82949429501d39d2d91a7acc23`
 and file SHA-256
-`6041f70a031c64c9140de13e11f403b54c614785492315e403a7c57d465a64f1`.
+`f4c9d8399f7f898495a02e43795f402f734ee9aa3975632762c8d606b0a204ab`.
 It records execution revision
-`31888f86fc6348ef223e5c606f7ad41fda7e3082`, source-manifest file SHA-256
+`2baf7cf6b276b81c50d01d45b152016d7cf68033`, generation revision
+`a2ae86b7463930c9`, source-manifest file SHA-256
 `d6e771d1582394cde9005be3185dc9cfbb875cab5fc004f184922a25dc996f56`,
-and native source-store manifest identity `605453ba11869e40`.
+native source-store manifest identity `605453ba11869e40`, writer configuration
+SHA-256 `fc47d06e76da64a51948429a60a59efcb685962e9f475f0b80865031b127f91b`,
+and the Python 3.11.15, PyTorch 2.4.1/CUDA 12.1, PyTorch3D 0.7.9,
+RTX 3080 Ti runtime identity.
 
 ## Issue #54 acceptance
 
 - Threshold formula, persistence, state/family applicability matrix, typed
-  family failures, no-label flat-gain semantics, and focused tests are
+  family failures, state-conditional no-reward-label flat-gain semantics, and focused tests are
   evidenced.
 - The required all-100-scene Phase-A run is evidenced and fails closed with an
   exact blocker taxonomy.
@@ -68,19 +74,19 @@ and native source-store manifest identity `605453ba11869e40`.
 
 ## Verification
 
-- Exact family/info/plot/panel/cache/source-adapter suite: 81 passed.
-- Campaign regression suite: 189 passed.
+- Exact family/info/plot/panel/cache/source-adapter suite: 82 passed.
+- Campaign regression suite: 192 passed.
 - Execution-identity and no-go exit regressions: 4 passed.
 - Strict focused mypy: seven changed Python owners passed.
 - Ruff check/format, Agents-DB validation, agent-memory validation, thesis
   compilation, and `git diff --check` passed.
 - Exact 100-scene command exited 2 after atomically writing the complete no-go
-  artifact. The full heatmap and funnel views were reconstructed through the
-  canonical reducer and plotting helper; their SVG SHA-256 values are
-  `42e089c1c3e2bc2ff741761d79df4126c4bcb5303a77f3925774b1159200f7f4`
-  and `6bc24e385d326481147c265b07bd7685ef3154d20343881c24e103e810b34077`.
+  artifact. The full heatmap and audit-stratum funnel views were reconstructed
+  through the dedicated reader and plotting helper; their SVG SHA-256 values are
+  `78e7928f5a65f62c6fe08870d109c5dc36e97bfb22ff87287311fc2cc5b98957`
+  and `ca17e5ca33bb404f7532122c3aa6bc0601c88b3b21e07a586f0fdb8610749144`.
   The legible one-scene-per-stratum thesis projection has SVG SHA-256
-  `0a185abcb917e571393fee7154587a6245af301993e3b59b202cc496cc32f478`.
+  `9fa6e3c2881366f42eac9071617bab79eb931f472ef4d1724a4b03688f4b0ae7`.
 
 ## Canonical impact
 
@@ -91,6 +97,6 @@ RRI result, or permission for broad generation.
 
 ## Commits
 
-- [Core family-preflight contract](https://github.com/JanDuchscherer104/ARIA-NBV/commit/41622351da702465de66e12a151fa690a1d564fb)
-- [Campaign Phase-A execution identity](https://github.com/JanDuchscherer104/ARIA-NBV/commit/31888f86fc6348ef223e5c606f7ad41fda7e3082)
-- [100-state plotting repair](https://github.com/JanDuchscherer104/ARIA-NBV/commit/9da250a3492119b2aaf515152d9efc5be4a61ad6)
+- [Fail-closed family admission repair](https://github.com/JanDuchscherer104/ARIA-NBV/commit/cf9e44d468fb9688872f772544b7bd4aeb7d8fdb)
+- [Frozen campaign execution head](https://github.com/JanDuchscherer104/ARIA-NBV/commit/2baf7cf6b276b81c50d01d45b152016d7cf68033)
+- [Canonical reader order repair](https://github.com/JanDuchscherer104/ARIA-NBV/commit/801dbae07f)

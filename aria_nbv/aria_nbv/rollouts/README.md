@@ -31,11 +31,14 @@ stored-rollout panel. Its root floor is resolved and persisted as
 versioned family floor. Applicable families require selected support, while
 inapplicable cells remain visible and non-failing and unknown legacy
 applicability fails closed for deployment. Direct target-root-gain variation is
-tested only over rows with valid oracle labels and reports its exact
-denominator. Candidate-only Phase A evidence therefore reports `flat_gain` as
-unavailable rather than inferring utility from geometry. Passing this preflight
-does not authorize broad generation: the later hash-bound issue-120/WP18 gate
-remains mandatory.
+state-conditional: it is tested only over eligible factual states with at
+least two compatible valid oracle labels, reports both label and eligible-state
+denominators, and uses the manifest-owned `minimum-per-state-range`
+aggregation revision. The Phase-A path has no reward labels, so `flat_gain` is
+unavailable rather than inferred from geometry. This remains a no-render,
+no-reward-label proposal-support audit with privileged GT target instruction
+and mesh validity, not an oracle-free audit. Passing it does not authorize
+broad generation: the later hash-bound issue-120/WP18 gate remains mandatory.
 
 `benchmark_from_sampling_result` is the candidate-only Phase-A seam. It copies
 the generator's full-shell component lineage, hard-valid mask, rule reason
@@ -49,17 +52,23 @@ content-hashed evidence JSON; it does not reinterpret candidate support.
 
 The frozen 100-scene control is
 [`candidate_family_phase_a_wp02.json`](../../../docs/contents/evidence/candidate_family_phase_a_wp02.json)
-(artifact SHA-256 `78632654ffb1bdf8cc085874483547f090bb6013eab5264efe35a5628c39d356`).
+(artifact SHA-256 `26d4ddefb007151d9975024478889fb0b3c30f82949429501d39d2d91a7acc23`;
+compact file SHA-256
+`f4c9d8399f7f898495a02e43795f402f734ee9aa3975632762c8d606b0a204ab`).
 It covers all 100 reviewed source rows, scenes, and target states with no
 exclusions. Of 6,000 attempted rows, 3,146 entered the compact valid shell, but
 the gate is a no-go: 44 state/family cells collapsed, 24 states missed the
 non-forward target-family floor, and 8 states missed the root-support floor.
-`flat_gain` is explicitly unavailable with denominator zero because Phase A
-contains no oracle labels. The full
+`flat_gain` is explicitly unavailable with label and eligible-state
+denominators both zero because Phase A contains no reward labels. The full
 [state-by-family heatmap](../../../docs/contents/evidence/candidate_family_phase_a_wp02_heatmap.html)
 and [per-state funnels](../../../docs/contents/evidence/candidate_family_phase_a_wp02_funnels.html)
-are derived from that same canonical reducer result. This evidence does not
-close issue #54 and does not admit broad generation.
+are derived from that same canonical reducer result. The artifact binds native
+source-store identity `605453ba11869e40`, writer configuration SHA-256
+`fc47d06e76da64a51948429a60a59efcb685962e9f475f0b80865031b127f91b`,
+generation revision `a2ae86b7463930c9`, and the recorded CUDA runtime. It
+satisfies issue #54's all-100-scene evidence step, but the failed sampler-pass
+criterion means issue #54 remains open; it does not admit broad generation.
 
 ## Generate and Inspect
 

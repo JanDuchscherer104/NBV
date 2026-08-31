@@ -204,7 +204,7 @@ def campaign_preflight(
         Path | None,
         typer.Option(
             "--source-store",
-            help="Explicit local VIN source-store path for Phase-A; basename must match the manifest.",
+            help="Explicit local VIN source store; its native manifest must exactly match the reviewed manifest.",
         ),
     ] = None,
 ) -> None:

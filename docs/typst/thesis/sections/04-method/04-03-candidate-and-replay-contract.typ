@@ -77,8 +77,11 @@ not the single action later chosen by the rollout policy.
 Reward variation is label-conditional. When finite target-root-gain labels
 exist under one manifest-bound oracle contract, the preflight compares their
 observed range with a versioned tolerance and reports the exact label-support
-denominator. A candidate-only Phase-A audit has no such labels, so
-`flat_gain` is unavailable rather than inferred from geometric dispersion. A
+denominator. A Phase-A audit has no such reward labels, so `flat_gain` is
+unavailable with both its label and eligible-state denominators reported as
+zero rather than being inferred from geometric dispersion. It is specifically
+a no-render, no-reward-label proposal-support audit with privileged
+ground-truth target instruction and mesh validity, not an oracle-free audit. A
 passing Phase-A family gate is necessary but not sufficient for broad rollout
 generation; the final hash-bound pre-scale decision remains a later issue-120
 gate.
@@ -89,9 +92,10 @@ $44$ applicable state/family cells had no selected row, $24$ states missed the
 aggregate non-forward target-aware-family floor, and $8$ states missed the
 root-support threshold. All $100$ reviewed source rows, scenes, and target
 states were represented without exclusions. Since this phase deliberately
-contains no oracle labels, the flat-gain outcome is unavailable with
-denominator zero. This is proposal-support evidence, not evidence about RRI or
-candidate quality, and it does not admit broad rollout generation.
+contains no reward labels, the flat-gain outcome is unavailable with label and
+eligible-state denominators both zero. This is proposal-support evidence, not
+evidence about RRI or candidate quality, and it does not admit broad rollout
+generation.
 
 #figure(
   image(
@@ -103,9 +107,10 @@ candidate quality, and it does not admit broad rollout generation.
     persisted Phase-A audit strata. Each cell reports compact-valid-shell
     membership divided by attempted rows for one factual state and proposal
     family. The complete 100-state matrix remains in the evidence bundle. The
-    artifact is bound to implementation revision
-    `31888f86fc6348ef223e5c606f7ad41fda7e3082` and artifact SHA-256
-    `78632654ffb1bdf8cc085874483547f090bb6013eab5264efe35a5628c39d356`.
+    artifact is bound to clean execution revision
+    `2baf7cf6b276b81c50d01d45b152016d7cf68033`, generation revision
+    `a2ae86b7463930c9`, and artifact SHA-256
+    `26d4ddefb007151d9975024478889fb0b3c30f82949429501d39d2d91a7acc23`.
   ],
 ) <fig:candidate-family-phase-a-support>
 
