@@ -26,7 +26,7 @@ touched_owner_paths:
   - scripts/tests/test_typst_report_data_contract.py
 codex_thread: codex://threads/01a04fd9-0c7c-7813-a9c5-dc49f2f867a6
 repo_object_format: sha1
-repo_head: 0c81a475ed3af85d3a21f9a68d970f0a4c52ea77
+repo_head: ae85a33ab218d943c837599f3dbf836fccf64686
 repo_branch: "codex/thesis-figure-qh-evidence-gates"
 worktree_kind: linked
 ---
@@ -149,6 +149,24 @@ reviews until zero P0--P2 findings remained.
   aggregation, 100-attempt support, and multi-repeat/multi-unit measurement.
   Map/flatten construction keeps the focused contract at about 19 seconds
   instead of the initial quadratic 77-second scale regression.
+- Exact-$Q_2$ admission now requires the report fact to name one canonical
+  certification receipt. Sidecar identifiers are recomputed as SHA-256 over
+  `logical_name + NUL + payload_digest` at provenance, payload-binding, and
+  receipt lookup boundaries, so a forged but internally consistent identifier
+  fails closed.
+- The receipt binds the exact ordered test-store manifest roster, learned-
+  recursion semantics, dense-valid objective profile, selected chains, factual
+  rows, population census, support strata, independent units, and final gate.
+  The Typst validator independently recomputes row errors and relative errors,
+  aggregate and per-unit statistics, thresholds, and every gate conjunct rather
+  than accepting a self-attested boolean or aggregate.
+- Report storage is intentionally lexical while QH dataset order defines
+  `store_index`. Admission therefore requires exact order-independent roster
+  inclusion at the report boundary, then verifies the receipt's own ordered
+  roster digest and bounds every selected-chain and census store index against
+  that roster. Adversarial tests cover roster omission and duplication,
+  reordered rosters without a matching digest, out-of-range indices, mutated
+  scientific identity, contradictory aggregates and gates, and 100-row scale.
 
 ## Commits
 
@@ -164,6 +182,7 @@ reviews until zero P0--P2 findings remained.
 - https://github.com/JanDuchscherer104/ARIA-NBV/commit/fa2f1699a9bd4828585976ed95a12d77c8be8b53
 - https://github.com/JanDuchscherer104/ARIA-NBV/commit/3b1a2e4dae1c1fe0ac86739ed1374ccbf9023abf
 - https://github.com/JanDuchscherer104/ARIA-NBV/commit/0c81a475ed3af85d3a21f9a68d970f0a4c52ea77
+- https://github.com/JanDuchscherer104/ARIA-NBV/commit/ae85a33ab218d943c837599f3dbf836fccf64686
 
 ## Verification
 
@@ -221,6 +240,16 @@ literature-provenance tests. `make thesis-report-data-contract` passed in
 `git diff --check` passed. The thesis remains 129 A4 pages. Physical pages 39,
 60, and 68--69 were inspected at final size. Independent contract and scientific
 reviewers approved the final candidate with zero P0--P2 findings.
+The canonical exact-$Q_2$ receipt repair passed `make docs-render-core`,
+`make thesis-report-data-contract`, `make thesis-results-full-profile-render`,
+`make thesis-pdf`, and `git diff --check`. The full-profile fixture remains two
+A4 pages, the thesis remains 129 A4 pages, and physical Results page 69 plus
+both full-profile pages were inspected at final size without clipping or
+overflow. Independent contract and scientific reviewers approved the exact
+text diff `dede045cc3bcab172a364a38f9ad9344ca723d2069ff8118f7bf8e2a5b682046`
+with zero P0--P2 findings. The final thesis and layout-fixture PDF SHA-256 values
+were `3a5761176e4b9ddef8f8f1b8122b53b2a78812937169162d657e5db6d6a5bf2b`
+and `47ba07f113e30ce3281530b670f34190bfe18776ea57a3d434bc3577746b9070`.
 
 ## Canonical Owner Impact
 
