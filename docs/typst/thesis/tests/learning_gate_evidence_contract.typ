@@ -1363,7 +1363,28 @@
   receipt-values: mutate-sidecar-value(q2-receipt-values, "exact_q2.factual_selected_action_exact_q2_rows[0].absolute_error", 0.0),
 ), "store-a"))
 #assert(not report-store-q2-evidence-valid(q2-report(
+  receipt-values: mutate-sidecar-value(q2-receipt-values, "exact_q2.factual_selected_action_exact_q2_rows[0].absolute_error", "0.1"),
+), "store-a"))
+#assert(not report-store-q2-evidence-valid(q2-report(
+  receipt-values: mutate-sidecar-value(q2-receipt-values, "exact_q2.factual_selected_action_exact_q2_rows[0].tolerance", "0.11"),
+), "store-a"))
+#assert(not report-store-q2-evidence-valid(q2-report(
+  receipt-values: mutate-sidecar-value(q2-receipt-values, "exact_q2.factual_selected_action_exact_q2_rows[0].successor_backup_count", "4"),
+), "store-a"))
+#assert(not report-store-q2-evidence-valid(q2-report(
   receipt-values: mutate-sidecar-value(q2-receipt-values, "exact_q2.factual_selected_action_exact_q2_rows[0].relative_error", 0.0),
+), "store-a"))
+#assert(not report-store-q2-evidence-valid(q2-report(
+  receipt-values: mutate-sidecar-value(q2-receipt-values, "exact_q2.population_census.strata[0].stratum.scene_id", 7),
+), "store-a"))
+#assert(not report-store-q2-evidence-valid(q2-report(
+  receipt-values: mutate-sidecar-value(q2-receipt-values, "exact_q2.support_stratum_aggregates[0].stratum.scene_id", 7),
+), "store-a"))
+#assert(not report-store-q2-evidence-valid(q2-report(
+  receipt-values: mutate-sidecar-value(q2-receipt-values, "exact_q2.independent_unit_aggregates[0].independent_unit.scene_id", 7),
+), "store-a"))
+#assert(not report-store-q2-evidence-valid(q2-report(
+  receipt-values: mutate-sidecar-value(q2-receipt-values, "exact_q2.spec.minimum_population_coverage", "0.8"),
 ), "store-a"))
 #assert(not report-store-q2-evidence-valid(q2-report(
   receipt-values: mutate-sidecar-value(q2-receipt-values, "exact_q2.learned_recursion_passed", false),

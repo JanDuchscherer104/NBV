@@ -1800,6 +1800,7 @@
   ) and manifest-values.dedup().len() == manifest-values.len() and report-manifests.all(
     report-sha256-value-valid,
   ) and manifest-values.sorted() == report-manifests.sorted() and manifest-values.contains(store-manifest)
+  if not lineage-valid { return false }
 
   let selected-prefixes = report-sidecar-record-prefixes(
     receipt-index,
@@ -1843,7 +1844,7 @@
     type(chain.target) == int and chain.target >= 0,
     type(chain.horizon) == int and chain.horizon >= 1,
     type(chain.width-min) == int and chain.width-min >= 1,
-    type(chain.width-max) == int and chain.width-max >= chain.width-min,
+    type(chain.width-max) == int and type(chain.width-min) == int and chain.width-max >= chain.width-min,
     type(chain.candidate-config) == str and chain.candidate-config.len() > 0,
     type(chain.rollout-config) == str and chain.rollout-config.len() > 0,
     type(chain.policy) == str and chain.policy.len() > 0,
@@ -1858,6 +1859,7 @@
   ) and selected.map(
     chain => str(chain.store) + "|" + str(chain.rollout),
   ).dedup().len() == selected.len()
+  if not selected-valid { return false }
   let selected-by-rank = (:)
   for chain in selected {
     if type(chain.rank) == int { selected-by-rank.insert(str(chain.rank), chain) }
@@ -1935,18 +1937,17 @@
       row.policy == chain.policy,
       type(row.step) == int and row.step >= 0,
       row.requested-horizon == 2,
-      type(row.current-count) == int and row.current-count >= 1,
-      type(row.successor-count) == int and row.successor-count >= 1,
-      row.branch-bin == q2-candidate-branch-bin(row.successor-count),
-      type(row.selected-index) == int and row.selected-index >= 0 and row.selected-index < row.current-count,
+      type(row.successor-count) == int and row.successor-count >= 1 and row.branch-bin == q2-candidate-branch-bin(row.successor-count),
+      type(row.current-count) == int and row.current-count >= 1 and type(row.selected-index) == int and row.selected-index >= 0 and row.selected-index < row.current-count,
       derived-relative-error != none and q2-values-equal(row.relative-error, derived-relative-error),
-      derived-absolute-error != none and calc.abs(row.absolute-error - derived-absolute-error) <= derived-identity-abs-tolerance,
-      derived-tolerance != none and calc.abs(row.tolerance - derived-tolerance) <= derived-identity-abs-tolerance,
-      type(row.within) == bool and row.within == (derived-absolute-error <= derived-tolerance),
+      derived-absolute-error != none and report-value-matches-kind(row.absolute-error, "number") and calc.abs(row.absolute-error - derived-absolute-error) <= derived-identity-abs-tolerance,
+      derived-tolerance != none and report-value-matches-kind(row.tolerance, "number") and calc.abs(row.tolerance - derived-tolerance) <= derived-identity-abs-tolerance,
+      derived-absolute-error != none and derived-tolerance != none and type(row.within) == bool and row.within == (derived-absolute-error <= derived-tolerance),
     ).all(check => check)
   }) and rows.map(
     row => str(row.store) + "|" + str(row.rollout) + "|" + str(row.step),
   ).dedup().len() == rows.len()
+  if not rows-valid { return false }
 
   let selected-row-groups = (:)
   let unit-row-groups = (:)
@@ -2025,6 +2026,22 @@
   let minimum-unit-rows-required = value(
     "exact_q2.spec.minimum_exact_rows_per_independent_unit",
   )
+  let specification-valid = report-value-matches-kind(
+    coverage-minimum,
+    "number",
+  ) and coverage-minimum >= 0 and coverage-minimum <= 1 and type(
+    minimum-units-required,
+  ) == int and minimum-units-required >= 1 and type(
+    minimum-unit-rows-required,
+  ) == int and minimum-unit-rows-required >= 1 and type(
+    population-chain-count,
+  ) == int and population-chain-count >= selected.len() and type(
+    selected-chain-count,
+  ) == int and selected-chain-count == selected.len() and report-value-matches-kind(
+    reported-coverage,
+    "number",
+  )
+  if not specification-valid { return false }
   let safe-minimum-units-required = if type(minimum-units-required) == int {
     minimum-units-required
   } else { 0 }
@@ -2078,25 +2095,25 @@
     fraction: value(prefix + ".selected_chain_fraction"),
   ))
   let census-keys = census-strata.map(stratum => (
-    stratum.scene,
+    str(stratum.scene),
     str(stratum.store),
     str(stratum.target),
     str(stratum.horizon),
-    stratum.branch-bin,
-    stratum.candidate-config,
-    stratum.rollout-config,
-    stratum.policy,
+    str(stratum.branch-bin),
+    str(stratum.candidate-config),
+    str(stratum.rollout-config),
+    str(stratum.policy),
   ).join("|"))
   let census-valid = census-strata.len() > 0 and census-strata.all(stratum => {
     let key = (
-      stratum.scene,
+      str(stratum.scene),
       str(stratum.store),
       str(stratum.target),
       str(stratum.horizon),
-      stratum.branch-bin,
-      stratum.candidate-config,
-      stratum.rollout-config,
-      stratum.policy,
+      str(stratum.branch-bin),
+      str(stratum.candidate-config),
+      str(stratum.rollout-config),
+      str(stratum.policy),
     ).join("|")
     let selected-count = support-chain-groups.at(key, default: ()).len()
     type(stratum.scene) == str and stratum.scene.len() > 0 and type(
@@ -2121,9 +2138,10 @@
   ) and census-strata.map(stratum => stratum.population).sum(default: 0) == population-chain-count and census-strata.map(
     stratum => stratum.selected,
   ).sum(default: 0) == selected.len()
+  if not census-valid { return false }
   let census-scenes = census-strata.map(stratum => stratum.scene).dedup()
   let census-targets = census-strata.map(
-    stratum => stratum.scene + "|" + str(stratum.target),
+    stratum => str(stratum.scene) + "|" + str(stratum.target),
   ).dedup()
   let branch-bin-values = range(6).map(index => value(
     "exact_q2.population_census.candidate_branch_bins[" + str(index) + "]",
@@ -2145,17 +2163,27 @@
     "exact_q2.support_stratum_aggregates",
     "stratum.scene_id",
   )
+  let support-key-types-valid = support-prefixes.all(prefix => (
+    type(value(prefix + ".stratum.scene_id")) == str,
+    type(value(prefix + ".stratum.store_index")) == int,
+    type(value(prefix + ".stratum.target_row_id")) == int,
+    type(value(prefix + ".stratum.configured_horizon")) == int,
+    type(value(prefix + ".stratum.candidate_branch_bin")) == str,
+    type(value(prefix + ".stratum.candidate_config_hash")) == str,
+    type(value(prefix + ".stratum.rollout_config_hash")) == str,
+    type(value(prefix + ".stratum.selection_policy")) == str,
+  ).all(check => check))
   let support-aggregate-keys = support-prefixes.map(prefix => (
-    value(prefix + ".stratum.scene_id"),
+    str(value(prefix + ".stratum.scene_id")),
     str(value(prefix + ".stratum.store_index")),
     str(value(prefix + ".stratum.target_row_id")),
     str(value(prefix + ".stratum.configured_horizon")),
-    value(prefix + ".stratum.candidate_branch_bin"),
-    value(prefix + ".stratum.candidate_config_hash"),
-    value(prefix + ".stratum.rollout_config_hash"),
-    value(prefix + ".stratum.selection_policy"),
+    str(value(prefix + ".stratum.candidate_branch_bin")),
+    str(value(prefix + ".stratum.candidate_config_hash")),
+    str(value(prefix + ".stratum.rollout_config_hash")),
+    str(value(prefix + ".stratum.selection_policy")),
   ).join("|"))
-  let support-aggregates-valid = support-prefixes.len() == support-chain-groups.len() and support-aggregate-keys.dedup().len() == support-aggregate-keys.len() and support-aggregate-keys.sorted() == support-chain-groups.keys().sorted() and support-prefixes.enumerate().all(((index, prefix)) => {
+  let support-aggregates-valid = support-key-types-valid and support-prefixes.len() == support-chain-groups.len() and support-aggregate-keys.dedup().len() == support-aggregate-keys.len() and support-aggregate-keys.sorted() == support-chain-groups.keys().sorted() and support-prefixes.enumerate().all(((index, prefix)) => {
     let key = support-aggregate-keys.at(index)
     let chains = support-chain-groups.at(key)
     (
@@ -2191,17 +2219,27 @@
     "exact_q2.stratum_aggregates",
     "stratum.scene_id",
   )
+  let stored-stratum-key-types-valid = stored-stratum-prefixes.all(prefix => (
+    type(value(prefix + ".stratum.scene_id")) == str,
+    type(value(prefix + ".stratum.store_index")) == int,
+    type(value(prefix + ".stratum.target_row_id")) == int,
+    type(value(prefix + ".stratum.candidate_branch_bin")) == str,
+    type(value(prefix + ".stratum.candidate_config_hash")) == str,
+    type(value(prefix + ".stratum.rollout_config_hash")) == str,
+    type(value(prefix + ".stratum.selection_policy")) == str,
+    type(value(prefix + ".stratum.configured_horizon")) == int,
+  ).all(check => check))
   let stored-stratum-keys = stored-stratum-prefixes.map(prefix => (
-    value(prefix + ".stratum.scene_id"),
+    str(value(prefix + ".stratum.scene_id")),
     str(value(prefix + ".stratum.store_index")),
     str(value(prefix + ".stratum.target_row_id")),
-    value(prefix + ".stratum.candidate_branch_bin"),
-    value(prefix + ".stratum.candidate_config_hash"),
-    value(prefix + ".stratum.rollout_config_hash"),
-    value(prefix + ".stratum.selection_policy"),
+    str(value(prefix + ".stratum.candidate_branch_bin")),
+    str(value(prefix + ".stratum.candidate_config_hash")),
+    str(value(prefix + ".stratum.rollout_config_hash")),
+    str(value(prefix + ".stratum.selection_policy")),
     str(value(prefix + ".stratum.configured_horizon")),
   ).join("|"))
-  let stratum-aggregates-valid = stored-stratum-prefixes.len() == row-stratum-groups.len() and stored-stratum-keys.dedup().len() == stored-stratum-keys.len() and stored-stratum-keys.sorted() == row-stratum-groups.keys().sorted() and stored-stratum-prefixes.enumerate().all(((index, prefix)) => q2-sidecar-aggregate-matches(
+  let stratum-aggregates-valid = stored-stratum-key-types-valid and stored-stratum-prefixes.len() == row-stratum-groups.len() and stored-stratum-keys.dedup().len() == stored-stratum-keys.len() and stored-stratum-keys.sorted() == row-stratum-groups.keys().sorted() and stored-stratum-prefixes.enumerate().all(((index, prefix)) => q2-sidecar-aggregate-matches(
     receipt-index,
     prefix,
     q2-row-aggregate(row-stratum-groups.at(stored-stratum-keys.at(index)), 1),
@@ -2212,17 +2250,20 @@
     ordered-unit-manifests.first()
   } else { "" }
   let population-unit-keys = census-scenes.map(
-    scene => ordered-unit-manifest + "|" + scene,
+    scene => ordered-unit-manifest + "|" + str(scene),
   )
   let unit-prefixes = report-sidecar-record-prefixes(
     receipt-index,
     "exact_q2.independent_unit_aggregates",
     "independent_unit.scene_id",
   )
-  let stored-unit-keys = unit-prefixes.map(prefix => value(
+  let unit-key-types-valid = unit-prefixes.all(prefix => report-sha256-value-valid(value(
     prefix + ".independent_unit.ordered_store_manifest_sha256",
-  ) + "|" + value(prefix + ".independent_unit.scene_id"))
-  let unit-aggregates-valid = ordered-unit-manifests.len() == 1 and unit-prefixes.len() == population-unit-keys.len() and stored-unit-keys.dedup().len() == stored-unit-keys.len() and stored-unit-keys.sorted() == population-unit-keys.sorted() and unit-prefixes.enumerate().all(((index, prefix)) => {
+  )) and type(value(prefix + ".independent_unit.scene_id")) == str)
+  let stored-unit-keys = unit-prefixes.map(prefix => str(value(
+    prefix + ".independent_unit.ordered_store_manifest_sha256",
+  )) + "|" + str(value(prefix + ".independent_unit.scene_id")))
+  let unit-aggregates-valid = unit-key-types-valid and ordered-unit-manifests.len() == 1 and unit-prefixes.len() == population-unit-keys.len() and stored-unit-keys.dedup().len() == stored-unit-keys.len() and stored-unit-keys.sorted() == population-unit-keys.sorted() and unit-prefixes.enumerate().all(((index, prefix)) => {
     let unit-key = stored-unit-keys.at(index)
     let scene = value(prefix + ".independent_unit.scene_id")
     let population-count = census-strata.filter(
