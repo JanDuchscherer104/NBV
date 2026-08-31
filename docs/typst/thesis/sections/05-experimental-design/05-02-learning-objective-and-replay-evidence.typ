@@ -81,7 +81,9 @@ tolerance is nonpositive. Each metric, threshold, count, and boolean decision
 shares its declared positive population denominator and one immutable sidecar
 source; a malformed value, aggregation, unit, count, provenance, rule identity,
 or contradictory boolean leaves the gate unresolved rather than producing a
-measured non-pass.
+measured non-pass. Actor-$Q_1$, exact-$Q_2$, and learned-policy endpoint evidence
+must name one content-addressed inference bundle before their claims compose;
+weight-free oracle headroom remains independent.
 
 For each exact row, the tolerance contract is
 

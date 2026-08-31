@@ -1,6 +1,6 @@
 = Results <sec:thesis-results>
 
-#import "../experiment_data.typ": thesis-report-settings, load-thesis-report, endpoint-evidence-facts, headroom-evidence-facts, recovery-evidence-facts, report-store-fact, report-store-endpoint-evidence-valid, report-store-headroom-evidence-valid, report-store-recovery-evidence-valid, report-store-headroom-identity-valid, report-store-recovery-identity-valid, report-store-population-evidence-valid, report-store-measurement-evidence-valid, report-store-candidate-support-evidence-valid, report-store-q1-evidence-valid, report-store-q2-evidence-valid, report-store-facts-share-value, report-store-facts-share-source, report-stores-have-facts, report-stores-decision-passed, evidence-gate-state, conditional-ratio-gate-state, short-store-label, format-report-value
+#import "../experiment_data.typ": thesis-report-settings, load-thesis-report, endpoint-evidence-facts, oracle-endpoint-evidence-facts, headroom-evidence-facts, recovery-evidence-facts, report-store-fact, report-store-endpoint-evidence-valid, report-store-oracle-endpoint-evidence-valid, report-store-headroom-evidence-valid, report-store-recovery-evidence-valid, report-store-headroom-identity-valid, report-store-recovery-identity-valid, report-store-population-evidence-valid, report-store-measurement-evidence-valid, report-store-candidate-support-evidence-valid, report-store-q1-evidence-valid, report-store-q2-evidence-valid, report-store-facts-share-value, report-store-facts-share-source, report-stores-facts-share-sha256, report-stores-have-facts, report-stores-decision-passed, evidence-gate-state, conditional-ratio-gate-state, short-store-label, format-report-value
 #import "../draft_markers.typ": validation_todo
 #import "../../shared/tables.typ": publication-table, index-cell
 
@@ -52,15 +52,23 @@
   report-stores-decision-passed(thesis_data, "candidate-support.gate.passed"),
 )
 #let shared-foundations-pass = measurement-state.claim_admissible and support-state.claim_admissible
-#let endpoint-evidence-available = confirmatory-evidence and report-stores-have-facts(thesis_data, endpoint-evidence-facts, denominators: true) and thesis_data.tables.stores.rows.all(store => {
+#let oracle-endpoint-evidence-available = confirmatory-evidence and report-stores-have-facts(thesis_data, oracle-endpoint-evidence-facts, denominators: true) and thesis_data.tables.stores.rows.all(store => {
   let endpoint-scenes = report-store-fact(thesis_data, store.store_id, "policy.endpoint_gain.n_scenes").value
-  type(endpoint-scenes) == int and endpoint-scenes > 0 and report-store-endpoint-evidence-valid(
+  type(endpoint-scenes) == int and endpoint-scenes > 0 and report-store-oracle-endpoint-evidence-valid(
     thesis_data,
     store.store_id,
     endpoint-scenes,
   )
 })
-#let headroom-evidence-available = endpoint-evidence-available and report-stores-have-facts(thesis_data, headroom-evidence-facts, denominators: true) and thesis_data.tables.stores.rows.all(store => {
+#let endpoint-evidence-available = oracle-endpoint-evidence-available and report-stores-have-facts(thesis_data, endpoint-evidence-facts, denominators: true) and thesis_data.tables.stores.rows.all(store => {
+  let endpoint-scenes = report-store-fact(thesis_data, store.store_id, "policy.endpoint_gain.n_scenes").value
+  report-store-endpoint-evidence-valid(
+    thesis_data,
+    store.store_id,
+    endpoint-scenes,
+  )
+})
+#let headroom-evidence-available = oracle-endpoint-evidence-available and report-stores-have-facts(thesis_data, headroom-evidence-facts, denominators: true) and thesis_data.tables.stores.rows.all(store => {
   let endpoint-scenes = report-store-fact(thesis_data, store.store_id, "policy.endpoint_gain.n_scenes").value
   let headroom-scenes = report-store-fact(thesis_data, store.store_id, "policy.paired_scene_endpoint.n_scenes").value
   endpoint-scenes != none and endpoint-scenes > 0 and headroom-scenes == endpoint-scenes and report-store-headroom-evidence-valid(
@@ -77,7 +85,7 @@
   ) and report-store-facts-share-source(
     thesis_data,
     store.store_id,
-    endpoint-evidence-facts + headroom-evidence-facts,
+    oracle-endpoint-evidence-facts + headroom-evidence-facts,
   ) and report-store-headroom-identity-valid(
     thesis_data,
     store.store_id,
@@ -101,10 +109,25 @@
   thesis_data,
   store.store_id,
 ))
+#let q1-q2-lineage-consistent = q1-evidence-available and q2-evidence-available and report-stores-facts-share-sha256(
+  thesis_data,
+  (
+    "q1.model.bundle_manifest_sha256",
+    "q2.exact.bundle_manifest_sha256",
+  ),
+)
 #let q2-state = evidence-gate-state(
   q2-evidence-available,
   report-stores-decision-passed(thesis_data, "q2.exact.passed"),
-  prerequisites-passed: q1-state.claim_admissible,
+  prerequisites-passed: q1-state.claim_admissible and q1-q2-lineage-consistent,
+)
+#let learned-chain-lineage-consistent = q1-q2-lineage-consistent and endpoint-evidence-available and report-stores-facts-share-sha256(
+  thesis_data,
+  (
+    "q1.model.bundle_manifest_sha256",
+    "q2.exact.bundle_manifest_sha256",
+    "policy.endpoint_gain.learned_q.bundle_manifest_sha256",
+  ),
 )
 #let recovery-contract-available = endpoint-evidence-available and headroom-evidence-available and report-stores-have-facts(thesis_data, recovery-evidence-facts, denominators: true) and thesis_data.tables.stores.rows.all(store => {
   let endpoint-scenes = report-store-fact(thesis_data, store.store_id, "policy.endpoint_gain.n_scenes").value
@@ -135,7 +158,7 @@
   headroom-state.claim_admissible,
   recovery-contract-available,
   report-stores-decision-passed(thesis_data, "policy.q_recovery.passed"),
-  remaining-prerequisites-passed: q2-state.claim_admissible,
+  remaining-prerequisites-passed: q2-state.claim_admissible and learned-chain-lineage-consistent,
 )
 #let recovery-state = recovery-evidence.state
 #let recovery-ratio-reportable = recovery-evidence.ratio_evidence_available
@@ -161,8 +184,8 @@ payload to reproduce every claimed row.
       [population/action / RQ4], [#evidence-status(support-state)], [#gate-status(support-state)], [#claim-status(support-state)], [held-out attempts pass the lower-tail support rule], [missing attempts, low support, or excessive failed roots],
       [headroom / RQ2a], [#evidence-status(headroom-state)], [#gate-status(headroom-state)], [#claim-status(headroom-state)], [meaningful non-myopic endpoint headroom passes], [shared foundation or effect rule non-pass],
       [actor $Q_1$ / RQ3], [#evidence-status(q1-state)], [#gate-status(q1-state)], [#claim-status(q1-state)], [actor-protocol receipt and ranking/calibration rule pass], [shared foundation or actor-$Q_1$ rule non-pass],
-      [learned/exact $Q_2$ / RQ2], [#evidence-status(q2-state)], [#gate-status(q2-state)], [#claim-status(q2-state)], [exact-$Q_2$ coverage, support, and rowwise tolerance pass], [$Q_1$ claim or exact-$Q_2$ rule non-pass],
-      [endpoint recovery / RQ2b], [#evidence-status(recovery-state)], [#gate-status(recovery-state)], [#claim-status(recovery-state)], [threshold and positive interval support recovery], [headroom, learned-value, or recovery rule non-pass],
+      [learned/exact $Q_2$ / RQ2], [#evidence-status(q2-state)], [#gate-status(q2-state)], [#claim-status(q2-state)], [exact-$Q_2$ coverage, support, and rowwise tolerance pass], [$Q_1$/bundle prerequisite or exact-$Q_2$ non-pass],
+      [endpoint recovery / RQ2b], [#evidence-status(recovery-state)], [#gate-status(recovery-state)], [#claim-status(recovery-state)], [threshold and positive interval support recovery], [headroom/bundle prerequisite or recovery non-pass],
     ),
   ),
   caption: [Evidence state, gate decision, and claim admissibility by inferential stage. Available evidence remains reported after a non-pass; only claims whose prerequisites pass are admitted.],
@@ -449,8 +472,9 @@ payload to reproduce every claimed row.
   it cannot compensate for a failed row, stratum, or unit. The recursive claim
   is #if q2-state.claim_admissible [admissible on the passed
   actor-$Q_1$ path.] else [blocked by its shared foundations, actor-$Q_1$, or
-  exact-$Q_2$ decision.] Even an admitted result does not establish endpoint
-  policy success.
+  exact-$Q_2$ decision, or by a Q1/Q2 bundle mismatch; the mismatch is a
+  prerequisite failure, not a measured non-pass.]
+  Even an admitted result does not establish endpoint policy success.
 ] else [
   No qualifying held-out learned-versus-exact $Q_2$ receipt is available;
   recursive finite-horizon accuracy is therefore unestablished.
@@ -467,7 +491,8 @@ payload to reproduce every claimed row.
   claim is
   #if recovery-state.claim_admissible [admissible because both the oracle-
   headroom and learned-value lanes pass.] else [blocked by at least one lane or
-  the recovery decision; the recorded endpoint observations remain auditable.]
+  the recovery decision, or by a learned-endpoint bundle mismatch; that mismatch
+  is a prerequisite failure, and the endpoint observations remain auditable.]
 ] else if endpoint-evidence-available [
   Matched per-policy endpoint estimates and intervals remain auditable in
   @tab:thesis-confirmatory-policy-values, but the recovered-headroom ratio and its

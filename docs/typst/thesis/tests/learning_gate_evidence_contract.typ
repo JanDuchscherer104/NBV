@@ -8,6 +8,7 @@
 #let measurement-benchmark = "3636363636363636363636363636363636363636363636363636363636363636"
 #let q2-receipt-digest = "4545454545454545454545454545454545454545454545454545454545454545"
 #let q2-receipt-name = "exact-q2-certification.json"
+#let qh-bundle-manifest = "8181818181818181818181818181818181818181818181818181818181818181"
 #let store-manifest = "5555555555555555555555555555555555555555555555555555555555555555"
 #let support-benchmark = "6666666666666666666666666666666666666666666666666666666666666666"
 #let support-config = "7777777777777777777777777777777777777777777777777777777777777777"
@@ -549,6 +550,7 @@
 )
 
 #let q1-rows(
+  bundle-manifest: qh-bundle-manifest,
   count-value: 5,
   ranking-value: 0.8,
   ranking-ci-low: 0.65,
@@ -572,6 +574,7 @@
   source: protocol-source,
   gate-source: protocol-source,
 ) = (
+  fact("q1.model.bundle_manifest_sha256", bundle-manifest, "sha256", 5, "model_identity", source: source),
   fact("q1.protocol.receipt_schema", receipt-schema, "identity", 5, "protocol_identity", source: source),
   fact("q1.protocol.scene_role", scene-role, "identity", 5, "protocol_identity", source: source),
   fact("q1.protocol.target_source", target-source, "identity", 5, "protocol_identity", source: source),
@@ -593,6 +596,7 @@
 )
 
 #let q2-rows(
+  bundle-manifest: qh-bundle-manifest,
   count-value: 5,
   row-n: 5,
   mae-value: 0.1,
@@ -613,6 +617,7 @@
   gate-source: source,
 ) = (
   fact("q2.exact.certification_receipt_sha256", q2-receipt-digest, "sha256", row-n, "receipt_binding_sha256", source: source),
+  fact("q2.exact.bundle_manifest_sha256", bundle-manifest, "sha256", row-n, "policy_identity", source: source),
   fact("q2.exact.mae", mae-value, "root_normalized_return", row-n, "independent_unit_macro", source: source),
   fact("q2.exact.coverage", coverage-value, coverage-unit, row-n, coverage-aggregation, source: source),
   fact("q2.exact.minimum_support_stratum_rows", minimum-support-stratum-rows, "count", row-n, "support_stratum_minimum", source: source),
@@ -629,6 +634,7 @@
 )
 
 #let q2-certification-sidecar-value-rows(
+  bundle-manifest: qh-bundle-manifest,
   population-count: 5,
   row-counts: (2, 2, 2, 2, 2),
   error: 0.1,
@@ -660,7 +666,7 @@
   let rollout-config = "9393939393939393939393939393939393939393939393939393939393939393"
   let envelope = (
     typed-sidecar-row(q2-receipt-sidecar, "schema_version", q2-certification-receipt-schema),
-    typed-sidecar-row(q2-receipt-sidecar, "bundle_manifest_sha256", "8181818181818181818181818181818181818181818181818181818181818181"),
+    typed-sidecar-row(q2-receipt-sidecar, "bundle_manifest_sha256", bundle-manifest),
     typed-sidecar-row(q2-receipt-sidecar, "test_population_sha256", "8282828282828282828282828282828282828282828282828282828282828282"),
     typed-sidecar-row(q2-receipt-sidecar, "test_provenance_sha256", "8383838383838383838383838383838383838383838383838383838383838383"),
     typed-sidecar-row(q2-receipt-sidecar, "bound_contract.scorer_config_hash", "8484848484848484848484848484848484848484848484848484848484848484"),
@@ -882,6 +888,8 @@
 }
 
 #let q2-report(
+  bundle-manifest: qh-bundle-manifest,
+  receipt-bundle-manifest: none,
   population-count: 5,
   row-counts: (2, 2, 2, 2, 2),
   error: 0.1,
@@ -895,6 +903,9 @@
   receipt-values: none,
   sidecar-rows: sidecars,
 ) = {
+  let receipt-bundle-manifest = if receipt-bundle-manifest == none {
+    bundle-manifest
+  } else { receipt-bundle-manifest }
   let selected-count = row-counts.len()
   let coverage = selected-count / population-count
   let absolute-error = calc.abs(error)
@@ -905,6 +916,7 @@
   let mae = if supported-counts.len() > 0 { absolute-error } else { 0.0 }
   let passed = coverage >= coverage-minimum and minimum-support >= 1 and selected-count >= minimum-independent-units and minimum-support >= minimum-unit-rows and maximum-excess <= 0
   let facts = q2-rows(
+    bundle-manifest: bundle-manifest,
     count-value: selected-count,
     row-n: selected-count,
     mae-value: mae,
@@ -921,6 +933,7 @@
   )
   let receipt = if receipt-values == none {
     q2-certification-sidecar-value-rows(
+      bundle-manifest: receipt-bundle-manifest,
       population-count: population-count,
       row-counts: row-counts,
       error: error,
@@ -1227,6 +1240,7 @@
 ), "store-a"))
 
 #assert(report-store-q1-evidence-valid(report(q1-rows()), "store-a"))
+#assert(not report-store-q1-evidence-valid(report(q1-rows(bundle-manifest: "invalid")), "store-a"))
 #assert(report-store-q1-evidence-valid(report(q1-rows(ranking-value: 0.6, passed: false)), "store-a"))
 #assert(report-store-q1-evidence-valid(report(q1-rows(calibration-value: 0.3, passed: false)), "store-a"))
 #assert(report-store-q1-evidence-valid(report(q1-rows(ranking-value: 0.7, calibration-value: 0.2)), "store-a"))
@@ -1266,6 +1280,7 @@
   q1-baseline-rows,
 )
 #for mutation in (
+  (key: "q1.model.bundle_manifest_sha256", value: digest-b),
   (key: "q1.protocol.receipt_schema", value: "unversioned_receipt"),
   (key: "q1.protocol.scene_role", value: "training_scene"),
   (key: "q1.protocol.target_source", value: "privileged_gt_obb"),
@@ -1303,6 +1318,8 @@
 #assert(not report-store-q1-evidence-valid(report(q1-rows(gate-source: "analysis/other.json|sidecar:" + sidecar-b)), "store-a"))
 
 #assert(report-store-q2-evidence-valid(q2-report(), "store-a"))
+#assert(not report-store-q2-evidence-valid(q2-report(bundle-manifest: "invalid"), "store-a"))
+#assert(not report-store-q2-evidence-valid(q2-report(receipt-bundle-manifest: digest-b), "store-a"))
 #assert(report-store-q2-evidence-valid(q2-report(row-counts: (20, 20, 20, 20, 20)), "store-a"))
 #assert(report-store-q2-evidence-valid(q2-report(population-count: 10), "store-a"))
 #assert(report-store-q2-evidence-valid(q2-report(error: 0.2), "store-a"))

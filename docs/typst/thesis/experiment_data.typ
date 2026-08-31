@@ -180,6 +180,7 @@
   "policy.endpoint_gain.learned_q.mean",
   "policy.endpoint_gain.learned_q.ci_low",
   "policy.endpoint_gain.learned_q.ci_high",
+  "policy.endpoint_gain.learned_q.bundle_manifest_sha256",
   "policy.endpoint_gain.interval_method",
   "policy.endpoint_gain.n_scenes",
   "policy.endpoint_gain.cohort_sha256",
@@ -194,9 +195,26 @@
   (key: "policy.endpoint_gain.learned_q.mean", aggregation: "paired_scene_endpoint_gain", unit: "fraction", value_kind: "number"),
   (key: "policy.endpoint_gain.learned_q.ci_low", aggregation: "paired_scene_endpoint_gain", unit: "fraction", value_kind: "number"),
   (key: "policy.endpoint_gain.learned_q.ci_high", aggregation: "paired_scene_endpoint_gain", unit: "fraction", value_kind: "number"),
+  (key: "policy.endpoint_gain.learned_q.bundle_manifest_sha256", aggregation: "policy_identity", unit: "sha256", value_kind: "string"),
   (key: "policy.endpoint_gain.interval_method", aggregation: "analysis_identity", unit: "identity", value_kind: "string"),
   (key: "policy.endpoint_gain.n_scenes", aggregation: "count", unit: "count", value_kind: "integer"),
   (key: "policy.endpoint_gain.cohort_sha256", aggregation: "cohort_binding_sha256", unit: "sha256", value_kind: "string"),
+)
+#let oracle-endpoint-evidence-facts = endpoint-evidence-facts.filter(
+  key => not key.starts-with("policy.endpoint_gain.learned_q."),
+)
+#let learned-endpoint-evidence-facts = endpoint-evidence-facts.filter(
+  key => key.starts-with("policy.endpoint_gain.learned_q.") or key in (
+    "policy.endpoint_gain.interval_method",
+    "policy.endpoint_gain.n_scenes",
+    "policy.endpoint_gain.cohort_sha256",
+  ),
+)
+#let oracle-endpoint-evidence-contract = endpoint-evidence-contract.filter(
+  item => item.key in oracle-endpoint-evidence-facts,
+)
+#let learned-endpoint-evidence-contract = endpoint-evidence-contract.filter(
+  item => item.key in learned-endpoint-evidence-facts,
 )
 #let headroom-evidence-facts = (
   "policy.paired_scene_endpoint.effect",
@@ -321,6 +339,7 @@
   (key: "candidate-support.gate.passed", aggregation: "state_then_scene_decision", unit: "bool", value_kind: "boolean"),
 )
 #let q1-evidence-facts = (
+  "q1.model.bundle_manifest_sha256",
   "q1.protocol.receipt_schema",
   "q1.protocol.scene_role",
   "q1.protocol.target_source",
@@ -341,6 +360,7 @@
   "q1.gate.passed",
 )
 #let q1-evidence-contract = (
+  (key: "q1.model.bundle_manifest_sha256", aggregation: "model_identity", unit: "sha256", value_kind: "string"),
   (key: "q1.protocol.receipt_schema", aggregation: "protocol_identity", unit: "identity", value_kind: "string"),
   (key: "q1.protocol.scene_role", aggregation: "protocol_identity", unit: "identity", value_kind: "string"),
   (key: "q1.protocol.target_source", aggregation: "protocol_identity", unit: "identity", value_kind: "string"),
@@ -362,6 +382,7 @@
 )
 #let q2-evidence-facts = (
   "q2.exact.certification_receipt_sha256",
+  "q2.exact.bundle_manifest_sha256",
   "q2.exact.mae",
   "q2.exact.coverage",
   "q2.exact.minimum_support_stratum_rows",
@@ -378,6 +399,7 @@
 )
 #let q2-evidence-contract = (
   (key: "q2.exact.certification_receipt_sha256", aggregation: "receipt_binding_sha256", unit: "sha256", value_kind: "string"),
+  (key: "q2.exact.bundle_manifest_sha256", aggregation: "policy_identity", unit: "sha256", value_kind: "string"),
   (key: "q2.exact.mae", aggregation: "independent_unit_macro", unit: "root_normalized_return", value_kind: "number", minimum: 0),
   (key: "q2.exact.coverage", aggregation: "selected_chain_fraction", unit: "fraction", value_kind: "number", minimum: 0, maximum: 1),
   (key: "q2.exact.minimum_support_stratum_rows", aggregation: "support_stratum_minimum", unit: "count", value_kind: "integer", minimum: 0),
@@ -571,6 +593,25 @@
   rows.all(
     row => row != none and type(row.source) == str and row.source.len() > 0,
   ) and rows.all(row => row.source == rows.first().source)
+}
+
+// Dependent learned claims may combine evidence only when every report profile
+// names the same content-addressed inference bundle. Per-store equality is not
+// sufficient because otherwise two internally consistent stores could still
+// refer to different selected models.
+#let report-stores-facts-share-sha256(report, keys) = {
+  let stores = report.tables.stores.rows
+  let rows = stores.map(store => keys.map(key => {
+    let matches = report.tables.facts.rows.filter(
+      row => row.store_id == store.store_id and row.key == key,
+    )
+    if matches.len() == 1 { matches.first() } else { none }
+  })).flatten()
+  rows.len() == stores.len() * keys.len() and rows.all(
+    row => row != none and type(row.value) == str and row.value.match(
+      regex("^[0-9a-f]{64}$"),
+    ) != none,
+  ) and rows.map(row => row.value).dedup().len() == 1
 }
 
 #let evidence-gate-state(
@@ -1559,6 +1600,13 @@
 }
 
 #let report-store-q1-evidence-valid(report, store-id) = {
+  let fact-index = report-store-fact-index(report)
+  let bundle-row = report-store-indexed-row-or-none(
+    fact-index,
+    store-id,
+    "q1.model.bundle_manifest_sha256",
+  )
+  let bundle-manifest = if bundle-row == none { none } else { bundle-row.value }
   let ranking = report-store-number-value(report, store-id, "q1.ranking.pairwise_accuracy")
   let ranking-ci-low = report-store-number-value(report, store-id, "q1.ranking.pairwise_accuracy.ci_low")
   let calibration = report-store-number-value(report, store-id, "q1.calibration.mae")
@@ -1591,7 +1639,7 @@
     store-id,
     q1-evidence-facts,
     required-name: q1-protocol-receipt-name,
-  ) and report-store-interval-is-ordered(
+  ) and report-sha256-value-valid(bundle-manifest) and report-store-interval-is-ordered(
     report,
     store-id,
     "q1.ranking.pairwise_accuracy.ci_low",
@@ -2231,6 +2279,7 @@
     expected.value,
   ))
   let facts-match = (
+    (key: "q2.exact.bundle_manifest_sha256", value: value("bundle_manifest_sha256")),
     (key: "q2.exact.mae", value: derived-mae),
     (key: "q2.exact.coverage", value: derived-coverage),
     (key: "q2.exact.minimum_support_stratum_rows", value: derived-minimum-support-rows),
@@ -2283,6 +2332,13 @@
 }
 
 #let report-store-q2-evidence-valid(report, store-id) = {
+  let fact-index = report-store-fact-index(report)
+  let bundle-row = report-store-indexed-row-or-none(
+    fact-index,
+    store-id,
+    "q2.exact.bundle_manifest_sha256",
+  )
+  let bundle-manifest = if bundle-row == none { none } else { bundle-row.value }
   let coverage = report-store-number-value(report, store-id, "q2.exact.coverage")
   let minimum-support-rows = report-store-number-value(report, store-id, "q2.exact.minimum_support_stratum_rows")
   let minimum-unit-rows = report-store-number-value(report, store-id, "q2.exact.minimum_rows_per_independent_unit")
@@ -2305,7 +2361,7 @@
   ) and report-store-q2-certification-receipt-valid(
     report,
     store-id,
-  ) and (
+  ) and report-sha256-value-valid(bundle-manifest) and (
     coverage,
     minimum-support-rows,
     minimum-unit-rows,
@@ -2323,21 +2379,55 @@
   )
 }
 
-#let report-store-endpoint-evidence-valid(report, store-id, expected-n) = {
+#let report-store-oracle-endpoint-evidence-valid(report, store-id, expected-n) = {
   report-store-analysis-family-valid(
     report,
     store-id,
-    endpoint-evidence-facts,
-    endpoint-evidence-contract,
+    oracle-endpoint-evidence-facts,
+    oracle-endpoint-evidence-contract,
     expected-n,
     expected-values: ((key: "policy.endpoint_gain.interval_method", value: paired-interval-method),),
     interval-pairs: (
       (low: "policy.endpoint_gain.oracle_one_step.ci_low", high: "policy.endpoint_gain.oracle_one_step.ci_high"),
       (low: "policy.endpoint_gain.oracle_lookahead.ci_low", high: "policy.endpoint_gain.oracle_lookahead.ci_high"),
-      (low: "policy.endpoint_gain.learned_q.ci_low", high: "policy.endpoint_gain.learned_q.ci_high"),
     ),
     digest-keys: ("policy.endpoint_gain.cohort_sha256",),
     required-source-fragment: "|sidecar:",
+  )
+}
+
+#let report-store-learned-endpoint-evidence-valid(report, store-id, expected-n) = {
+  report-store-analysis-family-valid(
+    report,
+    store-id,
+    learned-endpoint-evidence-facts,
+    learned-endpoint-evidence-contract,
+    expected-n,
+    expected-values: ((key: "policy.endpoint_gain.interval_method", value: paired-interval-method),),
+    interval-pairs: (
+      (low: "policy.endpoint_gain.learned_q.ci_low", high: "policy.endpoint_gain.learned_q.ci_high"),
+    ),
+    digest-keys: (
+      "policy.endpoint_gain.cohort_sha256",
+      "policy.endpoint_gain.learned_q.bundle_manifest_sha256",
+    ),
+    required-source-fragment: "|sidecar:",
+  )
+}
+
+#let report-store-endpoint-evidence-valid(report, store-id, expected-n) = {
+  report-store-oracle-endpoint-evidence-valid(
+    report,
+    store-id,
+    expected-n,
+  ) and report-store-learned-endpoint-evidence-valid(
+    report,
+    store-id,
+    expected-n,
+  ) and report-store-facts-share-source(
+    report,
+    store-id,
+    endpoint-evidence-facts,
   )
 }
 

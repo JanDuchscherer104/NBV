@@ -1,4 +1,4 @@
-#import "../experiment_data.typ": canonical-sidecar-id, conditional-ratio-gate-state, evidence-gate-state, endpoint-evidence-facts, headroom-evidence-facts, recovery-evidence-facts, headroom-decision-rule, paired-interval-method, recovery-decision-rule, recovery-interval-method, recovery-ratio-definition, report-store-endpoint-evidence-valid, report-store-headroom-evidence-valid, report-store-recovery-evidence-valid, report-store-headroom-identity-valid, report-store-recovery-identity-valid, report-store-fact, report-store-facts-share-source, report-store-facts-share-value, report-stores-have-facts
+#import "../experiment_data.typ": canonical-sidecar-id, conditional-ratio-gate-state, evidence-gate-state, endpoint-evidence-facts, oracle-endpoint-evidence-facts, headroom-evidence-facts, recovery-evidence-facts, headroom-decision-rule, paired-interval-method, recovery-decision-rule, recovery-interval-method, recovery-ratio-definition, report-store-endpoint-evidence-valid, report-store-oracle-endpoint-evidence-valid, report-store-headroom-evidence-valid, report-store-recovery-evidence-valid, report-store-headroom-identity-valid, report-store-recovery-identity-valid, report-store-fact, report-store-facts-share-source, report-store-facts-share-value, report-stores-have-facts
 
 #let digest-a = "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
 #let digest-b = "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
@@ -11,6 +11,7 @@
 )
 #let cohort-a = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 #let cohort-b = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+#let bundle-manifest = "8181818181818181818181818181818181818181818181818181818181818181"
 #let fact(key, value, unit, n, aggregation, source: source) = (
   store_id: "store-a",
   key: key,
@@ -76,7 +77,7 @@
     typed-sidecar-row(row.sidecar_id, row.key, replacement)
   } else { row })
 }
-#let endpoint-rows(cohort: cohort-a, source: source, scene-value: 5) = (
+#let endpoint-rows(cohort: cohort-a, bundle: bundle-manifest, source: source, scene-value: 5) = (
   fact("policy.endpoint_gain.oracle_one_step.mean", 0.20, "fraction", 5, "paired_scene_endpoint_gain", source: source),
   fact("policy.endpoint_gain.oracle_one_step.ci_low", 0.10, "fraction", 5, "paired_scene_endpoint_gain", source: source),
   fact("policy.endpoint_gain.oracle_one_step.ci_high", 0.30, "fraction", 5, "paired_scene_endpoint_gain", source: source),
@@ -86,6 +87,7 @@
   fact("policy.endpoint_gain.learned_q.mean", 0.38, "fraction", 5, "paired_scene_endpoint_gain", source: source),
   fact("policy.endpoint_gain.learned_q.ci_low", 0.28, "fraction", 5, "paired_scene_endpoint_gain", source: source),
   fact("policy.endpoint_gain.learned_q.ci_high", 0.48, "fraction", 5, "paired_scene_endpoint_gain", source: source),
+  fact("policy.endpoint_gain.learned_q.bundle_manifest_sha256", bundle, "sha256", 5, "policy_identity", source: source),
   fact("policy.endpoint_gain.interval_method", paired-interval-method, "identity", 5, "analysis_identity", source: source),
   fact("policy.endpoint_gain.n_scenes", scene-value, "count", 5, "count", source: source),
   fact("policy.endpoint_gain.cohort_sha256", cohort, "sha256", 5, "cohort_binding_sha256", source: source),
@@ -160,8 +162,18 @@
 #let headroom-valid = report-store-headroom-evidence-valid(accepted, "store-a", 5)
 #let recovery-valid = report-store-recovery-evidence-valid(accepted, "store-a", 5)
 #assert(endpoint-valid)
+#assert(report-store-oracle-endpoint-evidence-valid(accepted, "store-a", 5))
 #assert(headroom-valid)
 #assert(recovery-valid)
+#let oracle-only-rows = endpoint-rows().filter(
+  row => row.key in oracle-endpoint-evidence-facts,
+) + headroom-rows()
+#let oracle-only-report = report(oracle-only-rows)
+#assert(report-store-oracle-endpoint-evidence-valid(oracle-only-report, "store-a", 5))
+#assert(report-store-headroom-evidence-valid(oracle-only-report, "store-a", 5))
+#assert(not report-store-endpoint-evidence-valid(oracle-only-report, "store-a", 5))
+#assert(report-store-oracle-endpoint-evidence-valid(report(endpoint-rows(bundle: "invalid")), "store-a", 5))
+#assert(not report-store-endpoint-evidence-valid(report(endpoint-rows(bundle: "invalid")), "store-a", 5))
 #let accepted-rows = endpoint-rows() + headroom-rows() + recovery-rows()
 #let accepted-payload = analysis-sidecar-value-rows(
   sidecar-a,
@@ -174,6 +186,14 @@
     accepted-payload,
     "policy.endpoint_gain.oracle_lookahead.mean",
     0.49,
+  ),
+), "store-a", 5))
+#assert(not report-store-endpoint-evidence-valid(report(
+  accepted-rows,
+  sidecar-value-rows: mutate-sidecar-fact-value(
+    accepted-payload,
+    "policy.endpoint_gain.learned_q.bundle_manifest_sha256",
+    cohort-b,
   ),
 ), "store-a", 5))
 #assert(not report-store-headroom-evidence-valid(report(

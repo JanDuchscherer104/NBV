@@ -1,4 +1,4 @@
-#import "../experiment_data.typ": evidence-gate-state, report-store-count-binds-facts, report-stores-decision-passed, report-stores-have-facts, report-stores-have-boolean-fact
+#import "../experiment_data.typ": evidence-gate-state, report-store-count-binds-facts, report-stores-decision-passed, report-stores-facts-share-sha256, report-stores-have-facts, report-stores-have-boolean-fact
 
 #let report = (
   tables: (
@@ -35,6 +35,80 @@
 #assert(not report-stores-have-boolean-fact(malformed-report, "gate.integer"))
 #assert(not report-stores-decision-passed(malformed-report, "gate.string"))
 #assert(not report-stores-decision-passed(malformed-report, "gate.integer"))
+
+#let bundle-a = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+#let bundle-b = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+#let learned-lineage-keys = (
+  "q1.model.bundle_manifest_sha256",
+  "q2.exact.bundle_manifest_sha256",
+  "policy.endpoint_gain.learned_q.bundle_manifest_sha256",
+)
+#let learned-lineage-report(
+  store-a-values: (bundle-a, bundle-a, bundle-a),
+  store-b-values: (bundle-a, bundle-a, bundle-a),
+) = (
+  tables: (
+    stores: (rows: (
+      (store_id: "store-a"),
+      (store_id: "store-b"),
+    )),
+    facts: (rows: learned-lineage-keys.zip(store-a-values).map(((key, value)) => (
+        store_id: "store-a",
+        key: key,
+        value: value,
+      )) + learned-lineage-keys.zip(store-b-values).map(((key, value)) => (
+        store_id: "store-b",
+        key: key,
+        value: value,
+      ))),
+  ),
+)
+#assert(report-stores-facts-share-sha256(
+  learned-lineage-report(),
+  learned-lineage-keys,
+))
+#assert(report-stores-facts-share-sha256(
+  learned-lineage-report(
+    store-a-values: (bundle-b, bundle-b, bundle-b),
+    store-b-values: (bundle-b, bundle-b, bundle-b),
+  ),
+  learned-lineage-keys,
+))
+#assert(not report-stores-facts-share-sha256(
+  learned-lineage-report(store-a-values: (bundle-a, bundle-b, bundle-a)),
+  learned-lineage-keys,
+))
+#assert(not report-stores-facts-share-sha256(
+  learned-lineage-report(store-b-values: (bundle-b, bundle-b, bundle-b)),
+  learned-lineage-keys,
+))
+#assert(not report-stores-facts-share-sha256(
+  learned-lineage-report(store-a-values: (bundle-a, "invalid", bundle-a)),
+  learned-lineage-keys,
+))
+#let complete-lineage-report = learned-lineage-report()
+#let missing-lineage-report = (
+  tables: complete-lineage-report.tables + (
+    facts: (rows: complete-lineage-report.tables.facts.rows.filter(
+      row => not (row.store_id == "store-b" and row.key == learned-lineage-keys.last()),
+    )),
+  ),
+)
+#assert(not report-stores-facts-share-sha256(
+  missing-lineage-report,
+  learned-lineage-keys,
+))
+#let duplicate-lineage-report = (
+  tables: complete-lineage-report.tables + (
+    facts: (rows: complete-lineage-report.tables.facts.rows + (
+      complete-lineage-report.tables.facts.rows.first(),
+    )),
+  ),
+)
+#assert(not report-stores-facts-share-sha256(
+  duplicate-lineage-report,
+  learned-lineage-keys,
+))
 
 #let count-binding-report(count-value: 5, row-n: 5) = (
   tables: (
