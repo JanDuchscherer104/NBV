@@ -121,6 +121,8 @@ def info_command(
         evidence_status=thesis_evidence_status,
         sidecars=sidecar_paths,
         random_index=random_index,
+        candidate_benchmark_bundle=candidate_benchmark_bundle,
+        candidate_benchmark_binding_json=candidate_benchmark_binding_json,
     )
     store_dir = RolloutZarrStoreConfig(store_dir=store).store_dir
     reader = RolloutZarrStoreReader(store_dir)
@@ -207,6 +209,8 @@ def _validate_thesis_export_options(
     evidence_status: str | None,
     sidecars: list[Path],
     random_index: bool,
+    candidate_benchmark_bundle: Path | None,
+    candidate_benchmark_binding_json: Path | None,
 ) -> None:
     if output is None and (evidence_status is not None or sidecars):
         raise typer.BadParameter("--thesis-evidence-status and --thesis-sidecar require --thesis-bundle-output.")
@@ -214,6 +218,12 @@ def _validate_thesis_export_options(
         raise typer.BadParameter("--thesis-bundle-output requires --thesis-evidence-status pilot|confirmatory.")
     if random_index and output is not None:
         raise typer.BadParameter("--random-index cannot be combined with --thesis-bundle-output.")
+    if candidate_benchmark_bundle is None and candidate_benchmark_binding_json is not None:
+        raise typer.BadParameter("--candidate-benchmark-bundle is required with --candidate-benchmark-binding-json.")
+    if candidate_benchmark_bundle is not None and candidate_benchmark_binding_json is None:
+        raise typer.BadParameter("--candidate-benchmark-binding-json is required with --candidate-benchmark-bundle.")
+    if candidate_benchmark_bundle is not None and output is None:
+        raise typer.BadParameter("candidate benchmark attachment requires --thesis-bundle-output.")
 
 
 def _random_index_payload(*, reader: RolloutZarrStoreReader, min_horizon: int, seed: int | None) -> dict[str, Any]:

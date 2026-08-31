@@ -8,15 +8,16 @@ import pandas as pd
 import plotly.express as px
 import streamlit as st
 
+from ....rollouts.candidate_support_plotting import candidate_benchmark_figures as _candidate_benchmark_figures
 from ...scientific_labels import TheoryReferences
 from .candidate_generation import (
-    _candidate_benchmark_figures,
     _render_candidate_aggregate_breakdowns,
     _render_candidate_geometry_diagnostics,
     _render_candidate_population_evidence,
     _render_candidate_provenance_flow,
     _render_target_score_diagnostics,
 )
+from .session import CANDIDATE_BENCHMARK_STATE_KEY, CandidateBenchmarkBuildResult
 from .shared import ExplanationSection, ScientificExplanation
 from .shared import download_frame as _download_frame
 from .shared import render_plot as _render_plot
@@ -37,43 +38,68 @@ def _render_bounded_candidate_geometry(session_handle: Any, *, limit: int) -> No
 
 def _render_candidate_benchmark_card(session_handle: Any) -> None:
     """Render the explicit immutable benchmark card and its six support plots."""
-    benchmark_enabled = st.toggle(
-        "Build immutable candidate benchmark card",
-        value=False,
-        help="Explicitly constructs the validated benchmark bundle and its bounded support plots.",
-    )
-    if not benchmark_enabled:
-        return
-    benchmark_state = (
-        st.text_input(
-            "Benchmark state key (optional)",
-            value="",
-            help="Restrict the benchmark to one persisted rollout/step key; leave empty for all states.",
-        ).strip()
-        or None
-    )
-    benchmark_limit = int(
-        st.number_input(
-            "Benchmark candidate row limit",
-            min_value=1,
-            max_value=500_000,
-            value=500,
-            step=100,
+    with st.form("candidate_benchmark_build", border=False):
+        benchmark_state = (
+            st.text_input(
+                "Benchmark state key (optional)",
+                value="",
+                help="Restrict the benchmark to one persisted rollout/step key; leave empty for all states.",
+            ).strip()
+            or None
         )
-    )
+        benchmark_limit = int(
+            st.number_input(
+                "Benchmark candidate row limit",
+                min_value=1,
+                max_value=500_000,
+                value=500,
+                step=100,
+                help="Bounds interactive figures only; the download always contains the complete selected state.",
+            )
+        )
+        build_requested = st.form_submit_button(
+            "Build candidate benchmark",
+            help="Construct bounded display records and the complete deterministic export.",
+        )
     show_view_directions = st.toggle(
         "Show valid-candidate view directions",
         value=False,
         help="Adds short arrows for the camera optical axes projected into the target-aligned ground plane.",
     )
-    records = session_handle.candidate_benchmark_records(state_key=benchmark_state, candidate_limit=benchmark_limit)
+    store_identity = str(session_handle.store_identity)
+    if build_requested:
+        try:
+            st.session_state[CANDIDATE_BENCHMARK_STATE_KEY] = session_handle.build_candidate_benchmark(
+                state_key=benchmark_state,
+                candidate_limit=benchmark_limit,
+            )
+        except (OSError, RuntimeError, ValueError) as error:
+            st.session_state.pop(CANDIDATE_BENCHMARK_STATE_KEY, None)
+            st.error(f"Candidate benchmark build failed: {error}")
+            return
+    retained = st.session_state.get(CANDIDATE_BENCHMARK_STATE_KEY)
+    if not isinstance(retained, CandidateBenchmarkBuildResult):
+        if retained is not None:
+            st.session_state.pop(CANDIDATE_BENCHMARK_STATE_KEY, None)
+        st.info("Choose the state and display limit, then build the candidate benchmark.")
+        return
+    if retained.store_identity != store_identity:
+        st.session_state.pop(CANDIDATE_BENCHMARK_STATE_KEY, None)
+        st.warning("The selected rollout store changed; rebuild the candidate benchmark.")
+        return
+    if retained.state_key != benchmark_state or retained.candidate_limit != benchmark_limit:
+        st.info("The controls changed; build again to replace the retained candidate benchmark.")
+        return
     st.download_button(
         "Download candidate benchmark bundle",
-        session_handle.candidate_benchmark_export(state_key=benchmark_state),
+        retained.bundle_bytes,
         "candidate-benchmark.zip",
     )
     st.markdown("#### Candidate benchmark support")
-    for figure in _candidate_benchmark_figures(records, show_view_directions=show_view_directions):
+    for figure in _candidate_benchmark_figures(
+        retained.records,
+        show_view_directions=show_view_directions,
+    ):
         _render_plot(
             figure,
             ScientificExplanation(

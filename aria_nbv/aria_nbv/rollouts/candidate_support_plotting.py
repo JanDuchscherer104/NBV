@@ -8,8 +8,18 @@ from typing import cast
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 
 from .candidate_benchmark import CandidateBenchmark
+
+_BENCHMARK_FIGURE_TITLES = (
+    "Candidate family attempted → valid → selected funnel",
+    "Candidate family survival",
+    "Candidate support (target-normalized ground plane)",
+    "Candidate support (target-normalized 3D)",
+    "Candidate view jitter (bounded boxes and uncapped spherical support)",
+    "Candidate benchmark resource and timing summary",
+)
 
 
 def _point_frame(records: Iterable[CandidateBenchmark]) -> pd.DataFrame:
@@ -292,4 +302,145 @@ def candidate_support_figures(
     return ground, support, survival, jitter
 
 
-__all__ = ["candidate_ground_support_figure", "candidate_support_figures"]
+def candidate_benchmark_figures(
+    records: Iterable[CandidateBenchmark],
+    *,
+    show_view_directions: bool = False,
+) -> tuple[go.Figure, ...]:
+    """Build the six stable scientific views of candidate benchmark facts.
+
+    Runtime and peak GPU-memory values remain per-state observations on
+    separate subplots. Peak memory is never summed across states, because each
+    value is a high-water mark rather than an additive consumption quantity.
+    Missing runtime or memory evidence is annotated independently.
+    """
+
+    records = tuple(records)
+    if not records:
+        figures = []
+        for title in _BENCHMARK_FIGURE_TITLES[:5]:
+            figure = go.Figure()
+            figure.update_layout(title=title)
+            figure.add_annotation(
+                text="No matching benchmark candidates",
+                x=0.5,
+                y=0.5,
+                xref="paper",
+                yref="paper",
+                showarrow=False,
+            )
+            figures.append(figure)
+        resources = _candidate_resource_figure(records)
+        return (*figures, resources)
+
+    attempted = sum(family.attempted for record in records for family in record.families)
+    valid = sum(family.valid for record in records for family in record.families)
+    selected = sum(family.selected for record in records for family in record.families)
+    funnel = px.bar(
+        pd.DataFrame(
+            {
+                "stage": ("attempted", "actor-valid", "selected"),
+                "count": (attempted, valid, selected),
+            }
+        ),
+        x="stage",
+        y="count",
+        title=_BENCHMARK_FIGURE_TITLES[0],
+    )
+    for trace in funnel.data:
+        trace.name = trace.name or "candidate funnel"
+    plane, support, survival, jitter = candidate_support_figures(
+        records,
+        show_view_directions=show_view_directions,
+    )
+    survival.update_layout(title=_BENCHMARK_FIGURE_TITLES[1])
+    plane.update_layout(title=_BENCHMARK_FIGURE_TITLES[2])
+    support.update_layout(title=_BENCHMARK_FIGURE_TITLES[3])
+    jitter.update_layout(title=_BENCHMARK_FIGURE_TITLES[4])
+    return funnel, survival, plane, support, jitter, _candidate_resource_figure(records)
+
+
+def _candidate_resource_figure(records: tuple[CandidateBenchmark, ...]) -> go.Figure:
+    """Plot per-state runtime and peak-memory observations without aggregation."""
+
+    figure = make_subplots(
+        rows=2,
+        cols=1,
+        shared_xaxes=False,
+        vertical_spacing=0.2,
+        subplot_titles=("Runtime observations", "Peak GPU-memory observations"),
+    )
+    runtimes = [
+        (record.scene_key, record.state_key, f"{record.scene_key}<br>{record.state_key}", value)
+        for record in records
+        if (value := record.timings_ms.get("total_ms")) is not None
+    ]
+    memory = [
+        (record.scene_key, record.state_key, f"{record.scene_key}<br>{record.state_key}", value)
+        for record in records
+        if (value := record.resources.get("gpu_memory_mb")) is not None
+    ]
+    if runtimes:
+        figure.add_trace(
+            go.Bar(
+                x=[identity for _, _, identity, _ in runtimes],
+                y=[value for _, _, _, value in runtimes],
+                customdata=[(scene, state) for scene, state, _, _ in runtimes],
+                hovertemplate=(
+                    "scene=%{customdata[0]}<br>state=%{customdata[1]}<br>runtime=%{y:.3f} ms<extra></extra>"
+                ),
+                name="runtime per state",
+            ),
+            row=1,
+            col=1,
+        )
+    else:
+        figure.add_annotation(
+            text="unavailable: no persisted runtime",
+            x=0.5,
+            y=0.82,
+            xref="paper",
+            yref="paper",
+            showarrow=False,
+        )
+    if memory:
+        figure.add_trace(
+            go.Bar(
+                x=[identity for _, _, identity, _ in memory],
+                y=[value for _, _, _, value in memory],
+                customdata=[(scene, state) for scene, state, _, _ in memory],
+                hovertemplate=(
+                    "scene=%{customdata[0]}<br>state=%{customdata[1]}<br>peak GPU memory=%{y:.3f} MB<extra></extra>"
+                ),
+                name="peak GPU memory per state",
+            ),
+            row=2,
+            col=1,
+        )
+    else:
+        figure.add_annotation(
+            text="unavailable: no persisted peak GPU memory",
+            x=0.5,
+            y=0.18,
+            xref="paper",
+            yref="paper",
+            showarrow=False,
+        )
+    if not runtimes and not memory:
+        figure.add_annotation(
+            text="unavailable: no persisted timing/resource facts",
+            x=0.5,
+            y=0.5,
+            xref="paper",
+            yref="paper",
+            showarrow=False,
+        )
+    figure.update_yaxes(title_text="runtime [ms]", row=1, col=1)
+    figure.update_yaxes(title_text="peak GPU memory [MB]", row=2, col=1)
+    figure.update_xaxes(tickangle=-25, automargin=True)
+    figure.update_xaxes(title_text="scene / factual state", row=2, col=1)
+    figure.update_layout(title=_BENCHMARK_FIGURE_TITLES[5], barmode="group")
+    return figure
+
+
+__all__ = ["candidate_benchmark_figures", "candidate_ground_support_figure", "candidate_support_figures"]
