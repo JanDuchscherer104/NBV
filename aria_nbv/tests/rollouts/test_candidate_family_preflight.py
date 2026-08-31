@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import pickle
 from dataclasses import replace
 from pathlib import Path
@@ -13,6 +14,7 @@ from efm3d.aria.pose import PoseTW
 
 from aria_nbv.pose_generation.types import CandidateSamplingResult
 from aria_nbv.rollouts.candidate_benchmark import (
+    EVIDENCE_ASSEMBLY_REVISION,
     PROVENANCE_CORRECTION_REVISION,
     WRITER_CONFIG_IDENTITY_REVISION,
     CandidateBenchmark,
@@ -24,18 +26,32 @@ from aria_nbv.rollouts.candidate_benchmark import (
     CandidatePoint,
     CandidatePopulationCoverage,
     CandidateSupportFailure,
+    EvidenceTransformationKind,
     benchmark_from_sampling_result,
     candidate_family_preflight_from_reader,
-    candidate_family_selection_from_plotly_event,
+    canonical_generation_revision_hash,
+    canonical_json_bytes,
     read_candidate_family_phase_a,
     reduce_candidate_family_preflight,
     scientific_writer_config_sha256,
     select_candidate_family_shell,
+    sha256_bytes,
     write_candidate_family_phase_a,
 )
 from aria_nbv.rollouts.candidate_support_plotting import candidate_family_preflight_figures
 
 FAMILIES = ("forward_local", "target_bearing_local", "lateral_target_bypass")
+
+
+def _generation_revision() -> dict[str, str]:
+    revision = {
+        "contract_revision": "candidate-family-phase-a-v2",
+        "clean_commit": "a" * 40,
+        "head_tree": "b" * 40,
+        "uv_lock_sha256": "c" * 64,
+        "content_bundle_hash": "d" * 64,
+    }
+    return {**revision, "revision_hash": canonical_generation_revision_hash(revision)}
 
 
 def _record(
@@ -281,15 +297,6 @@ def test_family_selection_filters_the_existing_shell_without_recomputing() -> No
     assert {point.family for point in selected[0].points} == {"target_bearing_local"}
 
 
-def test_plotly_cell_adapter_requires_exact_scene_state_family_customdata() -> None:
-    selection = candidate_family_selection_from_plotly_event(
-        {"selection": {"points": [{"customdata": ["scene", "state", "family", True, 5]}]}}
-    )
-
-    assert selection == CandidateFamilySelection("scene", "state", "family")
-    assert candidate_family_selection_from_plotly_event({"selection": {"points": [{"customdata": ["state"]}]}}) is None
-
-
 def test_scientific_writer_identity_ignores_acquisition_and_output_paths() -> None:
     def payload(root: str) -> dict[str, object]:
         return {
@@ -307,6 +314,13 @@ def test_scientific_writer_identity_ignores_acquisition_and_output_paths() -> No
 
     assert first == second
     assert first != scientific_writer_config_sha256(payload("/checkout-a"), source_store_manifest_hash="b" * 16)
+
+    scientifically_changed = payload("/checkout-a")
+    scientifically_changed["candidate_mixture"] = {"total_count": 61, "paths": {"penalty": 2.0}}
+    assert first != scientific_writer_config_sha256(
+        scientifically_changed,
+        source_store_manifest_hash="a" * 16,
+    )
 
 
 def test_duplicate_state_keys_across_scenes_remain_distinct_end_to_end() -> None:
@@ -341,14 +355,7 @@ def test_phase_a_reader_validates_compact_content_source_policy_and_revision(tmp
         config,
         coverage=CandidatePopulationCoverage(1, 1, 1, 1, 1),
     )
-    revision = {
-        "contract_revision": "candidate-family-phase-a-v2",
-        "clean_commit": "a" * 40,
-        "head_tree": "b" * 40,
-        "uv_lock_sha256": "c" * 64,
-        "content_bundle_hash": "d" * 64,
-        "revision_hash": "0123456789abcdef",
-    }
+    revision = _generation_revision()
     evidence = CandidateFamilyPhaseAEvidence(
         source_manifest_sha256="e" * 64,
         source_store_manifest_hash="f" * 16,
@@ -358,6 +365,9 @@ def test_phase_a_reader_validates_compact_content_source_policy_and_revision(tmp
         writer_config_sha256="1" * 64,
         writer_config_identity_revision=WRITER_CONFIG_IDENTITY_REVISION,
         provenance_correction_revision=PROVENANCE_CORRECTION_REVISION,
+        evidence_assembly_revision=EVIDENCE_ASSEMBLY_REVISION,
+        predecessor_artifact_sha256=None,
+        transformation_kind=EvidenceTransformationKind.ORIGINAL_GENERATION,
         implementation_revision="a" * 40,
         generation_revision=revision,
         runtime_identity={
@@ -382,7 +392,7 @@ def test_phase_a_reader_validates_compact_content_source_policy_and_revision(tmp
         split_manifest_hash="split-v1",
         source_store_dir="source-store",
         writer_config_sha256="1" * 64,
-        generation_revision_hash="0123456789abcdef",
+        generation_revision_hash=revision["revision_hash"],
     )
     path = write_candidate_family_phase_a(tmp_path / "phase-a.json", evidence)
 
@@ -392,6 +402,55 @@ def test_phase_a_reader_validates_compact_content_source_policy_and_revision(tmp
     tampered = path.read_text(encoding="utf-8").replace('"selected":2', '"selected":1', 1)
     path.write_text(tampered, encoding="utf-8")
     with pytest.raises(ValueError, match="content hash mismatch"):
+        read_candidate_family_phase_a(path, expected=expected)
+
+
+def test_phase_a_reader_recomputes_generation_revision_after_outer_rehash(tmp_path: Path) -> None:
+    record = _record(state="revision", selected=(1, 2, 1))
+    config = replace(_config(), expected_population_size=1)
+    revision = _generation_revision()
+    evidence = CandidateFamilyPhaseAEvidence(
+        source_manifest_sha256="e" * 64,
+        source_store_manifest_hash="f" * 16,
+        source_cache_version="source-cache-v1",
+        split_manifest_hash="split-v1",
+        source_store_dir="source-store",
+        writer_config_sha256="1" * 64,
+        writer_config_identity_revision=WRITER_CONFIG_IDENTITY_REVISION,
+        provenance_correction_revision=PROVENANCE_CORRECTION_REVISION,
+        evidence_assembly_revision=EVIDENCE_ASSEMBLY_REVISION,
+        predecessor_artifact_sha256=None,
+        transformation_kind=EvidenceTransformationKind.ORIGINAL_GENERATION,
+        implementation_revision="a" * 40,
+        generation_revision=revision,
+        runtime_identity={
+            "python": "3.11.15",
+            "torch": "2.7.1",
+            "cuda": "12.8",
+            "pytorch3d": "0.7.8",
+            "gpu_name": "fixture",
+            "gpu_capability": "8.9",
+        },
+        source_row_count=1,
+        scene_count=1,
+        target_state_count=1,
+        excluded_source_rows={},
+        records=(record,),
+        preflight=reduce_candidate_family_preflight(
+            (record,), config, coverage=CandidatePopulationCoverage(1, 1, 1, 1, 1)
+        ),
+    )
+    path = write_candidate_family_phase_a(tmp_path / "phase-a.json", evidence)
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    payload.pop("artifact_sha256")
+    payload["generation_revision"]["head_tree"] = "9" * 40
+    payload["artifact_sha256"] = sha256_bytes(canonical_json_bytes(payload))
+    path.write_bytes(canonical_json_bytes(payload) + b"\n")
+    expected = CandidateFamilyPhaseAExpectation(
+        "e" * 64, "f" * 16, "source-cache-v1", "split-v1", "source-store", "1" * 64, revision["revision_hash"]
+    )
+
+    with pytest.raises(ValueError, match="generation revision hash mismatch"):
         read_candidate_family_phase_a(path, expected=expected)
 
 
@@ -412,15 +471,11 @@ def test_phase_a_reader_preserves_authenticated_persisted_record_order(tmp_path:
         writer_config_sha256="1" * 64,
         writer_config_identity_revision=WRITER_CONFIG_IDENTITY_REVISION,
         provenance_correction_revision=PROVENANCE_CORRECTION_REVISION,
+        evidence_assembly_revision=EVIDENCE_ASSEMBLY_REVISION,
+        predecessor_artifact_sha256=None,
+        transformation_kind=EvidenceTransformationKind.ORIGINAL_GENERATION,
         implementation_revision="a" * 40,
-        generation_revision={
-            "contract_revision": "candidate-family-phase-a-v2",
-            "clean_commit": "a" * 40,
-            "head_tree": "b" * 40,
-            "uv_lock_sha256": "c" * 64,
-            "content_bundle_hash": "d" * 64,
-            "revision_hash": "0123456789abcdef",
-        },
+        generation_revision=_generation_revision(),
         runtime_identity={
             "python": "3.11.15",
             "torch": "2.7.1",
@@ -443,7 +498,7 @@ def test_phase_a_reader_preserves_authenticated_persisted_record_order(tmp_path:
         split_manifest_hash="split-v1",
         source_store_dir="source-store",
         writer_config_sha256="1" * 64,
-        generation_revision_hash="0123456789abcdef",
+        generation_revision_hash=_generation_revision()["revision_hash"],
     )
 
     restored = read_candidate_family_phase_a(
@@ -479,3 +534,55 @@ def test_reader_uses_persisted_query_width_and_fails_closed_without_policy(
     assert persisted.flat_gain.tolerance == 0.125
     assert CandidateSupportFailure.LOW_ROOT_SUPPORT in {blocker.code for blocker in persisted.blockers}
     assert CandidateSupportFailure.MISSING_PRODUCTION_PROVENANCE in {blocker.code for blocker in missing.blockers}
+
+
+def test_unconfigured_family_cannot_inflate_root_support() -> None:
+    configured = _record(state="unknown", valid=(1, 1, 1), selected=(1, 1, 1))
+    record = replace(
+        configured,
+        families=(*configured.families, CandidateFamilyCounts("forged", True, 100, 100, 100, 100)),
+    )
+    result = reduce_candidate_family_preflight((record,), _config(60))
+    codes = {blocker.code for blocker in result.blockers}
+
+    assert CandidateSupportFailure.UNCONFIGURED_FAMILY in codes
+    assert CandidateSupportFailure.LOW_ROOT_SUPPORT in codes
+
+
+def test_reader_preflight_does_not_materialize_geometry(monkeypatch: pytest.MonkeyPatch) -> None:
+    from aria_nbv.rollouts import inspection
+
+    policy = _config(1)
+
+    class Reader:
+        root = object()
+
+        def manifest(self) -> dict[str, object]:
+            return {"manifest": {"generation": {"candidate_family_preflight": policy.to_payload()}}}
+
+    monkeypatch.setattr(
+        inspection,
+        "proposal_support_geometry",
+        lambda *_args, **_kwargs: pytest.fail("complete preflight must not materialize geometry"),
+    )
+    monkeypatch.setattr(
+        inspection,
+        "candidate_audit_rows",
+        lambda *_args, **_kwargs: [
+            {
+                "scene": "scene",
+                "rollout_row_id": 1,
+                "step_row_id": 2,
+                "mixture": "forward_local",
+                "candidate_row_id": 0,
+                "position": "forward_local",
+                "actor_action": True,
+                "compact_valid_index": 0,
+                "selected": True,
+            }
+        ],
+    )
+
+    result = candidate_family_preflight_from_reader(Reader())
+
+    assert result.cells

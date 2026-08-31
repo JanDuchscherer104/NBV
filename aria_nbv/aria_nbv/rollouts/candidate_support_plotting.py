@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Mapping
+from collections.abc import Collection, Iterable, Mapping
 from typing import cast
 
 import pandas as pd
@@ -443,7 +443,11 @@ def _candidate_resource_figure(records: tuple[CandidateBenchmark, ...]) -> go.Fi
     return figure
 
 
-def candidate_family_preflight_figures(result: CandidateFamilyPreflight) -> tuple[go.Figure, go.Figure]:
+def candidate_family_preflight_figures(
+    result: CandidateFamilyPreflight,
+    *,
+    funnel_identities: Collection[tuple[str, str]] | None = None,
+) -> tuple[go.Figure, go.Figure]:
     """Plot applicability-aware survival and per-family stage funnels.
 
     Applicable cells encode selected/attempted survival. Inapplicable cells use
@@ -538,6 +542,7 @@ def candidate_family_preflight_figures(result: CandidateFamilyPreflight) -> tupl
         heatmap.add_annotation(text="No candidate-family cells", x=0.5, y=0.5, showarrow=False)
     heatmap.update_layout(title="State × family applicability and selected survival")
 
+    retained_funnel_identities = set(funnel_identities) if funnel_identities is not None else None
     funnel_rows = [
         {
             "family": cell.family,
@@ -546,6 +551,7 @@ def candidate_family_preflight_figures(result: CandidateFamilyPreflight) -> tupl
             "state": f"{scene} · {state}",
         }
         for scene, state, cell in result.cells
+        if retained_funnel_identities is None or (scene, state) in retained_funnel_identities
         if cell.applicable is True
         for stage, count in (("attempted", cell.attempted), ("valid", cell.valid), ("selected", cell.selected))
     ]

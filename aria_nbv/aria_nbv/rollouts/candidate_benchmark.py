@@ -25,18 +25,21 @@ from typing import TYPE_CHECKING, Any, Literal, cast
 import numpy as np
 import pandas as pd
 
+from ..utils.fingerprints import stable_msgspec_hash
+
 if TYPE_CHECKING:
     from ..pose_generation.types import CandidateSamplingResult
 
 SCHEMA_ID = "aria-nbv-candidate-benchmark-v1"
 CANDIDATE_SUPPORT_METRICS_REVISION = 1
 FAMILY_PREFLIGHT_SCHEMA_ID = "aria-nbv-candidate-family-preflight-v3"
-FAMILY_PHASE_A_SCHEMA_ID = "aria-nbv-candidate-family-phase-a-evidence-v3"
+FAMILY_PHASE_A_SCHEMA_ID = "aria-nbv-candidate-family-phase-a-evidence-v4"
 FAMILY_SUPPORT_FLOOR_REVISION = "family-support-floor-v1"
 FLAT_GAIN_REVISION = "state-conditional-flat-gain-range-v2"
 FLAT_GAIN_AGGREGATION = "minimum-per-state-range"
 WRITER_CONFIG_IDENTITY_REVISION = "phase-a-scientific-config-v1"
 PROVENANCE_CORRECTION_REVISION = "phase-a-path-independent-config-reseal-v1"
+EVIDENCE_ASSEMBLY_REVISION = "phase-a-evidence-assembly-v1"
 MANIFEST_NAME = "manifest.json"
 DATA_NAME = "candidates.parquet"
 MULTI_STORE_BINDING_ALGORITHM = "sha256-canonical-json-v1"
@@ -158,26 +161,42 @@ def scientific_writer_config_sha256(
     if not isinstance(normalized, dict):
         raise ValueError("writer configuration must serialize to a mapping")
 
-    def without_paths(value: Any) -> Any:
-        if isinstance(value, dict):
-            return {key: without_paths(item) for key, item in value.items() if key != "paths"}
-        if isinstance(value, list):
-            return [without_paths(item) for item in value]
-        return value
-
-    normalized = without_paths(normalized)
-    normalized["source_manifest_path"] = "<verified-source-manifest>"
     source = normalized.get("source")
+    output_store = normalized.get("store")
     if isinstance(source, dict):
+        source.pop("paths", None)
         source_store = source.get("store")
         if isinstance(source_store, dict):
+            source_store.pop("paths", None)
             source_store["store_dir"] = {
                 "verified_source_store_manifest_hash": source_store_manifest_hash,
             }
-    output_store = normalized.get("store")
     if isinstance(output_store, dict):
+        output_store.pop("paths", None)
         output_store["store_dir"] = "<campaign-output-store>"
+    normalized["source_manifest_path"] = "<verified-source-manifest>"
     return sha256_bytes(canonical_json_bytes(normalized))
+
+
+def canonical_generation_revision_hash(payload: Mapping[str, Any]) -> str:
+    """Recompute the generation identity from its immutable constituent fields."""
+
+    values = {
+        "contract_revision": str(payload.get("contract_revision", "")),
+        "clean_commit": str(payload.get("clean_commit", "")),
+        "head_tree": str(payload.get("head_tree", "")),
+        "uv_lock_sha256": str(payload.get("uv_lock_sha256", "")),
+        "content_bundle_hash": str(payload.get("content_bundle_hash", "")),
+    }
+    if not values["contract_revision"]:
+        raise ValueError("Phase-A generation revision requires a contract revision")
+    for name in ("clean_commit", "head_tree"):
+        if not re.fullmatch(r"(?:[0-9a-f]{40}|[0-9a-f]{64})", values[name]):
+            raise ValueError(f"Phase-A generation revision {name} must be a Git object identity")
+    for name in ("uv_lock_sha256", "content_bundle_hash"):
+        if not re.fullmatch(r"[0-9a-f]{64}", values[name]):
+            raise ValueError(f"Phase-A generation revision {name} must be a SHA-256 identity")
+    return stable_msgspec_hash(values)
 
 
 def aggregate_store_content_sha256(store_seals: Mapping[str, str]) -> str:
@@ -258,6 +277,14 @@ class CandidateSupportFailure(StrEnum):
     FLAT_GAIN = "flat_gain"
     MISSING_POPULATION_COVERAGE = "missing_population_coverage"
     MISSING_PRODUCTION_PROVENANCE = "missing_production_provenance"
+    UNCONFIGURED_FAMILY = "unconfigured_family"
+
+
+class EvidenceTransformationKind(StrEnum):
+    """Whether evidence came directly from generation or an authenticated reseal."""
+
+    ORIGINAL_GENERATION = "original_generation"
+    AUTHENTICATED_METADATA_RESEAL = "authenticated_metadata_reseal_no_candidate_rerun"
 
 
 @dataclass(frozen=True, slots=True)
@@ -524,6 +551,9 @@ class CandidateFamilyPhaseAEvidence:
     writer_config_sha256: str
     writer_config_identity_revision: str
     provenance_correction_revision: str
+    evidence_assembly_revision: str
+    predecessor_artifact_sha256: str | None
+    transformation_kind: EvidenceTransformationKind
     implementation_revision: str
     generation_revision: Mapping[str, str]
     runtime_identity: Mapping[str, str]
@@ -546,6 +576,15 @@ class CandidateFamilyPhaseAEvidence:
             raise ValueError("unsupported Phase-A writer-config identity revision")
         if self.provenance_correction_revision != PROVENANCE_CORRECTION_REVISION:
             raise ValueError("unsupported Phase-A provenance-correction revision")
+        if self.evidence_assembly_revision != EVIDENCE_ASSEMBLY_REVISION:
+            raise ValueError("unsupported Phase-A evidence-assembly revision")
+        if self.transformation_kind is EvidenceTransformationKind.ORIGINAL_GENERATION:
+            if self.predecessor_artifact_sha256 is not None:
+                raise ValueError("original Phase-A evidence cannot claim a predecessor artifact")
+        elif not isinstance(self.predecessor_artifact_sha256, str) or not re.fullmatch(
+            r"[0-9a-f]{64}", self.predecessor_artifact_sha256
+        ):
+            raise ValueError("resealed Phase-A evidence requires its predecessor artifact SHA-256")
         if self.generation_revision.get("clean_commit") != self.implementation_revision:
             raise ValueError("Phase-A implementation revision must equal the clean generation commit")
         required_revision = {
@@ -558,6 +597,11 @@ class CandidateFamilyPhaseAEvidence:
         }
         if required_revision - set(self.generation_revision):
             raise ValueError("Phase-A evidence requires complete generation revision identity")
+        actual_revision_hash = str(self.generation_revision.get("revision_hash", ""))
+        if not re.fullmatch(r"[0-9a-f]{16}", actual_revision_hash):
+            raise ValueError("Phase-A generation revision hash must be a 16-hex identity")
+        if canonical_generation_revision_hash(self.generation_revision) != actual_revision_hash:
+            raise ValueError("Phase-A generation revision hash disagrees with its constituent fields")
         required_runtime = {"python", "torch", "cuda", "pytorch3d", "gpu_name", "gpu_capability"}
         if required_runtime - set(self.runtime_identity):
             raise ValueError("Phase-A evidence requires complete CUDA runtime identity")
@@ -590,6 +634,9 @@ class CandidateFamilyPhaseAEvidence:
             "writer_config_sha256": self.writer_config_sha256,
             "writer_config_identity_revision": self.writer_config_identity_revision,
             "provenance_correction_revision": self.provenance_correction_revision,
+            "evidence_assembly_revision": self.evidence_assembly_revision,
+            "predecessor_artifact_sha256": self.predecessor_artifact_sha256,
+            "transformation_kind": self.transformation_kind.value,
             "implementation_revision": self.implementation_revision,
             "generation_revision": dict(self.generation_revision),
             "runtime_identity": dict(self.runtime_identity),
@@ -724,6 +771,12 @@ def read_candidate_family_phase_a(
     claimed_hash = str(payload.pop("artifact_sha256", ""))
     if claimed_hash != sha256_bytes(canonical_json_bytes(payload)):
         raise ValueError("candidate-family Phase-A artifact content hash mismatch")
+    revision_payload = payload.get("generation_revision")
+    if not isinstance(revision_payload, Mapping):
+        raise ValueError("candidate-family Phase-A generation revision is missing")
+    stored_revision_hash = str(revision_payload.get("revision_hash", ""))
+    if canonical_generation_revision_hash(revision_payload) != stored_revision_hash:
+        raise ValueError("candidate-family Phase-A generation revision hash mismatch")
     expected_values = asdict(expected)
     actual_values = {
         "source_manifest_sha256": payload.get("source_manifest_sha256"),
@@ -732,11 +785,7 @@ def read_candidate_family_phase_a(
         "split_manifest_hash": payload.get("split_manifest_hash"),
         "source_store_dir": payload.get("source_store_dir"),
         "writer_config_sha256": payload.get("writer_config_sha256"),
-        "generation_revision_hash": (
-            payload.get("generation_revision", {}).get("revision_hash")
-            if isinstance(payload.get("generation_revision"), Mapping)
-            else None
-        ),
+        "generation_revision_hash": stored_revision_hash,
     }
     if actual_values != expected_values:
         raise ValueError("candidate-family Phase-A source/config/revision identity mismatch")
@@ -760,8 +809,11 @@ def read_candidate_family_phase_a(
         writer_config_sha256=str(payload["writer_config_sha256"]),
         writer_config_identity_revision=str(payload["writer_config_identity_revision"]),
         provenance_correction_revision=str(payload["provenance_correction_revision"]),
+        evidence_assembly_revision=str(payload["evidence_assembly_revision"]),
+        predecessor_artifact_sha256=_optional_text(payload.get("predecessor_artifact_sha256")),
+        transformation_kind=EvidenceTransformationKind(str(payload["transformation_kind"])),
         implementation_revision=str(payload["implementation_revision"]),
-        generation_revision=cast(Mapping[str, str], payload["generation_revision"]),
+        generation_revision=cast(Mapping[str, str], revision_payload),
         runtime_identity=cast(Mapping[str, str], payload["runtime_identity"]),
         source_row_count=int(payload["source_row_count"]),
         scene_count=int(payload["scene_count"]),
@@ -916,6 +968,7 @@ class CandidateBenchmark:
     coordinates: tuple[tuple[float, float, float], ...] = ()
     lineage: Mapping[str, str] = field(default_factory=dict)
     points: tuple[CandidatePoint, ...] = ()
+    oracle_target_root_gains: tuple[float, ...] = ()
 
     def __post_init__(self) -> None:
         if not self.state_key or not self.scene_key:
@@ -934,6 +987,8 @@ class CandidateBenchmark:
         for candidate_id, coordinate, point in zip(self.candidate_ids, self.coordinates, self.points, strict=True):
             if point.candidate_id != candidate_id or point.state_key != self.state_key or point.xyz != coordinate:
                 raise ValueError("candidate points must align exactly with candidate ids and coordinates")
+        if not all(math.isfinite(value) for value in self.oracle_target_root_gains):
+            raise ValueError("oracle target-root gains must be finite")
         for mapping_name in ("geometry", "diversity", "timings_ms", "resources", "provenance", "lineage"):
             value = getattr(self, mapping_name)
             object.__setattr__(self, mapping_name, MappingProxyType(dict(value)))
@@ -970,27 +1025,6 @@ class CandidateFamilySelection:
             raise ValueError("candidate-family selection requires scene, state, and family")
 
 
-def candidate_family_selection_from_plotly_event(event: Mapping[str, Any]) -> CandidateFamilySelection | None:
-    """Decode one clicked heatmap cell without accepting axis-label inference."""
-
-    selection = event.get("selection")
-    if not isinstance(selection, Mapping):
-        return None
-    points = selection.get("points")
-    if not isinstance(points, list) or not points:
-        return None
-    point = points[0]
-    if not isinstance(point, Mapping):
-        return None
-    customdata = point.get("customdata")
-    if not isinstance(customdata, list | tuple) or len(customdata) < 3:
-        return None
-    scene_key, state_key, family = customdata[:3]
-    if not all(isinstance(value, str) and value for value in (scene_key, state_key, family)):
-        return None
-    return CandidateFamilySelection(scene_key, state_key, family)
-
-
 def select_candidate_family_shell(
     records: Iterable[CandidateBenchmark],
     selection: CandidateFamilySelection,
@@ -1019,6 +1053,7 @@ def select_candidate_family_shell(
                 coordinates=tuple(point.xyz for point in points),
                 lineage=record.lineage,
                 points=points,
+                oracle_target_root_gains=record.oracle_target_root_gains,
             )
         )
     return tuple(selected_records)
@@ -1242,6 +1277,7 @@ def reduce_candidate_records(records: list[Mapping[str, Any]]) -> tuple[Candidat
                 )
                 for point in record.get("points", ())
             ),
+            oracle_target_root_gains=tuple(float(value) for value in record.get("oracle_target_root_gains", ())),
         )
         key = (dto.scene_key, dto.state_key)
         if key in keys:
@@ -1252,7 +1288,11 @@ def reduce_candidate_records(records: list[Mapping[str, Any]]) -> tuple[Candidat
 
 
 def benchmarks_from_reader(
-    reader: Any, *, state_key: str | None = None, candidate_limit: int | None = 500
+    reader: Any,
+    *,
+    state_key: str | None = None,
+    candidate_limit: int | None = 500,
+    include_geometry: bool = True,
 ) -> tuple[CandidateBenchmark, ...]:
     """Build state-keyed facts from canonical candidate rows and geometry.
 
@@ -1261,6 +1301,8 @@ def benchmarks_from_reader(
     affected state and counts with an explicit lineage reason. For one requested
     state, the complete shell is projected before the display row limit is
     applied, so a limit smaller than the shell cannot fabricate empty support.
+    Complete policy preflight sets ``include_geometry=False`` and streams only
+    lightweight audit facts through this same canonical reducer.
     """
 
     from .inspection import candidate_audit_rows, proposal_support_geometry
@@ -1278,7 +1320,7 @@ def benchmarks_from_reader(
         requested_state = (int(match.group(1)), int(match.group(2)))
         requested_rollout_ids = (requested_state[0],)
     projection = None
-    if hasattr(reader, "root"):
+    if include_geometry and hasattr(reader, "root"):
         projection = proposal_support_geometry(
             reader,
             rollout_row_ids=requested_rollout_ids,
@@ -1288,8 +1330,13 @@ def benchmarks_from_reader(
     geometry_points = {point.candidate_row_id: point for point in projection.points} if projection else {}
     geometry_frames = {frame.frame_id: frame for frame in projection.frames} if projection else {}
     geometry_issues = tuple(getattr(projection, "issues", ())) if projection else ()
+
+    def retain_audit_row(row: Mapping[str, Any]) -> None:
+        key = (str(row["scene"]), f"rollout:{row['rollout_row_id']}/step:{row['step_row_id']}")
+        grouped.setdefault(key, {}).setdefault(str(row["mixture"]), []).append(row)
+
     if state_key is None:
-        audit_rows = candidate_audit_rows(reader, limit=candidate_limit)
+        audit_rows = candidate_audit_rows(reader, limit=candidate_limit, row_callback=retain_audit_row)
     else:
         assert requested_state is not None
         audit_rows = candidate_audit_rows(
@@ -1297,10 +1344,10 @@ def benchmarks_from_reader(
             rollout_row_id=requested_state[0],
             step_row_id=requested_state[1],
             limit=candidate_limit,
+            row_callback=retain_audit_row,
         )
     for row in audit_rows:
-        key = (str(row["scene"]), f"rollout:{row['rollout_row_id']}/step:{row['step_row_id']}")
-        grouped.setdefault(key, {}).setdefault(str(row["mixture"]), []).append(row)
+        retain_audit_row(row)
     result = []
     for (scene, state), family_rows in sorted(grouped.items()):
         families = []
@@ -1310,6 +1357,13 @@ def benchmarks_from_reader(
         lineage: dict[str, str] = {"family_identity": "mixture_component"}
         points: list[CandidatePoint] = []
         state_rows = [row for rows in family_rows.values() for row in rows]
+        oracle_target_root_gains = tuple(
+            value
+            for row in state_rows
+            if bool(row.get("oracle_label"))
+            for value in (_finite_value(row.get("target_root_gain")),)
+            if value is not None
+        )
         missing_geometry = projection is not None and any(
             int(row["candidate_row_id"]) not in geometry_points for row in state_rows
         )
@@ -1371,6 +1425,8 @@ def benchmarks_from_reader(
                 )
             )
             for family_row in rows:
+                if not include_geometry:
+                    continue
                 candidate_id = int(family_row["candidate_row_id"])
                 projected = geometry_points.get(candidate_id)
                 if projection is not None and projected is None:
@@ -1448,6 +1504,7 @@ def benchmarks_from_reader(
                 coordinates=tuple(coordinates),
                 lineage=lineage,
                 points=tuple(points),
+                oracle_target_root_gains=oracle_target_root_gains,
             )
         )
     return tuple(result)
@@ -1573,6 +1630,16 @@ def reduce_candidate_family_preflight(
         )
     for record in records:
         family_by_name = {family.family: family for family in record.families}
+        for family_name in sorted(set(family_by_name) - set(config.configured_families)):
+            blockers.append(
+                CandidatePreflightBlocker(
+                    code=CandidateSupportFailure.UNCONFIGURED_FAMILY,
+                    detail="persisted family is absent from the configured family set",
+                    scene_key=record.scene_key,
+                    state_key=record.state_key,
+                    family=family_name,
+                )
+            )
         target_selected = 0
         any_target_applicable = False
         for family_name in config.configured_families:
@@ -1619,7 +1686,11 @@ def reduce_candidate_family_preflight(
                 if cell.applicable is True:
                     any_target_applicable = True
                     target_selected += cell.selected
-        valid_total = sum(family.valid for family in record.families if family.applicable is not False)
+        valid_total = sum(
+            family_by_name[family_name].valid
+            for family_name in config.configured_families
+            if family_name in family_by_name and family_by_name[family_name].applicable is not False
+        )
         if valid_total < config.resolved_min_valid:
             blockers.append(
                 CandidatePreflightBlocker(
@@ -1640,7 +1711,8 @@ def reduce_candidate_family_preflight(
             )
 
     labels_by_state = {
-        (record.scene_key, record.state_key): tuple(
+        (record.scene_key, record.state_key): record.oracle_target_root_gains
+        or tuple(
             point.target_root_gain
             for point in record.points
             if point.oracle_label and point.target_root_gain is not None
@@ -1723,7 +1795,7 @@ def reduce_candidate_family_preflight(
 def candidate_family_preflight_from_reader(reader: Any) -> CandidateFamilyPreflight:
     """Reduce only the complete scientific policy persisted by the store."""
 
-    records = benchmarks_from_reader(reader, candidate_limit=None)
+    records = benchmarks_from_reader(reader, candidate_limit=None, include_geometry=False)
     config = _candidate_family_policy_from_reader(reader)
     if config is None:
         fallback = CandidateFamilyPreflightConfig(
@@ -2321,7 +2393,6 @@ __all__ = [
     "candidate_family_preflight_config_from_writer",
     "candidate_family_preflight_from_payload",
     "candidate_family_preflight_from_reader",
-    "candidate_family_selection_from_plotly_event",
     "canonical_json_bytes",
     "circular_minimum_covering_span_deg",
     "read_bundle",

@@ -502,6 +502,11 @@ def test_campaign_worker_cli_binds_smoke_purpose_and_selected_unit_profile_hash(
         def preflight(self, **_kwargs: Any) -> Any:
             return None
 
+        def run_work_unit(self, actual_plan: Any, _unit: Any, *, purpose: Any, shard_runner: Any, **kwargs: Any) -> Any:
+            assert actual_plan is plan
+            seen["leaf_purpose"] = purpose.value
+            return shard_runner(kwargs["writer_config"], shard_entry=kwargs["shard_entry"])
+
     @dataclass(frozen=True)
     class _Result:
         outcome: str = "skipped"
@@ -542,6 +547,7 @@ def test_campaign_worker_cli_binds_smoke_purpose_and_selected_unit_profile_hash(
     assert result.exit_code == 0
     assert seen == {
         "purpose": "smoke",
+        "leaf_purpose": "smoke",
         "profile_hash": selected_profile_hash,
         "shard_profile_hash": selected_profile_hash,
     }

@@ -14,12 +14,16 @@ from typer.testing import CliRunner
 
 from aria_nbv.app.panels._stored_rollouts import session as session_module
 from aria_nbv.app.panels._stored_rollouts.session import CandidateBenchmarkBuildResult
+from aria_nbv.app.panels._stored_rollouts.validity_support import (
+    _candidate_family_selection_from_plotly_event,
+)
 from aria_nbv.rollouts.candidate_benchmark import (
     BINDING_KEYS,
     SCHEMA_ID,
     CandidateBenchmark,
     CandidateFamilyCounts,
     CandidateFamilyPreflightConfig,
+    CandidateFamilySelection,
     CandidatePoint,
     benchmark_binding_from_reader,
     read_bundle_bytes,
@@ -50,10 +54,10 @@ def _binding() -> dict[str, str]:
     }
 
 
-def _record() -> CandidateBenchmark:
+def _record(*, scene: str = "scene-a", state: str = "state-1") -> CandidateBenchmark:
     return CandidateBenchmark(
-        "state-1",
-        "scene-a",
+        state,
+        scene,
         (
             CandidateFamilyCounts("forward", True, 1, 1, 1, 1),
             CandidateFamilyCounts("target", True, 1, 1, 1, 1),
@@ -61,11 +65,9 @@ def _record() -> CandidateBenchmark:
         candidate_ids=(1, 2),
         coordinates=((0.1, 0.2, 0.3), (0.4, 0.5, 0.6)),
         points=(
+            CandidatePoint(1, (0.1, 0.2, 0.3), "forward", "forward_local", True, True, state, "cfg", "roll", "branch"),
             CandidatePoint(
-                1, (0.1, 0.2, 0.3), "forward", "forward_local", True, True, "state-1", "cfg", "roll", "branch"
-            ),
-            CandidatePoint(
-                2, (0.4, 0.5, 0.6), "target", "target_bearing_local", True, True, "state-1", "cfg", "roll", "branch"
+                2, (0.4, 0.5, 0.6), "target", "target_bearing_local", True, True, state, "cfg", "roll", "branch"
             ),
         ),
     )
@@ -81,6 +83,13 @@ class FakeSession:
 
         st.session_state.setdefault("benchmark_records_calls", [])
         st.session_state.setdefault("benchmark_export_calls", [])
+        st.session_state.setdefault("shell_records_calls", [])
+
+    def candidate_benchmark_records(self, **kwargs: Any) -> tuple[CandidateBenchmark, ...]:
+        import streamlit as st
+
+        st.session_state["shell_records_calls"].append(kwargs)
+        return (_record(scene="scene-b", state="state-2"),) if kwargs["state_key"] == "state-2" else (_record(),)
 
     def build_candidate_benchmark(self, **kwargs: Any) -> CandidateBenchmarkBuildResult:
         import streamlit as st
@@ -96,7 +105,7 @@ class FakeSession:
             records=(_record(),),
             bundle_bytes=payload,
             family_preflight=reduce_candidate_family_preflight(
-                (_record(),),
+                (_record(), _record(scene="scene-b", state="state-2")),
                 CandidateFamilyPreflightConfig(
                     query_width=2,
                     configured_families=("forward", "target"),
@@ -212,6 +221,42 @@ def test_candidate_family_heatmap_click_drives_exact_scene_state_family_shell(tm
     shell_trace_names = {trace["name"] for trace in shell_spec["data"]}
     assert "target, selected" in shell_trace_names
     assert "forward, selected" not in shell_trace_names
+
+
+def test_candidate_family_heatmap_click_fetches_cell_absent_from_bounded_records(tmp_path: Path) -> None:
+    app = _app(tmp_path).run()
+    next(button for button in app.button if button.label == "Build candidate benchmark").click()
+    app = app.run()
+    initial_calls = list(app.session_state["shell_records_calls"])
+    app.session_state["candidate-family-heatmap:fixture-store"] = {
+        "selection": {"points": [{"customdata": ["scene-b", "state-2", "target"]}]}
+    }
+
+    app = app.run()
+
+    assert not app.exception
+    assert app.session_state["shell_records_calls"] == [
+        *initial_calls,
+        {"state_key": "state-2", "candidate_limit": 2},
+    ]
+    assert app.session_state["candidate-family-shell:fixture-store"] == "scene-b · state-2 · target"
+    shell_spec = json.loads(app.get("plotly_chart")[2].proto.spec)
+    trace_names = {trace["name"] for trace in shell_spec["data"]}
+    assert "target, selected" in trace_names
+    assert "forward, selected" not in trace_names
+
+    app = app.run()
+    assert app.session_state["shell_records_calls"] == [
+        *initial_calls,
+        {"state_key": "state-2", "candidate_limit": 2},
+    ]
+
+
+def test_plotly_adapter_requires_exact_scene_state_family_customdata() -> None:
+    assert _candidate_family_selection_from_plotly_event(
+        {"selection": {"points": [{"customdata": ["scene", "state", "family", True]}]}}
+    ) == CandidateFamilySelection("scene", "state", "family")
+    assert _candidate_family_selection_from_plotly_event({"selection": {"points": [{"customdata": ["state"]}]}}) is None
 
 
 def test_real_streamlit_cache_keeps_only_primitive_family_payload(

@@ -20,6 +20,7 @@ from aria_nbv.rollouts.candidate_benchmark import (
     CandidateFamilyPreflight,
     CandidateFamilyPreflightConfig,
     CandidateSupportFailure,
+    canonical_generation_revision_hash,
     reduce_candidate_family_preflight,
     scientific_writer_config_sha256,
 )
@@ -152,7 +153,15 @@ def test_phase_a_adapter_stops_before_oracle_scoring(monkeypatch: pytest.MonkeyP
             "d" * 40,
             "e" * 64,
             "f" * 64,
-            "0123456789abcdef",
+            canonical_generation_revision_hash(
+                {
+                    "contract_revision": "candidate-family-phase-a-v2",
+                    "clean_commit": "c" * 40,
+                    "head_tree": "d" * 40,
+                    "uv_lock_sha256": "e" * 64,
+                    "content_bundle_hash": "f" * 64,
+                }
+            ),
         ),
     )
     monkeypatch.setattr(

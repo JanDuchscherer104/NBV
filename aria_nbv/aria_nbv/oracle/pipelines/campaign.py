@@ -28,6 +28,7 @@ from typing import Any, ClassVar, Protocol, cast
 from pydantic import BaseModel, Field, ValidationInfo, field_validator, model_validator
 
 from ...rollouts.candidate_benchmark import (
+    EVIDENCE_ASSEMBLY_REVISION,
     PROVENANCE_CORRECTION_REVISION,
     WRITER_CONFIG_IDENTITY_REVISION,
     CandidateBenchmark,
@@ -35,6 +36,7 @@ from ...rollouts.candidate_benchmark import (
     CandidateFamilyPhaseAEvidence,
     CandidateFamilyPreflight,
     CandidatePopulationCoverage,
+    EvidenceTransformationKind,
     benchmark_from_sampling_result,
     candidate_family_preflight_config_from_writer,
     candidate_family_preflight_from_reader,
@@ -1207,6 +1209,9 @@ class CudaRolloutCampaign:
             writer_config_sha256=writer_config_sha256,
             writer_config_identity_revision=WRITER_CONFIG_IDENTITY_REVISION,
             provenance_correction_revision=PROVENANCE_CORRECTION_REVISION,
+            evidence_assembly_revision=EVIDENCE_ASSEMBLY_REVISION,
+            predecessor_artifact_sha256=None,
+            transformation_kind=EvidenceTransformationKind.ORIGINAL_GENERATION,
             implementation_revision=generation_revision.clean_commit,
             generation_revision=generation_revision.to_jsonable(),
             runtime_identity=runtime_identity,
@@ -1818,6 +1823,8 @@ class CudaRolloutCampaign:
         config_path: Path | None = None,
         plan_path: Path | None = None,
     ) -> Any:
+        """Run the canonical per-unit smoke guard, not a smoke population."""
+
         unit = self._smoke_unit(plan)
         if config_path is None or plan_path is None:
             raise ValueError("production smoke requires canonical config_path and plan_path")
@@ -1840,6 +1847,7 @@ class CudaRolloutCampaign:
         if result.get("outcome") != CampaignOutcome.SUCCEEDED.value or result.get("validated") is not True:
             raise RuntimeError("smoke evidence requires a structured succeeded+validated worker result")
         evidence = {
+            "scope": "canonical_single_work_unit",
             "campaign_id": self.config.campaign_id,
             "plan_hash": plan.plan_hash,
             "work_unit_hash": unit.work_unit_hash,
@@ -1902,6 +1910,8 @@ class CudaRolloutCampaign:
         if not isinstance(raw_evidence, dict) or not all(isinstance(key, str) for key in raw_evidence):
             raise RuntimeError("smoke evidence must be a JSON object with string keys")
         evidence: dict[str, Any] = raw_evidence
+        if evidence.get("scope") != "canonical_single_work_unit":
+            raise RuntimeError("smoke evidence must declare the canonical per-unit guard scope")
         if evidence.get("campaign_id") != self.config.campaign_id or evidence.get("plan_hash") != plan.plan_hash:
             raise RuntimeError("smoke evidence is stale for this campaign plan")
         if not evidence.get("work_unit_hash") or evidence.get("config_hash") != plan.config_hash:
@@ -1930,7 +1940,7 @@ class CudaRolloutCampaign:
         return evidence
 
     def _smoke_unit(self, plan: CampaignPlan) -> CampaignWorkUnit:
-        """Return the first deterministically planned unit used for smoke proof."""
+        """Return the first deterministic unit used only as a per-unit guard."""
         if not plan.work_units:
             raise ValueError("plan has no work units")
         unit = plan.work_units[0]
@@ -1948,8 +1958,10 @@ class CudaRolloutCampaign:
 
     def run_work_unit(
         self,
+        plan: CampaignPlan,
         unit: CampaignWorkUnit,
         *,
+        purpose: CampaignWorkerPurpose,
         writer_config: Any,
         shard_entry: Any,
         output_tmp: Path,
@@ -1957,7 +1969,9 @@ class CudaRolloutCampaign:
         invocation: Any = None,
         shard_runner: Callable[..., Any] | None = None,
     ) -> Any:
-        """Delegate one unit to the shard owner; campaign never decides skips."""
+        """Admit and delegate one immutable plan unit before any leaf side effect."""
+
+        self.require_worker_admission(plan, unit, purpose=purpose)
         if shard_runner is None:
             from .shards import run_rollout_shard
 

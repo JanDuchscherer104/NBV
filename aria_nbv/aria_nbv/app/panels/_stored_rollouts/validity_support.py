@@ -3,15 +3,15 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import Any
+from typing import Any, cast
 
 import pandas as pd
 import plotly.express as px
 import streamlit as st
 
 from ....rollouts.candidate_benchmark import (
+    CandidateBenchmark,
     CandidateFamilySelection,
-    candidate_family_selection_from_plotly_event,
     select_candidate_family_shell,
 )
 from ....rollouts.candidate_support_plotting import candidate_benchmark_figures as _candidate_benchmark_figures
@@ -28,6 +28,72 @@ from .session import CANDIDATE_BENCHMARK_STATE_KEY, CandidateBenchmarkBuildResul
 from .shared import ExplanationSection, ScientificExplanation
 from .shared import download_frame as _download_frame
 from .shared import render_plot as _render_plot
+
+_CANDIDATE_FAMILY_SHELL_STATE_KEY = "stored-rollouts:candidate-family-shell"
+
+
+def _candidate_family_selection_from_plotly_event(event: Mapping[str, Any]) -> CandidateFamilySelection | None:
+    """Decode exact heatmap customdata at the presentation boundary."""
+
+    selection = event.get("selection")
+    if not isinstance(selection, Mapping):
+        return None
+    points = selection.get("points")
+    if not isinstance(points, list) or not points or not isinstance(points[0], Mapping):
+        return None
+    customdata = points[0].get("customdata")
+    if not isinstance(customdata, list | tuple) or len(customdata) < 3:
+        return None
+    scene_key, state_key, family = customdata[:3]
+    if not all(isinstance(value, str) and value for value in (scene_key, state_key, family)):
+        return None
+    return CandidateFamilySelection(scene_key, state_key, family)
+
+
+def _candidate_family_funnel_identities(
+    cells: tuple[tuple[str, str, Any], ...], audit_strata: Mapping[str, tuple[str, ...]]
+) -> tuple[tuple[str, str], ...]:
+    """Choose one deterministic factual state per audit stratum for the app funnel."""
+
+    identities = tuple(dict.fromkeys((scene, state) for scene, state, _cell in cells))
+    selected = []
+    for scenes in audit_strata.values():
+        identity = next((item for item in identities if item[0] in scenes), None)
+        if identity is not None:
+            selected.append(identity)
+    return tuple(dict.fromkeys(selected))
+
+
+def _selected_candidate_family_shell(
+    session_handle: Any,
+    *,
+    selection: CandidateFamilySelection,
+    candidate_limit: int,
+) -> tuple[CandidateBenchmark, ...]:
+    """Explicitly fetch and filter one identity-bound shell, cached across ordinary reruns."""
+
+    cache_identity = (str(session_handle.store_identity), selection, candidate_limit)
+    retained = st.session_state.get(_CANDIDATE_FAMILY_SHELL_STATE_KEY)
+    if (
+        isinstance(retained, tuple)
+        and len(retained) == 2
+        and retained[0] == cache_identity
+        and isinstance(retained[1], tuple)
+        and all(isinstance(record, CandidateBenchmark) for record in retained[1])
+    ):
+        return cast(tuple[CandidateBenchmark, ...], retained[1])
+    records = session_handle.candidate_benchmark_records(
+        state_key=selection.state_key,
+        candidate_limit=candidate_limit,
+    )
+    exact = tuple(
+        record
+        for record in records
+        if record.scene_key == selection.scene_key and record.state_key == selection.state_key
+    )
+    shell = select_candidate_family_shell(exact, selection)
+    st.session_state[_CANDIDATE_FAMILY_SHELL_STATE_KEY] = (cache_identity, shell)
+    return shell
 
 
 def _render_bounded_candidate_geometry(session_handle: Any, *, limit: int) -> None:
@@ -128,16 +194,12 @@ def _render_candidate_benchmark_card(session_handle: Any) -> None:
                 width="stretch",
             )
         selectable = tuple(
-            CandidateFamilySelection(scene_key, state_key, cell.family)
-            for scene_key, state_key, cell in gate.cells
-            if any(
-                record.scene_key == scene_key
-                and record.state_key == state_key
-                and any(family.family == cell.family for family in record.families)
-                for record in retained.records
-            )
+            CandidateFamilySelection(scene_key, state_key, cell.family) for scene_key, state_key, cell in gate.cells
         )
-        heatmap, funnel = candidate_family_preflight_figures(gate)
+        heatmap, funnel = candidate_family_preflight_figures(
+            gate,
+            funnel_identities=_candidate_family_funnel_identities(gate.cells, gate.audit_strata),
+        )
         heatmap_event = _render_plot(
             heatmap,
             ScientificExplanation(
@@ -170,7 +232,7 @@ def _render_candidate_benchmark_card(session_handle: Any) -> None:
             ),
         )
         clicked = (
-            candidate_family_selection_from_plotly_event(heatmap_event) if isinstance(heatmap_event, Mapping) else None
+            _candidate_family_selection_from_plotly_event(heatmap_event) if isinstance(heatmap_event, Mapping) else None
         )
         if selectable:
             selection_by_label = {
@@ -188,7 +250,11 @@ def _render_candidate_benchmark_card(session_handle: Any) -> None:
                 help="Cell clicks drive the existing target-aligned shell; this control is the keyboard-accessible fallback.",
             )
             selection = selection_by_label[selected_label]
-            shell = select_candidate_family_shell(retained.records, selection)
+            shell = _selected_candidate_family_shell(
+                session_handle,
+                selection=selection,
+                candidate_limit=gate.query_width,
+            )
             for figure in candidate_support_figures(shell)[:2]:
                 _render_plot(
                     figure,

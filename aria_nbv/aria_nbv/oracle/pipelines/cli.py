@@ -456,11 +456,15 @@ def campaign_worker(
         plan_path=plan_path,
     )
     try:
-        result = run_rollout_shard(
-            writer_cfg,
+        result = campaign.run_work_unit(
+            plan,
+            unit,
+            purpose=purpose,
+            writer_config=writer_cfg,
             shard_entry=entry,
             output_tmp=campaign.config.output_root / "tmp" / unit.work_unit_hash,
             output_final=campaign.config.output_root / "shards" / unit.work_unit_hash,
+            shard_runner=run_rollout_shard,
         )
     except RolloutShardOwnershipConflictError as exc:
         conflict = CampaignWorkerResult(
