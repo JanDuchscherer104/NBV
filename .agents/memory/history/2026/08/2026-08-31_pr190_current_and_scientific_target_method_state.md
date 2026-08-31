@@ -13,7 +13,7 @@ touched_owner_paths:
   - docs/typst/thesis/main.pdf
 codex_thread: codex://threads/01a057bd-546e-7e52-b5e8-c21124664bc2
 repo_object_format: sha1
-repo_head: fdf4d70bddbc570b1dff139f129e9990b1a53130
+repo_head: ef4d3c3d030ec35027fd36ba6ea8ffc4f3a7c53a
 repo_branch: "codex/pr190-stack-repair"
 worktree_kind: linked
 ---
@@ -29,8 +29,8 @@ architecture catalogue or overstating available evidence.
 The patch compared the PR against `main`, exact target/state protocol owners,
 the fitted-Q implementation, the Phase-A evidence bundle, and primary
 literature. It then revised the publication-facing Method and Results prose,
-compiled and rendered the thesis, and passed two frozen-candidate independent
-scientific reviews.
+compiled and rendered the thesis, and passed frozen-candidate independent
+scientific reviews, including the exact rebased publication commit.
 
 ## Findings
 
@@ -49,10 +49,14 @@ scientific reviews.
   denominators, bounded interpretation, and source-to-display provenance.
 - `Tree-Based Batch Mode Reinforcement Learning` now has a canonical
   `docs/literature/sources.jsonl` record.
+- Rebasing exposed duplicate generic and target-specific metadata for
+  `entity.target_error`; the obsolete generic entry was removed from the
+  canonical notation owners and all generated projections were refreshed.
 
 ## Commits
 
-- [Method-state repair](https://github.com/JanDuchscherer104/ARIA-NBV/commit/fdf4d70bddbc570b1dff139f129e9990b1a53130)
+- [Method-state repair](https://github.com/JanDuchscherer104/ARIA-NBV/commit/0f8ea48ba00970e9dbff8869b82613951c8ee88b)
+- [Rebased notation reconciliation](https://github.com/JanDuchscherer104/ARIA-NBV/commit/ef4d3c3d030ec35027fd36ba6ea8ffc4f3a7c53a)
 
 ## Verification
 
@@ -61,10 +65,13 @@ scientific reviews.
 - `make thesis-literature-provenance`: 31 passed.
 - `make thesis-marker-contract`, `make thesis-report-data-contract`, and
   `make scientific-report-v2-smoke`: passed.
+- Focused implementation validation on the exact rebased candidate: 156
+  passed.
 - Changed Method and Results pages were visually inspected without clipping or
   overlap.
-- Final independent scientific review: CLEAR; exact diff digest
-  `d27a41d426afa69bfc61e52e397101adba67441398b60bfd4c0ec0c8dd206878`.
+- Final independent scientific review of publication commit
+  `ef4d3c3d030ec35027fd36ba6ea8ffc4f3a7c53a`: CLEAR, with no scientific,
+  prose, citation, generated-artifact, or rebase regression.
 
 ## Canonical Owner Impact
 
