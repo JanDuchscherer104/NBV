@@ -23,7 +23,7 @@ target-conditioned task. Actor-visible target discovery is evaluated through
 the separate proposal-association path below.
 
 At decision step $t$, the proposal mechanism produces
-#symb.rl.candidate_table. Each row #symb.rl.candidate_qti represents one possible
+#symb.rl.candidate_table. Each row #symb.oracle.candidate_qti represents one possible
 camera pose together with its proposal provenance. The hard mask
 #symb.rl.action_mask then induces the feasible action set
 
@@ -226,7 +226,7 @@ $
 $
 
 The full shell retains proposal probability, family, rule masks, diagnostics,
-and invalid-reason bitsets. The hard mask then produces #symb.rl.action_set_t
+and invalid-reason bitsets. The hard mask then produces #symb.rl.action_set
 while retaining rejected rows for analysis. A separate root-support gate
 rejects a task if pruning leaves too few alternatives:
 

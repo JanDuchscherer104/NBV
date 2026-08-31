@@ -80,6 +80,12 @@ return {
       description = "Actor-visible target/entity descriptor used to condition target-specific value prediction.",
       thesis_list = true,
     },
+    ["entity.target_error"] = {
+      tex = "\\Delta_t^e",
+      typst = "#symb.entity.target_error",
+      description = "Target-specific reconstruction error at rollout step t.",
+      thesis_list = true,
+    },
     ["entity.target_reward"] = {
       tex = "r_t^e",
       typst = "#symb.entity.target_reward",
