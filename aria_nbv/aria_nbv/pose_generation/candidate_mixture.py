@@ -41,9 +41,9 @@ from efm3d.aria.pose import PoseTW
 from pydantic import Field, model_validator
 
 from ..data_handling import EfmSnippetView
+from ..geometry import PreparedMeshQuery
 from ..utils import BaseConfig, TargetConfig
 from .candidate_generation import CandidateViewGenerator, CandidateViewGeneratorConfig
-from .geometry import PreparedMeshQuery
 from .types import (
     CandidateGenerationRuntimeContext,
     CandidatePositionMode,

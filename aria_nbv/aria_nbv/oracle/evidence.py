@@ -276,8 +276,9 @@ def crop_padded_pointclouds_to_obb(
 
     cropped: list[Tensor] = []
     lengths_out: list[int] = []
-    for row_index in range(points.shape[0]):
-        length = int(lengths[row_index].detach().cpu().item())
+    row_lengths = lengths.to(dtype=torch.long).clamp(min=0, max=points.shape[1]).detach().cpu().tolist()
+    for row_index, length_value in enumerate(row_lengths):
+        length = int(length_value)
         row = crop_points_to_obb(points[row_index, :length, :3], obb, margin_m=margin_m)
         row = canonical_fuse_points(row, voxel_size_m=voxel_size_m, max_points=max_points)
         cropped.append(row)

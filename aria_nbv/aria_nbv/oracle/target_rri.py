@@ -21,6 +21,7 @@ Theory:
 
 from __future__ import annotations
 
+from collections import OrderedDict
 from dataclasses import dataclass
 from time import perf_counter
 from typing import TYPE_CHECKING
@@ -28,6 +29,7 @@ from typing import TYPE_CHECKING
 import torch
 from pydantic import Field, field_validator
 
+from ..geometry.point_mesh import tensor_identity_token
 from ..rendering.candidate_depth_renderer import CandidateDepthRendererConfig
 from ..rri_metrics.returns import log_error_gain, root_normalized_gain
 from ..utils import BaseConfig, Console, TargetConfig, Verbosity
@@ -60,6 +62,8 @@ TARGET_CROP_POLICY_GT_OBB_ORIENTED_ANY_VERTEX_V1 = "gt_obb_oriented_any_vertex_v
 
 SCENE_CROP_POLICY_SNIPPET_EXTENT_V1 = "snippet_occupancy_extent_v1"
 """Scene-RRI crop policy matching the existing snippet occupancy-extent scorer."""
+
+_TARGET_GEOMETRY_CACHE_SIZE = 2
 
 
 @dataclass(frozen=True, slots=True)
@@ -192,6 +196,10 @@ class TargetRriScorer:
             eval_fusion_voxel_size_m=config.eval_fusion_voxel_size_m,
         )
         self._target_obb_world: ObbTW | None = None
+        self._prepared_target_geometry: OrderedDict[
+            tuple[object, ...],
+            tuple[ObbTW, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor],
+        ] = OrderedDict()
         self._initial_invalidity: TargetRriInvalidity | None = None
         try:
             self._target_obb_world = target_gt_obb_world(target_task, target_sample)
@@ -203,6 +211,17 @@ class TargetRriScorer:
         """Return evidence invalidity known before candidate scoring."""
 
         return self._initial_invalidity
+
+    def _cache_target_geometry(
+        self,
+        key: tuple[object, ...],
+        geometry: tuple[ObbTW, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor],
+    ) -> None:
+        """Retain only the two most recent target geometries."""
+
+        self._prepared_target_geometry[key] = geometry
+        while len(self._prepared_target_geometry) > _TARGET_GEOMETRY_CACHE_SIZE:
+            self._prepared_target_geometry.popitem(last=False)
 
     def __call__(
         self,
@@ -236,16 +255,50 @@ class TargetRriScorer:
         crop_start_s = perf_counter()
         device = point_clouds.points.device
         dtype = point_clouds.points.dtype
-        target_obb = self._target_obb_world.to(device=device, dtype=dtype)
-        mesh_verts = self.sample.mesh_verts.to(device=device, dtype=dtype)
-        mesh_faces = self.sample.mesh_faces.to(device=device)
-        target_mesh_verts, target_mesh_faces = crop_mesh_to_obb(
-            mesh_verts,
-            mesh_faces,
-            target_obb,
-            margin_m=self.config.target_crop_margin_m,
-        )
-        target_extent = target_aabb_from_points(target_mesh_verts, margin_m=self.config.target_crop_margin_m)
+        mesh_verts_token = tensor_identity_token(self.sample.mesh_verts)
+        mesh_faces_token = tensor_identity_token(self.sample.mesh_faces)
+        geometry_key: tuple[object, ...] | None = None
+        if mesh_verts_token is not None and mesh_faces_token is not None:
+            geometry_key = (
+                device,
+                dtype,
+                mesh_verts_token,
+                mesh_faces_token,
+                tuple(
+                    float(value)
+                    for value in self._target_obb_world.tensor()  # type: ignore[no-untyped-call]  # efm3d is untyped.
+                    .detach()
+                    .cpu()
+                    .flatten()
+                    .tolist()
+                ),
+                float(self.config.target_crop_margin_m),
+            )
+        prepared_geometry = self._prepared_target_geometry.pop(geometry_key, None) if geometry_key is not None else None
+        if geometry_key is not None and prepared_geometry is not None:
+            self._prepared_target_geometry[geometry_key] = prepared_geometry
+        if prepared_geometry is None:
+            target_obb = self._target_obb_world.to(device=device, dtype=dtype)
+            mesh_verts = self.sample.mesh_verts.to(device=device, dtype=dtype)
+            mesh_faces = self.sample.mesh_faces.to(device=device)
+            target_mesh_verts, target_mesh_faces = crop_mesh_to_obb(
+                mesh_verts,
+                mesh_faces,
+                target_obb,
+                margin_m=self.config.target_crop_margin_m,
+            )
+            target_extent = target_aabb_from_points(target_mesh_verts, margin_m=self.config.target_crop_margin_m)
+            prepared_geometry = (
+                target_obb,
+                mesh_verts,
+                mesh_faces,
+                target_mesh_verts,
+                target_mesh_faces,
+                target_extent,
+            )
+            if geometry_key is not None:
+                self._cache_target_geometry(geometry_key, prepared_geometry)
+        target_obb, mesh_verts, mesh_faces, target_mesh_verts, target_mesh_faces, target_extent = prepared_geometry
 
         target_points_t = crop_points_to_obb(
             self._engine.current_eval_points(state, device=device, dtype=dtype, max_points=None),

@@ -69,6 +69,7 @@ def test_cuda_backend_error_propagates_without_cpu_fallback(monkeypatch: pytest.
         fail_point_face_distance,
     )
     monkeypatch.setattr(geometry, "torch", _TorchProxy)
+    monkeypatch.setattr("aria_nbv.geometry.point_mesh.torch", _TorchProxy)
 
     with pytest.raises(RuntimeError, match="Not compiled with GPU support") as raised:
         geometry.point_mesh_distance(points, verts, faces)
@@ -431,6 +432,33 @@ def test_prepared_mesh_query_bounds_real_trimesh_ray_to_endpoint() -> None:
     assert before_endpoint.tolist() == [False]
     assert through_mesh.tolist() == [True]
     assert query.triangles is None
+
+
+def test_acquire_reprepares_normalized_tensor_aliases() -> None:
+    verts = torch.tensor(
+        [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]],
+        dtype=torch.float64,
+    )
+    faces = torch.tensor([[0, 1, 2]], dtype=torch.int32)
+    first = geometry.PreparedMeshQuery(verts, faces, device="cpu", dtype=torch.float32)
+    prepared_verts, prepared_faces, _triangles = first.pytorch3d_mesh()
+
+    second = geometry.PreparedMeshQuery.acquire(
+        first,
+        prepared_verts,
+        prepared_faces,
+        device="cpu",
+        dtype=torch.float32,
+    )
+
+    assert second is not first
+    assert second.matches_request(
+        prepared_verts,
+        prepared_faces,
+        device="cpu",
+        dtype=torch.float32,
+        mesh=None,
+    )
 
 
 def test_prepared_mesh_query_accepts_inference_tensors_without_reusing_them(
