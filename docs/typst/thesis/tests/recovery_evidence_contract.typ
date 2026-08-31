@@ -77,6 +77,9 @@
     typed-sidecar-row(row.sidecar_id, row.key, replacement)
   } else { row })
 }
+#let mutate-fact-value(rows, fact-key, replacement) = rows.map(row => if row.key == fact-key {
+  row + (value: replacement)
+} else { row })
 #let endpoint-rows(cohort: cohort-a, bundle: bundle-manifest, source: source, scene-value: 5) = (
   fact("policy.endpoint_gain.oracle_one_step.mean", 0.20, "fraction", 5, "paired_scene_endpoint_gain", source: source),
   fact("policy.endpoint_gain.oracle_one_step.ci_low", 0.10, "fraction", 5, "paired_scene_endpoint_gain", source: source),
@@ -174,6 +177,34 @@
 #assert(not report-store-endpoint-evidence-valid(oracle-only-report, "store-a", 5))
 #assert(report-store-oracle-endpoint-evidence-valid(report(endpoint-rows(bundle: "invalid")), "store-a", 5))
 #assert(not report-store-endpoint-evidence-valid(report(endpoint-rows(bundle: "invalid")), "store-a", 5))
+#let bounded-endpoint-keys = (
+  "policy.endpoint_gain.oracle_one_step.mean",
+  "policy.endpoint_gain.oracle_one_step.ci_low",
+  "policy.endpoint_gain.oracle_one_step.ci_high",
+  "policy.endpoint_gain.oracle_lookahead.mean",
+  "policy.endpoint_gain.oracle_lookahead.ci_low",
+  "policy.endpoint_gain.oracle_lookahead.ci_high",
+  "policy.endpoint_gain.learned_q.mean",
+  "policy.endpoint_gain.learned_q.ci_low",
+  "policy.endpoint_gain.learned_q.ci_high",
+)
+#for key in bounded-endpoint-keys {
+  assert(not report-store-endpoint-evidence-valid(
+    report(mutate-fact-value(endpoint-rows(), key, 1.0001)),
+    "store-a",
+    5,
+  ))
+}
+#assert(report-store-oracle-endpoint-evidence-valid(
+  report(mutate-fact-value(endpoint-rows(), "policy.endpoint_gain.oracle_lookahead.ci_high", 1)),
+  "store-a",
+  5,
+))
+#assert(report-store-endpoint-evidence-valid(
+  report(mutate-fact-value(endpoint-rows(), "policy.endpoint_gain.learned_q.ci_high", 1)),
+  "store-a",
+  5,
+))
 #let accepted-rows = endpoint-rows() + headroom-rows() + recovery-rows()
 #let accepted-payload = analysis-sidecar-value-rows(
   sidecar-a,
