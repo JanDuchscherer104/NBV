@@ -241,10 +241,13 @@ class PositionSampler:
                         mu,
                         torch.tensor(self.cfg.kappa, device=self.cfg.device),
                     ).sample((n_draw,))
-                except Exception:
-                    noise = self._sample_unit_sphere(n_draw)
-                    kappa = float(self.cfg.kappa)
-                    dirs = (mu + noise / max(kappa, 1e-6)).to(dtype=noise.dtype)
+                except Exception as exc:
+                    raise RuntimeError(
+                        "PowerSpherical position sampling failed for "
+                        f"strategy={self.cfg.sampling_strategy.value!r}, "
+                        f"device={str(self.cfg.device)!r}, kappa={self.cfg.kappa!r}. "
+                        "No alternate distribution was used; verify the sampler dependency, device, and profile values."
+                    ) from exc
         dirs_rig = dirs / dirs.norm(dim=-1, keepdim=True)
 
         # Work entirely in reference (rig) frame for angle limits.

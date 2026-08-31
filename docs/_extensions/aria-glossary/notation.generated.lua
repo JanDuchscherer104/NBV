@@ -671,9 +671,9 @@ return {
       thesis_list = false,
     },
     ["action.candidate_center_world"] = {
-      tex = "r_i\\sim\\mathcal{U}(0.25,1.1),\\quad \\boldsymbol{c}_i^w=\\boldsymbol{T}_r^w(r_i\\boldsymbol{d}_i^{k(i)})",
+      tex = "r_i\\sim\\mathcal{U}(r_{\\min}^{k(i)},r_{\\max}^{k(i)}),\\quad \\boldsymbol{c}_i^w=\\boldsymbol{T}_r^w(r_i\\boldsymbol{d}_i^{k(i)})",
       typst = "#eqs.action.candidate_center_world",
-      description = "",
+      description = "Family-conditioned candidate radius and world-frame center.",
       thesis_list = false,
     },
     ["action.candidate_shell"] = {
@@ -683,7 +683,7 @@ return {
       thesis_list = false,
     },
     ["action.capped_direction"] = {
-      tex = "\\boldsymbol{d}_i^0=\\operatorname{norm}(\\sqrt{1-y_{\\mathrm{cap}}^2}(\\sin\\psi_{\\mathrm{cap}},\\cos\\psi_{\\mathrm{cap}}),y_{\\mathrm{cap}})",
+      tex = "\\boldsymbol{d}_i^0=(\\sqrt{1-y_{\\mathrm{cap}}^2}\\sin\\psi_{\\mathrm{cap}},y_{\\mathrm{cap}},\\sqrt{1-y_{\\mathrm{cap}}^2}\\cos\\psi_{\\mathrm{cap}}),\\quad\\lVert\\boldsymbol{d}_i^0\\rVert_2=1",
       typst = "#eqs.action.capped_direction",
       description = "",
       thesis_list = false,
@@ -719,7 +719,7 @@ return {
       thesis_list = false,
     },
     ["action.target_lookat_frame"] = {
-      tex = "\\boldsymbol{z}_i^w=\\operatorname{norm}(\\boldsymbol{p}_e-\\boldsymbol{c}_i^w),\\quad\\boldsymbol{x}_i^w=\\boldsymbol{y}_i^w\\times\\boldsymbol{z}_i^w",
+      tex = "\\boldsymbol{z}_i^w=(\\boldsymbol{p}_e-\\boldsymbol{c}_i^w)/\\lVert\\boldsymbol{p}_e-\\boldsymbol{c}_i^w\\rVert_2,\\quad\\boldsymbol{x}_i^w=\\boldsymbol{y}_i^w\\times\\boldsymbol{z}_i^w",
       typst = "#eqs.action.target_lookat_frame",
       description = "",
       thesis_list = false,

@@ -1,131 +1,123 @@
 #import "../../../shared/macros.typ": *
 #import "../../../shared/symbols.typ": symb
-#import "../../draft_markers.typ": prune_todo, development_only
-#import "../../experiment_data.typ": load-scientific-report, report-value, report-figure-path, format-report-value
+#import "../../../shared/equations.typ": eqs
 #import "../../../shared/tables.typ": publication-table
 
-== Replay Stores and Diagnostic Evidence
+== Dataset and Storage Semantics
 
-#prune_todo(
-  [Move schema names, directory names, joins, codecs, and DTO-level mechanics that do not change the scientific protocol to the implementation appendix. Keep lineage, missingness, leakage prevention, and reproducibility guarantees in the main text.],
-  source: [this section; aria_nbv/aria_nbv/rollouts/zarr_store.py],
-  gate: [every remaining implementation term is necessary to reproduce or interpret the experiment],
-)
+The replay dataset is organized around decision-state relations. Each state
+binds an information state $s_t$ and target $e$ to a candidate table
+#symb.rl.candidate_table, row-specific feasibility and label masks, oracle
+outcomes where defined, and the selected successor. Its normalized lineage
+connects a source to target tasks, retained chains, decision states, and
+candidate rows.
 
-The pipeline materializes two stores with different ownership. Immutable `vin_offline/` caches logged snippet evidence and expensive one-step oracle products. Standalone `rollouts.zarr/` references those source rows and stores target tasks, retained rollout chains, per-step finite candidate shells, masks, reason codes, selected-action successor evidence, and a derived #symb.rl.qh view. This separation prevents counterfactual experiments from mutating the source substrate and prevents one-step candidate labels from being mistaken for multi-step replay.
-
-The source store is immutable because it defines the logged actor substrate. Its manifest records source identity, split, schema, materialized blocks, and provenance. A source row may contain frozen EVL/VIN fields, one-step candidate poses and labels, compact rendering payloads, and semidense geometry/history. These fields support scorer training and rollout construction, but they do not themselves define target-conditioned finite-horizon data. Exact directory names, array groups, chunking, and codec choices are versioned reproducibility metadata rather than scientific entities, so they are not reproduced as directory-tree figures in the main text.
-
-The rollout store is normalized around replay identity. One source can produce multiple target rows, each target can produce multiple recipe and retained-chain rows, each chain expands into selected steps, and each step owns a full candidate shell. The store therefore captures selected or beam-retained chain evidence, not the complete counterfactual search tree. Padded `q_h/` arrays are a validated cache over the factual row tables. Invalid candidate rows remain inspectable, but action, training, and bootstrap masks exclude them.
+One logged source can support several target tasks. Each task can be explored by
+several rollout recipes. A retained chain contains ordered selected steps, and
+each step owns the full finite candidate shell. This layout preserves two forms
+of supervision. Candidate rows record the counterfactual outcomes available at
+one state; the selected row $a_t$ links that state to the factual successor
+$s_(t+1)$. The first supports dense one-step ranking, while the second supports
+finite-horizon returns along a causal trajectory.
 
 #figure(
   align(center, image(
     "../../figures/replay_lineage_relations.pdf",
     width: 100%,
   )),
-  caption: [Normalized lineage of the implemented replay evidence. An immutable VIN source row may define several oracle target tasks; each target may produce several retained policy chains; each chain contains ordered steps; and each step owns one full candidate shell. The step row may identify one chosen candidate through `selected_candidate_row_id`; selected-action successor and TD fields are then constructed in the derived `q_h/` join rather than persisted as a separate transition table.],
+  caption: [Normalized replay lineage. A source defines target tasks; each task
+  produces recipe-specific retained chains; each chain orders factual decision
+  states; and each state owns one complete candidate shell. Model-ready tensors
+  are derived by padding and batching these relations.],
 ) <fig:offline-rollout-store-relation>
 
 #figure(
   publication-table(
-    columns: (0.8fr, 1.35fr),
-    header: ([*Evidence family*], [*Interpretation contract*]),
+    columns: (0.75fr, 0.85fr, 1.45fr),
+    header: ([*Stored relation*], [*Mathematical role*], [*Scientific meaning*]),
     rows: (
-      [Sources and targets],
-      [Manifest-backed task coverage; not proof of actor-visible target discovery.],
-      [Candidates and invalidity],
-      [Full-shell support with separate hard-action, training, padding, and future deployable-feasibility roles.],
-      [Retained chains and steps],
-      [Recipe-selected evidence; not a persisted exhaustive search tree.],
-      [Selected depth],
-      [Chosen-action successor observation with calibration and source role; actor input only under an explicitly admitted later-state protocol.],
-      [#symb.rl.qh view],
-      [Derived training cache whose rewards and masks must agree with factual rows; not a scene-memory representation.],
-      [Candidate-support metrics],
-      [Attempted-row actor-valid fraction, per-state valid support, configured-family zero rate, attempted target-conditioned side balance and circular span, calibrated target-centre projection fraction, finite-support oracle opportunity, and bounded-jitter compliance.],
-      [Metric populations],
-      [State metrics aggregate state then scene then cohort; failed roots and zero-valid configured family/state pairs remain in denominators. Projection is framing, oracle opportunity is headroom, and jitter is QC—not visibility or policy performance.],
+      (
+        [Source--target],
+        [$s_0, e$],
+        [Binds a task to one immutable logged substrate and one declared target source.],
+      ),
+      (
+        [State--candidate],
+        [$s_t, q_(t,i)$],
+        [Preserves the full proposal support, hard feasibility, label availability, and proposal provenance.],
+      ),
+      (
+        [Selected transition],
+        [$(s_t, a_t, r_t^e, s_(t+1))$],
+        [Records the causal edge created by the selected action.],
+      ),
+      (
+        [Retained chain],
+        [$(s_0, a_0, dots, s_H)$],
+        [Identifies the recipe-specific trajectory from which finite-horizon returns may be derived.],
+      ),
+      (
+        [Derived training view],
+        [$(bold(X), bold(m), bold(y))$],
+        [Pads and batches factual relations without changing their information or missingness semantics.],
+      ),
     ),
   ),
-  caption: [Interpretation contract for rollout-store audits. Numeric values are rendered from the resolved report bundle in the experiment and reproducibility sections.],
+  caption: [Scientific roles of the normalized replay relations. State, target,
+  action support, supervision, and lineage are bound before model-specific
+  tensorization.],
 ) <tab:current-rollout-store-audit>
 
-Selected-depth persistence stores only the depth raster and calibration for the chosen action at each retained step. It is sufficient to reconstruct the selected-observation prefix without duplicating dense all-candidate renders, but persistence does not decide visibility. A `CF-GT` reader may use previously selected GT-mesh depths to build a privileged dynamic state; a deployable reader must instead consume a declared sensor-like or observed source. The current unselected candidate renders remain oracle-only in every student protocol. Selected depth is also not an independently scored endpoint artifact.
+=== Immutable Sources and Causal Replay
 
-Likewise, rollout rows summarize final cumulative selected-chain metrics; they do not preserve every rejected branch or a policy-neutral endpoint reconstruction. These limitations must be resolved by matched endpoint re-evaluation before confirmatory policy comparison.
+An immutable source store owns the logged actor substrate and one-step oracle
+products. A replay store references those identities and adds target tasks,
+retained chains, per-state candidate shells, selected-action successors, and
+recipe provenance. Changing a rollout recipe creates a new replay dataset over
+the same source facts. Observations and one-step oracle products keep stable
+identities across those experiments, which enables paired comparison.
 
-Scientific reporting is generated from the same inspection frames used by the diagnostic application. The main text needs target-task coverage, candidate validity and invalid reasons, family survival and selection, selected-history sanity, gain distributions, source-role counts, and runtime/storage summaries. Exact schema columns, compression, chunking, hashes, and cluster invocation belong in the reproducibility appendix and must be read from the resolved manifest and report bundle. Development bandwidth pilots are train-only feasibility checks; their counts and throughput may size later jobs but cannot support held-out reconstruction or policy claims.
+For each selected action, replay stores one calibrated depth raster. The ordered
+rasters reconstruct the selected-observation prefix without duplicating every
+candidate render inside each chain. Source role stays attached to each raster:
+mesh-rendered depth defines the privileged causal control, and sensor-like or
+observed depth defines an actor-side successor. Candidate renders for unselected
+rows stay with the one-step oracle products used to construct labels.
 
-#development_only(() => {
-  let s2-report = load-scientific-report(
-    "/typst/thesis/data/s2-rollout-pilot/report.json",
-    evidence-status: "pilot",
-  )
-  let source-sample-count = report-value(s2-report, "s2.quantity.s01.source-sample-count")
-  let source-snippet-count = report-value(s2-report, "s2.quantity.s01.source-snippet-count")
-  let source-scene-count = report-value(s2-report, "s2.quantity.s01.source-scene-count")
-  let target-count = report-value(s2-report, "s2.quantity.s01.target-count")
-  let rollout-count = report-value(s2-report, "s2.quantity.s01.rollout-count")
-  let selected-step-count = report-value(s2-report, "s2.quantity.s01.selected-step-count")
-  let movement-count = report-value(s2-report, "s2.quantity.s01.movement-count")
-  let view-count = report-value(s2-report, "s2.quantity.s01.view-direction-count")
-  let frustum-count = report-value(s2-report, "s2.quantity.s01.frustum-count")
-  let mean-solid-angle = report-value(s2-report, "s2.quantity.s01.mean-frustum-solid-angle")
-  let mean-proxy-fraction = report-value(s2-report, "s2.quantity.s01.mean-proxy-surface-fraction")
-  let union-proxy-fraction = report-value(s2-report, "s2.quantity.s01.union-proxy-surface-fraction")
+The stored data-generation transition is
 
-  [
-    === Development pilot: candidate-family support
+$
+  #eqs.rl.replay_transition
+$
 
-    // Evidence: contents/evidence/candidate_target_orbit_mvp/manifest.json
-    // schema aria-nbv-candidate-target-orbit-mvp-v3; the exact manifest digest is checked in repository tests.
-    #figure(
-      align(center, image(
-        "../../../../contents/evidence/candidate_target_orbit_mvp/candidate-centers.png",
-        width: 100%,
-      )),
-      caption: [Attempted candidate centres from a two-scene, two-state real-data method audit. Each state is centred on its factual expansion pose, yaw-aligned to the oracle-evaluation target with world Z-up, and divided by its current three-dimensional target distance. The cross marks the expansion/root pose, the stars mark the two oracle task target centres, colour denotes proposal family, and marker shape denotes actor-valid or selected status. The figure diagnoses proposal geometry under the `v0_gt_input` target protocol; it is neither a population estimate nor evidence of actor-visible target discovery or policy quality.],
-    ) <fig:candidate-target-orbit-pilot-support>
+It updates reference pose, selected history, budget, and the next candidate
+table under generation context $xi_t$. A visual successor adds a separately
+specified observation operator and state update for RGB, depth, EFM3D features,
+or surface memory. The rollout recipe retains the chains it selects or keeps in
+its beam. Matched oracle endpoint re-evaluation then supplies a common
+fixed-budget outcome for policy comparison.
 
-    The target-orbit challenger adds attempted support on both target-relative
-    sides in this bounded pilot, while pruning still leaves invalid rows and one
-    configured family/state pair without actor-valid support. The associated
-    immutable evidence manifest records the common-frame reducer, store-manifest
-    hashes, expected state index, committed reduced candidate rows, resolved challenger profile,
-    reproduction commands, metric denominators, and plot hashes. No frame-mixed
-    side-balance or orbit-span values are used. The interactive evidence and
-    Streamlit view can optionally add short arrows for the valid candidates'
-    camera optical axes; the static thesis figure omits them to preserve
-    legibility.
+=== Missingness and Derived Views
 
-    === Development pilot: target-frame $cal(S)^2$ diagnostics
+Every candidate row carries separate predicates for materialization,
+actor-feasible action #symb.rl.action_mask, finite value label
+#symb.rl.q_label_mask, and factual successor #symb.rl.successor_mask. These
+predicates describe structure, action support, supervision support, and
+trajectory heritage. A training objective may select their intersection; the
+stored fields preserve the reason each row enters or leaves that population.
 
-    The following frozen figures are generated by the same Python reporting and plotting owners as the stored-rollout application. For the selected real-data shard, the report records these support counts: source samples #format-report-value(source-sample-count.value), snippets #format-report-value(source-snippet-count.value), scenes #format-report-value(source-scene-count.value), targets #format-report-value(target-count.value), retained rollout chains #format-report-value(rollout-count.value), and selected steps #format-report-value(selected-step-count.value). It remains pilot evidence: its purpose is to validate the representation and reporting contract, not to estimate policy quality. The two point-direction views contain #format-report-value(movement-count.value) factual displacements and #format-report-value(view-count.value) factual optical axes. Colour denotes rollout-chain identity, marker shape denotes decision-step identity, and the sphere heat map is computed from the complete equal-solid-angle count grid rather than from the bounded incidence overlay.
+Model-ready arrays are deterministic projections of the normalized store. They
+pad candidate shells, expand a chain into state queries, and cache features
+while preserving source identity, target identity, state order, masks,
+requested horizon, and label provenance. Several states from one chain may
+share a batch, but each query receives only its own causal prefix.
 
-    #figure(
-      align(center, image(
-        report-figure-path(s2-report, "s2.figure.s01.movement"),
-        width: 82%,
-      )),
-      caption: [Target-frame $cal(S)^2$ movement directions from the frozen pilot report. This view records how the camera moved; it is not a visibility measurement.],
-    ) <fig:s2-pilot-movement>
-
-    #figure(
-      align(center, image(
-        report-figure-path(s2-report, "s2.figure.s01.view-direction"),
-        width: 82%,
-      )),
-      caption: [Target-frame $cal(S)^2$ selected-camera optical-axis directions from the same frozen pilot report. This view records where the camera pointed; it is distinct from both camera motion and calibrated surface support.],
-    ) <fig:s2-pilot-view-direction>
-
-    The calibrated proxy diagnostic integrates #format-report-value(frustum-count.value) selected frusta. Their mean intrinsic field-of-view solid angle is #format-report-value(mean-solid-angle.value, digits: 3, unit: mean-solid-angle.unit). On the geometric-mean-scale proxy sphere, one view covers a mean fraction of #format-report-value(mean-proxy-fraction.value, digits: 3), while their union covers #format-report-value(union-proxy-fraction.value, digits: 3). These fractions express geometric potential support under the proxy and front-facing tests; they exclude true target shape, depth ordering, and scene occlusion.
-
-    #figure(
-      align(center, image(
-        report-figure-path(s2-report, "s2.figure.s01.frustum"),
-        width: 70%,
-      )),
-      caption: [Calibrated selected-frustum support on the target-centred proxy sphere. The surface heat map is the complete equal-solid-angle coverage field; overlaid incidence samples preserve rollout and time heritage. This is not measured target-mesh visibility.],
-    ) <fig:s2-pilot-frustum-support>
-  ]
-})
+Reproducibility requires content identity and transformation identity.
+The source manifest fixes scene, snippet, target, geometry, and oracle products;
+the rollout manifest fixes proposal profile, pruning, recipe, seed, and
+retention; the training view fixes tensorization and supported horizons.
+Coverage, failed roots, family survival, undefined metrics, source-role counts,
+and exclusions define the population to which a learned value claim applies.
+Compression, chunking, hashes, and execution commands complete the
+reproducibility record. Development bandwidth pilots contribute cost estimates;
+held-out policy evidence comes from the evaluation protocol in Chapter 5.

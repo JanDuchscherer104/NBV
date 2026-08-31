@@ -22,6 +22,7 @@ from aria_nbv.pose_generation.candidate_generation_rules import (
     MotionRealismRule,
     PathCollisionRule,
 )
+from aria_nbv.pose_generation.positional_sampling import PositionSampler
 from aria_nbv.pose_generation.types import CandidateContext
 from aria_nbv.utils.frames import world_up_tensor
 
@@ -176,6 +177,40 @@ def test_shell_sampling_uniform_area():
     expected_mean = 0.5 * (sin_min + sin_max)
     empirical = torch.sin(elev).mean().item()
     assert abs(empirical - expected_mean) < 0.04
+
+
+def test_forward_power_spherical_sampling_failure_is_explicit(monkeypatch: pytest.MonkeyPatch) -> None:
+    cfg = CandidateViewGeneratorConfig(
+        num_samples=4,
+        oversample_factor=1.0,
+        sampling_strategy=SamplingStrategy.FORWARD_POWERSPHERICAL,
+        device="cpu",
+    )
+    sampler = PositionSampler(cfg)
+
+    class BrokenPowerSpherical:
+        def __init__(self, *args: object, **kwargs: object) -> None:
+            pass
+
+        def sample(self, shape: tuple[int, ...]) -> torch.Tensor:
+            raise RuntimeError("sampler backend failed")
+
+    monkeypatch.setattr("aria_nbv.pose_generation.positional_sampling.PowerSpherical", BrokenPowerSpherical)
+    monkeypatch.setattr(
+        sampler,
+        "_sample_unit_sphere",
+        lambda n_draw: pytest.fail("PowerSpherical failure must not invoke an alternate sampler"),
+    )
+
+    with pytest.raises(RuntimeError, match="PowerSpherical position sampling failed") as exc_info:
+        sampler.sample(_identity_pose())
+
+    message = str(exc_info.value)
+    assert "forward_powerspherical" in message
+    assert "device='cpu'" in message
+    assert "kappa=4.0" in message
+    assert "No alternate distribution was used" in message
+    assert isinstance(exc_info.value.__cause__, RuntimeError)
 
 
 def test_min_distance_rule_rejects_near_mesh(monkeypatch):

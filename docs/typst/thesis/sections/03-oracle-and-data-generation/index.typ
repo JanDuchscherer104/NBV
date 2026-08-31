@@ -1,8 +1,23 @@
 #import "../../../shared/macros.typ": *
+#import "../../../shared/symbols.typ": symb
 
 = Oracle and Data Generation <sec:thesis-oracle-data-generation>
 
-This chapter defines the non-deployable pipeline that turns logged ASE snippets into supervised target-conditioned @next-best-view:short tasks. It separates actor state from privileged data-generation state, specifies target-task and candidate construction, defines hard invalidity and target-specific @relative-reconstruction-improvement:short, and records the resulting selected counterfactual chains. The learned method in @sec:thesis-method may consume only the actor-side projection of these artifacts; @ground-truth:short geometry, counterfactual renders, labels, and oracle search remain instruction, supervision, or evaluation assets.
+This chapter defines the experimental objects from which ARIA-NBV constructs
+training and evaluation data. A logged snippet first induces an actor-side
+information state #symb.rl.s_hist. A target task then turns that state into a
+finite candidate table #symb.rl.candidate_table; the hard action mask
+#symb.rl.action_mask selects its feasible subset. Privileged rendering assigns
+target-specific reconstruction outcomes, while a selected action creates the
+only factual successor that may extend the causal history. Replay storage
+preserves these relations. Final padded tensors are model-specific projections.
+
+State determines what may be conditioned on. The target and proposal mechanism
+determine which actions can be compared. The oracle defines their supervision,
+and lineage determines which multi-step returns can be reconstructed from
+factual transitions. These dependencies connect the chapter's information,
+action, measurement, and storage contracts to the learned scorer in the Method
+chapter.
 
 #include "03-01-state-and-visibility.typ"
 

@@ -24,6 +24,11 @@
 ) = {
   set par(justify: false)
   assert(header.len() > 0, message: "shared table requires a semantic header")
+  // Author rows as nested tuples so the source grid mirrors the rendered grid.
+  // Flat legacy rows remain accepted while existing tables migrate.
+  let flat-rows = rows.fold((), (cells, row) => {
+    if type(row) == array { cells + row } else { cells + (row,) }
+  })
   let styled = table(
     columns: columns,
     align: align,
@@ -35,7 +40,7 @@
     toprule(stroke: 0.09em + _rule-color),
     table.header(..header),
     midrule(stroke: 0.045em + _rule-color),
-    ..rows,
+    ..flat-rows,
     bottomrule(stroke: 0.09em + _rule-color),
   )
   text(size: text-size, styled)
