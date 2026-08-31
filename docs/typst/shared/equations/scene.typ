@@ -8,7 +8,7 @@
       #symb.scene.scene_memory_t,
       #symb.model.target_token,
       q_(t,i),
-      bold(H)_t,
+      #symb.rl.selected_pose_prefix,
       t,
       #symb.rl.H
     )

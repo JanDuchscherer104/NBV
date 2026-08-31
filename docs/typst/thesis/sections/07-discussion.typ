@@ -1,5 +1,5 @@
 #import "../../shared/symbols.typ": symb
-#import "../draft_markers.typ": thesis_status, research_todo, prune_todo
+#import "../draft_markers.typ": thesis_status, scientific_core_todo, prune_todo
 
 = Discussion <sec:thesis-discussion>
 
@@ -30,10 +30,13 @@ Continuous and hierarchical policies change the action contract rather than mere
 
 Sequence or recurrent models are similarly conditional. They become scientifically motivated when errors persist after explicit history, time, horizon, and scene-memory conditioning, not simply because the dataset contains trajectories. Looping or recurrent refinement must preserve causal masks and candidate-row equivariance and must be compared against the same fixed-budget endpoint oracle evaluation.
 
-#research_todo(
-  [After the primary evidence chain is complete, promote only bridges tied to a measured failure: EVL support, target observability, directional history, valid-set interaction, long-horizon credit, or action-support mismatch.],
+#scientific_core_todo(
+  domain: "architecture",
+  priority: "P2",
+  readiness: "contingent",
+  claim: [which representation or interaction limitation explains residual held-out value error],
   source: [method design-space registry],
   gate: [artifact-backed failure analysis],
-)
+)[After the primary evidence chain is complete, promote only bridges tied to a measured failure: EVL support, target observability, directional history, valid-set interaction, long-horizon credit, or action-support mismatch.]
 
 The next evidential step remains procedural: complete validated stores under resolved manifests, freeze the eligible population and exclusions, establish oracle stability and headroom, train the matched controls, and only then interpret architectural differences. The registry above preserves concrete follow-up hypotheses without presenting them as validated conclusions.

@@ -562,7 +562,7 @@
     key: "rollout-state",
     short: "state",
     long: "Rollout State",
-    description: "Family of rollout state variants used by ARIA-NBV. The actor-visible variants contain logged or replayed observations, reconstruction proxies, candidates, validity masks, target descriptors, history, and budget; the oracle variant adds privileged GT geometry and all-candidate labels for supervision and evaluation only.",
+    description: "Family of rollout states used by ARIA-NBV. State source, dynamic carrier, implementation maturity, and evidential status are independent: an implemented privileged control is not an actor-visible scientific target, and a planned target state is not an empirical result. Oracle geometry and all-candidate labels remain supervision or evaluation only.",
     group: "Planning",
     custom: (
       anchor: "term-rollout-state",
@@ -574,7 +574,7 @@
       category: "planning.mdp",
       parent: "target-conditioned-nbv-mdp",
       definition_short: "Rollout state family separating actor-visible state from oracle-only supervision.",
-      definition_long: "ARIA-NBV distinguishes raw historic snippet state, persisted VIN offline sample state, minimal counterfactual actor state, geometry-rich counterfactual ablation state, and privileged oracle rollout state. The main Q_H actor input starts from the minimal counterfactual state; all-candidate GT renders, GT mesh crops, and oracle RRI labels remain outside the actor-visible state.",
+      definition_long: "ARIA-NBV distinguishes raw historic snippet state, persisted offline state, the implemented pose-only S0 baseline, the privileged selected-surface S1 control, an actor-visible observation-updated scientific target for which S2 ray memory is one candidate realization, and privileged oracle state. These roles are not a maturity ladder: implementation does not imply selection, selection does not imply validation, and the scientific target is a semantic information contract rather than one fixed architecture. All-candidate GT renders, GT mesh crops, and oracle RRI labels remain outside the actor-visible state.",
       internal_links: (
         "docs/typst/thesis/sections/04-method/04-01-scene-representation-requirements.typ#sec:thesis-scene-representation",
         "docs/typst/thesis/sections/01-research-questions.typ#ssec:rq4",
@@ -603,6 +603,9 @@
         "rl.s_hist",
         "rl.s_off",
         "rl.s_cf0",
+        "rl.s_pose",
+        "rl.s_surface",
+        "rl.s_ray",
         "rl.s_cf_geom",
         "rl.s_oracle",
         "oracle.points",
@@ -623,6 +626,41 @@
       notation: (
         typst: "$s_t$",
       ),
+      formula: (:),
+      formulae: (),
+    ),
+  ),
+  (
+    key: "pose-only-counterfactual-state",
+    short: "S0-pose",
+    long: "Pose-Only Counterfactual State",
+    description: [
+      Implemented selected baseline #symb.rl.s_pose. It combines immutable root evidence, target and candidate geometry, the strictly causal selected-pose prefix #symb.rl.selected_pose_prefix, and remaining budget, but it does not update scene geometry from selected observations.
+    ],
+    group: "Planning",
+    custom: (
+      anchor: "term-pose-only-counterfactual-state",
+      aliases: ("S0", "pose-history state", "pose-only rollout state"),
+      category: "planning.state",
+      parent: "rollout-state",
+      definition_short: "Implemented pose-history baseline without selected-observation scene updates.",
+      definition_long: "S0-pose is the selected executable baseline for interface and learning tests. It carries immutable root evidence, target and candidate relations, causal selected-pose history, and budget. Histories with the same poses but different observed surfaces collapse to the same dynamic state, so S0-pose is not claimed to be task-sufficient for target-specific future return.",
+      internal_links: (
+        "docs/typst/thesis/sections/04-method/04-01-scene-representation-requirements.typ#sec:thesis-scene-representation",
+      ),
+      citations: (),
+      related: (
+        "minimal-counterfactual-state",
+        "geometry-rich-counterfactual-state",
+        "counterfactual-transition",
+      ),
+      kg_tags: ("planning", "state", "baseline"),
+      tier: "core",
+      lookup_rank: 142.5,
+      symbol_refs: ("rl.s_pose", "rl.selected_pose_prefix"),
+      equation_refs: ("rl.s_pose",),
+      typst_macro: none,
+      notation: (typst: "#symb.rl.s_pose",),
       formula: (:),
       formulae: (),
     ),
@@ -732,7 +770,7 @@
     short: "CF0 state",
     long: "Minimal Counterfactual Actor State",
     description: [
-      Main thesis-core actor-visible counterfactual rollout state. It keeps the fused point proxy #symb.obs.points_t as broad scene state, optional lifted image-foundation features attached to points, local root EVL evidence for target support, selected-view history, target descriptor, budget, candidate table, validity masks and reason codes, and current candidate-query features, without exposing all-candidate GT renders.
+      Semantic actor-visible target for counterfactual planning. It must update causally from selected observations and preserve distinctions that can change target-specific return, including observed surface, observed free, unknown, finite support, uncertainty, source, and recency. It does not prescribe points, voxels, or rays as the carrier.
     ],
     group: "Planning",
     custom: (
@@ -744,8 +782,8 @@
       ),
       category: "planning.state",
       parent: "rollout-state",
-      definition_short: "Main Q_H actor state for mesh-supervised counterfactual rollouts.",
-      definition_long: "The minimal counterfactual actor state is the default input to target-conditioned Q_H. It contains the accumulated counterfactual point proxy as broad scene state, optional lifted image-foundation point features, local root EVL evidence for target support and local reads, selected-action history, observed or predicted target descriptor, budget state, finite candidate table, validity masks, reason codes, and current-state candidate-query features. Synthetic observations update the state only after their candidate is selected.",
+      definition_short: "Architecture-neutral actor-state target for causal counterfactual planning.",
+      definition_long: "The minimal counterfactual actor state is the scientific state target, not the currently selected implementation. It must expose an actor-visible target descriptor, finite candidate support, causal selected history, budget, and an observation-updated scene state that distinguishes observed surface, observed free, unknown space, support, uncertainty, source, and recency. Points, voxels, sparse rays, or another carrier may realize this contract only after leakage, deterministic-fusion, support, and held-out task-sufficiency gates pass.",
       internal_links: (
         "docs/typst/thesis/sections/04-method/04-01-scene-representation-requirements.typ#sec:thesis-scene-representation",
         "docs/contents/theory/efm3d_scene_embeddings.qmd",
@@ -783,7 +821,7 @@
     key: "geometry-rich-counterfactual-state",
     short: "CF+ state",
     long: "Geometry-Rich Counterfactual State",
-    description: "Ablation actor state that extends the minimal counterfactual state with selected prior synthetic observations only. The executable CF-GT carrier stores rendered depth, valid mask, calibration, selected-camera pose, source identity, and causal support; implemented S1 derives an identity-start, fixed-width current-camera surface-point residual from it.",
+    description: "Implemented privileged S1 selected-surface control. Its CF-GT carrier stores only previously selected rendered depth, valid mask, calibration, selected-camera pose, source identity, and causal support; an identity-start point encoder consumes that carrier. It is neither the actor-visible scientific target nor evidence that selected geometry improves value prediction.",
     group: "Planning",
     custom: (
       anchor: "term-geometry-rich-counterfactual-state",
@@ -794,7 +832,7 @@
       ),
       category: "planning.state",
       parent: "rollout-state",
-      definition_short: "Counterfactual ablation state with selected synthetic geometry observations.",
+      definition_short: "Privileged selected-surface control over causal selected synthetic geometry.",
       definition_long: "The geometry-rich counterfactual state adds only selected prior synthetic observations to the minimal state. The executable qh_cfplus_gt_depth_v1 carrier holds strictly causal rendered depth, depth-valid masks, calibration, selected-camera poses, source identity, and support for views that have already been selected; it never includes renders for unselected candidates. The source-matched CF+ H0 control validates this carrier but is exactly invariant to its numeric payload, so it remains an S0-pose-conditioned null model. The implemented S1-points control consumes only causal selected views through canonical float32 backprojection, expresses their surface points from the factual current camera, and adds a fixed-width density-weighted mean/max point-set residual to the unchanged root moments. Its final residual projection starts at zero, making fresh S1 predictions exactly equal to matched H0 while leaving that projection trainable on the first backward pass. The active discriminator root_moments_plus_selected_surface_points_identity_start_v1 binds that initialization; the shorter historical discriminator is ambiguous and inspection-only. S1 preserves no source-view or free/unknown ray identity and remains privileged and non-deployable. A matched H0/S1 difference estimates the complete S1 package, including geometry consumption, point-network capacity, initialization, and stochastic optimization; it does not identify geometry alone.",
       internal_links: (
         "docs/typst/thesis/sections/04-method/04-01-scene-representation-requirements.typ#sec:thesis-scene-representation",
@@ -815,6 +853,7 @@
       lookup_rank: 144,
       symbol_refs: (
         "rl.s_cf_geom",
+        "rl.s_surface",
       ),
       equation_refs: (
         "rl.s_cf_geom",
@@ -1151,6 +1190,7 @@
       ),
       related: (
         "finite-horizon-return",
+        "pose-only-counterfactual-state",
         "minimal-counterfactual-state",
         "predicted-target-q",
         "validity-mask",
@@ -1165,6 +1205,8 @@
       symbol_refs: (
         "rl.qh",
         "rl.return_h",
+        "rl.s",
+        "rl.s_pose",
         "rl.s_cf0",
         "rl.a",
       ),
@@ -1178,16 +1220,16 @@
       ),
       formula: (
         label: "Finite-horizon candidate value",
-        tex: "Q_H(s_t^{\\mathrm{cf0}},a_t,\\boldsymbol{\\phi}_e)=\\mathbb{E}\\left[G_t^{(H)}\\mid s_t=s_t^{\\mathrm{cf0}},a_t,\\boldsymbol{\\phi}_e\\right]",
+        tex: "Q_\\theta(s_t,e,a,h)=\\mathbb{E}\\left[G_t^{(h)}\\mid s_t,e,a_t=a\\right]",
       ),
       formulae: (
         (
           label: "Masked Double-DQN selector",
-          tex: "j^*=\\arg\\max_{j:m_{t+1,j}=1}Q_\\theta(s_{t+1}^{\\mathrm{cf0}},a_{t+1,j},\\boldsymbol{\\phi}_e)",
+          tex: "j^*=\\arg\\max_{j:m_{t+1,j}=1}Q_\\theta(s_{t+1},e,j,h-1)",
         ),
         (
           label: "Masked Double-DQN target",
-          tex: "y_t=r_t^e+\\gamma(1-d_t)Q_{\\bar\\theta}(s_{t+1}^{\\mathrm{cf0}},a_{t+1,j^*},\\boldsymbol{\\phi}_e)",
+          tex: "y_t^{(h)}=r_t^e+\\gamma(1-d_t)Q_{\\bar\\theta}(s_{t+1},e,j^*,h-1)",
         ),
       ),
     ),

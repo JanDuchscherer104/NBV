@@ -482,6 +482,30 @@ return {
       description = "Implemented fixed-root pose-history state used by qh_cf0_v1.",
       thesis_list = true,
     },
+    ["rl.s_ray"] = {
+      tex = "s_t^{\\mathrm{S2-ray}}",
+      typst = "#symb.rl.s_ray",
+      description = "Planned actor-visible ray-aware state preserving observed surface, free, unknown, support, uncertainty, source, and recency.",
+      thesis_list = true,
+    },
+    ["rl.s_surface"] = {
+      tex = "s_t^{\\mathrm{S1-surface}}",
+      typst = "#symb.rl.s_surface",
+      description = "Implemented privileged selected-surface control state; it consumes only previously selected rendered depth and is not deployable.",
+      thesis_list = true,
+    },
+    ["rl.selected_pose_prefix"] = {
+      tex = "\\boldsymbol{H}_t^{\\mathrm{pose}}",
+      typst = "#symb.rl.selected_pose_prefix",
+      description = "Strictly causal prefix of previously selected poses available at decision step t.",
+      thesis_list = true,
+    },
+    ["rl.selected_pose_prefix_next"] = {
+      tex = "\\boldsymbol{H}_{t+1}^{\\mathrm{pose}}",
+      typst = "#symb.rl.selected_pose_prefix_next",
+      description = "Strictly causal selected-pose prefix after applying the selected transition.",
+      thesis_list = false,
+    },
     ["rl.source_role"] = {
       tex = "\\ell_{t,i}^{\\mathrm{src}}",
       typst = "#symb.rl.source_role",
@@ -1061,9 +1085,9 @@ return {
       thesis_list = false,
     },
     ["rl.q_h"] = {
-      tex = "Q_H(s_t^{\\mathrm{cf0}},a_t)=\\mathbb{E}\\left[G_t^{(H)}\\mid s_t=s_t^{\\mathrm{cf0}},a_t\\right]",
+      tex = "Q_{h,e}^{\\star}(s_t,i)=\\sup_{\\pi\\in\\Pi^{\\mathrm{act}}}\\mathbb{E}_{\\pi}\\left[G_{t,e}^{(h)}\\mid s_t,a_t=i\\right],\\quad i\\in\\mathcal{A}_t,\\quad 1\\le h\\le b_t\\le H_{\\max},\\quad Q_{0,e}^{\\star}(s,i)=0",
       typst = "#eqs.rl.q_h",
-      description = "",
+      description = "Target-conditioned scalar-h candidate value over admissible continuation policies.",
       thesis_list = false,
     },
     ["rl.qh_candidate_token"] = {
@@ -1151,9 +1175,9 @@ return {
       thesis_list = false,
     },
     ["rl.s_cf0"] = {
-      tex = "s_t^{\\mathrm{cf0}}=(V^{\\mathrm{root}},\\mathcal{P}_t,\\mathcal{Q}_t,m_{t,i},\\rho_{t,i},e_t,b_t)",
+      tex = "s_t^{\\mathrm{cf0}}=(\\boldsymbol{\\Phi}_t^{\\mathrm{scene}},\\boldsymbol{\\phi}_e,\\mathcal{Q}_t,m_{t,i},\\boldsymbol{H}_t^{\\mathrm{pose}},b_t)\\in\\mathcal{S}^{\\mathrm{cf0}}",
       typst = "#eqs.rl.s_cf0",
-      description = "",
+      description = "Architecture-neutral actor-state target; the scene-memory carrier must remain actor-visible and update only from selected observations.",
       thesis_list = false,
     },
     ["rl.s_cf_geom"] = {

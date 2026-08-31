@@ -76,12 +76,11 @@
     #symb.rl.s_cf0
     =
     (
-      #(symb.vin.field_v)^"root",
-      #(symb.oracle.points) _t,
-      #symb.oracle.candidates_t,
+      #symb.scene.scene_memory_t,
+      #symb.entity.target_desc,
+      #symb.rl.candidate_table,
       #symb.rl.validity_mask,
-      #symb.rl.invalid_reason,
-      #symb.rl.target,
+      #symb.rl.selected_pose_prefix,
       #symb.rl.budget
     )
     in cal(S)^"cf0"
@@ -95,7 +94,7 @@
       (bold(T)_(r,e), bold(l)_e),
       #symb.oracle.candidates_t,
       #symb.rl.validity_mask,
-      bold(H)_t^"pose",
+      #symb.rl.selected_pose_prefix,
       #symb.rl.budget
     )
   $,
@@ -148,11 +147,11 @@
     #symb.rl.action_set_t = {i in {1, dots, #symb.shape.Nq} : m_(t,i)^"act" = 1}
   $,
   replay_transition: $
-    (x_(t+1), bold(H)_(t+1), b_(t+1), cal(Q)_(t+1))
+    (x_(t+1), #symb.rl.selected_pose_prefix_next, b_(t+1), cal(Q)_(t+1))
     =
     op("Step")(
       x_t,
-      bold(H)_t,
+      #symb.rl.selected_pose_prefix,
       b_t,
       q_(t,a_t),
       xi_t
