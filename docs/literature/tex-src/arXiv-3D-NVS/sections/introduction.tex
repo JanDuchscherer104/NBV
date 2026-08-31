@@ -1,0 +1,63 @@
+\section{Introduction}
+Three dimensional (3D) object reconstruction and acquisition are a long time focus of machine vision research and a key to visual understanding and interpretation.
+It has a wide range of practical applications including robotics, AR/VR, autonomous navigation and industrial automation to name just a few.
+Being able to access the 3D geometric cue about an object or scene can immensely benefit in post processing and decision making for instance in recognition \cite{pontil1998support}, segmentation \cite{qi2017pointnet}, pose estimation \cite{andriluka2010monocular} and other computer vision and pattern recognition tasks.
+
+As a computer vision task, this requires a sensor for observing the object which can be of two types namely, active and passive cameras.
+Active cameras like Laser iamging detection and ranging (LiDAR), Time of Flight (ToF) and depth cameras like the Kinect directly acquire scene depth and in turn the 3D shape of an object but come with their own limitations apart from the high cost and power requirements.
+Passive cameras are much cheaper and use significantly less power to acquire two dimensional (2D) optical RGB snapshots of the object which can then be used to recover the 3D structure by posing this as an inverse problem.
+
+Recovering 3D shape from its two dimensional snapshots has been a goal of classic computer vision problems like multiview stereo and Shape-from-X techniques.
+Early methods approached this with a geometric perspective and focussed on mathematically modelling the process of 2D projection to pose it as an ill-posed problem \cite{hartley2003multiple} constrained by suitable scene priors.
+The structure from motion(SfM) techniques can be used to obtain a sparse 3D point cloud of an object along with the respective camera poses.
+Along the similar lines, Multi View Stereo (MVS) techniques can provide a dense 3D reconstruction.
+Recently, with the advent of deep learning based methods, a model can directly learn a non linear mapping from the images to the 3D representation outperforming classical methods while doing it in real time \cite{pix2vox}.
+
+% MVS to NBV
+Although, there are works which attempt to reconstruct the 3D shape of an object from just a single view but these are in early stages due to their highly ill posed nature of the problem.
+Moreover, as in MVS, taking more than one view of the object reduces ambiguity and occlusion to significantly improve the 3D recognition quality as more information is available for recovery.
+Typically, these views are acquired from a set of passively selected viewpoints independent of the object geometry.
+In order to obtain the best 3D reconstruction, one would expect the location of these viewpoints to be dependent on the 3D shape in consideration.
+Therefore, to obtain the best possible 3D reconstruction quality from the captured images one has to actively decide the next best view point to take the snapshot from.
+
+% Motivation and Intro to NBV
+The Next View Selection (NVS) problem has been explored since the early days of machine vision research \cite{connolly1985determination}.
+This problem arises in many scenarios where one would want to find the next best viewpoint around an object or in an arena while maximizing a certain quality or performance metric.
+For instance, in order to better grasp an object, a robotic arm equiped with a camera may want to find the next viewpoint to obtain the best 3D reconstruction for better understanding quickly.
+Similarly, a UAV hovering over a scene may want to find the next view which can provide the best 3D digital elevation model in order to minimize the flight time.
+There are several works in robotic navigation, robotic arm positioning and remote sensing which are discussed in the related work section.
+
+% Gaps in the literature, typically done and what they lack
+However, almost all of these works use range cameras to directly capture scene depth and select the next view either heuristically or by optimizing for the suface area covered or information gained.
+Along with this, their aim has been to reconstruct a surface representation of the scene like mesh or point cloud.
+Volumetric representation like voxels are better suited for practical applications due to ease of manipulation and training than surface or mesh based representations.
+Hence, we focus on learning a volumetric representation of the scene in this work.
+Moreover, selecting next views using only passive camera images of a scene has been explored much recently but not very actively in the literature and we focus on this particular setup in this paper.
+Predicting a 3D shape or next views using passive cameras is a more challenging task due to much lesser data available for use than in the case of active sensors.
+Due to this setup of the problem, classical solutions based on surface reconstruction and optimized for surface area covered or information gained cannot be used here.
+
+% A hint of advantages of the proposed method and how it fits into the bigger picture
+In this paper, we attempt to address these gaps and propose a novel classfication based approach for NVS without using the preprocessed ground truth next views.
+Since our goal is to maximize the 3D reconstruction quality, we propose to extract supervisory signal from the reconstruction process itself to to drive the training of classifcation model and hence obtain a better loss-goal correspondence.
+We present how a light-weight neural network based classifier can be incorporated into existing 3D reconstruction models to perform NVS and trained without the knowledge of ground truth NVS labels.
+Training such a classifier-reconstructor architecture is not straightforward without the labels and therefore we propose a novel loss objective that facilitates end to end training of such a joint classifier-reconstructor deep neural network model.
+
+% End with a hint of some key findings and insights gained
+We demonstrate how the proposed method successfully selects the next views that maximize the reconstruction quality for a given 3D object on both synthetic and real data.
+Additionally we analyse the NBVs predicted for each object category to gain insights and observe underlying patterns to learn how they are distributed depending on the object shape.
+Our contributions in this paper are as follows:
+\begin{itemize}
+    \item We propose a deep learning based approach for next view selection and show how it can be effectively approached as a classifcation problem.
+    \item We show how the supervisory signal form the 3D reconstruction process can be used to learn both the classfication and reconstruction networks jointly in an end to end manner.
+    \item We present a qualitative analysis of the NBV predictions to gain insights into the process and their dependence on object categories and shape.
+    \item We present exhaustive experiments on both synthetic and real data to demonstrate the effectiveness of the proposed method in selecting appropriate NBV while providing high reconstruction quality.
+\end{itemize}
+
+
+\begin{figure*}
+\begin{center}
+\includegraphics[scale=0.36]{figures/3d-nvs-overview.pdf}
+\end{center}
+   \caption{An Overview of the proposed 3D-NVS model used during the (a) training and (b) testing. A detailed explanation of each sub-parts is given in Section \ref{sec:method}. (c) Chosen viewpoints of the ShapeNet dataset to generate images for training.}
+\label{fig:overview-model}
+\end{figure*}

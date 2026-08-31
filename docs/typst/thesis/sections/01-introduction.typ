@@ -45,6 +45,22 @@ structure can be recovered from a bounded egocentric information state.
 // - @GenNBV-chen2024 -> docs/literature/tex-src/arXiv-GenNBV/3-Method.tex:13-25,76-95 (history-conditioned continuous policy and coverage reward)
 // - @Hestia-lu2026 -> docs/literature/tex-src/arXiv-Hestia/sec/3_method.tex:30-58,70-118 (sequential coverage state and hierarchical action)
 
+The actor-state question includes a representation-transfer hypothesis. Prior
+NBV pipelines already use generic 2D pretraining or foundation-model components
+for view prediction, depth estimation, or scene construction
+@ThreeDNVS-ashutosh2020 @MACARONS-guedon2023 @NextBestSense-strong2024. These
+uses do not establish whether an egocentric 3D representation that combines a
+frozen 2D foundation feature extractor with learned upsampling and 3D processing
+improves target-conditioned endpoint-value learning. ARIA-NBV therefore treats
+EFM3D/EVL evidence as a hypothesis to be tested against matched actor-visible
+geometric controls, not as an assumed source of gain @EFM3D-straub2024.
+
+// evidence:
+// - @ThreeDNVS-ashutosh2020 -> docs/literature/tex-src/arXiv-3D-NVS/sections/method_new.tex:15-23 (fixed-view NBV classifier and ImageNet-pretrained VGG16 with frozen layers)
+// - @MACARONS-guedon2023 -> docs/literature/tex-src/arXiv-MACARONS/3_method.tex:27-34 (pretrained ResNet-18 image features in the depth module)
+// - @NextBestSense-strong2024 -> docs/literature/tex-src/arXiv-Next-Best-Sense/ms.tex:156-217 (SAM2/depth priors for 3DGS construction and Fisher-information view selection)
+// - @EFM3D-straub2024 -> docs/literature/tex-src/arXiv-EFM3D/method.tex:4-45, docs/literature/tex-src/arXiv-EFM3D/supplemental_text.tex:11-18 (frozen 2D foundation features followed by learned upsampling, 3D U-Net processing, and task heads)
+
 Project Aria supplies calibrated egocentric observations, EFM3D lifts them into
 local 3D evidence, and ARIA Synthetic Environments (ASE) provides the privileged
 geometry needed for controlled target tasks and counterfactual evaluation

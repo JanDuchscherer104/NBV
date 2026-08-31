@@ -15,6 +15,25 @@ predictable.
 // - @projectaria-engel2023 -> docs/literature/tex-src/arXiv-project-aria/intro.tex:24-26, docs/literature/tex-src/arXiv-project-aria/device.tex:12-15 (wearable egocentric capture and calibrated time-aligned streams)
 // - @EFM3D-straub2024 -> docs/literature/tex-src/arXiv-EFM3D/intro.tex:42-50, docs/literature/tex-src/arXiv-EFM3D/method.tex:15-33 (posed Aria modalities and gravity-aligned voxel lifting)
 
+Pretraining provenance and decision-time role must be distinguished. 3D-NVS
+uses ImageNet initialization in its NBV classifier, whereas MACARONS reuses
+pretrained image features within an online mapping pipeline
+@ThreeDNVS-ashutosh2020 @MACARONS-guedon2023. Next Best Sense instead uses SAM2
+and monocular-depth priors to improve 3DGS construction while retaining an
+analytic Fisher-information selector @NextBestSense-strong2024. EVL freezes its
+DINOv2.5 foundation feature extractor, then learns the feature upsampler, 3D
+U-Net, and task heads that form a local 3D field from posed egocentric streams
+and semidense geometry @EFM3D-straub2024. This structure may preserve semantic
+and geometric distinctions relevant to target visibility, but whether those
+distinctions improve candidate value is an empirical property of the downstream
+task rather than a consequence of pretraining alone.
+
+// evidence:
+// - @ThreeDNVS-ashutosh2020 -> docs/literature/tex-src/arXiv-3D-NVS/sections/method_new.tex:15-23 (ImageNet-pretrained VGG16 directly drives fixed-view NBV classification)
+// - @MACARONS-guedon2023 -> docs/literature/tex-src/arXiv-MACARONS/3_method.tex:27-34, docs/literature/tex-src/arXiv-MACARONS/7_appendix.tex:213-219 (pretrained image features and task-specific ShapeNet pretraining ablation)
+// - @NextBestSense-strong2024 -> docs/literature/tex-src/arXiv-Next-Best-Sense/ms.tex:156-217 (foundation-assisted scene construction and analytic Fisher-information selection)
+// - @EFM3D-straub2024 -> docs/literature/tex-src/arXiv-EFM3D/method.tex:4-45, docs/literature/tex-src/arXiv-EFM3D/supplemental_text.tex:11-18 (frozen 2D feature extractor plus learned upsampling, 3D U-Net processing, and task heads)
+
 Four requirements follow. First, *causal sufficiency* requires the actor state to
 retain the observation history relevant to future return without importing
 future or unselected evidence. EFM3D supplies strong local evidence but has a

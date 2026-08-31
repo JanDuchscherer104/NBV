@@ -1,0 +1,18 @@
+\section{Conclusion}
+In this paper, we present how the task of Next Best View prediction can be posed as a classification problem and learned in a data driven manner without the knowledge of underlying ground truth labels.
+We do this with an aim to obtain the best possible 3D reconstruction from the acquired views and use this reconstruction process to obtain an indirect supervision to train the proposed model.
+The performance of the proposed 3D-NVS method is evaluated on both synthetic and real data to demonstrate how it obtains better reconstruction quality than the existing state of the art 3D reconstruction techniques by effectively selecting the best view.
+Additionally, we present an analysis of how the NBV locations are distributed intuitively depending on the object category which concurs with previous techniques that use range sensors.
+Going forward we aim to extend this to successive N-view next view selection.
+
+% Going forward we plan to extend 3D-NVS to accommodate successive N-view selection. For example, if base image selects a next view, we use these two inputs and predict the third view and so on. One of the challenges associated with this generalization is that after a few views, the performance is essentially equal to random selection of N views. Consequently, the reconstruction performance is also the same.
+
+% We also plan to incorporate differential rendering \blue{cite} that would enable us to render images on the fly and predict the next views based on that. Such an experiment can also be combined with quantitative results on robotics or UAV simulator.
+% \sk{I think there is no need to mention Future work as their it is of no use in the paper untill it's done. Also, it is rarely found in vision papers plus lets the ideas out if the plan it to actually do them later. One para conclusions is all there is typically.}
+
+%Going forward we plan to extend this to:
+%\begin{itemize}
+%    \item N stage NBV?
+%    \item quantitative results on robotics or UAV simulator.
+%    \item Something else / or some other application?
+%\end{itemize}

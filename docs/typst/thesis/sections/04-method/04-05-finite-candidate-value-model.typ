@@ -55,9 +55,7 @@ The scorer emits two policy-facing tensors before masking:
   gate: [exact-Q2 certification, A0/A1 controls, per-horizon support tests, and held-out oracle policy comparison],
 )[One scalar $h$ per state is implemented. Omitting the query uses factual remaining budget; public horizon vectorization remains evidence-gated.]
 
-Using the finite-horizon return and conditional value defined in
-@sec:thesis-sequential-decision-foundations, the return for target $e$ over
-exactly the requested residual horizon $h$ is
+For target $e$, the return over exactly the requested residual horizon $h$ is
 
 $
   #eqs.rl.finite_horizon_return
@@ -93,7 +91,7 @@ The valid-action mask instead gates the policy argmax, Q supervision, and every 
 
 The value family is defined relative to a frozen state and source protocol. An `S0-pose` value, a privileged `CF-GT` selected-depth value, and a deployable observed-state value are different functions even when their tensors have similar shapes. The implemented CF+ H0 control belongs to the CF+ source population but, by construction, still estimates an S0-pose-conditioned function; the privileged selected-depth value begins only when S1 actually consumes the carrier. Likewise, “optimal” means optimal continuation only within the generated finite candidate support, hard-validity contract, represented state, and transition distribution. A pose-only state cannot be promoted to a task-sufficient reconstruction value merely by requesting a longer horizon.
 
-=== Horizon-recursive offline learning <ssec:thesis-horizon-recursive-offline-learning>
+=== Horizon-recursive offline learning
 
 Batch fitted Q iteration learns a greedy action-value function from a fixed transition collection through successive supervised regression problems; it does not require online interaction @FittedQIteration-ernst2005. The frozen lower-horizon recursion is
 
@@ -150,17 +148,7 @@ The online scorer then selects
 
 and a delayed scorer to evaluate that row. This may reduce overestimation from maximizing noisy learned values @DoubleDQN-vanHasselt2015. It is neither a requirement for offline learning nor the definition of the frozen scalar requested-horizon interface. It cannot repair unsupported long-horizon actions, an aliased actor state, or missing selected-observation evidence.
 
-Complete stored chains also permit regression to truncated Monte-Carlo returns.
-Without off-policy correction, those returns estimate the continuation of the
-behavior policy that generated each chain, $Q^mu$, rather than the greedy
-finite-support value $Q^star$ unless that behavior policy is itself the
-specified target policy
-@ReinforcementLearning-sutton2018[Secs. 5.2 and 5.5, pp. 96–97 and 103–109].
-They are therefore useful controls and diagnostics, but they must not be mixed
-with optimal Bellman targets without naming the estimand.
-
-// evidence:
-// - @ReinforcementLearning-sutton2018 -> docs/literature/pdf/RLbook2020.pdf#page=118-119, docs/literature/pdf/RLbook2020.pdf#page=125-131 (Ch. 5, Secs. 5.2 and 5.5, printed pp. 96-97 and 103-109; Monte-Carlo action values and behavior-versus-target-policy returns)
+Complete stored chains also permit regression to truncated Monte-Carlo returns. Those targets estimate the continuation of the behavior policy that generated each chain, $Q^mu$, rather than the greedy finite-support value $Q^star$ unless that behavior policy is itself the specified target policy. They are therefore useful controls and diagnostics, but they must not be mixed with optimal Bellman targets without naming the estimand.
 
 The objective-design comparison is therefore:
 

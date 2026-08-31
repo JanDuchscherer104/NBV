@@ -1,0 +1,38 @@
+\section{Method}
+\label{sec:method}
+%\begin{figure*}
+%\begin{center}
+%\includegraphics[scale=0.37]{figures/fig_draft.pdf}
+%\end{center}
+%   \caption{Draft 1 of Model Schematic Diagram}
+%\label{fig:short}
+%\end{figure*}
+%This section is dedicated for the method section.
+This section introduces 3D-NVS -- a novel deep learning model to reconstruct 3D shapes from 2D images while selecting the best next view. The proposed two-stage model works as follows: given an input image, stage 1 selects the next camera position out of 11 possible labels. Subsequently, stage 2 inputs the two images (base image and the selected next view) to a reconstruction model to generate a 3D shape. The shape is in voxel grids with binary occupancy (1 means occupied, 0 means empty). To select the next views, 3D-NVS uses supervision from ground truth 3D shapes. This indirect supervision is facilitated by a novel loss function, which enables the training of a network with a softmax classifier in between. Such a unified classifier followed by reconstruction architecture is the first in our knowledge and is a key enabler of our proposed method. An overview of the proposed model is presented in Figure \ref{fig:overview-model}, and the detailed architecture is shown in Figure \ref{fig:model-architecture}.
+\subsection{Network Architecture}
+We use slightly different architectures for training and testing. For training, we incorporate the availability of images from all camera viewpoints. However, during testing, we only input images from one viewpoint, and the model predicts the next view. This idea reinforces the freedom of obtaining multiple images from all viewpoints during training while restricted access during testing. 
+
+During training, the input RGB image from an arbitrary camera position, called henceforth as the base image, is passed into NVS-Net, which outputs a probability distribution over the next views. The number of possible camera positions for the next view is fixed (details in Section \ref{sec:experiments}) and, thus, is a classification problem. In parallel to NVS-Net, we pass images from all the viewpoints into the Encoder -- a sub-network of Stage 2 of 3D-NVS that generate feature maps. These are then used by the Decoder to produces coarse voxels. The context-aware fusion and the refiner \cite{pix2vox} are used to fine-tune the generated voxels. The 3D volumes obtained from all pairs of the base image and possible next-best views are combined with the probability distribution predicted by the NVS-Net to get a final 3D volume.
+
+During testing, we detach stage 1, which is NVS-Net, from the training setup \& use it for the next view selection described above and predicts the probability distribution over the next views. Now, the viewpoint with maximum probability is selected as the next view, and the two views (base view and selected next view) are passed into the Encoder, Decoder, Context-aware Fusion, and Refiner sub-networks to obtain the final reconstructed 3D volume.
+\subsubsection{NVS-Net}
+We use a classification network inspired by VGG16 \cite{vgg} and modify the last few layers of this network to suit our output classes. We take the model pre-trained on ImageNet \cite{imagenet} and freeze the first nine layers. An RGB square input image of size 228 pixels is progressively passed into convolutional layers with ELU activations while increasing the number of channels as described in Figure \ref{fig:model-architecture}. Finally, we obtain a 256x4x4 feature map which is flattened into a 4096-dimensional fully-connected layer and fed to two further fully-connected layers output 128 and 11 channel outputs, respectively. The last layer's activation is set to softmax to obtain probability distribution over the next views, as in other standard classification models.
+
+In the remainder of the paper, we define 3D-NVS-R as the model where we choose the next view randomly from all the available views. Also, we define 3D-NVS-II when we choose the second best view, 3D-NVS-III for the third view, and so on. Finally, 3D-NVS-F is when the next view is chosen to maximize the distance between the input images.
+\subsubsection{Encoder-Decoder}
+The Encoder extracts feature from both input RGB images, the base, and the next view image selected by NVS-Net. Since the NVS-Net already extracts features and flattens them for classification, we share its parameters with Encoder for parameter efficiency and smaller model. The output of the Encoder is a feature map of size 256x8x8, which is an intermediate output of NVS-Net. Note that only the base image is passed into the NVS-Net, whereas all the images are passed into the Encoder in stage 2 during the training phase.
+
+After obtaining the feature maps, we use those as input to recover 3D shapes. The architecture of having an Encoder-Decoder model is motivated by its success in Image Segmentation tasks \cite{7803544} and to more related 3D shape reconstruction tasks \cite{pix2vox}. The feature maps of size 256x8x8 are resized to 2048x2x2 and operated on successive transposed convolution layers that decrease the number of channels and increase the feature sizes. The obtained 32x32x32 vector is passed through a sigmoid activation function to obtain occupancy probability for each cell.
+\subsubsection{Context-aware Fusion and Refiner}
+Context-aware Fusion and Refiner is used in Pix2Vox \cite{pix2vox}  to convert coarse 3D volumes into an improved 3D volume. The idea behind such an additional network is to account for different reconstructions from different viewpoints. The Context-Aware Fusion generates a score map based on the viewpoint, and the final volume is obtained by multiplying a softmax-based activation with the corresponding coarse volume from that view. Finally, the Refiner is a UNet-like architecture \cite{unet}, which acts as a residual network to correct remaining mis-recovered parts of the object. The activation of the final layer is again set to sigmoid to obtain occupancy probability for the 32x32x32 grid.
+\subsubsection{Loss Function}
+We propose a loss function to train this unique architecture. The proposed loss function considers both NVS-Net output probability and the reconstructed 3D shape for each pair of views. Let the probability of selecting $i^{th}$ image is $p_i$ as per NVS-Net. Correspondingly, let $v_i$ denote the reconstructed volume of size 32x32x32 using base image and $i^{th}$ image as input. The averaged 3D shape is defined as 
+\begin{equation}
+    r = \sum_{\forall i} p_i v_i
+\end{equation}
+We propose the averaged per-voxel binary cross entropy between $r$ and ground truth voxel $t$ as the loss function of the network. Mathematically,
+\begin{equation}
+    L(r, t) = \frac{1}{N} \sum_{j=1}^{N} (t_j\log(r_j) + (1-t_j)\log(1-r_j))
+\end{equation}
+It is advantageous to have output from both the sub-networks in the expression of the loss. Such a choice prevents a network weight bottleneck at the NVS-Net outputs and serves the objective of simultaneous classification and reconstruction tasks. Our motivation to use this loss function is to improve the weighted reconstruction; that is, at each training step, we aim to improve the reconstruction performance on the network. Once it is trained successfully, the NVS-Net is inclined to assign a higher weight to the view which has a lower loss, thus achieving our two-fold objectives of Next View Selection and reconstruction.
+

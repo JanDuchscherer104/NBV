@@ -1,0 +1,44 @@
+\section{Related Work}
+Early works on 3D reconstruction focus on mathematically modeling the imaging process and solving an ill-posed problem via suitable scene priors and geometric constraints \cite{hartley2003multiple}.
+Among the recent deep learning-based methods, there are three broad types of techniques based on output representation: Volume-based, Surface-based, and Intermediate representation.
+Surface-based methods explore meshes and point clouds that are unordered representations \cite{wang2018pixel2mesh, kanazawa2018learning, pontes2018image2mesh}. 
+Volumetric methods explore regular voxel grid-based representation as we consider in this paper \cite{wu2017marrnet, tulsiani2017multi, yang2018learning}.
+The recent state of the art works in this category include Pix3D \cite{sun2018pix3d}, 3DR2N2 \cite{3dr2n2} and Pix2Vox \cite{pix2vox} which we use as our baselines to compare with.
+Some techniques decompose the problem into sequential steps, each predicting a different representation that can be used as per application \cite{tatarchenko2016multi, lin2018learning}.
+
+% \subsection{Next View Selection}
+
+% Use active cameras
+Early works in NVS acquire range images and aim to recover the surface geometry of an object.
+Connolly et al. \cite{connolly1985determination} did one of the first works on automatic range sensor positioning using partial octree models and optimize for the surface area covered.
+Maver et al. employ occlusion guidance \cite{maver1993occlusions} and optimize for information gained \cite{maver1993planning} for NVS.
+These and related methods \cite{pito1996sensor, pito1995solution, pito1999solution} require the images to overlap to allow for registration and integration of the new data captured with previous scans. 
+The earliest work in data-driven NVS is by Banta et al. \cite{banta1995best}, which uses synthetic range data to predict occupancy grids.
+Here, the number of viewpoints on the view sphere is limited, and the radius is large enough to encompass whole object.
+The center and coordinate axes of the view sphere are aligned with those of the object, and the camera always faces this center.
+We work with a similar setup but use passive RGB cameras.
+
+Recent works also focus on active sensors such as Hepp et al. \cite{hepp2018learn} use a CNN to learn a viewpoint utility function, Delmarico et al. \cite{delmerico2018comparison} optimize volumetric information gain, and Mendez et al. \cite{mendez2017taking} maximize information gain in terms of total map coverage and reconstruction quality.
+Chen et al. \cite{chen2005vision} propose a prediction model for the object's unknown area using a 3D range data acquisition.
+Zhang et al. \cite{delmerico2018comparison} use self-occlusion information for NVS to predict 3D motion estimation.
+Potthast et al. \cite{potthast2014probabilistic} and Isler et al. \cite{isler2016information} propose information gain based NVS for occluded enviroments and 3D reconstruction respectively.
+Other works include greedy \cite{obwald2018gpu} and supervised learning approach \cite{ly2019autonomous} for visibility based exploration and reconstruction of 3D environments.
+Hashim et al. \cite{hashim2019next} propose a view selection recommendation method by minimizing pose ambiguity for object pose estimation using depth sensors.
+There are also works on robotic arm navigation for autonomous exploration and grasping \cite{monica2018contour, morrison2019multi, bai2017toward, wu2019plant}, UAV positioning in remote sensing \cite{almadhoun2019guided}, Pose estimation \cite{sock2017multi} and 3D scene inpainting \cite{han2019deep}.
+
+\begin{figure*}
+\begin{center}
+\includegraphics[scale=0.43]{figures/cvpr_architecture_final.pdf}
+\end{center}
+   \caption{The proposed 3D-NVS architecture showing various constituent stages: NVS-Net, Encoder, Decoder and Refiner modules. Note that Encoder shares weight with NVS-Net in the 3D-NVS model for efficient parameter utilization leading to a smaller model size.}
+\label{fig:model-architecture}
+\end{figure*}
+
+Closely related to our work and among the deep learning-based methods, Wu et al. \cite{wu20153d} propose a deep neural network-based view prediction but use 2.5D RGB-D images to improve 3D object recognition.
+Daudelin et al. \cite{daudelin2017adaptable} propose a probabilistic NVS algorithm but use RGB-D sensor data for 3D object reconstruction.
+Mendez et al. \cite{mendez2016next} use stereo image pairs and propose NVS to optimize the surface area covered by reconstructing the object surface.
+Dunn et al. \cite{dunn2009next} use passive cameras but optimize for the surface area covered as their goal is surface reconstruction.
+Mendoza et al. \cite{mendoza2020supervised} also pose this as a classification problem but work with range sensor data and generate exhaustive ground truth data to train a classifier.
+They use a small dataset of 12 objects and a CNN-based classifier that takes the partial voxels as input to predict the next view. 
+In contrast, we use RGB images and do not generate the ground truth but propose a classification-based approach guided by the supervision from 3D reconstruction directly.
+Yang et al. \cite{yang2018active} propose a recurrent network for view prediction using passive cameras but use a highly restricted set of viewpoints on the view sphere, unlike the broad viewpoints and restrained acquisition process considered in the literature.

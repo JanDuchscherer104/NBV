@@ -56,11 +56,9 @@ the hard-valid indicator after endpoint and transition checks. The utility or
 value function ranks only those admitted rows;
 a rejected candidate is unavailable rather than merely low-value
 @PB-NBV-jia2025 @NextBestSense-strong2024. Separating proposal, admission, and
-ranking makes the state dependence of available actions explicit
-@ReinforcementLearning-sutton2018[Secs. 3.1 and 3.5, pp. 47–53 and 58–62] and
-prepares the sequential decision model introduced next.
+ranking makes the state dependence of available actions explicit and prepares
+the sequential decision model introduced next.
 
 // evidence:
 // - @PB-NBV-jia2025 -> docs/literature/tex-src/arXiv-PB-NBV/jzz_2025_ral_resub.tex:55-70, docs/literature/tex-src/arXiv-PB-NBV/sections/method.tex:21-45 (candidate generation followed by evaluation and selection)
 // - @NextBestSense-strong2024 -> docs/literature/tex-src/arXiv-Next-Best-Sense/ms.tex:211-217 (feasibility failures handled before final view execution)
-// - @ReinforcementLearning-sutton2018 -> docs/literature/pdf/RLbook2020.pdf#page=69-75, docs/literature/pdf/RLbook2020.pdf#page=80-84 (Ch. 3, Secs. 3.1 and 3.5, printed pp. 47-53 and 58-62; state-dependent action sets and value functions)

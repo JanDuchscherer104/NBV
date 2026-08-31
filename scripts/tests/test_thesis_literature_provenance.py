@@ -36,7 +36,6 @@ FOUNDATIONS_LITERATURE = tuple(
 )
 LITERATURE_ROOT = ROOT / "docs/literature"
 GLOSSARY = ROOT / "docs/typst/shared/glossary.typ"
-MAX_PDF_SOURCE_BYTES = 80 * 1024 * 1024
 LOCATOR_RE = re.compile(
     r"(?P<path>docs/literature/[^\s:,()]+)"
     r"(?::(?P<start>\d+)(?:-(?P<end>\d+))?"
@@ -131,7 +130,7 @@ def _selector_exists(path: Path, kind: str, selector: str) -> bool:
 
 def _pdf_page_count(path: Path) -> int:
     """Read the page count through the bounded PDF-aware Poppler utility."""
-    if path.stat().st_size > MAX_PDF_SOURCE_BYTES:
+    if path.stat().st_size > 64 * 1024 * 1024:
         raise AssertionError(f"PDF is too large for bounded page validation: {path}")
     try:
         result = subprocess.run(
