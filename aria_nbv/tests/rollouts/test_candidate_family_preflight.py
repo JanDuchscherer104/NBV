@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import gc
 import json
 import pickle
 from dataclasses import replace
@@ -28,6 +29,7 @@ from aria_nbv.rollouts.candidate_benchmark import (
     CandidateSupportFailure,
     EvidenceTransformationKind,
     benchmark_from_sampling_result,
+    benchmarks_from_reader,
     candidate_family_preflight_from_reader,
     canonical_generation_revision_hash,
     canonical_json_bytes,
@@ -578,24 +580,111 @@ def test_reader_preflight_does_not_materialize_geometry(monkeypatch: pytest.Monk
         "proposal_support_geometry",
         lambda *_args, **_kwargs: pytest.fail("complete preflight must not materialize geometry"),
     )
-    monkeypatch.setattr(
-        inspection,
-        "candidate_audit_rows",
-        lambda *_args, **_kwargs: [
-            {
-                "scene": "scene",
-                "rollout_row_id": 1,
-                "step_row_id": 2,
-                "mixture": "forward_local",
-                "candidate_row_id": 0,
-                "position": "forward_local",
-                "actor_action": True,
-                "compact_valid_index": 0,
-                "selected": True,
-            }
-        ],
-    )
+
+    def stream_rows(*_args: object, **kwargs: object) -> list[dict[str, object]]:
+        row = {
+            "scene": "scene",
+            "rollout_row_id": 1,
+            "step_row_id": 2,
+            "mixture": "forward_local",
+            "candidate_row_id": 0,
+            "position": "forward_local",
+            "actor_action": True,
+            "compact_valid_index": 0,
+            "selected": True,
+        }
+        callback = kwargs.get("row_callback")
+        assert callable(callback)
+        callback(row)
+        return []
+
+    monkeypatch.setattr(inspection, "candidate_audit_rows", stream_rows)
 
     result = candidate_family_preflight_from_reader(Reader())
 
     assert result.cells
+
+
+def test_lightweight_reader_is_constant_row_memory_and_matches_materialized_reduction(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from aria_nbv.rollouts import inspection
+
+    policy = _config(60)
+
+    class Reader:
+        def manifest(self) -> dict[str, object]:
+            return {
+                "manifest": {
+                    "generation": {
+                        "candidate_family_preflight": policy.to_payload(),
+                        "writer_config": {
+                            "candidate_mixture": {"components": [{"name": family} for family in FAMILIES]}
+                        },
+                    }
+                }
+            }
+
+    class TrackedRow(dict[str, object]):
+        live = 0
+        peak = 0
+
+        def __init__(self, candidate_id: int) -> None:
+            super().__init__(
+                scene="scene",
+                rollout_row_id=1,
+                step_row_id=2,
+                mixture=FAMILIES[candidate_id % len(FAMILIES)],
+                candidate_row_id=candidate_id,
+                position=FAMILIES[candidate_id % len(FAMILIES)],
+                actor_action=True,
+                compact_valid_index=candidate_id,
+                selected=False,
+                oracle_label=True,
+                target_root_gain=float(candidate_id % 5),
+                root_relative_x_m=0.0,
+                root_relative_y_m=0.0,
+                root_relative_z_m=0.0,
+            )
+            type(self).live += 1
+            type(self).peak = max(type(self).peak, type(self).live)
+
+        def __del__(self) -> None:
+            type(self).live -= 1
+
+    def audit(_reader: object, **kwargs: object) -> list[dict[str, object]]:
+        callback = kwargs.get("row_callback")
+        count = 20_000 if callable(callback) else 60
+        if callable(callback):
+            for candidate_id in range(count):
+                callback(TrackedRow(candidate_id))
+            return []
+        return [TrackedRow(candidate_id) for candidate_id in range(count)]
+
+    monkeypatch.setattr(inspection, "candidate_audit_rows", audit)
+    lightweight = benchmarks_from_reader(Reader(), candidate_limit=None, include_geometry=False)
+    gc.collect()
+
+    assert TrackedRow.live == 0
+    assert TrackedRow.peak < 10
+    assert sum(cell.attempted for cell in lightweight[0].families) == 20_000
+    assert lightweight[0].points == ()
+    assert lightweight[0].oracle_target_root_gains == ()
+    assert lightweight[0].oracle_target_root_gain_summary is not None
+
+    # Repeat with an identical bounded population through the materialized path.
+    def bounded_audit(_reader: object, **kwargs: object) -> list[dict[str, object]]:
+        rows = [TrackedRow(candidate_id) for candidate_id in range(60)]
+        callback = kwargs.get("row_callback")
+        if callable(callback):
+            for row in rows:
+                callback(row)
+            return []
+        return rows
+
+    monkeypatch.setattr(inspection, "candidate_audit_rows", bounded_audit)
+    lightweight_bounded = benchmarks_from_reader(Reader(), candidate_limit=None, include_geometry=False)
+    materialized = benchmarks_from_reader(Reader(), candidate_limit=None, include_geometry=True)
+    assert reduce_candidate_family_preflight(lightweight_bounded, policy).to_payload() == (
+        reduce_candidate_family_preflight(materialized, policy).to_payload()
+    )

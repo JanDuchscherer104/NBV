@@ -17,12 +17,15 @@ from aria_nbv.rollouts.candidate_benchmark import (
     SCHEMA_ID,
     CandidateBenchmark,
     CandidateFamilyCounts,
+    CandidateFamilyPreflightConfig,
     CandidatePoint,
+    CandidateSupportFailure,
     benchmarks_from_reader,
     candidate_support_metrics,
     circular_minimum_covering_span_deg,
     read_bundle,
     read_bundle_bytes,
+    reduce_candidate_family_preflight,
     reduce_candidate_records,
     serialize_bundle_bytes,
     sha256_bytes,
@@ -155,6 +158,7 @@ def _record() -> CandidateBenchmark:
         coordinates=((0.1, 0.2, 0.3), (-0.2, 0.3, 0.4)),
         lineage={"3": "cfg-a"},
         points=points,
+        oracle_target_root_gains=(0.1, 0.2),
     )
 
 
@@ -241,6 +245,38 @@ def test_serialized_bundle_is_byte_stable_and_round_trips_with_binding() -> None
         (point.candidate_id, tuple(point.xyz), point.family, point.selected) for point in expected.points
     ]
     assert actual.families == expected.families
+    assert actual.oracle_target_root_gains == expected.oracle_target_root_gains
+
+
+def test_bundle_round_trip_preserves_state_conditional_flat_gain_verdict() -> None:
+    record = _record()
+    record = CandidateBenchmark(
+        state_key=record.state_key,
+        scene_key=record.scene_key,
+        families=record.families,
+        candidate_ids=record.candidate_ids,
+        coordinates=record.coordinates,
+        points=record.points,
+        oracle_target_root_gains=(0.1, 0.10001),
+    )
+    policy = CandidateFamilyPreflightConfig(
+        query_width=4,
+        configured_families=("forward", "target"),
+        target_aware_families=("target",),
+        forward_family="forward",
+        min_selected_target_aware_total=0,
+        flat_gain_tolerance=1.0e-4,
+    )
+    before = reduce_candidate_family_preflight((record,), policy)
+    loaded = read_bundle_bytes(
+        serialize_bundle_bytes((record,), provenance=_binding()), expected_binding=_binding()
+    ).records
+    after = reduce_candidate_family_preflight(loaded, policy)
+
+    assert after.flat_gain == before.flat_gain
+    assert after.go == before.go
+    assert [blocker.code for blocker in after.blockers] == [blocker.code for blocker in before.blockers]
+    assert CandidateSupportFailure.FLAT_GAIN in {blocker.code for blocker in after.blockers}
 
 
 @pytest.mark.parametrize("mutation", ["stale", "missing", "nonhex", "allzero"])
@@ -287,6 +323,8 @@ def test_bundle_is_immutable_and_rejects_overwrite_or_unexpected_files(tmp_path:
         {"candidate_ids": [1], "coordinates": []},
         {"coordinates": [[float("nan"), 0.0, 0.0]]},
         {"candidate_ids": [1], "coordinates": [[0.0, 0.0, 0.0]], "points": []},
+        {"oracle_target_root_gains": [float("nan")]},
+        {"oracle_target_root_gains": [[1.0]]},
     ],
 )
 def test_reducer_rejects_malformed_contract_fields(changes: dict[str, Any]) -> None:

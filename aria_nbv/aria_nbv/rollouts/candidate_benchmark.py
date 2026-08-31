@@ -30,7 +30,9 @@ from ..utils.fingerprints import stable_msgspec_hash
 if TYPE_CHECKING:
     from ..pose_generation.types import CandidateSamplingResult
 
-SCHEMA_ID = "aria-nbv-candidate-benchmark-v1"
+SCHEMA_ID = "aria-nbv-candidate-benchmark-v2"
+LEGACY_SCHEMA_ID = "aria-nbv-candidate-benchmark-v1"
+BUNDLE_SCHEMA_REVISION = 2
 CANDIDATE_SUPPORT_METRICS_REVISION = 1
 FAMILY_PREFLIGHT_SCHEMA_ID = "aria-nbv-candidate-family-preflight-v3"
 FAMILY_PHASE_A_SCHEMA_ID = "aria-nbv-candidate-family-phase-a-evidence-v4"
@@ -196,7 +198,7 @@ def canonical_generation_revision_hash(payload: Mapping[str, Any]) -> str:
     for name in ("uv_lock_sha256", "content_bundle_hash"):
         if not re.fullmatch(r"[0-9a-f]{64}", values[name]):
             raise ValueError(f"Phase-A generation revision {name} must be a SHA-256 identity")
-    return stable_msgspec_hash(values)
+    return cast(str, stable_msgspec_hash(values))
 
 
 def aggregate_store_content_sha256(store_seals: Mapping[str, str]) -> str:
@@ -645,7 +647,7 @@ class CandidateFamilyPhaseAEvidence:
             "target_state_count": self.target_state_count,
             "excluded_source_rows": dict(self.excluded_source_rows),
             "oracle_labels_included": False,
-            "records": [record.to_record() for record in self.records],
+            "records": [record.to_phase_a_record() for record in self.records],
             "preflight": self.preflight.to_payload(),
             "broad_generation_admitted": False,
             "broad_generation_blocker": "broad_generation_blocked_pending_wp18",
@@ -969,6 +971,7 @@ class CandidateBenchmark:
     lineage: Mapping[str, str] = field(default_factory=dict)
     points: tuple[CandidatePoint, ...] = ()
     oracle_target_root_gains: tuple[float, ...] = ()
+    oracle_target_root_gain_summary: "CandidateOracleGainSummary | None" = None
 
     def __post_init__(self) -> None:
         if not self.state_key or not self.scene_key:
@@ -989,12 +992,19 @@ class CandidateBenchmark:
                 raise ValueError("candidate points must align exactly with candidate ids and coordinates")
         if not all(math.isfinite(value) for value in self.oracle_target_root_gains):
             raise ValueError("oracle target-root gains must be finite")
+        if self.oracle_target_root_gains and self.oracle_target_root_gain_summary is not None:
+            expected = CandidateOracleGainSummary.from_values(self.oracle_target_root_gains)
+            if self.oracle_target_root_gain_summary != expected:
+                raise ValueError("oracle target-root gain summary disagrees with the retained gains")
         for mapping_name in ("geometry", "diversity", "timings_ms", "resources", "provenance", "lineage"):
             value = getattr(self, mapping_name)
             object.__setattr__(self, mapping_name, MappingProxyType(dict(value)))
 
     def to_record(self) -> dict[str, Any]:
         """Flatten facts into one deterministic row for Parquet."""
+
+        if self.oracle_target_root_gain_summary is not None and not self.oracle_target_root_gains:
+            raise ValueError("lightweight oracle-gain summaries cannot be serialized as complete benchmark rows")
 
         return {
             "scene_key": self.scene_key,
@@ -1009,7 +1019,54 @@ class CandidateBenchmark:
             "coordinates": [list(point) for point in self.coordinates],
             "lineage": _json_field(self.lineage),
             "points": [asdict(point) for point in self.points],
+            "oracle_target_root_gains": list(self.oracle_target_root_gains),
         }
+
+    def to_phase_a_record(self) -> dict[str, Any]:
+        """Project the historical label-free Phase-A row without v2 gain columns.
+
+        The authenticated Phase-A artifact predates benchmark bundle schema v2
+        and is explicitly forbidden from containing oracle reward labels. This
+        projection keeps that artifact byte-stable while :meth:`to_record`
+        owns the current complete benchmark-bundle schema.
+        """
+
+        if self.oracle_target_root_gains or (
+            self.oracle_target_root_gain_summary is not None and self.oracle_target_root_gain_summary.count
+        ):
+            raise ValueError("Phase-A records cannot contain oracle target-root gains")
+        record = self.to_record()
+        record.pop("oracle_target_root_gains")
+        return record
+
+
+@dataclass(frozen=True, slots=True)
+class CandidateOracleGainSummary:
+    """Constant-size sufficient statistics for state-conditional flat gain."""
+
+    count: int
+    minimum: float | None
+    maximum: float | None
+
+    def __post_init__(self) -> None:
+        if self.count < 0:
+            raise ValueError("oracle gain count must be non-negative")
+        if self.count == 0:
+            if self.minimum is not None or self.maximum is not None:
+                raise ValueError("empty oracle gain summaries cannot define a range")
+            return
+        if self.minimum is None or self.maximum is None:
+            raise ValueError("non-empty oracle gain summaries require both range endpoints")
+        if not math.isfinite(self.minimum) or not math.isfinite(self.maximum) or self.minimum > self.maximum:
+            raise ValueError("oracle gain summary range must be finite and ordered")
+
+    @classmethod
+    def from_values(cls, values: Collection[float]) -> "CandidateOracleGainSummary":
+        """Reduce finite retained labels into their exact sufficient statistics."""
+
+        if not values:
+            return cls(0, None, None)
+        return cls(len(values), min(values), max(values))
 
 
 @dataclass(frozen=True, slots=True)
@@ -1054,6 +1111,7 @@ def select_candidate_family_shell(
                 lineage=record.lineage,
                 points=points,
                 oracle_target_root_gains=record.oracle_target_root_gains,
+                oracle_target_root_gain_summary=record.oracle_target_root_gain_summary,
             )
         )
     return tuple(selected_records)
@@ -1287,6 +1345,153 @@ def reduce_candidate_records(records: list[Mapping[str, Any]]) -> tuple[Candidat
     return tuple(sorted(result, key=lambda item: (item.scene_key, item.state_key)))
 
 
+@dataclass(slots=True)
+class _ConsistentAuditValue:
+    """Track one optional scalar's consensus in constant memory."""
+
+    value: Any = None
+    observed: bool = False
+    mixed: bool = False
+
+    def add(self, value: Any) -> None:
+        if value is None or self.mixed:
+            return
+        if not self.observed:
+            self.value = value
+            self.observed = True
+        elif value != self.value:
+            self.value = None
+            self.mixed = True
+
+    def result(self) -> Any:
+        return self.value if self.observed and not self.mixed else None
+
+
+@dataclass(slots=True)
+class _FamilyAuditAccumulator:
+    """Bounded sufficient statistics for one factual state/family cell."""
+
+    attempted: int = 0
+    valid: int = 0
+    selected: int = 0
+    invalid_reason_bitsets: set[int] = field(default_factory=set)
+    first_failures: dict[str, int] = field(default_factory=dict)
+    margins: dict[str, float] = field(default_factory=dict)
+    refill_rounds: _ConsistentAuditValue = field(default_factory=_ConsistentAuditValue)
+    fallback_used: _ConsistentAuditValue = field(default_factory=_ConsistentAuditValue)
+    support_failure: _ConsistentAuditValue = field(default_factory=_ConsistentAuditValue)
+
+    def add(self, row: Mapping[str, Any]) -> None:
+        self.attempted += 1
+        actor_valid = bool(row.get("actor_action"))
+        self.valid += int(actor_valid)
+        self.selected += int(int(row.get("compact_valid_index", -1)) >= 0)
+        if not actor_valid:
+            self.invalid_reason_bitsets.add(int(row.get("invalid_reason_bitset") or 0))
+            reason = str(row.get("invalid_reason") or "unknown")
+            self.first_failures[reason] = self.first_failures.get(reason, 0) + 1
+        for name in (
+            "free_space_margin_m",
+            "mesh_distance_m",
+            "path_min_clearance_m",
+            "target_pixel_margin_px",
+        ):
+            value = _finite_value(row.get(name))
+            if value is not None:
+                self.margins[name] = min(value, self.margins.get(name, value))
+        self.refill_rounds.add(None if row.get("refill_rounds") is None else int(row["refill_rounds"]))
+        self.fallback_used.add(None if row.get("fallback_used") is None else bool(row["fallback_used"]))
+        self.support_failure.add(None if row.get("support_failure") is None else str(row["support_failure"]))
+
+    def finish(self, family: str, *, configured: bool) -> CandidateFamilyCounts:
+        first_failure = (
+            min(self.first_failures, key=lambda reason: (-self.first_failures[reason], reason))
+            if self.first_failures
+            else None
+        )
+        return CandidateFamilyCounts(
+            family=family,
+            applicable=True if configured else None,
+            attempted=self.attempted,
+            valid=self.valid,
+            selected=self.selected,
+            denominator=self.attempted,
+            reason=None if configured else "unavailable_in_legacy_store",
+            invalid_reason_bitsets=tuple(sorted(self.invalid_reason_bitsets)),
+            first_failure=first_failure,
+            margins=self.margins,
+            refill_rounds=cast(int | None, self.refill_rounds.result()),
+            fallback_used=cast(bool | None, self.fallback_used.result()),
+            support_failure=cast(str | None, self.support_failure.result()),
+        )
+
+
+@dataclass(slots=True)
+class _StateAuditAccumulator:
+    """Constant-per-cell audit state used by complete preflight reads."""
+
+    families: dict[str, _FamilyAuditAccumulator] = field(default_factory=dict)
+    oracle_count: int = 0
+    oracle_minimum: float | None = None
+    oracle_maximum: float | None = None
+
+    def add(self, row: Mapping[str, Any]) -> None:
+        family = str(row["mixture"])
+        self.families.setdefault(family, _FamilyAuditAccumulator()).add(row)
+        gain = _finite_value(row.get("target_root_gain")) if bool(row.get("oracle_label")) else None
+        if gain is not None:
+            self.oracle_count += 1
+            self.oracle_minimum = gain if self.oracle_minimum is None else min(self.oracle_minimum, gain)
+            self.oracle_maximum = gain if self.oracle_maximum is None else max(self.oracle_maximum, gain)
+
+    def gain_summary(self) -> CandidateOracleGainSummary:
+        return CandidateOracleGainSummary(self.oracle_count, self.oracle_minimum, self.oracle_maximum)
+
+
+def _lightweight_benchmarks_from_reader(
+    reader: Any,
+    *,
+    state_key: str | None,
+    candidate_limit: int | None,
+    requested_state: tuple[int, int] | None,
+    configured_families: tuple[str, ...],
+) -> tuple[CandidateBenchmark, ...]:
+    """Stream audit rows into bounded state/family sufficient statistics."""
+
+    from .inspection import candidate_audit_rows
+
+    states: dict[tuple[str, str], _StateAuditAccumulator] = {}
+
+    def accumulate(row: Mapping[str, Any]) -> None:
+        identity = (str(row["scene"]), f"rollout:{row['rollout_row_id']}/step:{row['step_row_id']}")
+        states.setdefault(identity, _StateAuditAccumulator()).add(row)
+
+    kwargs: dict[str, Any] = {"limit": candidate_limit, "row_callback": accumulate}
+    if state_key is not None:
+        assert requested_state is not None
+        kwargs.update(rollout_row_id=requested_state[0], step_row_id=requested_state[1])
+    candidate_audit_rows(reader, **kwargs)
+
+    configured = set(configured_families)
+    result = []
+    for (scene, state), audit in sorted(states.items()):
+        family_names = sorted(set(audit.families) | configured)
+        families = tuple(
+            audit.families.get(family, _FamilyAuditAccumulator()).finish(family, configured=family in configured)
+            for family in family_names
+        )
+        result.append(
+            CandidateBenchmark(
+                scene_key=scene,
+                state_key=state,
+                families=families,
+                lineage={"family_identity": "mixture_component", "representation": "lightweight_audit_accumulator"},
+                oracle_target_root_gain_summary=audit.gain_summary(),
+            )
+        )
+    return tuple(result)
+
+
 def benchmarks_from_reader(
     reader: Any,
     *,
@@ -1319,6 +1524,14 @@ def benchmarks_from_reader(
             return ()
         requested_state = (int(match.group(1)), int(match.group(2)))
         requested_rollout_ids = (requested_state[0],)
+    if not include_geometry:
+        return _lightweight_benchmarks_from_reader(
+            reader,
+            state_key=state_key,
+            candidate_limit=candidate_limit,
+            requested_state=requested_state,
+            configured_families=configured_families,
+        )
     projection = None
     if include_geometry and hasattr(reader, "root"):
         projection = proposal_support_geometry(
@@ -1336,28 +1549,14 @@ def benchmarks_from_reader(
         grouped.setdefault(key, {}).setdefault(str(row["mixture"]), []).append(row)
 
     if state_key is None:
-        audit_rows = (
-            candidate_audit_rows(reader, limit=candidate_limit)
-            if include_geometry
-            else candidate_audit_rows(reader, limit=candidate_limit, row_callback=retain_audit_row)
-        )
+        audit_rows = candidate_audit_rows(reader, limit=candidate_limit)
     else:
         assert requested_state is not None
-        audit_rows = (
-            candidate_audit_rows(
-                reader,
-                rollout_row_id=requested_state[0],
-                step_row_id=requested_state[1],
-                limit=candidate_limit,
-            )
-            if include_geometry
-            else candidate_audit_rows(
-                reader,
-                rollout_row_id=requested_state[0],
-                step_row_id=requested_state[1],
-                limit=candidate_limit,
-                row_callback=retain_audit_row,
-            )
+        audit_rows = candidate_audit_rows(
+            reader,
+            rollout_row_id=requested_state[0],
+            step_row_id=requested_state[1],
+            limit=candidate_limit,
         )
     for row in audit_rows:
         retain_audit_row(row)
@@ -1604,6 +1803,19 @@ def _finite_value(value: Any) -> float | None:
     return result if math.isfinite(result) else None
 
 
+def _oracle_gain_summary(record: CandidateBenchmark) -> CandidateOracleGainSummary:
+    """Return exact state-level label statistics without requiring retained rows."""
+
+    if record.oracle_target_root_gain_summary is not None:
+        return record.oracle_target_root_gain_summary
+    if record.oracle_target_root_gains:
+        return CandidateOracleGainSummary.from_values(record.oracle_target_root_gains)
+    point_values = tuple(
+        point.target_root_gain for point in record.points if point.oracle_label and point.target_root_gain is not None
+    )
+    return CandidateOracleGainSummary.from_values(point_values)
+
+
 def reduce_candidate_family_preflight(
     records: Iterable[CandidateBenchmark],
     config: CandidateFamilyPreflightConfig,
@@ -1723,19 +1935,13 @@ def reduce_candidate_family_preflight(
                 )
             )
 
-    labels_by_state = {
-        (record.scene_key, record.state_key): record.oracle_target_root_gains
-        or tuple(
-            point.target_root_gain
-            for point in record.points
-            if point.oracle_label and point.target_root_gain is not None
-        )
-        for record in records
-    }
+    label_summaries = {(record.scene_key, record.state_key): _oracle_gain_summary(record) for record in records}
     eligible_state_ranges = {
-        identity: max(values) - min(values) for identity, values in labels_by_state.items() if len(values) >= 2
+        identity: cast(float, summary.maximum) - cast(float, summary.minimum)
+        for identity, summary in label_summaries.items()
+        if summary.count >= 2
     }
-    label_denominator = sum(len(values) for values in labels_by_state.values())
+    label_denominator = sum(summary.count for summary in label_summaries.values())
     if eligible_state_ranges:
         observed_range = min(eligible_state_ranges.values())
         failing_states = {
@@ -2096,6 +2302,7 @@ def write_bundle(
             "coordinates",
             "lineage",
             "points",
+            "oracle_target_root_gains",
         ],
     )
     with tempfile.TemporaryDirectory(dir=destination.parent) as temp:
@@ -2123,7 +2330,7 @@ def write_bundle(
             "schema_id": SCHEMA_ID,
             "evidence_class": "candidate_benchmark",
             "completion": "complete",
-            "revision": 1,
+            "revision": BUNDLE_SCHEMA_REVISION,
             "record_count": len(rows),
             "data_sha256": data_hash,
             "provenance": _canonical(provenance_payload),
@@ -2324,11 +2531,12 @@ def _read_bundle_payload(
     required = {"schema_id", "evidence_class", "completion", "revision", "record_count", "data_sha256", "provenance"}
     if set(manifest) != required:
         raise ValueError("schema-mismatched candidate benchmark bundle")
+    schema_id = manifest.get("schema_id")
+    schema_revision = manifest.get("revision")
     if (
-        manifest.get("schema_id") != SCHEMA_ID
+        (schema_id, schema_revision) not in {(SCHEMA_ID, BUNDLE_SCHEMA_REVISION), (LEGACY_SCHEMA_ID, 1)}
         or manifest.get("evidence_class") != "candidate_benchmark"
         or manifest.get("completion") != "complete"
-        or manifest.get("revision") != 1
         or not isinstance(manifest.get("record_count"), int)
         or manifest.get("record_count") < 0
         or not isinstance(manifest.get("data_sha256"), str)
@@ -2371,6 +2579,8 @@ def _read_bundle_payload(
         "lineage",
         "points",
     }
+    if schema_id == SCHEMA_ID:
+        expected_columns.add("oracle_target_root_gains")
     if set(frame.columns) != expected_columns:
         raise ValueError("schema-mismatched candidate benchmark columns")
     if len(frame) != manifest.get("record_count"):
@@ -2390,6 +2600,7 @@ __all__ = [
     "CandidateBenchmark",
     "CandidateBenchmarkBundle",
     "CandidateBenchmarkSource",
+    "CandidateOracleGainSummary",
     "CandidateFamilyPhaseAExpectation",
     "CandidateFamilyPhaseAEvidence",
     "CandidateFamilyPreflight",
