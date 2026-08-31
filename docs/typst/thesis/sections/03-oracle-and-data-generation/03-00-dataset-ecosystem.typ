@@ -52,8 +52,10 @@ stores them beside logged streams.
 
 EFM3D releases ground-truth meshes for its simulated validation setting. The
 local ATEK--EFM inventory used for this mesh-evaluation protocol contains 100
-scene directories, or $100 / 100,000 = 0.1$ percent of the full ASE scene
-count. This is a deliberately bounded local evaluation scope. The logarithmic
+scene directories, and the local GT-mesh inventory has the same 100 scene IDs
+(recorded in the immutable gallery manifest). This is $100 / 100,000 = 0.1$
+percent of the full ASE scene count and a deliberately bounded local evaluation
+scope. The logarithmic
 comparison in @fig:thesis-ase-mesh-scope makes the three-order-of-magnitude
 gap explicit, preventing the 100-scene result from being read as a property of
 the entire 100,000-scene release.
@@ -62,6 +64,7 @@ the entire 100,000-scene release.
 // - @ProjectAria-ASE-2025 -> https://facebookresearch.github.io/projectaria_tools/docs/open_datasets/aria_synthetic_environments_dataset (100,000 scenes and aggregate scale, checked 2026-08-31)
 // - @EFM3D-straub2024 -> docs/literature/tex-src/arXiv-EFM3D/dataset.tex:30-30 (simulated-validation ground-truth meshes)
 // - docs/contents/ase_dataset.qmd:42-52 (100 local scene directories and 4,608 local snippet windows)
+// - docs/typst/thesis/data/ase-figure-gallery/manifest.json (schema v1: matching 100-scene ATEK and GT-mesh inventories; exact IDs and mesh-statistics digest)
 
 #figure(
   image(
