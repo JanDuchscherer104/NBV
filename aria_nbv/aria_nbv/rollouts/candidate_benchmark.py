@@ -990,8 +990,8 @@ class CandidateBenchmark:
         for candidate_id, coordinate, point in zip(self.candidate_ids, self.coordinates, self.points, strict=True):
             if point.candidate_id != candidate_id or point.state_key != self.state_key or point.xyz != coordinate:
                 raise ValueError("candidate points must align exactly with candidate ids and coordinates")
-        if not all(math.isfinite(value) for value in self.oracle_target_root_gains):
-            raise ValueError("oracle target-root gains must be finite")
+        normalized_gains = tuple(_oracle_gain_scalar(value) for value in self.oracle_target_root_gains)
+        object.__setattr__(self, "oracle_target_root_gains", normalized_gains)
         if self.oracle_target_root_gains and self.oracle_target_root_gain_summary is not None:
             expected = CandidateOracleGainSummary.from_values(self.oracle_target_root_gains)
             if self.oracle_target_root_gain_summary != expected:
@@ -1335,7 +1335,9 @@ def reduce_candidate_records(records: list[Mapping[str, Any]]) -> tuple[Candidat
                 )
                 for point in record.get("points", ())
             ),
-            oracle_target_root_gains=tuple(float(value) for value in record.get("oracle_target_root_gains", ())),
+            oracle_target_root_gains=tuple(
+                _oracle_gain_scalar(value) for value in record.get("oracle_target_root_gains", ())
+            ),
         )
         key = (dto.scene_key, dto.state_key)
         if key in keys:
@@ -1801,6 +1803,17 @@ def _finite_value(value: Any) -> float | None:
     except (TypeError, ValueError):
         return None
     return result if math.isfinite(result) else None
+
+
+def _oracle_gain_scalar(value: Any) -> float:
+    """Validate one canonical reward label without coercing malformed values."""
+
+    if isinstance(value, bool) or not isinstance(value, (int, float, np.integer, np.floating)):
+        raise ValueError("oracle target-root gains must be numeric scalars")
+    result = float(value)
+    if not math.isfinite(result):
+        raise ValueError("oracle target-root gains must be finite")
+    return result
 
 
 def _oracle_gain_summary(record: CandidateBenchmark) -> CandidateOracleGainSummary:

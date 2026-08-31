@@ -325,6 +325,8 @@ def test_bundle_is_immutable_and_rejects_overwrite_or_unexpected_files(tmp_path:
         {"candidate_ids": [1], "coordinates": [[0.0, 0.0, 0.0]], "points": []},
         {"oracle_target_root_gains": [float("nan")]},
         {"oracle_target_root_gains": [[1.0]]},
+        {"oracle_target_root_gains": [True]},
+        {"oracle_target_root_gains": ["1.0"]},
     ],
 )
 def test_reducer_rejects_malformed_contract_fields(changes: dict[str, Any]) -> None:
