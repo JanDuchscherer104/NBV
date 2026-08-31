@@ -8,8 +8,9 @@ import pandas as pd
 import plotly.express as px
 import streamlit as st
 
+from ....rollouts.candidate_benchmark import CandidateFamilySelection, select_candidate_family_shell
 from ....rollouts.candidate_support_plotting import candidate_benchmark_figures as _candidate_benchmark_figures
-from ....rollouts.candidate_support_plotting import candidate_family_preflight_figures
+from ....rollouts.candidate_support_plotting import candidate_family_preflight_figures, candidate_support_figures
 from ...scientific_labels import TheoryReferences
 from .candidate_generation import (
     _render_candidate_aggregate_breakdowns,
@@ -136,6 +137,40 @@ def _render_candidate_benchmark_card(session_handle: Any) -> None:
                     source_fields=("candidate_family_preflight",),
                 ),
             )
+        selectable = tuple(
+            CandidateFamilySelection(state_key, cell.family)
+            for state_key, cell in gate.cells
+            if any(
+                record.state_key == state_key and any(family.family == cell.family for family in record.families)
+                for record in retained.records
+            )
+        )
+        if selectable:
+            selection_by_label = {f"{value.state_key} · {value.family}": value for value in selectable}
+            selected_label = st.selectbox(
+                "Inspect one state × family shell",
+                tuple(selection_by_label),
+                key=f"candidate-family-shell:{store_identity}",
+                help="Drives the existing target-aligned 2-D and 3-D candidate-shell views.",
+            )
+            selection = selection_by_label[selected_label]
+            shell = select_candidate_family_shell(retained.records, selection)
+            for figure in candidate_support_figures(shell)[:2]:
+                _render_plot(
+                    figure,
+                    ScientificExplanation(
+                        question="Where is the selected factual-state family supported?",
+                        answer="The existing target-aligned shell is filtered by the selected state and persisted family identity.",
+                        sections=(
+                            ExplanationSection(
+                                "Selection semantics",
+                                "The adapter selects only persisted points; it does not recompute geometry or candidate validity.",
+                            ),
+                        ),
+                        evidence_role="derived training data",
+                        source_fields=("candidate_family_preflight", "candidate_benchmark.parquet"),
+                    ),
+                )
     st.markdown("#### Candidate benchmark support")
     for figure in _candidate_benchmark_figures(
         retained.records,

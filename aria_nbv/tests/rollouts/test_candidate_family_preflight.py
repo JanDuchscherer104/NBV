@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+import pickle
+from dataclasses import replace
+from pathlib import Path
+
 import pytest
 import torch
 from efm3d.aria.camera import CameraTW
@@ -11,11 +15,19 @@ from aria_nbv.pose_generation.types import CandidateSamplingResult
 from aria_nbv.rollouts.candidate_benchmark import (
     CandidateBenchmark,
     CandidateFamilyCounts,
+    CandidateFamilyPhaseAEvidence,
+    CandidateFamilyPhaseAExpectation,
     CandidateFamilyPreflightConfig,
+    CandidateFamilySelection,
     CandidatePoint,
+    CandidatePopulationCoverage,
     CandidateSupportFailure,
     benchmark_from_sampling_result,
+    candidate_family_preflight_from_reader,
+    read_candidate_family_phase_a,
     reduce_candidate_family_preflight,
+    select_candidate_family_shell,
+    write_candidate_family_phase_a,
 )
 from aria_nbv.rollouts.candidate_support_plotting import candidate_family_preflight_figures
 
@@ -105,16 +117,53 @@ def test_inapplicable_is_visible_non_failing_but_unknown_fails_closed() -> None:
     assert CandidateSupportFailure.UNKNOWN_FAMILY_APPLICABILITY in {blocker.code for blocker in unknown.blockers}
 
 
+def test_inapplicable_recorded_failure_remains_visible_but_nonblocking() -> None:
+    record = _record(state="na", applicable=(True, True, False), selected=(1, 2, 0))
+    lateral = record.families[2]
+    record = CandidateBenchmark(
+        state_key=record.state_key,
+        scene_key=record.scene_key,
+        families=(*record.families[:2], replace(lateral, support_failure="target unavailable")),
+    )
+
+    result = reduce_candidate_family_preflight((record,), _config())
+
+    assert not any(blocker.family == "lateral_target_bypass" for blocker in result.blockers)
+    assert result.cells[2][1].support_failure == "target unavailable"
+
+
+def test_empty_population_fails_with_typed_coverage_blocker() -> None:
+    result = reduce_candidate_family_preflight((), _config())
+
+    assert result.go is False
+    assert CandidateSupportFailure.MISSING_POPULATION_COVERAGE in {blocker.code for blocker in result.blockers}
+
+
 def test_flat_gain_uses_exact_label_denominator_and_is_unavailable_without_oracle() -> None:
     passed = reduce_candidate_family_preflight((_record(state="pass", gains=(0.0, 0.2)),), _config())
     failed = reduce_candidate_family_preflight((_record(state="fail", gains=(0.1, 0.10001)),), _config())
     unavailable = reduce_candidate_family_preflight((_record(state="phase-a"),), _config())
     assert passed.flat_gain.available and passed.flat_gain.passed and passed.flat_gain.denominator == 2
+    assert passed.flat_gain.eligible_state_denominator == 1
     assert failed.flat_gain.available and failed.flat_gain.passed is False and failed.flat_gain.denominator == 2
     assert CandidateSupportFailure.FLAT_GAIN in {blocker.code for blocker in failed.blockers}
     assert unavailable.flat_gain.available is False
     assert unavailable.flat_gain.passed is None
     assert unavailable.flat_gain.denominator == 0
+
+
+def test_flat_gain_is_state_conditional_not_population_pooled() -> None:
+    varied = _record(state="varied", gains=(0.0, 1.0))
+    flat = _record(state="flat", gains=(100.0, 100.0))
+
+    result = reduce_candidate_family_preflight((varied, flat), _config())
+
+    assert result.flat_gain.denominator == 4
+    assert result.flat_gain.eligible_state_denominator == 2
+    assert result.flat_gain.observed_range == pytest.approx(0.0)
+    assert any(
+        blocker.code is CandidateSupportFailure.FLAT_GAIN and blocker.state_key == "flat" for blocker in result.blockers
+    )
 
 
 def test_preflight_figures_encode_applicability_and_all_three_stages() -> None:
@@ -124,6 +173,7 @@ def test_preflight_figures_encode_applicability_and_all_three_stages() -> None:
     )
     heatmap, funnel = candidate_family_preflight_figures(result)
     assert set(heatmap.data[0].text[0]) == {"20%", "N/A", "?"}
+    assert len(heatmap.layout.shapes) == 5
     assert {trace.name for trace in funnel.data} == {"attempted", "valid", "selected"}
 
 
@@ -184,3 +234,111 @@ def test_sampling_result_reducer_preserves_full_shell_reasons_and_margins() -> N
     assert target.first_failure in {"POSE_OUT_OF_EXTENT", "CLEARANCE_TOO_SMALL"}
     assert target.margins == pytest.approx({"free_space_margin_m": -0.2, "mesh_distance_m": 0.05})
     assert all(point.oracle_label is False and point.selected is False for point in record.points)
+
+
+def test_margins_are_immutable_while_preflight_payload_is_pickleable() -> None:
+    result = reduce_candidate_family_preflight((_record(state="immutable"),), _config())
+    with pytest.raises(TypeError):
+        result.cells[0][1].margins["free_space_margin_m"] = 2.0  # type: ignore[index]
+
+    assert pickle.loads(pickle.dumps(result.to_payload())) == result.to_payload()
+
+
+def test_family_selection_filters_the_existing_shell_without_recomputing() -> None:
+    record = _record(state="select", gains=(0.0, 1.0, 2.0))
+
+    selected = select_candidate_family_shell(
+        (record,),
+        CandidateFamilySelection("select", "target_bearing_local"),
+    )
+
+    assert len(selected) == 1
+    assert [family.family for family in selected[0].families] == ["target_bearing_local"]
+    assert {point.family for point in selected[0].points} == {"target_bearing_local"}
+
+
+def test_phase_a_reader_validates_compact_content_source_policy_and_revision(tmp_path: Path) -> None:
+    record = _record(state="phase-a", selected=(1, 2, 1))
+    config = replace(_config(), expected_population_size=1)
+    preflight = reduce_candidate_family_preflight(
+        (record,),
+        config,
+        coverage=CandidatePopulationCoverage(1, 1, 1, 1, 1),
+    )
+    revision = {
+        "contract_revision": "candidate-family-phase-a-v2",
+        "clean_commit": "a" * 40,
+        "head_tree": "b" * 40,
+        "uv_lock_sha256": "c" * 64,
+        "content_bundle_hash": "d" * 64,
+        "revision_hash": "0123456789abcdef",
+    }
+    evidence = CandidateFamilyPhaseAEvidence(
+        source_manifest_sha256="e" * 64,
+        source_store_manifest_hash="f" * 16,
+        source_cache_version="source-cache-v1",
+        split_manifest_hash="split-v1",
+        source_store_dir="source-store",
+        writer_config_sha256="1" * 64,
+        implementation_revision="a" * 40,
+        generation_revision=revision,
+        runtime_identity={
+            "python": "3.11.15",
+            "torch": "2.7.1",
+            "cuda": "12.8",
+            "pytorch3d": "0.7.8",
+            "gpu_name": "fixture",
+            "gpu_capability": "8.9",
+        },
+        source_row_count=1,
+        scene_count=1,
+        target_state_count=1,
+        excluded_source_rows={},
+        records=(record,),
+        preflight=preflight,
+    )
+    expected = CandidateFamilyPhaseAExpectation(
+        source_manifest_sha256="e" * 64,
+        source_store_manifest_hash="f" * 16,
+        source_cache_version="source-cache-v1",
+        split_manifest_hash="split-v1",
+        source_store_dir="source-store",
+        writer_config_sha256="1" * 64,
+        generation_revision_hash="0123456789abcdef",
+    )
+    path = write_candidate_family_phase_a(tmp_path / "phase-a.json", evidence)
+
+    assert len(path.read_text(encoding="utf-8").splitlines()) == 1
+    assert read_candidate_family_phase_a(path, expected=expected).to_payload() == evidence.to_payload()
+
+    tampered = path.read_text(encoding="utf-8").replace('"selected":2', '"selected":1', 1)
+    path.write_text(tampered, encoding="utf-8")
+    with pytest.raises(ValueError, match="content hash mismatch"):
+        read_candidate_family_phase_a(path, expected=expected)
+
+
+def test_reader_uses_persisted_query_width_and_fails_closed_without_policy(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import aria_nbv.rollouts.candidate_benchmark as benchmark_module
+
+    record = _record(state="reader", valid=(5, 5, 4))
+    monkeypatch.setattr(benchmark_module, "benchmarks_from_reader", lambda *_args, **_kwargs: (record,))
+
+    class Reader:
+        def __init__(self, policy: object) -> None:
+            self.policy = policy
+
+        def manifest(self) -> dict[str, object]:
+            return {"manifest": {"generation": {"candidate_family_preflight": self.policy}}}
+
+    persisted = candidate_family_preflight_from_reader(
+        Reader(_config(60).to_payload()),
+        require_known_applicability=True,
+    )
+    missing = candidate_family_preflight_from_reader(Reader(None), require_known_applicability=True)
+
+    assert persisted.query_width == 60
+    assert persisted.resolved_min_valid == 15
+    assert CandidateSupportFailure.LOW_ROOT_SUPPORT in {blocker.code for blocker in persisted.blockers}
+    assert CandidateSupportFailure.MISSING_PRODUCTION_PROVENANCE in {blocker.code for blocker in missing.blockers}

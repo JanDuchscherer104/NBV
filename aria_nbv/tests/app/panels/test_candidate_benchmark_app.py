@@ -3,13 +3,16 @@
 from __future__ import annotations
 
 import json
+import pickle
 from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
+import pytest
 from streamlit.testing.v1 import AppTest
 from typer.testing import CliRunner
 
+from aria_nbv.app.panels._stored_rollouts import session as session_module
 from aria_nbv.app.panels._stored_rollouts.session import CandidateBenchmarkBuildResult
 from aria_nbv.rollouts.candidate_benchmark import (
     BINDING_KEYS,
@@ -51,12 +54,18 @@ def _record() -> CandidateBenchmark:
     return CandidateBenchmark(
         "state-1",
         "scene-a",
-        (CandidateFamilyCounts("forward", True, 1, 1, 1, 1),),
-        candidate_ids=(1,),
-        coordinates=((0.1, 0.2, 0.3),),
+        (
+            CandidateFamilyCounts("forward", True, 1, 1, 1, 1),
+            CandidateFamilyCounts("target", True, 1, 1, 1, 1),
+        ),
+        candidate_ids=(1, 2),
+        coordinates=((0.1, 0.2, 0.3), (0.4, 0.5, 0.6)),
         points=(
             CandidatePoint(
                 1, (0.1, 0.2, 0.3), "forward", "forward_local", True, True, "state-1", "cfg", "roll", "branch"
+            ),
+            CandidatePoint(
+                2, (0.4, 0.5, 0.6), "target", "target_bearing_local", True, True, "state-1", "cfg", "roll", "branch"
             ),
         ),
     )
@@ -89,8 +98,8 @@ class FakeSession:
             family_preflight=reduce_candidate_family_preflight(
                 (_record(),),
                 CandidateFamilyPreflightConfig(
-                    query_width=1,
-                    configured_families=("forward",),
+                    query_width=2,
+                    configured_families=("forward", "target"),
                     target_aware_families=(),
                 ),
             ),
@@ -122,11 +131,13 @@ def test_candidate_benchmark_card_requires_build_and_reuses_retained_result_on_u
     assert not app.exception
     assert app.session_state["benchmark_records_calls"] == [{"state_key": "state-1", "candidate_limit": 123}]
     assert app.session_state["benchmark_export_calls"] == [{"state_key": "state-1"}]
-    assert len(app.get("plotly_chart")) == 8
+    assert len(app.get("plotly_chart")) == 10
     titles = [json.loads(chart.proto.spec)["layout"]["title"]["text"] for chart in app.get("plotly_chart")]
     assert titles == [
         "State × family applicability and selected survival",
         "Applicable family attempted → valid → selected funnels",
+        "Candidate centers in target-aligned support (ground plane)",
+        "Candidate centers in target-aligned support (3D)",
         "Candidate family attempted → valid → selected funnel",
         "Candidate family survival",
         "Candidate support (target-normalized ground plane)",
@@ -146,14 +157,27 @@ def test_candidate_benchmark_card_requires_build_and_reuses_retained_result_on_u
     assert not app.exception
     assert app.session_state["benchmark_records_calls"] == []
     assert app.session_state["benchmark_export_calls"] == []
-    assert len(app.get("plotly_chart")) == 8
+    assert len(app.get("plotly_chart")) == 10
+
+    shell_selection = next(
+        selectbox for selectbox in app.selectbox if selectbox.label == "Inspect one state × family shell"
+    )
+    shell_selection.select("state-1 · target")
+    app = app.run()
+    assert not app.exception
+    assert app.session_state["benchmark_records_calls"] == []
+    assert app.session_state["benchmark_export_calls"] == []
+    shell_spec = json.loads(app.get("plotly_chart")[2].proto.spec)
+    shell_trace_names = {trace["name"] for trace in shell_spec["data"]}
+    assert "target, selected" in shell_trace_names
+    assert "forward, selected" not in shell_trace_names
 
 
 def test_candidate_benchmark_card_rejects_retained_result_after_identity_replacement(tmp_path: Path) -> None:
     app = _app(tmp_path).run()
     next(button for button in app.button if button.label == "Build candidate benchmark").click()
     app = app.run()
-    assert len(app.get("plotly_chart")) == 8
+    assert len(app.get("plotly_chart")) == 10
 
     app.session_state["candidate_benchmark_build_result"] = replace(
         app.session_state["candidate_benchmark_build_result"],
@@ -164,6 +188,42 @@ def test_candidate_benchmark_card_rejects_retained_result_after_identity_replace
     assert not app.exception
     assert not app.get("plotly_chart")
     assert not app.get("download_button")
+
+
+def test_real_streamlit_cache_keeps_only_primitive_family_payload(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[str] = []
+    result = reduce_candidate_family_preflight(
+        (_record(),),
+        CandidateFamilyPreflightConfig(
+            query_width=2,
+            configured_families=("forward", "target"),
+            target_aware_families=(),
+        ),
+    )
+    monkeypatch.setattr(
+        session_module,
+        "_cached_store_bundle_cached",
+        lambda store_path, *, store_identity: (object(), object(), object()),
+    )
+
+    def _reduce(_reader: Any, *, require_known_applicability: bool) -> Any:
+        calls.append(str(require_known_applicability))
+        return result
+
+    monkeypatch.setattr(session_module, "candidate_family_preflight_from_reader", _reduce)
+    session_module._cached_candidate_family_preflight_cached.clear()
+    try:
+        first = session_module._cached_candidate_family_preflight_cached("fixture", store_identity="identity")
+        second = session_module._cached_candidate_family_preflight_cached("fixture", store_identity="identity")
+    finally:
+        session_module._cached_candidate_family_preflight_cached.clear()
+
+    assert calls == ["True"]
+    assert first == second
+    assert isinstance(first, dict)
+    pickle.dumps(first)
 
 
 def test_cli_requires_binding_and_attaches_validated_candidate_bundle(tmp_path: Path) -> None:

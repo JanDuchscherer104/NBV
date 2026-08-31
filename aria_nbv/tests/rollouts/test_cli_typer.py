@@ -202,10 +202,25 @@ def test_campaign_preflight_writes_same_phase_a_evidence_payload(
         source_manifest_path=manifest_path,
         source=_Copyable(store=_Copyable(store_dir=tmp_path / "configured-store")),
     )
-    manifest = SimpleNamespace(rows=(1,), source_store_dir="source-store")
+    manifest_payload = {
+        "rows": [1],
+        "source_store_dir": "source-store",
+        "source_manifest_hash": "a" * 16,
+        "source_cache_version": "source-cache-v1",
+        "split_manifest_hash": "b" * 16,
+    }
+    manifest = SimpleNamespace(
+        rows=(1,),
+        source_store_dir="source-store",
+        source_manifest_hash="a" * 16,
+        source_cache_version="source-cache-v1",
+        split_manifest_hash="b" * 16,
+        to_jsonable=lambda: manifest_payload,
+    )
     monkeypatch.setattr(rollout_cli, "_campaign", lambda _path: campaign)
     monkeypatch.setattr(rollout_cli, "_writer_config", lambda _campaign: writer)
     monkeypatch.setattr(rollout_cli, "read_rollout_source_manifest", lambda _path: manifest)
+    monkeypatch.setattr(rollout_cli, "plan_rollout_source_manifest", lambda _source: manifest)
 
     result = runner.invoke(
         rollout_cli.campaign_app,
@@ -379,6 +394,9 @@ def test_campaign_run_and_resume_delegate_once(
     class _Campaign:
         config = SimpleNamespace(output_root=output_root, writer_config_path=None)
 
+        def require_execution_admission(self) -> None:
+            return None
+
         def load_plan(self, path: Any) -> Any:
             return SimpleNamespace(plan_hash="plan")
 
@@ -398,6 +416,31 @@ def test_campaign_run_and_resume_delegate_once(
     assert message in result.stdout
     assert len(calls) == 1
     assert "preflight" not in calls
+
+
+@pytest.mark.parametrize("command", ["run", "resume"])
+def test_campaign_broad_execution_blocks_before_plan_or_output_access(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, command: str
+) -> None:
+    class _Campaign:
+        config = SimpleNamespace(output_root=tmp_path / "must-not-exist", writer_config_path=None)
+
+        def require_execution_admission(self) -> None:
+            raise RuntimeError("broad_generation_blocked_pending_wp18")
+
+        def load_plan(self, _path: Any) -> Any:
+            pytest.fail("plan read occurred before broad-generation admission")
+
+    monkeypatch.setattr(rollout_cli, "_campaign", lambda _path: _Campaign())
+
+    result = runner.invoke(
+        rollout_cli.campaign_app,
+        [command, "--config-path", "cfg.toml", "--plan-path", "plan.json"],
+    )
+
+    assert result.exit_code == 2
+    assert "broad_generation_blocked_pending_wp18" in result.output
+    assert not (tmp_path / "must-not-exist").exists()
 
 
 def test_campaign_worker_binds_selected_unit_profile_hash(

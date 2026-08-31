@@ -16,7 +16,7 @@ import re
 import tempfile
 import zipfile
 from collections.abc import Collection, Iterable, Mapping
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, fields
 from enum import StrEnum
 from pathlib import Path
 from types import MappingProxyType
@@ -30,10 +30,11 @@ if TYPE_CHECKING:
 
 SCHEMA_ID = "aria-nbv-candidate-benchmark-v1"
 CANDIDATE_SUPPORT_METRICS_REVISION = 1
-FAMILY_PREFLIGHT_SCHEMA_ID = "aria-nbv-candidate-family-preflight-v1"
-FAMILY_PHASE_A_SCHEMA_ID = "aria-nbv-candidate-family-phase-a-evidence-v1"
+FAMILY_PREFLIGHT_SCHEMA_ID = "aria-nbv-candidate-family-preflight-v2"
+FAMILY_PHASE_A_SCHEMA_ID = "aria-nbv-candidate-family-phase-a-evidence-v2"
 FAMILY_SUPPORT_FLOOR_REVISION = "family-support-floor-v1"
-FLAT_GAIN_REVISION = "flat-gain-range-v1"
+FLAT_GAIN_REVISION = "state-conditional-flat-gain-range-v2"
+FLAT_GAIN_AGGREGATION = "minimum-per-state-range"
 MANIFEST_NAME = "manifest.json"
 DATA_NAME = "candidates.parquet"
 MULTI_STORE_BINDING_ALGORITHM = "sha256-canonical-json-v1"
@@ -183,7 +184,12 @@ class CandidateFamilyCounts:
             raise ValueError("invalid-reason bitsets must be non-negative")
         if self.refill_rounds is not None and self.refill_rounds < 0:
             raise ValueError("refill_rounds must be non-negative when present")
-        object.__setattr__(self, "margins", dict(self.margins))
+        object.__setattr__(self, "margins", MappingProxyType(dict(self.margins)))
+
+    def to_payload(self) -> dict[str, Any]:
+        """Return a compact serializable projection without copying the proxy."""
+
+        return _family_payload(self)
 
 
 class CandidateSupportFailure(StrEnum):
@@ -195,6 +201,8 @@ class CandidateSupportFailure(StrEnum):
     UNKNOWN_FAMILY_APPLICABILITY = "unknown_family_applicability"
     RECORDED_SUPPORT_FAILURE = "recorded_support_failure"
     FLAT_GAIN = "flat_gain"
+    MISSING_POPULATION_COVERAGE = "missing_population_coverage"
+    MISSING_PRODUCTION_PROVENANCE = "missing_production_provenance"
 
 
 @dataclass(frozen=True, slots=True)
@@ -217,7 +225,9 @@ class CandidateFamilyPreflightConfig:
     min_selected_per_applicable_family: int = 1
     min_selected_target_aware_total: int = 3
     flat_gain_tolerance: float = 1.0e-4
+    flat_gain_aggregation: str = FLAT_GAIN_AGGREGATION
     require_known_applicability: bool = True
+    expected_population_size: int | None = None
     audit_strata_count: int = 10
     family_floor_revision: str = FAMILY_SUPPORT_FLOOR_REVISION
     flat_gain_revision: str = FLAT_GAIN_REVISION
@@ -231,8 +241,16 @@ class CandidateFamilyPreflightConfig:
             raise ValueError("family support floors must be non-negative")
         if not math.isfinite(self.flat_gain_tolerance) or self.flat_gain_tolerance < 0:
             raise ValueError("flat_gain_tolerance must be finite and non-negative")
+        if self.flat_gain_aggregation != FLAT_GAIN_AGGREGATION:
+            raise ValueError(f"flat_gain_aggregation must be {FLAT_GAIN_AGGREGATION!r}")
+        if self.expected_population_size is not None and self.expected_population_size <= 0:
+            raise ValueError("expected_population_size must be positive when present")
         if self.audit_strata_count <= 0:
             raise ValueError("audit_strata_count must be positive")
+        if self.family_floor_revision != FAMILY_SUPPORT_FLOOR_REVISION:
+            raise ValueError(f"family_floor_revision must be {FAMILY_SUPPORT_FLOOR_REVISION!r}")
+        if self.flat_gain_revision != FLAT_GAIN_REVISION:
+            raise ValueError(f"flat_gain_revision must be {FLAT_GAIN_REVISION!r}")
 
     @property
     def resolved_min_valid(self) -> int:
@@ -246,18 +264,134 @@ class CandidateFamilyPreflightConfig:
 
         return sha256_bytes(canonical_json_bytes(asdict(self)))
 
+    def to_payload(self) -> dict[str, Any]:
+        """Serialize the complete reader-resolvable family policy."""
+
+        return cast(dict[str, Any], _canonical(asdict(self)))
+
+    @classmethod
+    def from_payload(cls, payload: Mapping[str, Any]) -> "CandidateFamilyPreflightConfig":
+        """Decode one complete persisted family policy without defaults."""
+
+        required = {item.name for item in fields(cls)}
+        missing = sorted(required - set(payload))
+        if missing:
+            raise ValueError(f"candidate-family policy is missing persisted fields: {missing}")
+        return cls(
+            query_width=int(payload["query_width"]),
+            configured_families=tuple(str(value) for value in payload["configured_families"]),
+            target_aware_families=tuple(str(value) for value in payload["target_aware_families"]),
+            forward_family=str(payload["forward_family"]),
+            min_selected_per_applicable_family=int(payload["min_selected_per_applicable_family"]),
+            min_selected_target_aware_total=int(payload["min_selected_target_aware_total"]),
+            flat_gain_tolerance=float(payload["flat_gain_tolerance"]),
+            flat_gain_aggregation=str(payload["flat_gain_aggregation"]),
+            require_known_applicability=bool(payload["require_known_applicability"]),
+            expected_population_size=(
+                None if payload["expected_population_size"] is None else int(payload["expected_population_size"])
+            ),
+            audit_strata_count=int(payload["audit_strata_count"]),
+            family_floor_revision=str(payload["family_floor_revision"]),
+            flat_gain_revision=str(payload["flat_gain_revision"]),
+        )
+
+
+def candidate_family_preflight_config_from_writer(
+    writer_config: Any,
+    *,
+    expected_population_size: int | None = None,
+) -> CandidateFamilyPreflightConfig:
+    """Resolve the complete family policy from one typed rollout writer config."""
+
+    mixture = getattr(writer_config, "candidate_mixture", None)
+    components = getattr(mixture, "components", None)
+    query_width = getattr(mixture, "total_count", None)
+    if not components or not isinstance(query_width, int) or query_width <= 0:
+        raise ValueError("rollout writer lacks complete candidate-mixture provenance")
+    configured: list[str] = []
+    target_aware: list[str] = []
+    forward_family: str | None = None
+    target_positions = {"target_bearing_local", "lateral_target_bypass", "target_orbit"}
+    for component in components:
+        name = str(getattr(component, "name", ""))
+        position = getattr(component, "position_mode", None)
+        position_value = str(getattr(position, "value", position or ""))
+        if not name or not position_value:
+            raise ValueError("rollout writer candidate components require names and position roles")
+        names = [name]
+        paired = getattr(component, "paired_view_mode", None)
+        if paired is not None:
+            paired_value = str(getattr(paired, "value", paired))
+            names.append(f"{name}__paired_{paired_value}")
+        configured.extend(names)
+        if position_value in target_positions:
+            target_aware.extend(names)
+        if position_value == "forward_local":
+            if forward_family is not None and forward_family != name:
+                raise ValueError("rollout writer has ambiguous forward-family provenance")
+            forward_family = name
+    return CandidateFamilyPreflightConfig(
+        query_width=query_width,
+        configured_families=tuple(configured),
+        target_aware_families=tuple(target_aware),
+        forward_family=forward_family or "forward_local",
+        require_known_applicability=True,
+        expected_population_size=expected_population_size,
+    )
+
 
 @dataclass(frozen=True, slots=True)
 class FlatGainOutcome:
-    """Oracle-label variation result with an exact label-support denominator."""
+    """State-conditional label variation with exact label/state denominators."""
 
     available: bool
     passed: bool | None
     denominator: int
+    eligible_state_denominator: int
     tolerance: float
     observed_range: float | None
     revision: str
+    aggregation: str
     reason: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class CandidatePopulationCoverage:
+    """Population counts used by the canonical family preflight decision."""
+
+    expected: int | None
+    selected_source_rows: int
+    represented_rows: int
+    target_states: int
+    unique_scenes: int
+
+    def __post_init__(self) -> None:
+        values = (
+            self.selected_source_rows,
+            self.represented_rows,
+            self.target_states,
+            self.unique_scenes,
+        )
+        if any(value < 0 for value in values):
+            raise ValueError("candidate population coverage counts must be non-negative")
+        if self.expected is not None and self.expected <= 0:
+            raise ValueError("candidate population expected count must be positive")
+
+    @property
+    def complete(self) -> bool:
+        """Return whether evidence contains a non-empty complete population."""
+
+        if self.expected is None:
+            return self.represented_rows > 0 and self.unique_scenes > 0
+        return all(
+            value == self.expected
+            for value in (
+                self.selected_source_rows,
+                self.represented_rows,
+                self.target_states,
+                self.unique_scenes,
+            )
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -277,11 +411,13 @@ class CandidateFamilyPreflight:
     go: bool
     schema_id: str
     config_sha256: str
+    config: CandidateFamilyPreflightConfig
     query_width: int
     resolved_min_valid: int
     cells: tuple[tuple[str, CandidateFamilyCounts], ...]
     blockers: tuple[CandidatePreflightBlocker, ...]
     flat_gain: FlatGainOutcome
+    coverage: CandidatePopulationCoverage
     audit_strata: Mapping[str, tuple[str, ...]]
 
     def __post_init__(self) -> None:
@@ -294,18 +430,25 @@ class CandidateFamilyPreflight:
             "schema_id": self.schema_id,
             "go": self.go,
             "config_sha256": self.config_sha256,
+            "config": self.config.to_payload(),
             "query_width": self.query_width,
             "resolved_min_valid": self.resolved_min_valid,
             "cells": [{"state_key": state_key, **_canonical(_family_payload(cell))} for state_key, cell in self.cells],
             "blockers": [{**asdict(blocker), "code": blocker.code.value} for blocker in self.blockers],
             "flat_gain": asdict(self.flat_gain),
+            "coverage": asdict(self.coverage),
             "audit_strata": {name: list(scenes) for name, scenes in self.audit_strata.items()},
         }
 
 
 @dataclass(frozen=True, slots=True)
 class CandidateFamilyPhaseAEvidence:
-    """Immutable no-label Phase-A benchmark and canonical gate result.
+    """Immutable Phase-A proposal-support audit and canonical gate result.
+
+    This is a no-render, no-reward-label Phase-A proposal-support audit with
+    privileged GT target instruction and mesh validity. It therefore uses
+    oracle-owned target geometry for instruction and physical validity without
+    claiming to be oracle-free.
 
     ``source_manifest_sha256`` binds the reviewed manifest file bytes, while
     ``source_store_manifest_hash`` preserves the VIN store's native canonical
@@ -316,8 +459,13 @@ class CandidateFamilyPhaseAEvidence:
 
     source_manifest_sha256: str
     source_store_manifest_hash: str
+    source_cache_version: str
+    split_manifest_hash: str
+    source_store_dir: str
     writer_config_sha256: str
     implementation_revision: str
+    generation_revision: Mapping[str, str]
+    runtime_identity: Mapping[str, str]
     source_row_count: int
     scene_count: int
     target_state_count: int
@@ -331,11 +479,38 @@ class CandidateFamilyPhaseAEvidence:
                 raise ValueError(f"{name} must be a SHA-256 identity")
         if not re.fullmatch(r"(?:[0-9a-f]{16}|[0-9a-f]{64})", self.source_store_manifest_hash):
             raise ValueError("source_store_manifest_hash must preserve the canonical store-manifest identity")
+        if not self.source_cache_version or not self.split_manifest_hash or not self.source_store_dir:
+            raise ValueError("Phase-A evidence requires complete source-store lineage")
+        if self.generation_revision.get("clean_commit") != self.implementation_revision:
+            raise ValueError("Phase-A implementation revision must equal the clean generation commit")
+        required_revision = {
+            "contract_revision",
+            "clean_commit",
+            "head_tree",
+            "uv_lock_sha256",
+            "content_bundle_hash",
+            "revision_hash",
+        }
+        if required_revision - set(self.generation_revision):
+            raise ValueError("Phase-A evidence requires complete generation revision identity")
+        required_runtime = {"python", "torch", "cuda", "pytorch3d", "gpu_name", "gpu_capability"}
+        if required_runtime - set(self.runtime_identity):
+            raise ValueError("Phase-A evidence requires complete CUDA runtime identity")
         if self.source_row_count < 1 or self.scene_count < 1 or self.target_state_count < 0:
             raise ValueError("Phase-A evidence counts are invalid")
         if self.preflight.flat_gain.available or self.preflight.flat_gain.denominator != 0:
             raise ValueError("Phase-A evidence must not contain oracle reward labels")
+        coverage = self.preflight.coverage
+        if (
+            coverage.selected_source_rows != self.source_row_count
+            or coverage.represented_rows != len(self.records)
+            or coverage.target_states != self.target_state_count
+            or coverage.unique_scenes != self.scene_count
+        ):
+            raise ValueError("Phase-A evidence counts disagree with canonical population coverage")
         object.__setattr__(self, "excluded_source_rows", MappingProxyType(dict(self.excluded_source_rows)))
+        object.__setattr__(self, "generation_revision", MappingProxyType(dict(self.generation_revision)))
+        object.__setattr__(self, "runtime_identity", MappingProxyType(dict(self.runtime_identity)))
 
     def to_payload(self) -> dict[str, Any]:
         """Serialize records and the one reducer result with a content hash."""
@@ -344,8 +519,13 @@ class CandidateFamilyPhaseAEvidence:
             "schema_id": FAMILY_PHASE_A_SCHEMA_ID,
             "source_manifest_sha256": self.source_manifest_sha256,
             "source_store_manifest_hash": self.source_store_manifest_hash,
+            "source_cache_version": self.source_cache_version,
+            "split_manifest_hash": self.split_manifest_hash,
+            "source_store_dir": self.source_store_dir,
             "writer_config_sha256": self.writer_config_sha256,
             "implementation_revision": self.implementation_revision,
+            "generation_revision": dict(self.generation_revision),
+            "runtime_identity": dict(self.runtime_identity),
             "source_row_count": self.source_row_count,
             "scene_count": self.scene_count,
             "target_state_count": self.target_state_count,
@@ -357,6 +537,188 @@ class CandidateFamilyPhaseAEvidence:
             "broad_generation_blocker": "broad_generation_blocked_pending_wp18",
         }
         return {**payload, "artifact_sha256": sha256_bytes(canonical_json_bytes(payload))}
+
+
+@dataclass(frozen=True, slots=True)
+class CandidateFamilyPhaseAExpectation:
+    """Externally owned identities required to admit one Phase-A artifact."""
+
+    source_manifest_sha256: str
+    source_store_manifest_hash: str
+    source_cache_version: str
+    split_manifest_hash: str
+    source_store_dir: str
+    writer_config_sha256: str
+    generation_revision_hash: str
+
+
+def candidate_family_preflight_from_payload(payload: Mapping[str, Any]) -> CandidateFamilyPreflight:
+    """Reconstruct the immutable reducer result from a primitive payload."""
+
+    if payload.get("schema_id") != FAMILY_PREFLIGHT_SCHEMA_ID:
+        raise ValueError("unsupported candidate-family preflight schema")
+    config_payload = payload.get("config")
+    if not isinstance(config_payload, Mapping):
+        raise ValueError("candidate-family preflight requires the complete reducer policy")
+    config = CandidateFamilyPreflightConfig.from_payload(config_payload)
+    cells = tuple(
+        (
+            str(item["state_key"]),
+            CandidateFamilyCounts(
+                family=str(item["family"]),
+                applicable=(None if item.get("applicable") is None else bool(item["applicable"])),
+                attempted=int(item.get("attempted", 0)),
+                valid=int(item.get("valid", 0)),
+                selected=int(item.get("selected", 0)),
+                denominator=int(item.get("denominator", 0)),
+                reason=_optional_text(item.get("reason")),
+                invalid_reason_bitsets=tuple(int(value) for value in item.get("invalid_reason_bitsets", ())),
+                first_failure=_optional_text(item.get("first_failure")),
+                margins=_mapping_field(item.get("margins", {})),
+                refill_rounds=(None if item.get("refill_rounds") is None else int(item["refill_rounds"])),
+                fallback_used=(None if item.get("fallback_used") is None else bool(item["fallback_used"])),
+                support_failure=_optional_text(item.get("support_failure")),
+            ),
+        )
+        for item in payload.get("cells", ())
+    )
+    blockers = tuple(
+        CandidatePreflightBlocker(
+            code=CandidateSupportFailure(str(item["code"])),
+            detail=str(item["detail"]),
+            state_key=_optional_text(item.get("state_key")),
+            family=_optional_text(item.get("family")),
+        )
+        for item in payload.get("blockers", ())
+    )
+    flat_payload = payload.get("flat_gain")
+    coverage_payload = payload.get("coverage")
+    if not isinstance(flat_payload, Mapping) or not isinstance(coverage_payload, Mapping):
+        raise ValueError("candidate-family preflight requires flat-gain and population evidence")
+    flat_gain = FlatGainOutcome(
+        available=bool(flat_payload["available"]),
+        passed=None if flat_payload.get("passed") is None else bool(flat_payload["passed"]),
+        denominator=int(flat_payload["denominator"]),
+        eligible_state_denominator=int(flat_payload["eligible_state_denominator"]),
+        tolerance=float(flat_payload["tolerance"]),
+        observed_range=(None if flat_payload.get("observed_range") is None else float(flat_payload["observed_range"])),
+        revision=str(flat_payload["revision"]),
+        aggregation=str(flat_payload["aggregation"]),
+        reason=_optional_text(flat_payload.get("reason")),
+    )
+    coverage = CandidatePopulationCoverage(
+        expected=(None if coverage_payload.get("expected") is None else int(coverage_payload["expected"])),
+        selected_source_rows=int(coverage_payload["selected_source_rows"]),
+        represented_rows=int(coverage_payload["represented_rows"]),
+        target_states=int(coverage_payload["target_states"]),
+        unique_scenes=int(coverage_payload["unique_scenes"]),
+    )
+    result = CandidateFamilyPreflight(
+        go=bool(payload["go"]),
+        schema_id=FAMILY_PREFLIGHT_SCHEMA_ID,
+        config_sha256=str(payload["config_sha256"]),
+        config=config,
+        query_width=int(payload["query_width"]),
+        resolved_min_valid=int(payload["resolved_min_valid"]),
+        cells=cells,
+        blockers=blockers,
+        flat_gain=flat_gain,
+        coverage=coverage,
+        audit_strata=MappingProxyType(
+            {
+                str(name): tuple(str(scene) for scene in scenes)
+                for name, scenes in cast(Mapping[str, Iterable[Any]], payload.get("audit_strata", {})).items()
+            }
+        ),
+    )
+    if result.go != (not result.blockers):
+        raise ValueError("candidate-family preflight go flag disagrees with blockers")
+    if (
+        result.config_sha256 != config.config_sha256
+        or result.query_width != config.query_width
+        or result.resolved_min_valid != config.resolved_min_valid
+    ):
+        raise ValueError("candidate-family preflight policy identity disagrees with its decision")
+    return result
+
+
+def read_candidate_family_phase_a(
+    path: Path | str,
+    *,
+    expected: CandidateFamilyPhaseAExpectation,
+) -> CandidateFamilyPhaseAEvidence:
+    """Validate content, source, config, and revision identities before use."""
+
+    payload = json.loads(Path(path).expanduser().resolve().read_bytes())
+    if not isinstance(payload, dict) or payload.get("schema_id") != FAMILY_PHASE_A_SCHEMA_ID:
+        raise ValueError("unsupported candidate-family Phase-A evidence schema")
+    claimed_hash = str(payload.pop("artifact_sha256", ""))
+    if claimed_hash != sha256_bytes(canonical_json_bytes(payload)):
+        raise ValueError("candidate-family Phase-A artifact content hash mismatch")
+    expected_values = asdict(expected)
+    actual_values = {
+        "source_manifest_sha256": payload.get("source_manifest_sha256"),
+        "source_store_manifest_hash": payload.get("source_store_manifest_hash"),
+        "source_cache_version": payload.get("source_cache_version"),
+        "split_manifest_hash": payload.get("split_manifest_hash"),
+        "source_store_dir": payload.get("source_store_dir"),
+        "writer_config_sha256": payload.get("writer_config_sha256"),
+        "generation_revision_hash": (
+            payload.get("generation_revision", {}).get("revision_hash")
+            if isinstance(payload.get("generation_revision"), Mapping)
+            else None
+        ),
+    }
+    if actual_values != expected_values:
+        raise ValueError("candidate-family Phase-A source/config/revision identity mismatch")
+    records_payload = payload.get("records")
+    if not isinstance(records_payload, list):
+        raise ValueError("candidate-family Phase-A records must be a list")
+    preflight_payload = payload.get("preflight")
+    if not isinstance(preflight_payload, Mapping):
+        raise ValueError("candidate-family Phase-A preflight payload is missing")
+    evidence = CandidateFamilyPhaseAEvidence(
+        source_manifest_sha256=str(payload["source_manifest_sha256"]),
+        source_store_manifest_hash=str(payload["source_store_manifest_hash"]),
+        source_cache_version=str(payload["source_cache_version"]),
+        split_manifest_hash=str(payload["split_manifest_hash"]),
+        source_store_dir=str(payload["source_store_dir"]),
+        writer_config_sha256=str(payload["writer_config_sha256"]),
+        implementation_revision=str(payload["implementation_revision"]),
+        generation_revision=cast(Mapping[str, str], payload["generation_revision"]),
+        runtime_identity=cast(Mapping[str, str], payload["runtime_identity"]),
+        source_row_count=int(payload["source_row_count"]),
+        scene_count=int(payload["scene_count"]),
+        target_state_count=int(payload["target_state_count"]),
+        excluded_source_rows=cast(Mapping[str, str], payload.get("excluded_source_rows", {})),
+        records=reduce_candidate_records(records_payload),
+        preflight=candidate_family_preflight_from_payload(preflight_payload),
+    )
+    recomputed = reduce_candidate_family_preflight(
+        evidence.records,
+        evidence.preflight.config,
+        coverage=evidence.preflight.coverage,
+    )
+    if recomputed.to_payload() != evidence.preflight.to_payload():
+        raise ValueError("candidate-family Phase-A reducer evidence disagrees with its records and policy")
+    if evidence.to_payload()["artifact_sha256"] != claimed_hash:
+        raise ValueError("candidate-family Phase-A artifact does not round-trip canonically")
+    return evidence
+
+
+def write_candidate_family_phase_a(path: Path | str, evidence: CandidateFamilyPhaseAEvidence) -> Path:
+    """Atomically write one compact, canonical Phase-A JSON artifact."""
+
+    target = Path(path).expanduser().resolve()
+    target.parent.mkdir(parents=True, exist_ok=True)
+    payload = canonical_json_bytes(evidence.to_payload()) + b"\n"
+    with tempfile.NamedTemporaryFile(dir=target.parent, prefix=f".{target.name}.", delete=False) as stream:
+        temporary = Path(stream.name)
+        stream.write(payload)
+        stream.flush()
+        os.fsync(stream.fileno())
+    os.replace(temporary, target)
+    return target
 
 
 @dataclass(frozen=True, slots=True)
@@ -517,6 +879,51 @@ class CandidateBenchmark:
             "lineage": _json_field(self.lineage),
             "points": [asdict(point) for point in self.points],
         }
+
+
+@dataclass(frozen=True, slots=True)
+class CandidateFamilySelection:
+    """One factual state/family shell selection shared by UI and plots."""
+
+    state_key: str
+    family: str
+
+    def __post_init__(self) -> None:
+        if not self.state_key or not self.family:
+            raise ValueError("candidate-family selection requires state and family")
+
+
+def select_candidate_family_shell(
+    records: Iterable[CandidateBenchmark],
+    selection: CandidateFamilySelection,
+) -> tuple[CandidateBenchmark, ...]:
+    """Project one selected cell into the existing 2-D/3-D shell interface."""
+
+    selected_records: list[CandidateBenchmark] = []
+    for record in records:
+        if record.state_key != selection.state_key:
+            continue
+        points = tuple(point for point in record.points if point.family == selection.family)
+        family = tuple(cell for cell in record.families if cell.family == selection.family)
+        if not family:
+            continue
+        selected_records.append(
+            CandidateBenchmark(
+                state_key=record.state_key,
+                scene_key=record.scene_key,
+                families=family,
+                geometry=record.geometry,
+                diversity=record.diversity,
+                timings_ms=record.timings_ms,
+                resources=record.resources,
+                provenance=record.provenance,
+                candidate_ids=tuple(point.candidate_id for point in points),
+                coordinates=tuple(point.xyz for point in points),
+                lineage=record.lineage,
+                points=points,
+            )
+        )
+    return tuple(selected_records)
 
 
 def benchmark_from_sampling_result(
@@ -1032,6 +1439,8 @@ def _finite_value(value: Any) -> float | None:
 def reduce_candidate_family_preflight(
     records: Iterable[CandidateBenchmark],
     config: CandidateFamilyPreflightConfig,
+    *,
+    coverage: CandidatePopulationCoverage | None = None,
 ) -> CandidateFamilyPreflight:
     """Evaluate root support, family floors, and direct label variation once.
 
@@ -1046,6 +1455,24 @@ def reduce_candidate_family_preflight(
     records = tuple(sorted(records, key=lambda record: (record.scene_key, record.state_key)))
     cells: list[tuple[str, CandidateFamilyCounts]] = []
     blockers: list[CandidatePreflightBlocker] = []
+    derived_coverage = CandidatePopulationCoverage(
+        expected=config.expected_population_size,
+        selected_source_rows=len(records),
+        represented_rows=len(records),
+        target_states=len(records),
+        unique_scenes=len({record.scene_key for record in records}),
+    )
+    coverage = coverage or derived_coverage
+    if coverage.expected != config.expected_population_size:
+        raise ValueError("candidate population coverage expectation disagrees with preflight policy")
+    if not coverage.complete:
+        blockers.append(
+            CandidatePreflightBlocker(
+                CandidateSupportFailure.MISSING_POPULATION_COVERAGE,
+                f"expected={coverage.expected}; selected_source_rows={coverage.selected_source_rows}; represented_rows={coverage.represented_rows}; "
+                f"target_states={coverage.target_states}; unique_scenes={coverage.unique_scenes}",
+            )
+        )
     for record in records:
         family_by_name = {family.family: family for family in record.families}
         target_selected = 0
@@ -1060,7 +1487,7 @@ def reduce_candidate_family_preflight(
                 ),
             )
             cells.append((record.state_key, cell))
-            if cell.support_failure is not None:
+            if cell.support_failure is not None and cell.applicable is not False:
                 blockers.append(
                     CandidatePreflightBlocker(
                         CandidateSupportFailure.RECORDED_SUPPORT_FAILURE,
@@ -1109,38 +1536,54 @@ def reduce_candidate_family_preflight(
                 )
             )
 
-    label_values = [
-        point.target_root_gain
+    labels_by_state = {
+        record.state_key: tuple(
+            point.target_root_gain
+            for point in record.points
+            if point.oracle_label and point.target_root_gain is not None
+        )
         for record in records
-        for point in record.points
-        if point.oracle_label and point.target_root_gain is not None
-    ]
-    if label_values:
-        observed_range = max(label_values) - min(label_values)
+    }
+    eligible_state_ranges = {
+        state_key: max(values) - min(values) for state_key, values in labels_by_state.items() if len(values) >= 2
+    }
+    label_denominator = sum(len(values) for values in labels_by_state.values())
+    if eligible_state_ranges:
+        observed_range = min(eligible_state_ranges.values())
+        failing_states = {
+            state_key: value
+            for state_key, value in eligible_state_ranges.items()
+            if value <= config.flat_gain_tolerance
+        }
         flat_gain = FlatGainOutcome(
             available=True,
-            passed=observed_range > config.flat_gain_tolerance,
-            denominator=len(label_values),
+            passed=not failing_states,
+            denominator=label_denominator,
+            eligible_state_denominator=len(eligible_state_ranges),
             tolerance=config.flat_gain_tolerance,
             observed_range=observed_range,
             revision=config.flat_gain_revision,
+            aggregation=config.flat_gain_aggregation,
         )
-        if flat_gain.passed is False:
+        for state_key, state_range in sorted(failing_states.items()):
             blockers.append(
                 CandidatePreflightBlocker(
                     CandidateSupportFailure.FLAT_GAIN,
-                    f"label_range={observed_range:.12g} <= tolerance={config.flat_gain_tolerance:.12g}",
+                    f"state_label_range={state_range:.12g} <= tolerance={config.flat_gain_tolerance:.12g}",
+                    state_key=state_key,
                 )
             )
     else:
         flat_gain = FlatGainOutcome(
             available=False,
             passed=None,
-            denominator=0,
+            denominator=label_denominator,
+            eligible_state_denominator=0,
             tolerance=config.flat_gain_tolerance,
             observed_range=None,
             revision=config.flat_gain_revision,
-            reason="no_valid_target_labels",
+            aggregation=config.flat_gain_aggregation,
+            reason="no_state_with_multiple_valid_target_labels",
         )
 
     scenes = sorted({record.scene_key for record in records})
@@ -1155,11 +1598,13 @@ def reduce_candidate_family_preflight(
         go=not ordered_blockers,
         schema_id=FAMILY_PREFLIGHT_SCHEMA_ID,
         config_sha256=config.config_sha256,
+        config=config,
         query_width=config.query_width,
         resolved_min_valid=config.resolved_min_valid,
         cells=tuple(cells),
         blockers=ordered_blockers,
         flat_gain=flat_gain,
+        coverage=coverage,
         audit_strata=audit_strata,
     )
 
@@ -1173,20 +1618,57 @@ def candidate_family_preflight_from_reader(
     """Build the complete store gate through the canonical benchmark reducer."""
 
     records = benchmarks_from_reader(reader, candidate_limit=None)
-    configured = _configured_family_names(reader)
-    if not configured:
-        configured = tuple(sorted({family.family for record in records for family in record.families}))
-    query_width = max(
-        (sum(family.denominator for family in record.families) for record in records),
-        default=1,
-    )
-    config = CandidateFamilyPreflightConfig(
-        query_width=query_width,
-        configured_families=configured or ("unknown",),
-        flat_gain_tolerance=flat_gain_tolerance,
-        require_known_applicability=require_known_applicability,
-    )
+    config = _candidate_family_policy_from_reader(reader)
+    if config is None:
+        fallback = CandidateFamilyPreflightConfig(
+            query_width=1,
+            configured_families=("unknown",),
+            flat_gain_tolerance=flat_gain_tolerance,
+            require_known_applicability=require_known_applicability,
+        )
+        result = reduce_candidate_family_preflight(records, fallback)
+        blocker = CandidatePreflightBlocker(
+            CandidateSupportFailure.MISSING_PRODUCTION_PROVENANCE,
+            "rollout manifest lacks the complete candidate_family_preflight policy",
+        )
+        blockers = tuple(
+            sorted(
+                (*result.blockers, blocker),
+                key=lambda item: (item.code.value, item.state_key or "", item.family or "", item.detail),
+            )
+        )
+        return CandidateFamilyPreflight(
+            go=False,
+            schema_id=result.schema_id,
+            config_sha256=result.config_sha256,
+            config=result.config,
+            query_width=result.query_width,
+            resolved_min_valid=result.resolved_min_valid,
+            cells=result.cells,
+            blockers=blockers,
+            flat_gain=result.flat_gain,
+            coverage=result.coverage,
+            audit_strata=result.audit_strata,
+        )
+    if config.require_known_applicability != require_known_applicability:
+        raise ValueError("reader-backed preflight applicability policy disagrees with the requested profile")
+    if not math.isclose(config.flat_gain_tolerance, flat_gain_tolerance, rel_tol=0.0, abs_tol=0.0):
+        raise ValueError("reader-backed preflight flat-gain tolerance disagrees with persisted policy")
     return reduce_candidate_family_preflight(records, config)
+
+
+def _candidate_family_policy_from_reader(reader: Any) -> CandidateFamilyPreflightConfig | None:
+    """Resolve only a complete, manifest-owned production policy."""
+
+    try:
+        manifest = reader.manifest().get("manifest", {})
+    except (AttributeError, TypeError):
+        return None
+    generation = manifest.get("generation", {}) if isinstance(manifest, Mapping) else {}
+    payload = generation.get("candidate_family_preflight") if isinstance(generation, Mapping) else None
+    if not isinstance(payload, Mapping):
+        return None
+    return CandidateFamilyPreflightConfig.from_payload(payload)
 
 
 def circular_minimum_covering_span_deg(angles_deg: Iterable[float]) -> float | None:
@@ -1717,28 +2199,36 @@ __all__ = [
     "CandidateBenchmark",
     "CandidateBenchmarkBundle",
     "CandidateBenchmarkSource",
+    "CandidateFamilyPhaseAExpectation",
     "CandidateFamilyPhaseAEvidence",
     "CandidateFamilyPreflight",
     "CandidateFamilyPreflightConfig",
     "CandidateFamilyCounts",
+    "CandidateFamilySelection",
+    "CandidatePopulationCoverage",
     "CandidatePreflightBlocker",
     "CandidatePoint",
     "CandidateSupportFailure",
     "FlatGainOutcome",
     "candidate_support_metrics",
     "benchmark_from_sampling_result",
+    "candidate_family_preflight_config_from_writer",
+    "candidate_family_preflight_from_payload",
     "candidate_family_preflight_from_reader",
     "canonical_json_bytes",
     "circular_minimum_covering_span_deg",
     "read_bundle",
+    "read_candidate_family_phase_a",
     "benchmarks_from_reader",
     "read_bundle_bytes",
     "reduce_candidate_records",
     "reduce_candidate_family_preflight",
+    "select_candidate_family_shell",
     "serialize_bundle_bytes",
     "sha256_bytes",
     "target_relative_orbit_span_deg",
     "target_side_count_balance",
     "write_bundle",
+    "write_candidate_family_phase_a",
     "benchmark_binding_from_manifest",
 ]

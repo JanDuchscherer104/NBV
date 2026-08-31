@@ -20,6 +20,7 @@ import click
 import typer
 
 from ...data_handling.vin_store.dataset import VinOfflineDatasetConfig
+from ...rollouts.candidate_benchmark import write_candidate_family_phase_a
 from ...rollouts.manifest import RolloutStoreInvocation
 from ...rollouts.shard_manifest import load_rollout_shard_entry, read_rollout_source_manifest
 from ...utils.cli_format import cli_console, key_value_panel
@@ -113,6 +114,15 @@ def _require_smoke_evidence(campaign: CudaRolloutCampaign, plan: CampaignPlan) -
     return evidence
 
 
+def _require_campaign_execution_admission(campaign: CudaRolloutCampaign) -> None:
+    """Fail closed before broad run/resume can read or mutate campaign state."""
+
+    try:
+        campaign.require_execution_admission()
+    except RuntimeError as exc:
+        raise typer.BadParameter(str(exc)) from exc
+
+
 @campaign_app.command("plan")
 def campaign_plan(
     config_path: Annotated[Path, typer.Option("--config-path")],
@@ -187,7 +197,7 @@ def campaign_preflight(
         Path | None,
         typer.Option(
             "--family-phase-a-output",
-            help="Optional immutable no-label candidate-family evidence JSON.",
+            help="Optional immutable no-render, no-reward-label Phase-A proposal-support evidence JSON.",
         ),
     ] = None,
     source_store: Annotated[
@@ -201,6 +211,8 @@ def campaign_preflight(
     """Run CUDA checks and optionally the canonical 100-scene family gate."""
     campaign = _campaign(config_path)
     writer_cfg = _writer_config(campaign)
+    if family_phase_a_output is not None and source_store is None:
+        raise typer.BadParameter("family Phase-A requires an explicit --source-store")
     try:
         campaign.preflight(
             nested_configs=(writer_cfg,) if writer_cfg is not None else (),
@@ -215,25 +227,31 @@ def campaign_preflight(
         manifest_path = Path(writer_cfg.source_manifest_path)
         manifest_bytes = manifest_path.read_bytes()
         manifest = read_rollout_source_manifest(manifest_path)
-        if source_store is not None:
-            resolved_source_store = source_store.expanduser().resolve()
-            if resolved_source_store.name != Path(manifest.source_store_dir).name:
-                raise typer.BadParameter("Phase-A source-store basename does not match the reviewed manifest")
-            if not resolved_source_store.is_dir():
-                raise typer.BadParameter("Phase-A source store is missing or not a directory")
-            source_store_config = writer_cfg.source.store.model_copy(update={"store_dir": resolved_source_store})
-            source_config = writer_cfg.source.model_copy(update={"store": source_store_config})
-            writer_cfg = writer_cfg.model_copy(update={"source": source_config})
+        assert source_store is not None
+        resolved_source_store = source_store.expanduser().resolve()
+        if not resolved_source_store.is_dir():
+            raise typer.BadParameter("Phase-A source store is missing or not a directory")
+        source_store_config = writer_cfg.source.store.model_copy(update={"store_dir": resolved_source_store})
+        source_config = writer_cfg.source.model_copy(update={"store": source_store_config})
+        writer_cfg = writer_cfg.model_copy(update={"source": source_config})
+        try:
+            actual_manifest = plan_rollout_source_manifest(writer_cfg.source)
+        except (RuntimeError, ValueError, OSError, TypeError) as exc:
+            raise typer.BadParameter(f"Phase-A source-store validation failed: {exc}") from None
+        if actual_manifest.to_jsonable() != manifest.to_jsonable():
+            raise typer.BadParameter(
+                "Phase-A source store does not reproduce the reviewed native manifest, cache version, split, and rows"
+            )
         try:
             evidence = campaign.candidate_family_phase_a(
                 writer_cfg,
-                manifest,
+                actual_manifest,
                 source_manifest_sha256=hashlib.sha256(manifest_bytes).hexdigest(),
             )
         except (RuntimeError, ValueError, OSError, TypeError) as exc:
             raise typer.BadParameter(str(exc)) from None
         payload = evidence.to_payload()
-        write_json_atomic(family_phase_a_output.expanduser().resolve(), payload, indent=2)
+        write_candidate_family_phase_a(family_phase_a_output, evidence)
         typer.echo(
             "candidate family Phase-A "
             f"go={str(evidence.preflight.go).lower()} "
@@ -337,6 +355,7 @@ def campaign_run(
 ) -> None:
     """Start a foreground campaign after preflight (planning is supplied by API callers)."""
     campaign = _campaign(config_path)
+    _require_campaign_execution_admission(campaign)
     writer_cfg = _writer_config(campaign)
     plan = campaign.load_plan(plan_path)
     writer_hash = _validate_plan_digests(campaign, plan, writer_cfg)
@@ -363,6 +382,7 @@ def campaign_resume(
 ) -> None:
     """Resume a campaign through the Python campaign API."""
     campaign = _campaign(config_path)
+    _require_campaign_execution_admission(campaign)
     writer_cfg = _writer_config(campaign)
     plan = campaign.load_plan(plan_path)
     writer_hash = _validate_plan_digests(campaign, plan, writer_cfg)

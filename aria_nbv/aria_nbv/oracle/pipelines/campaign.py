@@ -7,6 +7,7 @@ decisions remain owned by :func:`run_rollout_shard`.
 from __future__ import annotations
 
 import hashlib
+import importlib.metadata
 import json
 import math
 import os
@@ -31,8 +32,9 @@ from ...rollouts.candidate_benchmark import (
     CandidateFamilyCounts,
     CandidateFamilyPhaseAEvidence,
     CandidateFamilyPreflight,
-    CandidateFamilyPreflightConfig,
+    CandidatePopulationCoverage,
     benchmark_from_sampling_result,
+    candidate_family_preflight_config_from_writer,
     candidate_family_preflight_from_reader,
     canonical_json_bytes,
     reduce_candidate_family_preflight,
@@ -158,6 +160,31 @@ def current_generation_revision(
     return GenerationRevision(contract_revision, commit, tree, lock_hash, content_hash, revision_hash)
 
 
+def current_phase_a_runtime_identity() -> dict[str, str]:
+    """Capture the exact CUDA/PyTorch/PyTorch3D execution environment."""
+
+    import platform
+
+    import torch
+
+    if not torch.cuda.is_available():
+        raise RuntimeError("candidate family Phase-A requires an available CUDA device")
+    try:
+        pytorch3d_version = importlib.metadata.version("pytorch3d")
+    except importlib.metadata.PackageNotFoundError as exc:
+        raise RuntimeError("candidate family Phase-A requires an installed PyTorch3D distribution") from exc
+    device = torch.cuda.current_device()
+    major, minor = torch.cuda.get_device_capability(device)
+    return {
+        "python": platform.python_version(),
+        "torch": str(torch.__version__),
+        "cuda": str(torch.version.cuda or "unavailable"),
+        "pytorch3d": pytorch3d_version,
+        "gpu_name": torch.cuda.get_device_name(device),
+        "gpu_capability": f"{major}.{minor}",
+    }
+
+
 class CampaignOutcome(StrEnum):
     SUCCEEDED = "succeeded"
     SKIPPED = "skipped"
@@ -183,6 +210,15 @@ class CampaignMode(StrEnum):
 
     BROAD = "broad"
     PILOT = "pilot"
+
+
+class BroadGenerationAdmissionError(RuntimeError):
+    """Typed fail-closed blocker until WP18 owns a canonical evidence reader."""
+
+    code = "broad_generation_blocked_pending_wp18"
+
+    def __init__(self) -> None:
+        super().__init__(self.code)
 
 
 class CampaignProfileConfig(BaseModel):
@@ -1014,9 +1050,10 @@ class CudaRolloutCampaign:
         *,
         source_manifest_sha256: str,
     ) -> CandidateFamilyPhaseAEvidence:
-        """Generate the unchanged single-root Phase-A control without labels.
+        """Generate the unchanged single-root Phase-A proposal-support audit.
 
-        This adapter deepens the existing campaign source-target preflight. It
+        This is a no-render, no-reward-label Phase-A proposal-support audit
+        with privileged GT target instruction and mesh validity. The adapter
         applies the reviewed source manifest, uses the writer's existing target
         task sampler and candidate mixture, and stops before any target scorer,
         renderer, replay policy, or reward label is constructed. The resulting
@@ -1037,11 +1074,8 @@ class CudaRolloutCampaign:
         from ..target_selection import OracleTargetTaskSampler
         from .rollout_dataset import RolloutDatasetWriter
 
-        implementation_revision = subprocess.check_output(
-            ["git", "rev-parse", "HEAD"],
-            text=True,
-            cwd=Path(__file__).resolve().parents[4],
-        ).strip()
+        generation_revision = current_generation_revision(contract_revision="candidate-family-phase-a-v2")
+        runtime_identity = current_phase_a_runtime_identity()
         phase_source = writer_config.source
         if hasattr(phase_source, "model_copy"):
             phase_source = phase_source.model_copy(
@@ -1069,7 +1103,6 @@ class CudaRolloutCampaign:
         generator = writer_config.candidate_mixture.setup_target()
         component_positions: dict[str, str] = {}
         target_families: list[str] = []
-        forward_family = "forward_local"
         for component in writer_config.candidate_mixture.components:
             assert component.position_mode is not None
             component_positions[component.name] = component.position_mode.value
@@ -1084,8 +1117,6 @@ class CudaRolloutCampaign:
                 target_families.append(component.name)
                 if component.paired_view_mode is not None:
                     target_families.append(paired_name)
-            if component.position_mode is CandidatePositionMode.FORWARD_LOCAL:
-                forward_family = component.name
 
         records: list[CandidateBenchmark] = []
         excluded: dict[str, str] = {}
@@ -1141,22 +1172,36 @@ class CudaRolloutCampaign:
                 )
             )
 
-        config = CandidateFamilyPreflightConfig(
-            query_width=writer_config.candidate_mixture.total_count,
-            configured_families=tuple(component_positions),
-            target_aware_families=tuple(target_families),
-            forward_family=forward_family,
-            require_known_applicability=True,
+        config = candidate_family_preflight_config_from_writer(
+            writer_config,
+            expected_population_size=self.config.expected_scene_count,
         )
-        preflight = reduce_candidate_family_preflight(records, config)
+        target_state_count = sum("target:unavailable" not in record.state_key for record in records)
+        scene_count = len({record.scene_key for record in records})
+        preflight = reduce_candidate_family_preflight(
+            records,
+            config,
+            coverage=CandidatePopulationCoverage(
+                expected=self.config.expected_scene_count,
+                selected_source_rows=len(source_rows),
+                represented_rows=len(records),
+                target_states=target_state_count,
+                unique_scenes=scene_count,
+            ),
+        )
         return CandidateFamilyPhaseAEvidence(
             source_manifest_sha256=source_manifest_sha256,
             source_store_manifest_hash=str(source_manifest.source_manifest_hash),
+            source_cache_version=str(source_manifest.source_cache_version),
+            split_manifest_hash=str(source_manifest.split_manifest_hash),
+            source_store_dir=str(source_manifest.source_store_dir),
             writer_config_sha256=sha256_bytes(canonical_json_bytes(writer_config.model_dump_jsonable())),
-            implementation_revision=implementation_revision,
+            implementation_revision=generation_revision.clean_commit,
+            generation_revision=generation_revision.to_jsonable(),
+            runtime_identity=runtime_identity,
             source_row_count=len(source_rows),
-            scene_count=len({record.scene_key for record in records}),
-            target_state_count=sum("target:unavailable" not in record.state_key for record in records),
+            scene_count=scene_count,
+            target_state_count=target_state_count,
             excluded_source_rows=excluded,
             records=tuple(records),
             preflight=preflight,
@@ -1165,30 +1210,27 @@ class CudaRolloutCampaign:
     def admit_broad_generation(
         self,
         reader: Any,
-        *,
-        final_prescale_artifact: Mapping[str, Any] | None,
     ) -> CandidateFamilyPreflight:
-        """Fail closed until family support and the later WP18 gate both pass.
+        """Evaluate family support, then fail closed pending the WP18 reader.
 
         Phase-A generation may run to produce the candidate-only evidence.
         This method owns admission of the broader rollout campaign: a passing
         family result is necessary but deliberately insufficient until the
-        hash-bound final ``#120`` artifact is supplied by WP18.
+        hash-bound final ``#120`` artifact is read by a canonical WP18 owner.
+        No caller-supplied mapping is accepted as an admission receipt.
         """
 
         result = self.candidate_family_preflight(reader)
         if not result.go:
             codes = ",".join(blocker.code.value for blocker in result.blockers)
             raise RuntimeError(f"candidate family preflight blocked broad generation: {codes}")
-        artifact = final_prescale_artifact
-        if (
-            not isinstance(artifact, Mapping)
-            or artifact.get("issue") != 120
-            or artifact.get("go") is not True
-            or not re.fullmatch(r"[0-9a-f]{64}", str(artifact.get("artifact_sha256", "")))
-        ):
-            raise RuntimeError("broad_generation_blocked_pending_wp18")
-        return result
+        raise BroadGenerationAdmissionError()
+
+    def require_execution_admission(self) -> None:
+        """Reject broad execution before claims, status, events, or outputs."""
+
+        if self.config.mode is CampaignMode.BROAD:
+            raise BroadGenerationAdmissionError()
 
     def plan(
         self, source_rows: Iterable[Any], *, source_manifest_hash: str = "", writer_config_hash: str = ""
@@ -2195,6 +2237,7 @@ class CudaRolloutCampaign:
         free_disk_floor_gb: float | None = None,
     ) -> list[Any]:
         """Run a claimed campaign and always release its claim."""
+        self.require_execution_admission()
         if plan is None:
             raise ValueError("an immutable CampaignPlan is required")
         if plan.campaign_id != self.config.campaign_id or any(

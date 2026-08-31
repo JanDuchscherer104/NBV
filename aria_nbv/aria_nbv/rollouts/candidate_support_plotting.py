@@ -514,6 +514,20 @@ def candidate_family_preflight_figures(result: CandidateFamilyPreflight) -> tupl
                 ),
             )
         )
+        for state_index, state in enumerate(states):
+            for family_index, family in enumerate(families):
+                if indexed.loc[(state, family), "applicable"] is not False:
+                    continue
+                for offset in (-0.4, -0.2, 0.0, 0.2, 0.4):
+                    heatmap.add_shape(
+                        type="line",
+                        x0=family_index - 0.45,
+                        x1=family_index + 0.45,
+                        y0=state_index + offset - 0.35,
+                        y1=state_index + offset + 0.35,
+                        line={"color": "rgba(70,70,70,0.65)", "width": 1},
+                        layer="above",
+                    )
     else:
         heatmap.add_annotation(text="No candidate-family cells", x=0.5, y=0.5, showarrow=False)
     heatmap.update_layout(title="State × family applicability and selected survival")

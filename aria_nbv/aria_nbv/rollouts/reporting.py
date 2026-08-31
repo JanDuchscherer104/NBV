@@ -71,7 +71,7 @@ def candidate_benchmark_report_frames(
     points: list[dict[str, Any]] = []
     for record in bundle.records:
         for family in record.families:
-            families.append({"scene_key": record.scene_key, "state_key": record.state_key, **asdict(family)})
+            families.append({"scene_key": record.scene_key, "state_key": record.state_key, **family.to_payload()})
         for point in record.points:
             points.append({"scene_key": record.scene_key, **asdict(point)})
     return {

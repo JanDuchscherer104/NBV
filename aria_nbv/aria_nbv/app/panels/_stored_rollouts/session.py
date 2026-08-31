@@ -21,6 +21,7 @@ from ....rollouts.candidate_benchmark import (
     CandidateFamilyPreflight,
     benchmark_binding_from_reader,
     benchmarks_from_reader,
+    candidate_family_preflight_from_payload,
     candidate_family_preflight_from_reader,
     read_bundle_bytes,
     reduce_candidate_records,
@@ -171,11 +172,11 @@ def _cached_candidate_family_preflight_cached(
     store_path: str,
     *,
     store_identity: str = "",
-) -> CandidateFamilyPreflight:
-    """Cache the complete canonical family gate by immutable store identity."""
+) -> dict[str, Any]:
+    """Cache a primitive family-gate payload by immutable store identity."""
 
     reader, _, _ = _cached_store_bundle_cached(store_path, store_identity=store_identity)
-    return candidate_family_preflight_from_reader(reader, require_known_applicability=True)
+    return candidate_family_preflight_from_reader(reader, require_known_applicability=True).to_payload()
 
 
 def _store_projection_identity(store_path: str) -> str:
@@ -314,9 +315,11 @@ class StoredRolloutSession:
         records = self.candidate_benchmark_records(state_key=state_key, candidate_limit=candidate_limit)
         bundle_bytes = self.candidate_benchmark_export(state_key=state_key)
         self._assert_current_identity()
-        family_preflight = _cached_candidate_family_preflight_cached(
-            self._projection_path(),
-            store_identity=identity,
+        family_preflight = candidate_family_preflight_from_payload(
+            _cached_candidate_family_preflight_cached(
+                self._projection_path(),
+                store_identity=identity,
+            )
         )
         self._assert_current_identity()
         return CandidateBenchmarkBuildResult(

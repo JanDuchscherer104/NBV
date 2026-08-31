@@ -910,8 +910,9 @@ def test_candidate_benchmark_cache_keys_separate_display_limit_from_complete_exp
     monkeypatch.setattr(
         session,
         "_cached_candidate_family_preflight_cached",
-        lambda *args, **kwargs: _record(calls, ("preflight", args, kwargs), None),
+        lambda *args, **kwargs: _record(calls, ("preflight", args, kwargs), {}),
     )
+    monkeypatch.setattr(session, "candidate_family_preflight_from_payload", lambda _payload: None)
 
     handle.build_candidate_benchmark(state_key="rollout:1/step:2", candidate_limit=7)
 
