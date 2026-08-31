@@ -6,11 +6,18 @@
 Chapter 3 fixed the experimental world: a target-specific task, a finite and
 hard-masked action set, a causal replay transition, and a root-normalized
 reconstruction-gain outcome. This chapter fixes the learner that operates
-inside that world. The selected method is a scalar-horizon, target-conditioned
-candidate-value model. It reads root evidence, relative candidate and target
-geometry, the factual selected-pose prefix, and remaining budget; it predicts a
+inside that world. It distinguishes two levels throughout. The *current
+realization* is the executable baseline used to validate interfaces and expose
+representation limits. The *scientific target* states the actor-visible
+information and evidence required to answer the research questions. It is a
+promotion contract, not a claim about code or results already obtained.
+
+Both levels share a scalar-horizon, target-conditioned candidate-value
+interface. The scorer reads admitted scene and target evidence, relative
+candidate geometry, causal history, and remaining budget; it predicts a
 conditional value for every materialized candidate before the authoritative
-hard mask is applied.
+hard mask is applied. What differs is whether the admitted actor state retains
+the target-specific information on which future return can depend.
 
 The selected executable configuration uses the `S0-pose` state, H0 mean-pooled pose
 history, A1 candidate-to-state cross-attention, and direct continuous Huber
@@ -21,19 +28,14 @@ ordinal decoding, and candidate-set interaction remain alternatives because
 none has yet passed a frozen comparative evaluation.
 
 The value query distinguishes factual remaining budget $b_t$ from requested
-residual horizon $h$. The executable scorer admits the joint triangular domain
-$1 <= h <= b_t$. Dense one-step labels support $(b_t,1)$ across realized
-budgets, whereas recursive supervision for $h>1$ follows the factual diagonal
-$h=b_t$; exact $Q_2$ is executable only at $(b_t,h)=(2,2)$ and its held-out
-receipt remains pending. Current bundles record trained horizons rather than
-budget--horizon pairs, and deployed inference requests $h=b_t$ behind a
-trained-horizon gate. A pair-bound gate is therefore required before any
-off-diagonal $h>1$ query can be promoted beyond the syntactic scorer
-interface. Exact horizon two remains the first epistemic test of learned
-lookahead: it checks whether recursion recovers a target that can be computed
-without trusting a learned longer-horizon continuation. Passing that test is
-necessary but not sufficient for a policy claim, which additionally requires
-positive oracle headroom and held-out endpoint recovery.
+residual horizon $h$. Current supervision supports dense one-step queries and
+recursive queries on the factual budget diagonal; wider executable inputs do
+not establish wider learned support. Exact horizon two is therefore the first
+epistemic test of learned lookahead: it can compare learned recursion with an
+exact finite-support endpoint without trusting a learned longer-horizon
+continuation. Passing that test is necessary but not sufficient for a policy
+claim, which additionally requires positive oracle headroom and held-out
+endpoint recovery.
 
 The chapter proceeds from the selected state and encoding, through finite
 action and replay semantics, to architectural acceptance properties and the

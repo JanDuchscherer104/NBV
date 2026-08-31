@@ -194,7 +194,49 @@ The thesis report bundle is loaded through the strict schema checked in `experim
 #if candidate-support-available [
   The confirmatory bundle supplies descriptive candidate-support quality-control diagnostics for every validated store. Actor-valid fraction, lower-tail valid support, configured-family zero rate, target-side balance, and circular orbit span are reported per profile in @tab:thesis-confirmatory-values with the frozen state--scene macro identities and scene denominators. These values audit candidate support; they are not paired policy effects and carry no comparative inference unless a separately preregistered paired scene contrast and interval are present.
 ] else [
-  The available artifacts show that the finite-candidate rollout path reaches mesh rendering, target-specific oracle scoring, and selected-action replay on training sources. They therefore support an implementation-readiness claim only. A CUDA out-of-memory failure in an unbatched candidate render and later memory-bounded attempts identify rendering as a scale gate; neither establishes rollout throughput, storage cost, candidate-family support, or policy quality for the intended study population.
+  The frozen 100-scene Phase-A proposal audit attempted $6,000$ candidates and
+  admitted $3,146$ into the compact valid shells. It nevertheless failed its
+  support gate: $44$ applicable state--family cells had no selected row, $24$
+  states missed the aggregate non-forward target-aware-family floor, and $8$
+  states missed the root-support threshold. All $100$ reviewed source rows,
+  scenes, and target states were represented without exclusions. Because this
+  no-render audit contains no reward labels, flat-gain status is unavailable
+  with label and eligible-state denominators both zero. The result diagnoses
+  proposal support; it provides no evidence about RRI, candidate quality,
+  rollout throughput, or policy performance and does not admit broad rollout
+  generation.
+
+  Separately, training-source rollout attempts reached mesh rendering,
+  target-specific oracle scoring, and selected-action replay. An out-of-memory
+  failure during unbatched candidate rendering and subsequent memory-bounded
+  attempts identify rendering as a scale gate; they do not establish population
+  throughput or storage feasibility.
+
+  // Display provenance:
+  // - source -> docs/contents/evidence/candidate_family_phase_a_wp02.json (canonical 100-state Phase-A evidence and internal artifact identity)
+  // - transform -> provenance_correction_revision plus embedded phase-a-target-aligned-z-up-v1 coordinate contract; no candidate regeneration
+  // - aggregate -> preflight.coverage, preflight.blockers, preflight.flat_gain, and records[].points actor_valid counts
+  // - representative selection -> sort composite (scene_key, state_key) identities and, for each persisted audit stratum in insertion order, retain the first identity whose scene belongs to that stratum; this matches _candidate_family_funnel_identities in aria_nbv/aria_nbv/app/panels/_stored_rollouts/validity_support.py
+  // - plot/export -> use the selected/attempted matrix semantics of candidate_family_preflight_figures in aria_nbv/aria_nbv/rollouts/candidate_support_plotting.py and export the Plotly heatmap as SVG; the exact historical shell command was not retained, so the checked-in SVG remains the display owner
+  // - display -> docs/contents/evidence/candidate_family_phase_a_wp02_audit_heatmap.svg and this bounded Results interpretation
+
+  #figure(
+    image(
+      "../../../contents/evidence/candidate_family_phase_a_wp02_audit_heatmap.svg",
+      width: 100%,
+    ),
+    caption: [
+      Candidate-family survival for one deterministic scene from each of the
+      ten persisted Phase-A audit strata. Each cell reports compact-valid-shell
+      membership divided by attempted rows for one factual state and proposal
+      family; the complete 100-state matrix remains in the hash-bound evidence
+      bundle. The underlying artifact geometry uses correction revision
+      `phase-a-target-aligned-z-up-v1`; the stored shells, support counts,
+      verdict, and execution identity are unchanged. The artifact is bound to
+      clean execution revision `2baf7cf6b276b81c50d01d45b152016d7cf68033` and
+      SHA-256 `6d33e9e3d68737c8a6a5589ae5117c1e4d7fcaa89056fcfcaec1d315e4509c83`.
+    ],
+  ) <fig:candidate-family-phase-a-support>
 ]
 
 == Target-Task Coverage

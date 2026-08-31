@@ -19,6 +19,13 @@ five state tokens as keys and values; candidates never attend to other
 candidates. A0 flattens the same ordered tokens and applies a row-shared MLP.
 Both expose the same-width context to the same value-decoder seam.
 
+The A0/A1 choice is orthogonal to the state distinction in
+@tab:thesis-counterfactual-state-protocols. A1 is the current interaction
+choice, not the scientific target itself: the same row-equivariant interface
+can read a richer causal state without introducing candidate-to-candidate
+communication. Architecture should escalate only if a frozen comparison shows
+that an admitted state is informative but A0/A1 cannot recover its value.
+
 #figure(
   publication-table(
     text-size: 8.2pt,

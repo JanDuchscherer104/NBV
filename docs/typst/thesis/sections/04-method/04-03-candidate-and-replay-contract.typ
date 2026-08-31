@@ -6,11 +6,11 @@
 == Finite Action and Causal Replay
 
 #thesis_status(
-  implementation: "implemented",
+  implementation: "partial",
   evidence: "pending",
-  source: "aria_nbv/aria_nbv/rollouts/replay/engine.py; aria_nbv/aria_nbv/rollouts/zarr_store.py; aria_nbv/aria_nbv/rollouts/qh_reader.py; aria_nbv/tests/rollouts/test_qh_reader.py",
-  gate: [retain deterministic row identity, source roles, hard-mask isolation, and selected-transition validation],
-)[Finite candidate tables, hard masks, factual selected transitions, and dense one-step label admission are implemented and tested. Population support and policy outcomes remain pending.]
+  source: "aria_nbv/aria_nbv/targets/protocol.py; aria_nbv/aria_nbv/rollouts/replay/engine.py; aria_nbv/aria_nbv/rollouts/zarr_store.py; aria_nbv/aria_nbv/rollouts/qh_reader.py; aria_nbv/tests/rollouts/test_qh_reader.py",
+  gate: [retain deterministic row identity, source roles, hard-mask isolation, and selected-transition validation; add selected-observation fusion and no-future-observation tests],
+)[Finite candidate tables, hard masks, and the `S0-pose` replay transition are implemented and tested. The scientific target additionally requires a causal actor-visible observation update, which remains pending.]
 
 At step $t$, the generator returns the full candidate table
 #symb.rl.candidate_table, a hard-valid mask $bold(m)_t$, and versioned failure
@@ -37,7 +37,7 @@ values. Generator family, sampled support, hard rejection, and stable shell
 identity remain attached to every row so proposal coverage can be audited
 before policy quality is interpreted.
 
-=== Factual transition
+=== Supervision and audit contracts
 
 The persisted supervision profile makes label density an auditable contract
 rather than an inference from array shape. Historical stores declare
@@ -97,42 +97,12 @@ camera-forward directions are rotated by the same basis but remain unit
 vectors. Hence target-forward and target-lateral plots are invariant to factual
 rig yaw; rig-frame components cannot carry those axis labels directly.
 
-The frozen 100-scene Phase-A control attempted $6,000$ candidates and admitted
-$3,146$ into the compact valid shells. It nevertheless failed the support gate:
-$44$ applicable state/family cells had no selected row, $24$ states missed the
-aggregate non-forward target-aware-family floor, and $8$ states missed the
-root-support threshold. All $100$ reviewed source rows, scenes, and target
-states were represented without exclusions. Since this phase deliberately
-contains no reward labels, the flat-gain outcome is unavailable with label and
-eligible-state denominators both zero. This is proposal-support evidence, not
-evidence about RRI or candidate quality, and it does not admit broad rollout
-generation.
+The authenticated Phase-A outcome belongs to Results rather than to this
+definition of the audit. Method fixes the estimand, denominators, coordinate
+normalization, and failure semantics; @sec:thesis-results reports what the
+frozen evidence actually showed.
 
-#figure(
-  image(
-    "../../../../contents/evidence/candidate_family_phase_a_wp02_audit_heatmap.svg",
-    width: 100%,
-  ),
-  caption: [
-    Candidate-family survival for one deterministic scene from each of the ten
-    persisted Phase-A audit strata. Each cell reports compact-valid-shell
-    membership divided by attempted rows for one factual state and proposal
-    family. The complete 100-state matrix remains in the evidence bundle. The
-    artifact is bound to clean execution revision
-    `2baf7cf6b276b81c50d01d45b152016d7cf68033`, generation revision
-    `a2ae86b7463930c9`, and artifact SHA-256
-    `6d33e9e3d68737c8a6a5589ae5117c1e4d7fcaa89056fcfcaec1d315e4509c83`.
-    The stored shells, support counts, verdict, and execution identity are
-    unchanged. Geometry correction revision
-    `phase-a-target-aligned-z-up-v1` rotates the authenticated candidate
-    centres, target-relative vectors, and view directions into the canonical
-    target-aligned world-Z-up basis without rerunning candidate generation. Its
-    predecessor artifact is
-    `60b271db515a5e665fcb7bbeeecb87e6acb4bac2ff8e28b26b7308911328759c`.
-  ],
-) <fig:candidate-family-phase-a-support>
-
-=== Implemented replay transition
+=== Current replay transition
 
 After selecting an admitted row, the replay engine applies
 
@@ -153,6 +123,24 @@ support. It does not claim that the actor received RGB, fused depth, or updated
 a spatial reconstruction. Selected mesh-rendered depth may be persisted as
 privileged counterfactual evidence for a separate control, but unselected
 candidate renders never enter a successor state.
+
+=== Scientific target transition
+
+The scientific target retains the same factual action, budget, and candidate-
+regeneration semantics, but its dynamic state must also update from the
+observation acquired at the selected pose. That update is strictly causal: it
+may use the previous actor-visible state, the selected action, and the selected
+observation, but neither a future observation nor any unselected candidate
+render. Its carrier must preserve observed surface, observed free, unknown,
+finite support, uncertainty, source, and recency so that two pose-identical
+histories with different observations need not collapse to one state.
+
+This target transition is a scientific requirement, not the behavior of the
+current replay engine. Promotion therefore requires deterministic fusion,
+source-dropout and no-future-observation tests, target-source leakage checks,
+and held-out evidence that the added state improves the target-specific value
+task. Persisted mesh depth remains a privileged control until an actor-visible
+observation path satisfies those gates.
 
 The normalized replay view expands one retained chain into its realized
 decision states. Each state sees only the prefix available before its action.

@@ -79,15 +79,20 @@ budget $b_t$ or requested horizon $h$, which remain separate tokens. Because
 H0 observes poses rather than selected surfaces or free-space evidence, it
 inherits the `S0-pose` sufficiency limitation identified above.
 
+The current encoder implements the `S0-pose` actor-state carrier described
+above. The implemented `v1_observed` protocol can supply its target token
+without adding selected-observation state; target provenance and dynamic state
+are separate axes. Reaching the scientific target therefore does not merely
+append a larger scene token: the encoder must preserve source and availability
+while letting each candidate query both the actor-visible target and the causal
+dynamic state in relative geometry. Whether points, voxels, rays, or another
+carrier best meets that requirement remains an empirical comparison.
+
 The maximum horizon $H_"max"$ binds data, model, and checkpoint. Remaining
-budget records the factual state; $h$ selects a requested return within the
-joint support domain $1 <= h <= b_t <= H_"max"$. Omitting $h$ selects the
-factual diagonal $h=b_t$. Dense $Q_1$ supervision realizes $(b_t,1)$ across
-observed budgets, while recursive $h>1$ supervision follows the diagonal and
-exact $Q_2$ is executable at $(2,2)$ with its held-out receipt still pending.
-The current bundle records trained horizons, not pair-level support. Deployed
-online inference requests only $h=b_t$ and rejects horizons absent from that
-bundle. The scorer can execute shorter off-diagonal queries syntactically, but
-a manifest-bound pair gate is required before promoted off-diagonal $h>1$
-inference. The public interface scores one scalar horizon at a time and
-preserves candidate order in its $[B,S,N_q]$ output.
+budget records the factual state and $h$ selects one return from
+$1 <= h <= b_t <= H_"max"$. Current bundles record trained horizons rather
+than budget--horizon pairs, so deployed inference requests the factual diagonal
+$h=b_t$. A manifest-bound pair gate is required before any off-diagonal $h>1$
+query is promoted beyond the syntactic scorer interface. The public interface
+scores one scalar horizon at a time and preserves candidate order in its
+$[B,S,N_q]$ output.
