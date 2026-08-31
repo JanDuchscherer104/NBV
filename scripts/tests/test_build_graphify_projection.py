@@ -78,6 +78,10 @@ class Fixture:
     def __init__(self, root: Path) -> None:
         self.root = root
         subprocess.run(["git", "init", "-q", "-b", "main"], cwd=root, check=True)
+        assert _git(root, "config", "--local", "--bool", "core.bare") == "false"
+        assert (
+            Path(_git(root, "rev-parse", "--show-toplevel")).resolve() == root.resolve()
+        )
         _git(root, "config", "user.email", "projection@example.invalid")
         _git(root, "config", "user.name", "Projection Test")
         self.write("src/model.py", "class Model:\n    pass\n")

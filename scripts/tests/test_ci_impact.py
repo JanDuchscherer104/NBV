@@ -72,8 +72,7 @@ class SelectionTests(unittest.TestCase):
         )[0]
         self.assertIn("if: steps.impact.outputs.package == 'true'", setup_uv)
         self.assertIn(
-            'python -m pip install --disable-pip-version-check --no-input '
-            '"uv==0.12.5"',
+            'python -m pip install --disable-pip-version-check --no-input "uv==0.12.5"',
             setup_uv,
         )
         self.assertIn('uv_version="$(python -m uv --version)"', setup_uv)
@@ -106,7 +105,7 @@ class SelectionTests(unittest.TestCase):
             "$(UV) run --extra dev pytest --import-mode=importlib $(PYTEST_WORKERS_FLAG) $(PACKAGE_SMOKE_TESTS)",
             "$(UV) run --extra dev mypy --no-incremental $(MYPY_JUNIT_FLAG) tests/data_handling/public_api_typing_contract.py",
             "$(UV) run --extra dev ruff format --check --quiet aria_nbv tests",
-            "$(UV) run --extra dev ruff check --output-format \"$(RUFF_CHECK_OUTPUT_FORMAT)\" $(RUFF_FIX_FLAG) aria_nbv tests",
+            '$(UV) run --extra dev ruff check --output-format "$(RUFF_CHECK_OUTPUT_FORMAT)" $(RUFF_FIX_FLAG) aria_nbv tests',
         ):
             with self.subTest(command=command):
                 self.assertIn(command, makefile)
@@ -161,6 +160,7 @@ class SelectionTests(unittest.TestCase):
             with self.subTest(path=path):
                 self.assertIn(f'"{path}"', workflow)
         self.assertIn('"scripts/agent_status.py"', workflow)
+        self.assertIn('"scripts/git_env_contract.py"', workflow)
         self.assertIn('"scripts/tests/test_agent_status.py"', workflow)
         self.assertIn("python3 scripts/tests/test_agent_status.py", workflow)
         self.assertIn('"scripts/scaffold/fixtures/routing.json"', workflow)
@@ -192,8 +192,12 @@ class SelectionTests(unittest.TestCase):
             "python3 scripts/tests/test_graphify_upstream_skill.py",
             workflow,
         )
-        self.assertIn("python3 scripts/tests/test_reconcile_graphify_worktree.py", workflow)
-        self.assertIn("python3 scripts/tests/test_graphify_session_readiness.py", workflow)
+        self.assertIn(
+            "python3 scripts/tests/test_reconcile_graphify_worktree.py", workflow
+        )
+        self.assertIn(
+            "python3 scripts/tests/test_graphify_session_readiness.py", workflow
+        )
         self.assertIn(
             "make qmd-frontmatter-check api-docs-self-test docs-render-core", workflow
         )

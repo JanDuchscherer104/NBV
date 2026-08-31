@@ -43,6 +43,8 @@ VENV_PYTHON ?= $(CURDIR)/aria_nbv/.venv/bin/python
 PYTHON_INTERPRETER ?= $(VENV_PYTHON)
 AGENT_STATUS_PYTHON ?= python3
 AGENT_STATUS_ARGS ?=
+# Nested fixture repositories must not inherit the caller's repository routing.
+GIT_ENV_CLEAN := ./scripts/clean_git_env.sh
 CONTEXT_DIR ?= docs/_generated/context
 CONTEXT_OUT ?= $(CONTEXT_DIR)/context_snapshot.md
 CONTEXT_INDEX_OUT ?= $(CONTEXT_DIR)/source_index.md
@@ -283,7 +285,7 @@ agent-status: ## 🧭 Report read-only checkout and scaffold readiness status
 
 scaffold-audit-self-test: _check_python ## 🧭 Run negative probes for scaffold-audit invariants
 	@$(PYTHON_INTERPRETER) scripts/scaffold_audit.py --self-test
-	@$(PYTHON_INTERPRETER) scripts/tests/test_agent_governance_g002.py
+	@$(GIT_ENV_CLEAN) $(PYTHON_INTERPRETER) scripts/tests/test_agent_governance_g002.py
 
 scaffold-check: agents-db-validate check-agent-memory scaffold-audit scaffold-audit-self-test skill-source-self-test graphify-state-check ## 🧭 Run the strict local agent-scaffold gate
 
@@ -298,7 +300,7 @@ graphify-session-readiness-integration: _check_python ## 🕸️ Exercise real e
 	@ARIA_NBV_RUN_GRAPHIFY_SESSION_INTEGRATION=1 $(PYTHON_INTERPRETER) scripts/tests/test_graphify_session_readiness_integration.py
 
 graphify-projection-self-test: _check_python ## 🕸️ Verify the deterministic literature projection builder
-	@$(PYTHON_INTERPRETER) scripts/tests/test_build_graphify_projection.py
+	@$(GIT_ENV_CLEAN) $(PYTHON_INTERPRETER) scripts/tests/test_build_graphify_projection.py
 
 graphify-projection-live-check: _check_python ## 🕸️ Validate the projection against live owners at exact HEAD
 	@$(PYTHON_INTERPRETER) scripts/build_graphify_projection.py --check --aria-code-ref "$$(git rev-parse HEAD)"
@@ -313,7 +315,8 @@ graphify-maintain: ## 🕸️ Maintain and admit the current worktree's Graphify
 	@CODEX_WORKTREE_PATH="$$PWD" bash scripts/setup_codex_worktree_env.sh --maintain --quiet
 
 ci-impact-self-test: ## 🧭 Verify path-to-CI-family routing and fail-closed behavior
-	@$(PYTHON_INTERPRETER) scripts/tests/test_ci_impact.py
+	@$(GIT_ENV_CLEAN) $(PYTHON_INTERPRETER) scripts/tests/test_ci_impact.py
+	@$(GIT_ENV_CLEAN) $(PYTHON_INTERPRETER) scripts/tests/test_git_env_contract.py
 
 api-docs-self-test: ## 📚 Exercise Quartodoc stale-alias recovery with a fake builder
 	@./scripts/tests/test_quarto_generate_api_docs.sh
@@ -365,7 +368,7 @@ agents-db-validate: _check_python ## Validate the agents DB schema
 	@$(PYTHON_INTERPRETER) scripts/agents_db.py validate
 
 ownership-consolidation-contract: _check_python ## Validate ownership boundaries against canonical sources
-	@$(PYTHON_INTERPRETER) -m pytest --import-mode=importlib scripts/tests/test_ownership_consolidation_contract.py scripts/tests/test_validate_agent_memory_retired.py
+	@$(GIT_ENV_CLEAN) $(PYTHON_INTERPRETER) -m pytest --import-mode=importlib scripts/tests/test_ownership_consolidation_contract.py scripts/tests/test_validate_agent_memory_retired.py
 
 #  ══════════════════════════════════════════════════════════════════════
 #  Offline / rollout inspection

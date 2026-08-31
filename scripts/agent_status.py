@@ -13,23 +13,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal, TypedDict
 
+from git_env_contract import environment_without_inherited_git_overrides
+
 SCRIPT = Path(__file__).resolve()
 FRESHNESS_CHECKER = SCRIPT.with_name("check_graphify_freshness.py")
-GIT_ENV_OVERRIDES = {
-    "GIT_ALTERNATE_OBJECT_DIRECTORIES",
-    "GIT_CEILING_DIRECTORIES",
-    "GIT_COMMON_DIR",
-    "GIT_CONFIG_COUNT",
-    "GIT_CONFIG_NOSYSTEM",
-    "GIT_CONFIG_PARAMETERS",
-    "GIT_DIR",
-    "GIT_DISCOVERY_ACROSS_FILESYSTEM",
-    "GIT_INDEX_FILE",
-    "GIT_NAMESPACE",
-    "GIT_OBJECT_DIRECTORY",
-    "GIT_OBJECT_DIRECTORY_RELATIVE",
-    "GIT_WORK_TREE",
-}
 State = Literal[
     "healthy", "unavailable", "uninitialized", "stale", "unusable", "not-applicable"
 ]
@@ -131,11 +118,7 @@ class GitBoundary:
 
     def __init__(self, path: Path) -> None:
         self.path = path.resolve()
-        self.env = {
-            key: value
-            for key, value in os.environ.items()
-            if not key.startswith("GIT_") and key not in GIT_ENV_OVERRIDES
-        }
+        self.env = environment_without_inherited_git_overrides()
         self.env["GIT_OPTIONAL_LOCKS"] = "0"
         self.env["GIT_CONFIG_NOSYSTEM"] = "1"
         self.env["GIT_CONFIG_GLOBAL"] = os.devnull
@@ -310,12 +293,18 @@ def _upstream(
 
 def _runtime_action(boundary: GitBoundary, kind: Kind) -> str | None:
     """Return the topology-valid, non-executed runtime setup action."""
-    if kind == "linked" and (boundary.path / "scripts" / "setup_worktree_env.sh").is_file():
+    if (
+        kind == "linked"
+        and (boundary.path / "scripts" / "setup_worktree_env.sh").is_file()
+    ):
         return _graphify_command(boundary.path, "bash", "scripts/setup_worktree_env.sh")
-    if kind in {"primary", "standalone"} and (
-        boundary.path / "aria_nbv" / "pyproject.toml"
-    ).is_file():
-        return _graphify_command(boundary.path / "aria_nbv", "uv", "sync", "--extra", "dev")
+    if (
+        kind in {"primary", "standalone"}
+        and (boundary.path / "aria_nbv" / "pyproject.toml").is_file()
+    ):
+        return _graphify_command(
+            boundary.path / "aria_nbv", "uv", "sync", "--extra", "dev"
+        )
     return None
 
 
@@ -324,7 +313,11 @@ def _readiness(boundary: GitBoundary, kind: Kind) -> ReadinessStatus:
     if runtime_path.is_file() and os.access(runtime_path, os.X_OK):
         try:
             result = subprocess.run(
-                [str(runtime_path), "-c", "import sys; raise SystemExit(not bool(sys.executable))"],
+                [
+                    str(runtime_path),
+                    "-c",
+                    "import sys; raise SystemExit(not bool(sys.executable))",
+                ],
                 check=False,
                 capture_output=True,
                 text=True,

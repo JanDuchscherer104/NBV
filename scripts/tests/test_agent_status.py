@@ -412,8 +412,6 @@ class AgentStatusTests(unittest.TestCase):
             "GIT_OBJECT_DIRECTORY",
             "GIT_ALTERNATE_OBJECT_DIRECTORIES",
             "GIT_NAMESPACE",
-            "GIT_CEILING_DIRECTORIES",
-            "GIT_DISCOVERY_ACROSS_FILESYSTEM",
         ):
             env[name] = str(other)
         env["GIT_OPTIONAL_LOCKS"] = "1"
