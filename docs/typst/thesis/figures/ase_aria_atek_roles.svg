@@ -12,14 +12,14 @@
     <g fill="#172033">
       <text x="94" y="155" font-size="20" font-weight="700">Project Aria</text>
       <text x="360" y="155" font-size="20" font-weight="700">ASE</text>
-      <text x="626" y="155" font-size="20" font-weight="700">EFM3D</text>
-      <text x="892" y="155" font-size="20" font-weight="700">ATEK</text>
+      <text x="626" y="155" font-size="20" font-weight="700">ATEK</text>
+      <text x="892" y="155" font-size="20" font-weight="700">EFM3D</text>
     </g>
     <g fill="#334155" font-size="15">
       <text x="94" y="188">calibration &amp; time alignment</text><text x="94" y="215">poses &amp; semi-dense evidence</text><text x="94" y="242">observation contract</text>
       <text x="360" y="188">100,000 synthetic indoor scenes</text><text x="360" y="215">sensor-like streams + GT</text><text x="360" y="242">controlled data substrate</text>
-      <text x="626" y="188">posed local 3D lifting</text><text x="626" y="215">OBB metadata + 100 meshes</text><text x="626" y="242">representation / evaluation path</text>
-      <text x="892" y="188">preprocessing &amp; data stores</text><text x="892" y="215">standard task evaluators</text><text x="892" y="242">interface, not scientific truth</text>
+      <text x="626" y="188">preprocessing &amp; data stores</text><text x="626" y="215">standard task evaluators</text><text x="626" y="242">interface, not scientific truth</text>
+      <text x="892" y="188">posed local 3D lifting</text><text x="892" y="215">OBB metadata + mesh evaluation</text><text x="892" y="242">representation / evaluation path</text>
     </g>
     <g stroke="#64748b" stroke-width="2" fill="#64748b"><path d="M314 215 H330 L322 209 M330 215 L322 221"/><path d="M580 215 H596 L588 209 M596 215 L588 221"/><path d="M846 215 H862 L854 209 M862 215 L854 221"/></g>
     <rect x="70" y="357" width="1040" height="104" rx="12" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1.5"/>

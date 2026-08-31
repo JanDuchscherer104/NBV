@@ -50,23 +50,25 @@ stores them beside logged streams.
 
 === Dataset Scale and Ground-Truth Mesh Scope
 
-Ground-truth meshes are available for 100 ASE validation scenes in the EFM3D
-release. This is $100 / 100,000 = 0.1$ percent of the full ASE scene count: a
-precious but deliberately bounded mesh-evaluation subset. The logarithmic
+EFM3D releases ground-truth meshes for its simulated validation setting. The
+local ATEK--EFM inventory used for this mesh-evaluation protocol contains 100
+scene directories, or $100 / 100,000 = 0.1$ percent of the full ASE scene
+count. This is a deliberately bounded local evaluation scope. The logarithmic
 comparison in @fig:thesis-ase-mesh-scope makes the three-order-of-magnitude
 gap explicit, preventing the 100-scene result from being read as a property of
 the entire 100,000-scene release.
 
 // evidence:
 // - @ProjectAria-ASE-2025 -> https://facebookresearch.github.io/projectaria_tools/docs/open_datasets/aria_synthetic_environments_dataset (100,000 scenes and aggregate scale, checked 2026-08-31)
-// - @EFM3D-straub2024 -> docs/literature/tex-src/arXiv-EFM3D/dataset.tex:30-30 (100 simulated-validation ground-truth meshes)
+// - @EFM3D-straub2024 -> docs/literature/tex-src/arXiv-EFM3D/dataset.tex:30-30 (simulated-validation ground-truth meshes)
+// - docs/contents/ase_dataset.qmd:42-52 (100 local scene directories and 4,608 local snippet windows)
 
 #figure(
   image(
     "../../figures/ase_gt_mesh_subset_scale.svg",
     width: 100%,
   ),
-  caption: [Scale of the released ASE corpus and the EFM3D ground-truth-mesh evaluation subset. A logarithmic scene-count axis locates 100 mesh validation scenes against 100,000 ASE scenes; the subset is 0.1% of the corpus (a 1,000:1 ratio). This schematic quantitative comparison is derived from the cited release counts. @ProjectAria-ASE-2025 @EFM3D-straub2024],
+  caption: [Scale of the released ASE corpus and the local ATEK--EFM mesh-evaluation snapshot. A logarithmic scene-count axis locates 100 local scene directories against 100,000 ASE scenes; the snapshot is 0.1% of the corpus (a 1,000:1 ratio). This schematic quantitative comparison combines the cited ASE release size with the dated local inventory. @ProjectAria-ASE-2025],
 ) <fig:thesis-ase-mesh-scope>
 
 The local ATEK--EFM snapshot used to inspect the mesh subset contains 100
@@ -84,7 +86,7 @@ complete ASE release or of a future ATEK export.
     "../../figures/ase_local_snapshot_summary.svg",
     width: 100%,
   ),
-  caption: [Fresh summary of per-scene availability in the locally scanned ATEK--EFM snapshot (scan date: 2025-12-31). The range, percentile interval, median, and mean characterize 4,608 windows across 100 scenes. This data-derived figure scopes local experimental availability, not the global ASE distribution.],
+  caption: [Summary of per-scene availability in the locally scanned ATEK--EFM snapshot (scan date: 2025-12-31). The range, percentile interval, median, and mean characterize 4,608 windows across 100 scenes. This data-derived figure scopes local experimental availability, not the global ASE distribution.],
 ) <fig:thesis-ase-local-snippets>
 
 ATEK supplies a standardized data and evaluation interface rather than another

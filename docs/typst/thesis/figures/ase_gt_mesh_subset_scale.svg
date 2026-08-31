@@ -1,8 +1,8 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1180" height="420" viewBox="0 0 1180 420" role="img" aria-labelledby="title desc">
-  <title id="title">ASE dataset and EFM3D ground-truth mesh subset scale</title>
-  <desc id="desc">A logarithmic scene-count axis compares the 100,000 scenes in Aria Synthetic Environments with the 100 validation scenes that have released ground-truth meshes in EFM3D. The difference is three orders of magnitude, or one thousand to one.</desc>
+  <title id="title">ASE dataset and local mesh-evaluation snapshot scale</title>
+  <desc id="desc">A logarithmic scene-count axis compares the 100,000 scenes in Aria Synthetic Environments with the 100-scene local ATEK EFM snapshot used for the mesh-evaluation protocol. The difference is three orders of magnitude, or one thousand to one.</desc>
   <rect width="1180" height="420" fill="#ffffff"/>
-  <text x="70" y="52" fill="#172033" font-family="Arial, Helvetica, sans-serif" font-size="25" font-weight="700">Released dataset scale and mesh-evaluation scope</text>
+  <text x="70" y="52" fill="#172033" font-family="Arial, Helvetica, sans-serif" font-size="25" font-weight="700">Released dataset scale and local mesh-evaluation scope</text>
   <text x="70" y="82" fill="#4b5563" font-family="Arial, Helvetica, sans-serif" font-size="16">Scene count on a logarithmic scale</text>
   <line x1="178" y1="325" x2="1080" y2="325" stroke="#334155" stroke-width="2"/>
   <g stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4 5">
@@ -22,7 +22,7 @@
     <text x="1080" y="355">100,000</text>
   </g>
   <text x="629" y="395" fill="#475569" font-family="Arial, Helvetica, sans-serif" font-size="15" text-anchor="middle">number of ASE scenes</text>
-  <text x="70" y="183" fill="#172033" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="700">EFM3D validation meshes</text>
+  <text x="70" y="183" fill="#172033" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="700">Local mesh-evaluation snapshot</text>
   <text x="70" y="209" fill="#475569" font-family="Arial, Helvetica, sans-serif" font-size="15">100 scenes · 0.1% of ASE</text>
   <line x1="178" y1="199" x2="538" y2="199" stroke="#0f766e" stroke-width="8" stroke-linecap="round"/>
   <circle cx="538" cy="199" r="12" fill="#0f766e" stroke="#ffffff" stroke-width="4"/>
