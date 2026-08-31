@@ -14,6 +14,7 @@ import zarr
 from typer.testing import CliRunner
 
 import aria_nbv.rollouts.info_cli as info_cli
+from aria_nbv.rollouts.candidate_benchmark import FAMILY_PREFLIGHT_SCHEMA_ID
 from aria_nbv.rollouts.info_cli import app as rollouts_info_app
 from aria_nbv.rollouts.info_cli import main as rollouts_info_main
 from aria_nbv.rollouts.inspection import build_compact_statistics
@@ -137,7 +138,7 @@ def test_rollouts_info_preflight_json_reports_go_no_go_sections(
     assert preflight["validation"]["ok"]
     assert "coverage" in preflight
     assert "validity" in preflight
-    assert preflight["candidate_family"]["schema_id"] == "aria-nbv-candidate-family-preflight-v1"
+    assert preflight["candidate_family"]["schema_id"] == FAMILY_PREFLIGHT_SCHEMA_ID
     assert preflight["candidate_family"]["resolved_min_valid"] >= 12
     assert "rewards" in preflight
     assert "storage" in preflight

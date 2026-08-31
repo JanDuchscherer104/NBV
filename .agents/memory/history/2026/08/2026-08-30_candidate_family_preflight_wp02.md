@@ -74,8 +74,7 @@ RTX 3080 Ti runtime identity.
 
 ## Verification
 
-- Exact family/info/plot/panel/cache/source-adapter suite: 82 passed.
-- Campaign regression suite: 192 passed.
+- Broad campaign/family/info/panel/cache/source-adapter suite: 277 passed.
 - Execution-identity and no-go exit regressions: 4 passed.
 - Strict focused mypy: seven changed Python owners passed.
 - Ruff check/format, Agents-DB validation, agent-memory validation, thesis
