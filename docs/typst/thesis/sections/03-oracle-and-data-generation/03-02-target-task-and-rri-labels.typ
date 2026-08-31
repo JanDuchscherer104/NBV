@@ -303,7 +303,18 @@ annotated as uncapped spherical support and are not represented by a bounded box
 
 Rollout recipes select and retain finite chains from the valid action table. The implemented families are uniform valid sampling, one-step oracle greedy selection, bounded oracle lookahead, and temperature-softmax sampling. Their horizon, branch factor, beam width, temperature, and seed are resolved parameters. These recipes generate replay diversity and bounded references; they do not constitute a learned policy.
 
-Bounded oracle lookahead can select a different first action from one-step greedy because it ranks retained finite-horizon chains rather than immediate gain alone (@fig:oracle-lookahead-tree). The persisted artifact contains these selected or beam-retained chains and their full per-step candidate shells; it is not an exhaustive materialization of the counterfactual action tree.
+Bounded oracle lookahead can select a different first action from one-step
+greedy because it ranks retained finite-horizon chains rather than immediate
+gain alone (@fig:oracle-lookahead-tree). In reinforcement-learning terms, this
+is decision-time planning: computation is focused on the current choice by
+expanding possible consequences before acting
+@ReinforcementLearning-sutton2018[Sec. 8.8, pp. 180–181]. The persisted artifact
+contains these selected or beam-retained chains and their full per-step
+candidate shells; it is not an exhaustive materialization of the
+counterfactual action tree.
+
+// evidence:
+// - @ReinforcementLearning-sutton2018 -> docs/literature/pdf/RLbook2020.pdf#page=202-203 (Ch. 8, Sec. 8.8, printed pp. 180-181; planning at decision time)
 
 #figure(
   align(center, image(
@@ -429,7 +440,11 @@ $
   #eqs.rl.cumulative_target_root_gain
 $
 
-The finite-horizon return is the discounted sum of those target rewards along a selected counterfactual branch. It is a training target for #symb.rl.qh, not a claim that the deployed system has an online continuous-control policy:
+Using the finite-horizon return defined in
+@sec:thesis-sequential-decision-foundations, the discounted sum of those target
+rewards along a selected counterfactual branch is a training target for
+#symb.rl.qh, not a claim that the deployed system has an online
+continuous-control policy:
 
 $
   #eqs.rl.finite_horizon_return
