@@ -42,10 +42,14 @@
   s_off: $s_t^"off"$,
   // Reserved actor-visible state; no direct authored use in the 2026-08-14 audit.
   s_obs: $s_t^"obs"$,
-  // Zero-cost counterfactual state at rollout step t.
+  // Architecture-neutral actor-visible counterfactual state target at rollout step t.
   s_cf0: $s_t^"cf0"$,
   // Implemented pose-history actor state used by the qh_cf0_v1 profile.
   s_pose: $s_t^"S0-pose"$,
+  // Implemented privileged selected-surface control state.
+  s_surface: $s_t^"S1-surface"$,
+  // Planned actor-visible ray-aware state; a candidate realization of the scientific state target.
+  s_ray: $s_t^"S2-ray"$,
   // Reserved next counterfactual state; no direct authored use in the 2026-08-14 audit.
   s_cf0_next: $s_(t+1)^"cf0"$,
   // Counterfactual state augmented with rendered geometry.
@@ -56,11 +60,15 @@
   s_oracle: $s_t^"oracle"$,
   // Reserved rollout-state embedding; no direct authored use in the 2026-08-14 audit.
   state_emb: $bold(h)_t$,
+  // Strictly causal prefix of previously selected poses at decision step t.
+  selected_pose_prefix: $bold(H)_t^"pose"$,
+  // Strictly causal prefix after the selected transition.
+  selected_pose_prefix_next: $bold(H)_(t+1)^"pose"$,
   // Unused duplicate of canonical `entity.target_reward`; prefer the entity owner.
   reward_target: $r_t^e$,
   // Unused duplicate of canonical `entity.return_h`; prefer the entity owner.
   return_h: $G_t^((H))$,
-  // Horizon-conditioned action-value function.
+  // Bounded family of horizon-conditioned action-value functions.
   qh: $Q_H$,
   // Action-mask-independent conditional candidate value emitted by the scorer.
   conditional_q: $Q_(h,theta,e,i)^"cond"$,

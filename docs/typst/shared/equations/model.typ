@@ -10,7 +10,7 @@
       bold(a)_e,
       {bold(T)_(r arrow.l c_i), bold(T)_(c_t arrow.l c_i),
        bold(T)_(c_i arrow.l e), #symb.rl.candidate_row_mask}_(i=1)^(#symb.shape.Nq),
-      {bold(T)_(c_t arrow.l c_j)}_(j<t),
+        #symb.rl.selected_pose_prefix,
       #symb.rl.budget,
       #symb.rl.requested_horizon
     )
@@ -61,7 +61,7 @@
     =
     E_"set" (
       {
-        op("concat") (#symb.model.candidate_row, #symb.model.target_token, bold(H)_t)
+        op("concat") (#symb.model.candidate_row, #symb.model.target_token, #symb.rl.selected_pose_prefix)
       }_(i=1)^(#symb.shape.Nq),
       bold(m)_t
     )

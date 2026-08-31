@@ -191,6 +191,11 @@ return {
     short = "PC",
     anchor = "term-point-cloud",
   },
+  ["pose-only-counterfactual-state"] = {
+    label = "Pose-Only Counterfactual State",
+    short = "S0-pose",
+    anchor = "term-pose-only-counterfactual-state",
+  },
   ["predicted-target-q"] = {
     label = "Predicted-Target Q",
     short = "PRED-Q",

@@ -1,7 +1,7 @@
 #import "template/layout/thesis_template.typ": *
 #import "metadata.typ": *
 #import "../shared/macros.typ": *
-#import "glossary-overrides.typ": make-aria-glossary, register-aria-glossary, print-aria-glossary
+#import "../shared/glossary.typ": make-glossary as make-aria-glossary, register-aria-glossary, print-aria-glossary
 #import "../shared/notation.typ": print-thesis-symbols
 #import "experiment_data.typ": thesis-report-settings, load-thesis-report
 #import "draft_markers.typ": development_only

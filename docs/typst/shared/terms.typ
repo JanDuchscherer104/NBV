@@ -1,7 +1,8 @@
 // Backwards-compatible term facade.
-// Term constants are generated from docs/typst/shared/glossary.typ into
-// glossary.generated.typ. Add `typst_macro: Name` to an entry's custom metadata
-// to expose #Name and #Name_full here.
+// Alias names are generated into glossary.generated.typ, but every value is
+// resolved from the canonical docs/typst/shared/glossary.typ entries at Typst
+// evaluation time. Add `typst_macro: Name` to canonical custom metadata to
+// expose #Name and #Name_full here.
 //
 // TODO: deprecate this file!
 

@@ -21,11 +21,11 @@ execute:
 ::: {.glossary-page}
 
 ::: {.glossary-intro}
-**57 terms** across **10 categories**. The canonical source is
+**58 terms** across **10 categories**. The canonical source is
 `docs/typst/shared/glossary.typ`; generated Quarto, Typst, YAML, KG, and shortcode artifacts
 share the same definitions.
 
-Tier counts: **27 core**, **14 support**,
+Tier counts: **28 core**, **14 support**,
 and **16 background** terms. Core terms are the thesis math lookup;
 background terms remain linkable but are visually demoted.
 
@@ -34,7 +34,7 @@ Use `{{{< gls term-id >}}}` for the linked short label and
 :::
 
 <nav class="glossary-category-index" aria-label="Glossary categories">
-<a class="glossary-chip glossary-category-chip" href="#glossary-tier-core">Core <span>27</span></a>
+<a class="glossary-chip glossary-category-chip" href="#glossary-tier-core">Core <span>28</span></a>
 <a class="glossary-chip glossary-category-chip" href="#glossary-core-math-lookup">Math lookup</a>
 <a class="glossary-chip glossary-category-chip" href="#glossary-category-dataset">Dataset <span>11</span></a>
 <a class="glossary-chip glossary-category-chip" href="#glossary-category-geometry">Geometry <span>5</span></a>
@@ -122,7 +122,7 @@ Use `{{{< gls term-id >}}}` for the linked short label and
 <td><a href="#term-predicted-target-q">PRED-Q - Predicted-Target Q</a></td>
 <td>Main thesis protocol component requiring scorer or Q_H inputs to use predicted or observed target descriptors.</td>
 <td><div class="glossary-notation-list glossary-notation-symbols"><span class="glossary-notation-item"><span class="glossary-notation-math">$Q_H$</span><code>rl.qh</code></span></div></td>
-<td><div class="glossary-notation-list glossary-notation-equations"><span class="glossary-notation-item"><span class="glossary-notation-math">$Q_H(s_t^{\mathrm{cf0}},a_t)=\mathbb{E}\left[G_t^{(H)}\mid s_t=s_t^{\mathrm{cf0}},a_t\right]$</span><code>rl.q_h</code></span></div></td>
+<td><div class="glossary-notation-list glossary-notation-equations"><span class="glossary-notation-item"><span class="glossary-notation-math">$Q_{h,e}^{\star}(s_t,i)=\sup_{\pi\in\Pi^{\mathrm{act}}}\mathbb{E}_{\pi}\left[G_{t,e}^{(h)}\mid s_t,a_t=i\right],\quad i\in\mathcal{A}_t,\quad 1\le h\le b_t\le H_{\max},\quad Q_{0,e}^{\star}(s,i)=0$</span><code>rl.q_h</code></span></div></td>
 </tr>
 <tr>
 <td><a href="#term-ground-truth-target-evaluation">GT-EVAL - Ground-Truth Target Evaluation</a></td>
@@ -145,8 +145,8 @@ Use `{{{< gls term-id >}}}` for the linked short label and
 <tr>
 <td><a href="#term-rollout-state">state - Rollout State</a></td>
 <td>Rollout state family separating actor-visible state from oracle-only supervision.</td>
-<td><div class="glossary-notation-list glossary-notation-symbols"><span class="glossary-notation-item"><span class="glossary-notation-math">$s$</span><code>rl.s</code></span> <span class="glossary-notation-item"><span class="glossary-notation-math">$s_t^{\mathrm{hist}}$</span><code>rl.s_hist</code></span> <span class="glossary-notation-item"><span class="glossary-notation-math">$s_t^{\mathrm{off}}$</span><code>rl.s_off</code></span> <span class="glossary-notation-item"><span class="glossary-notation-math">$s_t^{\mathrm{cf0}}$</span><code>rl.s_cf0</code></span> <span class="glossary-notation-item"><span class="glossary-notation-math">$s_t^{\mathrm{cf+}}$</span><code>rl.s_cf_geom</code></span> <span class="glossary-notation-item"><span class="glossary-notation-math">$s_t^{\mathrm{oracle}}$</span><code>rl.s_oracle</code></span> <span class="glossary-notation-item"><span class="glossary-notation-math">$\mathcal{P}$</span><code>oracle.points</code></span> <span class="glossary-notation-item"><span class="glossary-notation-math">$\mathcal{Q}_t$</span><code>oracle.candidates_t</code></span> <span class="glossary-notation-item"><span class="glossary-notation-math">$m_{t,i}$</span><code>rl.validity_mask</code></span> <span class="glossary-notation-item"><span class="glossary-notation-math">$\rho_{t,i}$</span><code>rl.invalid_reason</code></span> <span class="glossary-notation-item"><span class="glossary-notation-math">$e_t$</span><code>rl.target</code></span> <span class="glossary-notation-item"><span class="glossary-notation-math">$b_t$</span><code>rl.budget</code></span></div></td>
-<td><div class="glossary-notation-list glossary-notation-equations"><span class="glossary-notation-item"><span class="glossary-notation-math">$s_t^{\mathrm{hist}}=(I_{1:t},T_{1:t},P_{1:t}^{\mathrm{semi}},V^{\mathrm{root}},e_t,b_t)$</span><code>rl.s_hist</code></span> <span class="glossary-notation-item"><span class="glossary-notation-math">$s_t^{\mathrm{off}}=(\mathrm{VinSnippetView},\mathcal{Q}_t,N_t,m_{t,i},\ell_{t,i})$</span><code>rl.s_off</code></span> <span class="glossary-notation-item"><span class="glossary-notation-math">$s_t^{\mathrm{cf0}}=(V^{\mathrm{root}},\mathcal{P}_t,\mathcal{Q}_t,m_{t,i},\rho_{t,i},e_t,b_t)$</span><code>rl.s_cf0</code></span> <span class="glossary-notation-item"><span class="glossary-notation-math">$s_t^{\mathrm{cf+}}=(s_t^{\mathrm{cf0}},D_{1:t}^{\mathrm{sel}},P_{1:t}^{\mathrm{sel}},N_{1:t}^{\mathrm{sel}})$</span><code>rl.s_cf_geom</code></span> <span class="glossary-notation-item"><span class="glossary-notation-math">$s_t^{\mathrm{oracle}}=(s_t^{\mathrm{cf+}},\mathcal{M}^{\mathrm{GT}},\mathcal{M}_e^{\mathrm{GT}},\{D_{t,i}^{\mathrm{GT}},\mathcal{P}_{t,i}^{\mathrm{GT}},\mathrm{RRI}_{t,i}\}_{i=1}^{N_t})$</span><code>rl.s_oracle</code></span></div></td>
+<td><div class="glossary-notation-list glossary-notation-symbols"><span class="glossary-notation-item"><span class="glossary-notation-math">$s$</span><code>rl.s</code></span> <span class="glossary-notation-item"><span class="glossary-notation-math">$s_t^{\mathrm{hist}}$</span><code>rl.s_hist</code></span> <span class="glossary-notation-item"><span class="glossary-notation-math">$s_t^{\mathrm{off}}$</span><code>rl.s_off</code></span> <span class="glossary-notation-item"><span class="glossary-notation-math">$s_t^{\mathrm{cf0}}$</span><code>rl.s_cf0</code></span> <span class="glossary-notation-item"><span class="glossary-notation-math">$s_t^{\mathrm{S0-pose}}$</span><code>rl.s_pose</code></span> <span class="glossary-notation-item"><span class="glossary-notation-math">$s_t^{\mathrm{S1-surface}}$</span><code>rl.s_surface</code></span> <span class="glossary-notation-item"><span class="glossary-notation-math">$s_t^{\mathrm{S2-ray}}$</span><code>rl.s_ray</code></span> <span class="glossary-notation-item"><span class="glossary-notation-math">$s_t^{\mathrm{cf+}}$</span><code>rl.s_cf_geom</code></span> <span class="glossary-notation-item"><span class="glossary-notation-math">$s_t^{\mathrm{oracle}}$</span><code>rl.s_oracle</code></span> <span class="glossary-notation-item"><span class="glossary-notation-math">$\mathcal{P}$</span><code>oracle.points</code></span> <span class="glossary-notation-item"><span class="glossary-notation-math">$\mathcal{Q}_t$</span><code>oracle.candidates_t</code></span> <span class="glossary-notation-item"><span class="glossary-notation-math">$m_{t,i}$</span><code>rl.validity_mask</code></span> <span class="glossary-notation-item"><span class="glossary-notation-math">$\rho_{t,i}$</span><code>rl.invalid_reason</code></span> <span class="glossary-notation-item"><span class="glossary-notation-math">$e_t$</span><code>rl.target</code></span> <span class="glossary-notation-item"><span class="glossary-notation-math">$b_t$</span><code>rl.budget</code></span></div></td>
+<td><div class="glossary-notation-list glossary-notation-equations"><span class="glossary-notation-item"><span class="glossary-notation-math">$s_t^{\mathrm{hist}}=(I_{1:t},T_{1:t},P_{1:t}^{\mathrm{semi}},V^{\mathrm{root}},e_t,b_t)$</span><code>rl.s_hist</code></span> <span class="glossary-notation-item"><span class="glossary-notation-math">$s_t^{\mathrm{off}}=(\mathrm{VinSnippetView},\mathcal{Q}_t,N_t,m_{t,i},\ell_{t,i})$</span><code>rl.s_off</code></span> <span class="glossary-notation-item"><span class="glossary-notation-math">$s_t^{\mathrm{cf0}}=(\boldsymbol{\Phi}_t^{\mathrm{scene}},\boldsymbol{\phi}_e,\mathcal{Q}_t,m_{t,i},\boldsymbol{H}_t^{\mathrm{pose}},b_t)\in\mathcal{S}^{\mathrm{cf0}}$</span><code>rl.s_cf0</code></span> <span class="glossary-notation-item"><span class="glossary-notation-math">$s_t^{\mathrm{cf+}}=(s_t^{\mathrm{cf0}},D_{1:t}^{\mathrm{sel}},P_{1:t}^{\mathrm{sel}},N_{1:t}^{\mathrm{sel}})$</span><code>rl.s_cf_geom</code></span> <span class="glossary-notation-item"><span class="glossary-notation-math">$s_t^{\mathrm{oracle}}=(s_t^{\mathrm{cf+}},\mathcal{M}^{\mathrm{GT}},\mathcal{M}_e^{\mathrm{GT}},\{D_{t,i}^{\mathrm{GT}},\mathcal{P}_{t,i}^{\mathrm{GT}},\mathrm{RRI}_{t,i}\}_{i=1}^{N_t})$</span><code>rl.s_oracle</code></span></div></td>
 </tr>
 <tr>
 <td><a href="#term-historic-snippet-state">historic state - Historic Snippet State</a></td>
@@ -161,15 +161,21 @@ Use `{{{< gls term-id >}}}` for the linked short label and
 <td><div class="glossary-notation-list glossary-notation-equations"><span class="glossary-notation-item"><span class="glossary-notation-math">$s_t^{\mathrm{off}}=(\mathrm{VinSnippetView},\mathcal{Q}_t,N_t,m_{t,i},\ell_{t,i})$</span><code>rl.s_off</code></span></div></td>
 </tr>
 <tr>
+<td><a href="#term-pose-only-counterfactual-state">S0-pose - Pose-Only Counterfactual State</a></td>
+<td>Implemented pose-history baseline without selected-observation scene updates.</td>
+<td><div class="glossary-notation-list glossary-notation-symbols"><span class="glossary-notation-item"><span class="glossary-notation-math">$s_t^{\mathrm{S0-pose}}$</span><code>rl.s_pose</code></span> <span class="glossary-notation-item"><span class="glossary-notation-math">$\boldsymbol{H}_t^{\mathrm{pose}}$</span><code>rl.selected_pose_prefix</code></span></div></td>
+<td><div class="glossary-notation-list glossary-notation-equations"><span class="glossary-notation-item"><span class="glossary-notation-math">$s_t^{\mathrm{S0-pose}}=(\mathcal{S}_{\mathrm{root}}^{\mathrm{VIN}},V^{\mathrm{root}},(T_{r,e},l_e),\mathcal{Q}_t,m_{t,i},H_t^{\mathrm{pose}},b_t)$</span><code>rl.s_pose</code></span></div></td>
+</tr>
+<tr>
 <td><a href="#term-minimal-counterfactual-state">CF0 state - Minimal Counterfactual Actor State</a></td>
-<td>Main Q_H actor state for mesh-supervised counterfactual rollouts.</td>
+<td>Architecture-neutral actor-state target for causal counterfactual planning.</td>
 <td><div class="glossary-notation-list glossary-notation-symbols"><span class="glossary-notation-item"><span class="glossary-notation-math">$s_t^{\mathrm{cf0}}$</span><code>rl.s_cf0</code></span></div></td>
-<td><div class="glossary-notation-list glossary-notation-equations"><span class="glossary-notation-item"><span class="glossary-notation-math">$s_t^{\mathrm{cf0}}=(V^{\mathrm{root}},\mathcal{P}_t,\mathcal{Q}_t,m_{t,i},\rho_{t,i},e_t,b_t)$</span><code>rl.s_cf0</code></span></div></td>
+<td><div class="glossary-notation-list glossary-notation-equations"><span class="glossary-notation-item"><span class="glossary-notation-math">$s_t^{\mathrm{cf0}}=(\boldsymbol{\Phi}_t^{\mathrm{scene}},\boldsymbol{\phi}_e,\mathcal{Q}_t,m_{t,i},\boldsymbol{H}_t^{\mathrm{pose}},b_t)\in\mathcal{S}^{\mathrm{cf0}}$</span><code>rl.s_cf0</code></span></div></td>
 </tr>
 <tr>
 <td><a href="#term-geometry-rich-counterfactual-state">CF+ state - Geometry-Rich Counterfactual State</a></td>
-<td>Counterfactual ablation state with selected synthetic geometry observations.</td>
-<td><div class="glossary-notation-list glossary-notation-symbols"><span class="glossary-notation-item"><span class="glossary-notation-math">$s_t^{\mathrm{cf+}}$</span><code>rl.s_cf_geom</code></span></div></td>
+<td>Privileged selected-surface control over causal selected synthetic geometry.</td>
+<td><div class="glossary-notation-list glossary-notation-symbols"><span class="glossary-notation-item"><span class="glossary-notation-math">$s_t^{\mathrm{cf+}}$</span><code>rl.s_cf_geom</code></span> <span class="glossary-notation-item"><span class="glossary-notation-math">$s_t^{\mathrm{S1-surface}}$</span><code>rl.s_surface</code></span></div></td>
 <td><div class="glossary-notation-list glossary-notation-equations"><span class="glossary-notation-item"><span class="glossary-notation-math">$s_t^{\mathrm{cf+}}=(s_t^{\mathrm{cf0}},D_{1:t}^{\mathrm{sel}},P_{1:t}^{\mathrm{sel}},N_{1:t}^{\mathrm{sel}})$</span><code>rl.s_cf_geom</code></span></div></td>
 </tr>
 <tr>
@@ -205,8 +211,8 @@ Use `{{{< gls term-id >}}}` for the linked short label and
 <tr>
 <td><a href="#term-finite-horizon-q-function">Q_H - Finite-Horizon Q Function</a></td>
 <td>Finite-horizon candidate-value function for target-conditioned ARIA-NBV.</td>
-<td><div class="glossary-notation-list glossary-notation-symbols"><span class="glossary-notation-item"><span class="glossary-notation-math">$Q_H$</span><code>rl.qh</code></span> <span class="glossary-notation-item"><span class="glossary-notation-math">$G_t^{(H)}$</span><code>rl.return_h</code></span> <span class="glossary-notation-item"><span class="glossary-notation-math">$s_t^{\mathrm{cf0}}$</span><code>rl.s_cf0</code></span> <span class="glossary-notation-item"><span class="glossary-notation-math">$a$</span><code>rl.a</code></span></div></td>
-<td><div class="glossary-notation-list glossary-notation-equations"><span class="glossary-notation-item"><span class="glossary-notation-math">$Q_H(s_t^{\mathrm{cf0}},a_t)=\mathbb{E}\left[G_t^{(H)}\mid s_t=s_t^{\mathrm{cf0}},a_t\right]$</span><code>rl.q_h</code></span> <span class="glossary-notation-item"><span class="glossary-notation-math">$y_t^Q=r_t+\gamma V(s_{t+1})$</span><code>rl.q_backup</code></span></div></td>
+<td><div class="glossary-notation-list glossary-notation-symbols"><span class="glossary-notation-item"><span class="glossary-notation-math">$Q_H$</span><code>rl.qh</code></span> <span class="glossary-notation-item"><span class="glossary-notation-math">$G_t^{(H)}$</span><code>rl.return_h</code></span> <span class="glossary-notation-item"><span class="glossary-notation-math">$s$</span><code>rl.s</code></span> <span class="glossary-notation-item"><span class="glossary-notation-math">$s_t^{\mathrm{S0-pose}}$</span><code>rl.s_pose</code></span> <span class="glossary-notation-item"><span class="glossary-notation-math">$s_t^{\mathrm{cf0}}$</span><code>rl.s_cf0</code></span> <span class="glossary-notation-item"><span class="glossary-notation-math">$a$</span><code>rl.a</code></span></div></td>
+<td><div class="glossary-notation-list glossary-notation-equations"><span class="glossary-notation-item"><span class="glossary-notation-math">$Q_{h,e}^{\star}(s_t,i)=\sup_{\pi\in\Pi^{\mathrm{act}}}\mathbb{E}_{\pi}\left[G_{t,e}^{(h)}\mid s_t,a_t=i\right],\quad i\in\mathcal{A}_t,\quad 1\le h\le b_t\le H_{\max},\quad Q_{0,e}^{\star}(s,i)=0$</span><code>rl.q_h</code></span> <span class="glossary-notation-item"><span class="glossary-notation-math">$y_t^Q=r_t+\gamma V(s_{t+1})$</span><code>rl.q_backup</code></span></div></td>
 </tr>
 <tr>
 <td><a href="#term-validity-mask">mask - Validity Mask</a></td>
@@ -597,7 +603,7 @@ $$
 
 <div class="glossary-card-notation">
 <div><strong>Symbols</strong><div class="glossary-notation-list glossary-notation-symbols"><span class="glossary-notation-item"><span class="glossary-notation-math">$Q_H$</span><code>rl.qh</code></span></div></div>
-<div><strong>Equations</strong><div class="glossary-notation-list glossary-notation-equations"><span class="glossary-notation-item"><span class="glossary-notation-math">$Q_H(s_t^{\mathrm{cf0}},a_t)=\mathbb{E}\left[G_t^{(H)}\mid s_t=s_t^{\mathrm{cf0}},a_t\right]$</span><code>rl.q_h</code></span></div></div>
+<div><strong>Equations</strong><div class="glossary-notation-list glossary-notation-equations"><span class="glossary-notation-item"><span class="glossary-notation-math">$Q_{h,e}^{\star}(s_t,i)=\sup_{\pi\in\Pi^{\mathrm{act}}}\mathbb{E}_{\pi}\left[G_{t,e}^{(h)}\mid s_t,a_t=i\right],\quad i\in\mathcal{A}_t,\quad 1\le h\le b_t\le H_{\max},\quad Q_{0,e}^{\star}(s,i)=0$</span><code>rl.q_h</code></span></div></div>
 </div>
 
 <p class="glossary-definition">Main thesis protocol component requiring scorer or Q_H inputs to use predicted or observed target descriptors.</p>
@@ -741,13 +747,13 @@ $$
 </div>
 
 <div class="glossary-card-notation">
-<div><strong>Symbols</strong><div class="glossary-notation-list glossary-notation-symbols"><span class="glossary-notation-item"><span class="glossary-notation-math">$s$</span><code>rl.s</code></span> <span class="glossary-notation-item"><span class="glossary-notation-math">$s_t^{\mathrm{hist}}$</span><code>rl.s_hist</code></span> <span class="glossary-notation-item"><span class="glossary-notation-math">$s_t^{\mathrm{off}}$</span><code>rl.s_off</code></span> <span class="glossary-notation-item"><span class="glossary-notation-math">$s_t^{\mathrm{cf0}}$</span><code>rl.s_cf0</code></span> <span class="glossary-notation-item"><span class="glossary-notation-math">$s_t^{\mathrm{cf+}}$</span><code>rl.s_cf_geom</code></span> <span class="glossary-notation-item"><span class="glossary-notation-math">$s_t^{\mathrm{oracle}}$</span><code>rl.s_oracle</code></span> <span class="glossary-notation-item"><span class="glossary-notation-math">$\mathcal{P}$</span><code>oracle.points</code></span> <span class="glossary-notation-item"><span class="glossary-notation-math">$\mathcal{Q}_t$</span><code>oracle.candidates_t</code></span> <span class="glossary-notation-item"><span class="glossary-notation-math">$m_{t,i}$</span><code>rl.validity_mask</code></span> <span class="glossary-notation-item"><span class="glossary-notation-math">$\rho_{t,i}$</span><code>rl.invalid_reason</code></span> <span class="glossary-notation-item"><span class="glossary-notation-math">$e_t$</span><code>rl.target</code></span> <span class="glossary-notation-item"><span class="glossary-notation-math">$b_t$</span><code>rl.budget</code></span></div></div>
-<div><strong>Equations</strong><div class="glossary-notation-list glossary-notation-equations"><span class="glossary-notation-item"><span class="glossary-notation-math">$s_t^{\mathrm{hist}}=(I_{1:t},T_{1:t},P_{1:t}^{\mathrm{semi}},V^{\mathrm{root}},e_t,b_t)$</span><code>rl.s_hist</code></span> <span class="glossary-notation-item"><span class="glossary-notation-math">$s_t^{\mathrm{off}}=(\mathrm{VinSnippetView},\mathcal{Q}_t,N_t,m_{t,i},\ell_{t,i})$</span><code>rl.s_off</code></span> <span class="glossary-notation-item"><span class="glossary-notation-math">$s_t^{\mathrm{cf0}}=(V^{\mathrm{root}},\mathcal{P}_t,\mathcal{Q}_t,m_{t,i},\rho_{t,i},e_t,b_t)$</span><code>rl.s_cf0</code></span> <span class="glossary-notation-item"><span class="glossary-notation-math">$s_t^{\mathrm{cf+}}=(s_t^{\mathrm{cf0}},D_{1:t}^{\mathrm{sel}},P_{1:t}^{\mathrm{sel}},N_{1:t}^{\mathrm{sel}})$</span><code>rl.s_cf_geom</code></span> <span class="glossary-notation-item"><span class="glossary-notation-math">$s_t^{\mathrm{oracle}}=(s_t^{\mathrm{cf+}},\mathcal{M}^{\mathrm{GT}},\mathcal{M}_e^{\mathrm{GT}},\{D_{t,i}^{\mathrm{GT}},\mathcal{P}_{t,i}^{\mathrm{GT}},\mathrm{RRI}_{t,i}\}_{i=1}^{N_t})$</span><code>rl.s_oracle</code></span></div></div>
+<div><strong>Symbols</strong><div class="glossary-notation-list glossary-notation-symbols"><span class="glossary-notation-item"><span class="glossary-notation-math">$s$</span><code>rl.s</code></span> <span class="glossary-notation-item"><span class="glossary-notation-math">$s_t^{\mathrm{hist}}$</span><code>rl.s_hist</code></span> <span class="glossary-notation-item"><span class="glossary-notation-math">$s_t^{\mathrm{off}}$</span><code>rl.s_off</code></span> <span class="glossary-notation-item"><span class="glossary-notation-math">$s_t^{\mathrm{cf0}}$</span><code>rl.s_cf0</code></span> <span class="glossary-notation-item"><span class="glossary-notation-math">$s_t^{\mathrm{S0-pose}}$</span><code>rl.s_pose</code></span> <span class="glossary-notation-item"><span class="glossary-notation-math">$s_t^{\mathrm{S1-surface}}$</span><code>rl.s_surface</code></span> <span class="glossary-notation-item"><span class="glossary-notation-math">$s_t^{\mathrm{S2-ray}}$</span><code>rl.s_ray</code></span> <span class="glossary-notation-item"><span class="glossary-notation-math">$s_t^{\mathrm{cf+}}$</span><code>rl.s_cf_geom</code></span> <span class="glossary-notation-item"><span class="glossary-notation-math">$s_t^{\mathrm{oracle}}$</span><code>rl.s_oracle</code></span> <span class="glossary-notation-item"><span class="glossary-notation-math">$\mathcal{P}$</span><code>oracle.points</code></span> <span class="glossary-notation-item"><span class="glossary-notation-math">$\mathcal{Q}_t$</span><code>oracle.candidates_t</code></span> <span class="glossary-notation-item"><span class="glossary-notation-math">$m_{t,i}$</span><code>rl.validity_mask</code></span> <span class="glossary-notation-item"><span class="glossary-notation-math">$\rho_{t,i}$</span><code>rl.invalid_reason</code></span> <span class="glossary-notation-item"><span class="glossary-notation-math">$e_t$</span><code>rl.target</code></span> <span class="glossary-notation-item"><span class="glossary-notation-math">$b_t$</span><code>rl.budget</code></span></div></div>
+<div><strong>Equations</strong><div class="glossary-notation-list glossary-notation-equations"><span class="glossary-notation-item"><span class="glossary-notation-math">$s_t^{\mathrm{hist}}=(I_{1:t},T_{1:t},P_{1:t}^{\mathrm{semi}},V^{\mathrm{root}},e_t,b_t)$</span><code>rl.s_hist</code></span> <span class="glossary-notation-item"><span class="glossary-notation-math">$s_t^{\mathrm{off}}=(\mathrm{VinSnippetView},\mathcal{Q}_t,N_t,m_{t,i},\ell_{t,i})$</span><code>rl.s_off</code></span> <span class="glossary-notation-item"><span class="glossary-notation-math">$s_t^{\mathrm{cf0}}=(\boldsymbol{\Phi}_t^{\mathrm{scene}},\boldsymbol{\phi}_e,\mathcal{Q}_t,m_{t,i},\boldsymbol{H}_t^{\mathrm{pose}},b_t)\in\mathcal{S}^{\mathrm{cf0}}$</span><code>rl.s_cf0</code></span> <span class="glossary-notation-item"><span class="glossary-notation-math">$s_t^{\mathrm{cf+}}=(s_t^{\mathrm{cf0}},D_{1:t}^{\mathrm{sel}},P_{1:t}^{\mathrm{sel}},N_{1:t}^{\mathrm{sel}})$</span><code>rl.s_cf_geom</code></span> <span class="glossary-notation-item"><span class="glossary-notation-math">$s_t^{\mathrm{oracle}}=(s_t^{\mathrm{cf+}},\mathcal{M}^{\mathrm{GT}},\mathcal{M}_e^{\mathrm{GT}},\{D_{t,i}^{\mathrm{GT}},\mathcal{P}_{t,i}^{\mathrm{GT}},\mathrm{RRI}_{t,i}\}_{i=1}^{N_t})$</span><code>rl.s_oracle</code></span></div></div>
 </div>
 
 <p class="glossary-definition">Rollout state family separating actor-visible state from oracle-only supervision.</p>
 
-<p class="glossary-detail-text">ARIA-NBV distinguishes raw historic snippet state, persisted VIN offline sample state, minimal counterfactual actor state, geometry-rich counterfactual ablation state, and privileged oracle rollout state. The main Q_H actor input starts from the minimal counterfactual state; all-candidate GT renders, GT mesh crops, and oracle RRI labels remain outside the actor-visible state.</p>
+<p class="glossary-detail-text">ARIA-NBV distinguishes raw historic snippet state, persisted offline state, the implemented pose-only S0 baseline, the privileged selected-surface S1 control, an actor-visible observation-updated scientific target for which S2 ray memory is one candidate realization, and privileged oracle state. These roles are not a maturity ladder: implementation does not imply selection, selection does not imply validation, and the scientific target is a semantic information contract rather than one fixed architecture. All-candidate GT renders, GT mesh crops, and oracle RRI labels remain outside the actor-visible state.</p>
 
 <details class="glossary-details">
 <summary>Links and references</summary>
@@ -828,6 +834,40 @@ $$
 
 </article>
 
+<article class="glossary-card glossary-tier-core" id="term-pose-only-counterfactual-state">
+<div class="glossary-card-header">
+<div class="glossary-term-title">Pose-Only Counterfactual State</div>
+<div class="glossary-term-badges">
+<span class="glossary-badge glossary-badge-short">S0-pose</span>
+<span class="glossary-badge glossary-tier-badge glossary-tier-badge-core">core</span>
+<span class="glossary-badge">planning.state</span>
+</div>
+</div>
+
+<div class="glossary-aliases">
+<span>Aliases</span>
+<code>S0</code> <code>pose-history state</code> <code>pose-only rollout state</code>
+</div>
+
+<div class="glossary-card-notation">
+<div><strong>Symbols</strong><div class="glossary-notation-list glossary-notation-symbols"><span class="glossary-notation-item"><span class="glossary-notation-math">$s_t^{\mathrm{S0-pose}}$</span><code>rl.s_pose</code></span> <span class="glossary-notation-item"><span class="glossary-notation-math">$\boldsymbol{H}_t^{\mathrm{pose}}$</span><code>rl.selected_pose_prefix</code></span></div></div>
+<div><strong>Equations</strong><div class="glossary-notation-list glossary-notation-equations"><span class="glossary-notation-item"><span class="glossary-notation-math">$s_t^{\mathrm{S0-pose}}=(\mathcal{S}_{\mathrm{root}}^{\mathrm{VIN}},V^{\mathrm{root}},(T_{r,e},l_e),\mathcal{Q}_t,m_{t,i},H_t^{\mathrm{pose}},b_t)$</span><code>rl.s_pose</code></span></div></div>
+</div>
+
+<p class="glossary-definition">Implemented pose-history baseline without selected-observation scene updates.</p>
+
+<p class="glossary-detail-text">S0-pose is the selected executable baseline for interface and learning tests. It carries immutable root evidence, target and candidate relations, causal selected-pose history, and budget. Histories with the same poses but different observed surfaces collapse to the same dynamic state, so S0-pose is not claimed to be task-sufficient for target-specific future return.</p>
+
+<details class="glossary-details">
+<summary>Links and references</summary>
+<div class="glossary-metadata">
+<div class="glossary-metadata-row"><span>Related</span><div><a class="glossary-chip" href="#term-minimal-counterfactual-state">CF0 state</a> <a class="glossary-chip" href="#term-geometry-rich-counterfactual-state">CF+ state</a> <a class="glossary-chip" href="#term-counterfactual-transition">transition</a></div></div>
+<div class="glossary-metadata-row"><span>Docs</span><div><a class="glossary-chip" href="../typst/thesis/sections/04-method/04-01-scene-representation-requirements.typ#sec:thesis-scene-representation" title="docs/typst/thesis/sections/04-method/04-01-scene-representation-requirements.typ#sec:thesis-scene-representation">04 01 Scene Representation Requirements</a></div></div>
+</div>
+</details>
+
+</article>
+
 <article class="glossary-card glossary-tier-core" id="term-minimal-counterfactual-state">
 <div class="glossary-card-header">
 <div class="glossary-term-title">Minimal Counterfactual Actor State</div>
@@ -845,12 +885,12 @@ $$
 
 <div class="glossary-card-notation">
 <div><strong>Symbols</strong><div class="glossary-notation-list glossary-notation-symbols"><span class="glossary-notation-item"><span class="glossary-notation-math">$s_t^{\mathrm{cf0}}$</span><code>rl.s_cf0</code></span></div></div>
-<div><strong>Equations</strong><div class="glossary-notation-list glossary-notation-equations"><span class="glossary-notation-item"><span class="glossary-notation-math">$s_t^{\mathrm{cf0}}=(V^{\mathrm{root}},\mathcal{P}_t,\mathcal{Q}_t,m_{t,i},\rho_{t,i},e_t,b_t)$</span><code>rl.s_cf0</code></span></div></div>
+<div><strong>Equations</strong><div class="glossary-notation-list glossary-notation-equations"><span class="glossary-notation-item"><span class="glossary-notation-math">$s_t^{\mathrm{cf0}}=(\boldsymbol{\Phi}_t^{\mathrm{scene}},\boldsymbol{\phi}_e,\mathcal{Q}_t,m_{t,i},\boldsymbol{H}_t^{\mathrm{pose}},b_t)\in\mathcal{S}^{\mathrm{cf0}}$</span><code>rl.s_cf0</code></span></div></div>
 </div>
 
-<p class="glossary-definition">Main Q_H actor state for mesh-supervised counterfactual rollouts.</p>
+<p class="glossary-definition">Architecture-neutral actor-state target for causal counterfactual planning.</p>
 
-<p class="glossary-detail-text">The minimal counterfactual actor state is the default input to target-conditioned Q_H. It contains the accumulated counterfactual point proxy as broad scene state, optional lifted image-foundation point features, local root EVL evidence for target support and local reads, selected-action history, observed or predicted target descriptor, budget state, finite candidate table, validity masks, reason codes, and current-state candidate-query features. Synthetic observations update the state only after their candidate is selected.</p>
+<p class="glossary-detail-text">The minimal counterfactual actor state is the scientific state target, not the currently selected implementation. It must expose an actor-visible target descriptor, finite candidate support, causal selected history, budget, and an observation-updated scene state that distinguishes observed surface, observed free, unknown space, support, uncertainty, source, and recency. Points, voxels, sparse rays, or another carrier may realize this contract only after leakage, deterministic-fusion, support, and held-out task-sufficiency gates pass.</p>
 
 <details class="glossary-details">
 <summary>Links and references</summary>
@@ -878,11 +918,11 @@ $$
 </div>
 
 <div class="glossary-card-notation">
-<div><strong>Symbols</strong><div class="glossary-notation-list glossary-notation-symbols"><span class="glossary-notation-item"><span class="glossary-notation-math">$s_t^{\mathrm{cf+}}$</span><code>rl.s_cf_geom</code></span></div></div>
+<div><strong>Symbols</strong><div class="glossary-notation-list glossary-notation-symbols"><span class="glossary-notation-item"><span class="glossary-notation-math">$s_t^{\mathrm{cf+}}$</span><code>rl.s_cf_geom</code></span> <span class="glossary-notation-item"><span class="glossary-notation-math">$s_t^{\mathrm{S1-surface}}$</span><code>rl.s_surface</code></span></div></div>
 <div><strong>Equations</strong><div class="glossary-notation-list glossary-notation-equations"><span class="glossary-notation-item"><span class="glossary-notation-math">$s_t^{\mathrm{cf+}}=(s_t^{\mathrm{cf0}},D_{1:t}^{\mathrm{sel}},P_{1:t}^{\mathrm{sel}},N_{1:t}^{\mathrm{sel}})$</span><code>rl.s_cf_geom</code></span></div></div>
 </div>
 
-<p class="glossary-definition">Counterfactual ablation state with selected synthetic geometry observations.</p>
+<p class="glossary-definition">Privileged selected-surface control over causal selected synthetic geometry.</p>
 
 <p class="glossary-detail-text">The geometry-rich counterfactual state adds only selected prior synthetic observations to the minimal state. The executable qh_cfplus_gt_depth_v1 carrier holds strictly causal rendered depth, depth-valid masks, calibration, selected-camera poses, source identity, and support for views that have already been selected; it never includes renders for unselected candidates. The source-matched CF+ H0 control validates this carrier but is exactly invariant to its numeric payload, so it remains an S0-pose-conditioned null model. The implemented S1-points control consumes only causal selected views through canonical float32 backprojection, expresses their surface points from the factual current camera, and adds a fixed-width density-weighted mean/max point-set residual to the unchanged root moments. Its final residual projection starts at zero, making fresh S1 predictions exactly equal to matched H0 while leaving that projection trainable on the first backward pass. The active discriminator root_moments_plus_selected_surface_points_identity_start_v1 binds that initialization; the shorter historical discriminator is ambiguous and inspection-only. S1 preserves no source-view or free/unknown ray identity and remains privileged and non-deployable. A matched H0/S1 difference estimates the complete S1 package, including geometry consumption, point-network capacity, initialization, and stochastic optimization; it does not identify geometry alone.</p>
 
@@ -1140,8 +1180,8 @@ $$
 </div>
 
 <div class="glossary-card-notation">
-<div><strong>Symbols</strong><div class="glossary-notation-list glossary-notation-symbols"><span class="glossary-notation-item"><span class="glossary-notation-math">$Q_H$</span><code>rl.qh</code></span> <span class="glossary-notation-item"><span class="glossary-notation-math">$G_t^{(H)}$</span><code>rl.return_h</code></span> <span class="glossary-notation-item"><span class="glossary-notation-math">$s_t^{\mathrm{cf0}}$</span><code>rl.s_cf0</code></span> <span class="glossary-notation-item"><span class="glossary-notation-math">$a$</span><code>rl.a</code></span></div></div>
-<div><strong>Equations</strong><div class="glossary-notation-list glossary-notation-equations"><span class="glossary-notation-item"><span class="glossary-notation-math">$Q_H(s_t^{\mathrm{cf0}},a_t)=\mathbb{E}\left[G_t^{(H)}\mid s_t=s_t^{\mathrm{cf0}},a_t\right]$</span><code>rl.q_h</code></span> <span class="glossary-notation-item"><span class="glossary-notation-math">$y_t^Q=r_t+\gamma V(s_{t+1})$</span><code>rl.q_backup</code></span></div></div>
+<div><strong>Symbols</strong><div class="glossary-notation-list glossary-notation-symbols"><span class="glossary-notation-item"><span class="glossary-notation-math">$Q_H$</span><code>rl.qh</code></span> <span class="glossary-notation-item"><span class="glossary-notation-math">$G_t^{(H)}$</span><code>rl.return_h</code></span> <span class="glossary-notation-item"><span class="glossary-notation-math">$s$</span><code>rl.s</code></span> <span class="glossary-notation-item"><span class="glossary-notation-math">$s_t^{\mathrm{S0-pose}}$</span><code>rl.s_pose</code></span> <span class="glossary-notation-item"><span class="glossary-notation-math">$s_t^{\mathrm{cf0}}$</span><code>rl.s_cf0</code></span> <span class="glossary-notation-item"><span class="glossary-notation-math">$a$</span><code>rl.a</code></span></div></div>
+<div><strong>Equations</strong><div class="glossary-notation-list glossary-notation-equations"><span class="glossary-notation-item"><span class="glossary-notation-math">$Q_{h,e}^{\star}(s_t,i)=\sup_{\pi\in\Pi^{\mathrm{act}}}\mathbb{E}_{\pi}\left[G_{t,e}^{(h)}\mid s_t,a_t=i\right],\quad i\in\mathcal{A}_t,\quad 1\le h\le b_t\le H_{\max},\quad Q_{0,e}^{\star}(s,i)=0$</span><code>rl.q_h</code></span> <span class="glossary-notation-item"><span class="glossary-notation-math">$y_t^Q=r_t+\gamma V(s_{t+1})$</span><code>rl.q_backup</code></span></div></div>
 </div>
 
 <p class="glossary-definition">Finite-horizon candidate-value function for target-conditioned ARIA-NBV.</p>
@@ -1152,7 +1192,7 @@ $$
 **Finite-horizon candidate value**
 
 $$
-Q_H(s_t^{\mathrm{cf0}},a_t,\boldsymbol{\phi}_e)=\mathbb{E}\left[G_t^{(H)}\mid s_t=s_t^{\mathrm{cf0}},a_t,\boldsymbol{\phi}_e\right]
+Q_\theta(s_t,e,a,h)=\mathbb{E}\left[G_t^{(h)}\mid s_t,e,a_t=a\right]
 $$
 :::
 
@@ -1160,7 +1200,7 @@ $$
 **Masked Double-DQN selector**
 
 $$
-j^*=\arg\max_{j:m_{t+1,j}=1}Q_\theta(s_{t+1}^{\mathrm{cf0}},a_{t+1,j},\boldsymbol{\phi}_e)
+j^*=\arg\max_{j:m_{t+1,j}=1}Q_\theta(s_{t+1},e,j,h-1)
 $$
 :::
 
@@ -1168,14 +1208,14 @@ $$
 **Masked Double-DQN target**
 
 $$
-y_t=r_t^e+\gamma(1-d_t)Q_{\bar\theta}(s_{t+1}^{\mathrm{cf0}},a_{t+1,j^*},\boldsymbol{\phi}_e)
+y_t^{(h)}=r_t^e+\gamma(1-d_t)Q_{\bar\theta}(s_{t+1},e,j^*,h-1)
 $$
 :::
 
 <details class="glossary-details">
 <summary>Links and references</summary>
 <div class="glossary-metadata">
-<div class="glossary-metadata-row"><span>Related</span><div><a class="glossary-chip" href="#term-finite-horizon-return">return</a> <a class="glossary-chip" href="#term-minimal-counterfactual-state">CF0 state</a> <a class="glossary-chip" href="#term-predicted-target-q">PRED-Q</a> <a class="glossary-chip" href="#term-validity-mask">mask</a></div></div>
+<div class="glossary-metadata-row"><span>Related</span><div><a class="glossary-chip" href="#term-finite-horizon-return">return</a> <a class="glossary-chip" href="#term-pose-only-counterfactual-state">S0-pose</a> <a class="glossary-chip" href="#term-minimal-counterfactual-state">CF0 state</a> <a class="glossary-chip" href="#term-predicted-target-q">PRED-Q</a> <a class="glossary-chip" href="#term-validity-mask">mask</a></div></div>
 <div class="glossary-metadata-row"><span>Docs</span><div><a class="glossary-chip" href="../typst/thesis/sections/01-research-questions.typ#ssec:rq2" title="docs/typst/thesis/sections/01-research-questions.typ#ssec:rq2">01 Research Questions</a> <a class="glossary-chip" href="../typst/thesis/development/roadmap.typ#ssec:milestones" title="docs/typst/thesis/development/roadmap.typ#ssec:milestones">Roadmap</a> <a class="glossary-chip" href="../typst/thesis/sections/04-method/index.typ#sec:thesis-method" title="docs/typst/thesis/sections/04-method/index.typ#sec:thesis-method">Index</a> <a class="glossary-chip" href="literature/rl_planning.html#q-h-and-dqn" title="docs/contents/literature/rl_planning.qmd#q-h-and-dqn">RL Sources For Rollout And Q_H</a></div></div>
 <div class="glossary-metadata-row"><span>References</span><div><a class="glossary-chip glossary-citation" href="#ref-DBLP:journals/corr/MnihKSGAWR13">&#64;DBLP:journals/corr/MnihKSGAWR13</a> <a class="glossary-chip glossary-citation" href="#ref-DoubleDQN-vanHasselt2015">&#64;DoubleDQN-vanHasselt2015</a> <a class="glossary-chip glossary-citation" href="#ref-IQL-kostrikov2021">&#64;IQL-kostrikov2021</a></div></div>
 </div>

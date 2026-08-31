@@ -10,10 +10,11 @@
   evidence: "pending",
   source: "aria_nbv/aria_nbv/targets/protocol.py; aria_nbv/aria_nbv/rollouts/replay/engine.py; aria_nbv/aria_nbv/rollouts/zarr_store.py; aria_nbv/aria_nbv/rollouts/qh_reader.py; aria_nbv/tests/rollouts/test_qh_reader.py",
   gate: [retain deterministic row identity, source roles, hard-mask isolation, and selected-transition validation; add selected-observation fusion and no-future-observation tests],
-)[Finite candidate tables, hard masks, and the `S0-pose` replay transition are implemented and tested. The scientific target additionally requires a causal actor-visible observation update, which remains pending.]
+)[Finite candidate tables, hard masks, and the #symb.rl.s_pose replay transition are implemented and tested. The scientific target additionally requires a causal actor-visible observation update, which remains pending.]
 
 At step $t$, the generator returns the full candidate table
-#symb.rl.candidate_table, a hard-valid mask $bold(m)_t$, and versioned failure
+#symb.rl.candidate_table, the hard @validity-mask:short
+#symb.rl.action_mask, and versioned failure
 reasons. The admissible action set is
 
 $
@@ -110,14 +111,14 @@ $
   #eqs.rl.replay_transition
 $
 
-where $x_t$ is the current reference pose, $bold(H)_t$ the selected-pose
-prefix, $b_t$ the remaining budget, and $xi_t$ the deterministic generation
+where $x_t$ is the current reference pose, #symb.rl.selected_pose_prefix the
+selected-pose history, #symb.rl.budget the remaining budget, and $xi_t$ the deterministic generation
 context. The next candidate table is regenerated around the selected pose under
 the same target task and versioned generator. Proposal and action-selection
 randomness use separate streams keyed by the factual selected-action history,
 so reordering retained trajectories cannot change a previously defined state.
 
-This is the complete transition of the selected `S0-pose` method. It changes
+This is the complete transition of the selected #symb.rl.s_pose method. It changes
 reference pose, selected-pose history, remaining budget, and finite action
 support. It does not claim that the actor received RGB, fused depth, or updated
 a spatial reconstruction. Selected mesh-rendered depth may be persisted as
@@ -126,7 +127,7 @@ candidate renders never enter a successor state.
 
 === Scientific target transition
 
-The scientific target retains the same factual action, budget, and candidate-
+The @minimal-counterfactual-state:short retains the same factual action, budget, and candidate-
 regeneration semantics, but its dynamic state must also update from the
 observation acquired at the selected pose. That update is strictly causal: it
 may use the previous actor-visible state, the selected action, and the selected
