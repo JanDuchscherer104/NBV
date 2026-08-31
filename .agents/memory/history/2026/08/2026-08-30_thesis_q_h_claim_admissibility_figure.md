@@ -26,7 +26,7 @@ touched_owner_paths:
   - scripts/tests/test_typst_report_data_contract.py
 codex_thread: codex://threads/01a04fd9-0c7c-7813-a9c5-dc49f2f867a6
 repo_object_format: sha1
-repo_head: fa2f1699a9bd4828585976ed95a12d77c8be8b53
+repo_head: 0c81a475ed3af85d3a21f9a68d970f0a4c52ea77
 repo_branch: "codex/thesis-figure-qh-evidence-gates"
 worktree_kind: linked
 ---
@@ -134,6 +134,21 @@ reviews until zero P0--P2 findings remained.
   canonical fact contracts, asserts exact units and value kinds, exercises all
   production family specifications, and fails unless the render remains exactly
   two A4 pages.
+- Every promoted analysis family now binds its exact typed fact payload to one
+  content-addressed sidecar rather than treating a sidecar digest as sufficient
+  evidence. Candidate-support admission additionally compares the observed
+  per-attempt receipt against an independently frozen scene/root roster and
+  recomputes scene-balanced P05 support and failed-root rate.
+- Measurement repeatability now compares the observed receipt against an
+  independent Cartesian plan over exact repeat identifiers, measurement
+  identities, and ranking-group membership. It derives competition ranks from
+  bound gains under frozen direction and tie semantics, recomputes maximum
+  matched-unit discrepancy, and rejects self-adjusted repeat or unit truncation.
+- Adversarial fixtures cover payload mutations, roster truncation, shared
+  artifact contradictions, stable ties and tie-breaking, nonuniform scene
+  aggregation, 100-attempt support, and multi-repeat/multi-unit measurement.
+  Map/flatten construction keeps the focused contract at about 19 seconds
+  instead of the initial quadratic 77-second scale regression.
 
 ## Commits
 
@@ -147,6 +162,8 @@ reviews until zero P0--P2 findings remained.
 - https://github.com/JanDuchscherer104/ARIA-NBV/commit/56122614724bd73787cd816483dd51f67b4ef15f
 - https://github.com/JanDuchscherer104/ARIA-NBV/commit/e28bc6234b319de39ea5637068df601ff46d9895
 - https://github.com/JanDuchscherer104/ARIA-NBV/commit/fa2f1699a9bd4828585976ed95a12d77c8be8b53
+- https://github.com/JanDuchscherer104/ARIA-NBV/commit/3b1a2e4dae1c1fe0ac86739ed1374ccbf9023abf
+- https://github.com/JanDuchscherer104/ARIA-NBV/commit/0c81a475ed3af85d3a21f9a68d970f0a4c52ea77
 
 ## Verification
 
@@ -197,6 +214,13 @@ The thesis remains 129 A4 pages; physical Results pages 68--69 were inspected
 at final size in color and grayscale. Independent scientific re-review first
 identified and then approved the exact source-to-payload binding with zero
 remaining P0--P2 findings.
+The frozen-roster repair passed `make docs-render-core`, including the Quarto
+render, Typst report contract, 22 authoring checks, marker contract, and 31
+literature-provenance tests. `make thesis-report-data-contract` passed in
+18.6 seconds; `make thesis-results-full-profile-render`, `make thesis-pdf`, and
+`git diff --check` passed. The thesis remains 129 A4 pages. Physical pages 39,
+60, and 68--69 were inspected at final size. Independent contract and scientific
+reviewers approved the final candidate with zero P0--P2 findings.
 
 ## Canonical Owner Impact
 
