@@ -35,7 +35,7 @@ Compared the PR #190 candidate against its parent and implementation owners, res
 
 ## Commits
 - [efad7e09ef91ea6264f00cf1ee9dae7054453783](https://github.com/JanDuchscherer104/ARIA-NBV/commit/efad7e09ef91ea6264f00cf1ee9dae7054453783) — restore Method design space, canonical shared glossary/notation, ranked scientific-core markers, and generator regressions.
-- [1a823a17667e26071fd54d2781014db121e8bd43](https://github.com/JanDuchscherer104/ARIA-NBV/commit/1a823a17667e26071fd54d2781014db121e8bd43) — replace stale candidate aliases and register the directional moment in the canonical notation owner after the strict projection gate exposed both omissions.
+- [1a823a176615f9fa55b18b45122b1e847f45d705](https://github.com/JanDuchscherer104/ARIA-NBV/commit/1a823a176615f9fa55b18b45122b1e847f45d705) — replace stale candidate aliases and register the directional moment in the canonical notation owner after the strict projection gate exposed both omissions.
 
 ## Verification
 - `make glossary` — passed; 58 terms, 117 symbols, and 122 equations; a second run was byte-idempotent across all generated projections.
