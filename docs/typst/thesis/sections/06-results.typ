@@ -480,9 +480,12 @@ payload to reproduce every claimed row.
   anchored or derived content binding to the actor, rollout, implementation, or
   actor-state contract; the receipt does not establish provenance upstream of
   those bound artifacts.
-  Actor-visible ranking with its interval,
-  calibration, declared thresholds, scene denominators, and their rule-checked
-  decision are also available from one global analysis in
+  The same receipt binds every admitted candidate's decoded prediction and
+  persisted one-step label. The report reconstructs strict statewise pair
+  accuracy, candidate calibration error, scene macro-averages, the
+  leave-one-scene-out interval, and the globally deduplicated scene denominator
+  before checking the declared thresholds. These values and their rule-checked
+  decision are available from one global analysis in
   @tab:thesis-confirmatory-q1-values.
   The actor-$Q_1$ claim is
   #if q1-state.claim_admissible [admissible under the passed target, state,

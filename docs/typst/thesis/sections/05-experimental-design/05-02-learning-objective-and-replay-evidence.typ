@@ -63,9 +63,19 @@ value. Actor-visible $Q_1$ must first pass on held-out scenes; exact $Q_2$ must
 then pass its frozen independent-unit, coverage, and tolerance rules; endpoint
 recovery is interpreted only if oracle headroom is already meaningful.
 
-The report contract preserves those populations explicitly. Pairwise accuracy
-is a unit-interval fraction with a scene-clustered 95% interval; one-step
-calibration MAE is a nonnegative root-normalized-return error. The frozen $Q_1$
+The report contract preserves those populations explicitly. Its
+content-addressed candidate ledger binds each decoded actor-visible prediction
+to its persisted one-step target and admission masks. Pairwise accuracy first
+averages strict unequal-label comparisons within state and then averages states
+within globally unique held-out scenes; prediction ties are errors. States with
+no unequal-label pair do not contribute a ranking value, and a scene with no
+pair-supported state invalidates the receipt rather than silently changing the
+scene population. Calibration still uses every state with admitted finite
+prediction--label rows. The reported
+point estimate is the scene macro-average and its 95% bounds use a deterministic
+leave-one-scene-out jackknife normal interval. One-step calibration MAE averages
+candidate absolute errors within state and then uses the same scene weighting.
+The frozen $Q_1$
 rule requires the point ranking to reach a declared threshold above chance, the
 interval lower bound to exceed chance $0.5$, and calibration MAE not to exceed
 its declared maximum. This supports point-estimated threshold attainment and

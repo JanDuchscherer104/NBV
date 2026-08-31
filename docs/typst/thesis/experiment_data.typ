@@ -140,6 +140,7 @@
 )
 
 #let paired-interval-method = "scene_clustered_percentile_bootstrap_95"
+#let q1-ranking-interval-method = "scene_clustered_jackknife_normal_95_v1"
 #let recovery-interval-method = "paired_scene_joint_ratio_bootstrap_95_v1"
 #let recovery-ratio-definition = "ratio_of_paired_scene_mean_differences"
 #let q1-pairwise-chance = 0.5
@@ -157,9 +158,9 @@
 #let candidate-support-benchmark-name = "candidate-support-benchmark-plan-v2"
 #let candidate-support-benchmark-schema = "candidate_support_benchmark_plan_v2"
 #let q1-decision-rule = "ranking_gte_minimum_and_ci_low_gt_chance_and_calibration_mae_lte_maximum_v1"
-#let q1-analysis-receipt-name = "q1-actor-analysis-v2"
-#let q1-protocol-receipt-name = "q1-actor-protocol-audit-v5"
-#let q1-protocol-receipt-schema = "actor_visible_q1_protocol_receipt_v5"
+#let q1-analysis-receipt-name = "q1-actor-analysis-v3"
+#let q1-protocol-receipt-name = "q1-actor-protocol-audit-v6"
+#let q1-protocol-receipt-schema = "actor_visible_q1_protocol_receipt_v6"
 #let q1-population-benchmark-name = "q1-population-benchmark-v1"
 #let q1-population-benchmark-schema = "q1_population_benchmark_v1"
 #let q1-bundle-manifest-name = "manifest.json"
@@ -173,6 +174,11 @@
 #let q1-audit-selected-observation-protocol = "none"
 #let q1-audit-action-mask-semantics = "actor_observed_action_mask_v1"
 #let q1-audit-actor-input-manifest-schema = "qh_cf0_actor_input_leaf_manifest_v2"
+#let q1-audit-prediction-semantics = "decoded_actor_visible_conditional_q_h1_v1"
+#let q1-audit-label-semantics = "persisted_one_step_target_root_gain_v1"
+#let q1-audit-ranking-pair-policy = "unordered_unequal_label_pairs_prediction_ties_incorrect_v1"
+#let q1-audit-calibration-aggregation = "candidate_then_state_then_scene_macro_v1"
+#let q1-audit-independent-unit-semantics = "ase_scene_id_v1"
 #let q1-audit-actor-input-leaves = (
   (name: "root_observation_evidence", role: "actor_root_evidence", schema-id: "qh_root_observation_evidence_v1", source-owner: "actor_manifest", derivation: "actor_manifest_member_v1", presence: true),
   (name: "root_reference_pose", role: "actor_reference_frame", schema-id: "pose_tw_12_float32_v1", source-owner: "rollout_manifest", derivation: "rollout_state_projection_v1", presence: true),
@@ -1511,7 +1517,7 @@
     observation.artifact != none and report-sha256-value-valid(observation.artifact.value) and observation.artifact.unit == "sha256" and observation.artifact.aggregation == "measurement_output_sha256",
     observation.protocol != none and observation.protocol.value == protocol-id-row.value and observation.protocol.unit == "identity" and observation.protocol.aggregation == "protocol_identity",
     observation.config != none and observation.config.value == protocol-config-row.value and observation.config.unit == "sha256" and observation.config.aggregation == "protocol_binding_sha256",
-    observation.gain != none and report-value-matches-kind(observation.gain.value, "number") and observation.gain.unit == "fraction" and observation.gain.aggregation == "matched_unit_measurement",
+    observation.gain != none and report-value-is-finite-float32(observation.gain.value) and observation.gain.value <= 1 and observation.gain.unit == "fraction" and observation.gain.aggregation == "matched_unit_measurement",
   ).all(value => value))
   let record-keys = record-rows.map(row => row.key)
   records-valid and reported-max-diff != none and reported-ranking-agreement != none and store-manifest != none and type(protocol-id-row.value) == str and protocol-id-row.value.match(identity-pattern) != none and report-store-fact-values-match(
@@ -1720,6 +1726,26 @@
     store-id,
     "q1.population.n_scenes",
   )
+  let reported-ranking = report-store-number-value(
+    report,
+    store-id,
+    "q1.ranking.pairwise_accuracy",
+  )
+  let reported-ranking-ci-low = report-store-number-value(
+    report,
+    store-id,
+    "q1.ranking.pairwise_accuracy.ci_low",
+  )
+  let reported-ranking-ci-high = report-store-number-value(
+    report,
+    store-id,
+    "q1.ranking.pairwise_accuracy.ci_high",
+  )
+  let reported-calibration = report-store-number-value(
+    report,
+    store-id,
+    "q1.calibration.mae",
+  )
   let manifest-rows = index.rows.values().filter(
     row => row.key.match(regex("^bound_contract\\.ordered_test_store_manifests\\[[0-9]+\\]$")) != none,
   ).sorted(key: row => row.key)
@@ -1771,7 +1797,19 @@
     "action_mask_semantics",
   ) == q1-audit-action-mask-semantics and value(
     "actor_input_manifest_schema",
-  ) == q1-audit-actor-input-manifest-schema and manifests.len() > 0 and manifests.all(
+  ) == q1-audit-actor-input-manifest-schema and value(
+    "metric_contract.prediction_semantics",
+  ) == q1-audit-prediction-semantics and value(
+    "metric_contract.label_semantics",
+  ) == q1-audit-label-semantics and value(
+    "metric_contract.ranking_pair_policy",
+  ) == q1-audit-ranking-pair-policy and value(
+    "metric_contract.calibration_aggregation",
+  ) == q1-audit-calibration-aggregation and value(
+    "metric_contract.independent_unit_semantics",
+  ) == q1-audit-independent-unit-semantics and value(
+    "metric_contract.interval_method",
+  ) == q1-ranking-interval-method and manifests.len() > 0 and manifests.all(
     report-sha256-value-valid,
   ) and manifests.dedup().len() == manifests.len() and manifests == manifests.sorted() and report-store-ids.len() == report-store-ids.dedup().len() and report-manifests.len() > 0 and report-manifests.all(
     report-sha256-value-valid,
@@ -2161,6 +2199,10 @@
     action-mask: value(prefix + ".actor_action_mask"),
     label-mask: value(prefix + ".oracle_label_mask"),
     q-train-mask: value(prefix + ".q_train_mask"),
+    prediction-row: report-sidecar-indexed-row-or-none(index, prefix + ".prediction"),
+    label-row: report-sidecar-indexed-row-or-none(index, prefix + ".label"),
+    prediction: value(prefix + ".prediction"),
+    label: value(prefix + ".label"),
     prediction-finite: value(prefix + ".prediction_finite"),
     label-finite: value(prefix + ".label_finite"),
     included: value(prefix + ".included_in_q1_metric"),
@@ -2173,6 +2215,8 @@
       (candidate.store, candidate.rollout, candidate.step-row).map(str).join("|"),
       default: none,
     )
+    let prediction-finite = report-value-is-finite-float32(candidate.prediction)
+    let label-finite = report-value-is-finite-float32(candidate.label)
     state != none and (
       type(candidate.store) == int and candidate.store >= 0 and candidate.store < manifests.len(),
       type(candidate.rollout) == int and candidate.rollout >= 0,
@@ -2182,14 +2226,113 @@
       type(candidate.action-mask) == bool,
       type(candidate.label-mask) == bool,
       type(candidate.q-train-mask) == bool and candidate.q-train-mask == (candidate.action-mask and candidate.label-mask),
-      type(candidate.prediction-finite) == bool,
-      type(candidate.label-finite) == bool,
+      candidate.prediction-row != none,
+      candidate.label-row != none,
+      candidate.prediction == none or report-value-matches-kind(candidate.prediction, "number"),
+      candidate.label == none or (
+        report-value-matches-kind(candidate.label, "number") and (
+          not label-finite or candidate.label <= 1
+        )
+      ),
+      type(candidate.prediction-finite) == bool and candidate.prediction-finite == prediction-finite,
+      type(candidate.label-finite) == bool and candidate.label-finite == label-finite,
+      not candidate.q-train-mask or (prediction-finite and label-finite),
       type(candidate.included) == bool and candidate.included == (
         candidate.q-train-mask and candidate.prediction-finite and candidate.label-finite
       ),
     ).all(check => check)
   }) and candidate-identities.dedup().len() == candidates.len()
   if not candidates-valid { return false }
+
+  // Reconstruct both Q1 estimands from the content-addressed candidate rows.
+  // Ranking is macro-averaged within state and then scene; calibration follows
+  // the same state-then-scene weighting. Equal oracle labels are not ranking
+  // comparisons, and a prediction tie is incorrect for a strict label order.
+  let state-metrics = states.map(state => {
+    let included = candidates.filter(candidate => (
+      candidate.store == state.store,
+      candidate.rollout == state.rollout,
+      candidate.step-row == state.step-row,
+      candidate.included,
+    ).all(check => check)).sorted(key: candidate => candidate.index)
+    let pair-scores = ()
+    for left-index in range(included.len()) {
+      for right-index in range(left-index + 1, included.len()) {
+        let left = included.at(left-index)
+        let right = included.at(right-index)
+        if left.label != right.label {
+          let correct = if left.label > right.label {
+            left.prediction > right.prediction
+          } else {
+            left.prediction < right.prediction
+          }
+          pair-scores.push(if correct { 1.0 } else { 0.0 })
+        }
+      }
+    }
+    if included.len() == 0 {
+      none
+    } else {
+      (
+        scene-key: state.scene,
+        ranking: if pair-scores.len() == 0 { none } else {
+          pair-scores.sum() / pair-scores.len()
+        },
+        calibration: included.map(
+          candidate => calc.abs(candidate.prediction - candidate.label),
+        ).sum() / included.len(),
+      )
+    }
+  })
+  if state-metrics.any(metric => metric == none) { return false }
+  let scene-groups = (:)
+  for metric in state-metrics {
+    scene-groups.insert(
+      metric.scene-key,
+      scene-groups.at(metric.scene-key, default: ()) + (metric,),
+    )
+  }
+  let scene-keys = scene-groups.keys().sorted()
+  if scene-keys.len() < 2 { return false }
+  let scene-rankings = scene-keys.map(scene-key => {
+    let group = scene-groups.at(scene-key)
+    let supported = group.filter(metric => metric.ranking != none)
+    if supported.len() == 0 { none } else {
+      supported.map(metric => metric.ranking).sum() / supported.len()
+    }
+  })
+  if scene-rankings.any(score => score == none) { return false }
+  let scene-calibrations = scene-keys.map(scene-key => {
+    let group = scene-groups.at(scene-key)
+    group.map(metric => metric.calibration).sum() / group.len()
+  })
+  let derived-ranking = scene-rankings.sum() / scene-rankings.len()
+  let derived-calibration = scene-calibrations.sum() / scene-calibrations.len()
+  let leave-one-scene-out = range(scene-rankings.len()).map(omitted-index => {
+    let subtotal = 0.0
+    for (scene-index, score) in scene-rankings.enumerate() {
+      if scene-index != omitted-index { subtotal += score }
+    }
+    subtotal / (scene-rankings.len() - 1)
+  })
+  let jackknife-centre = leave-one-scene-out.sum() / leave-one-scene-out.len()
+  let jackknife-se = calc.sqrt(
+    (scene-rankings.len() - 1) / scene-rankings.len() * leave-one-scene-out.map(
+      value => calc.pow(value - jackknife-centre, 2),
+    ).sum(),
+  )
+  let normal-95 = 1.959963984540054
+  let derived-ranking-ci-low = calc.max(0.0, derived-ranking - normal-95 * jackknife-se)
+  let derived-ranking-ci-high = calc.min(1.0, derived-ranking + normal-95 * jackknife-se)
+  let derived-metrics-valid = (
+    declared-scenes == scene-keys.len(),
+    reported-ranking != none and calc.abs(reported-ranking - derived-ranking) <= derived-identity-abs-tolerance,
+    reported-ranking-ci-low != none and calc.abs(reported-ranking-ci-low - derived-ranking-ci-low) <= derived-identity-abs-tolerance,
+    reported-ranking-ci-high != none and calc.abs(reported-ranking-ci-high - derived-ranking-ci-high) <= derived-identity-abs-tolerance,
+    reported-calibration != none and calc.abs(reported-calibration - derived-calibration) <= derived-identity-abs-tolerance,
+  ).all(check => check)
+  if not derived-metrics-valid { return false }
+
   let measured-state-identities = states.map(state => {
     let roster = candidates.filter(candidate => (
       candidate.store == state.store,
@@ -2265,9 +2408,6 @@
   let hard-mask-applied = candidates.all(
     candidate => not candidate.included or candidate.action-mask,
   )
-  let current-store-state-scenes = states.filter(
-    state => state.store == current-store-index,
-  ).map(state => state.scene).dedup()
   let declared-counts-valid = type(declared-scenes) == int and declared-scenes > 0 and type(
     value("population.target_count"),
   ) == int and value("population.target_count") == targets.len() and type(
@@ -2275,7 +2415,7 @@
   ) == int and value("population.state_count") == states.len() and type(
     value("population.candidate_count"),
   ) == int and value("population.candidate_count") == candidates.len()
-  declared-counts-valid and state-candidate-roster-valid and current-store-state-scenes.len() == declared-scenes and targets.filter(
+  declared-counts-valid and state-candidate-roster-valid and targets.filter(
     target => target.store == current-store-index,
   ).len() > 0 and states.filter(
     state => state.store == current-store-index,
@@ -2332,7 +2472,7 @@
       (key: "q1.protocol.actor_oracle_mask_separation_audited", value: true),
       (key: "q1.protocol.hard_mask_applied", value: true),
       (key: "q1.protocol.causal_history_only", value: true),
-      (key: "q1.ranking.interval_method", value: paired-interval-method),
+      (key: "q1.ranking.interval_method", value: q1-ranking-interval-method),
       (key: "q1.ranking.chance", value: q1-pairwise-chance),
       (key: "q1.gate.rule", value: q1-decision-rule),
     ),

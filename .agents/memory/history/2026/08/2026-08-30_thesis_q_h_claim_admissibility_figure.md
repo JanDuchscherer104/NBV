@@ -448,6 +448,36 @@ candidate reviewers approved source diff
 with zero P0--P2 findings. The thesis remains 129 A4 pages with PDF SHA-256
 `33342e974dcc63b73ca52cd3555c2441cc74f7bf9f83ef2aaa265e1ae4dfb2b0`.
 
+The Q1 metric-identity repair replaces trusted ranking and calibration
+aggregates with reconstruction from the content-addressed candidate ledger.
+The v6 receipt freezes prediction and one-step-label semantics, strict
+unequal-label pairs with prediction ties counted incorrect, state-then-scene
+macro aggregation, globally unique ASE scene units, and a deterministic
+leave-one-scene-out jackknife-normal interval. Every training-supported row
+must retain finite prediction and label carriers and must be included; masked
+roster rows remain auditable with explicit missing carriers. Coordinated
+omission, malformed carriers, aggregate drift, store-order reversal, and
+overlapping multi-store scene identities are covered by fail-closed fixtures.
+The weighting-sensitive fixture distinguishes state/scene macro estimates
+(`0.8` ranking and `0.16` calibration MAE) from raw pair/candidate weighting
+(`0.75` and approximately `0.188235`) and fixes the nonzero unclipped 95%
+jackknife interval at `[0.6399696108, 0.9600303892]`. The methods text now
+states that states without unequal-label pairs are excluded from ranking and
+that a scene without a pair-supported state invalidates the receipt.
+
+Repeatability evidence now rejects every non-finite float32 gain and every
+gain above the geometric upper bound of one while retaining valid negative
+gains. The global Q1 scene denominator is reconstructed from deduplicated
+scene identities rather than from the current store. Fresh verification passed
+`make thesis-report-data-contract`, `make typst-authoring-contract`,
+`make thesis-results-full-profile-render`, `make thesis-pdf-ci`,
+`make thesis-marker-contract`, `make thesis-pdf`, and `git diff --check`.
+Independent Q1-contract and scientific reviewers approved exact pre-debrief
+source diff `208ac6d56bdf2426ea721922dda1c317a2acc63b03db3d52b465486c4a277545`
+with zero valid P0--P2 findings. The thesis remains 129 A4 pages; physical page
+94 was inspected at final size and the PDF SHA-256 is
+`5f7bbd67be19ebd1cb54e42f8cbd6dd63701136dc224829c252b2449219ec036`.
+
 ## Canonical Owner Impact
 
 Current thesis truth now lives in the touched Typst figure, report-data,

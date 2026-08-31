@@ -1,4 +1,4 @@
-#import "../experiment_data.typ": candidate-support-benchmark-name, candidate-support-benchmark-schema, candidate-support-decision-rule, candidate-support-receipt-name, candidate-support-receipt-schema, canonical-sidecar-id, measurement-benchmark-name, measurement-benchmark-schema, measurement-protocol-receipt-name, measurement-protocol-receipt-schema, measurement-rank-direction, measurement-rank-tie-policy, paired-interval-method, q1-analysis-receipt-name, q1-audit-action-mask-semantics, q1-audit-actor-input-leaves, q1-audit-actor-input-manifest-schema, q1-audit-campaign-descriptor-provenance, q1-audit-campaign-target-source, q1-audit-experiment-profile, q1-audit-gt-match-status, q1-audit-selected-observation-protocol, q1-audit-target-protocol, q1-bundle-manifest-name, q1-decision-rule, q1-pairwise-chance, q1-population-benchmark-name, q1-population-benchmark-schema, q1-protocol-receipt-name, q1-protocol-receipt-schema, q1-scene-role, q1-target-source-protocol, q2-certification-receipt-schema, q2-certification-schema, q2-decision-rule, q2-independent-unit-aggregation, q2-independent-unit-semantics, q2-selection-semantics, repeatability-decision-rule, report-store-population-evidence-valid, report-store-measurement-evidence-valid, report-store-candidate-support-evidence-valid, report-store-q1-evidence-valid, report-stores-q1-evidence-valid, report-store-q2-evidence-valid, sha256-hex
+#import "../experiment_data.typ": candidate-support-benchmark-name, candidate-support-benchmark-schema, candidate-support-decision-rule, candidate-support-receipt-name, candidate-support-receipt-schema, canonical-sidecar-id, measurement-benchmark-name, measurement-benchmark-schema, measurement-protocol-receipt-name, measurement-protocol-receipt-schema, measurement-rank-direction, measurement-rank-tie-policy, paired-interval-method, q1-analysis-receipt-name, q1-audit-action-mask-semantics, q1-audit-actor-input-leaves, q1-audit-actor-input-manifest-schema, q1-audit-campaign-descriptor-provenance, q1-audit-campaign-target-source, q1-audit-experiment-profile, q1-audit-gt-match-status, q1-audit-selected-observation-protocol, q1-audit-target-protocol, q1-bundle-manifest-name, q1-decision-rule, q1-pairwise-chance, q1-population-benchmark-name, q1-population-benchmark-schema, q1-protocol-receipt-name, q1-protocol-receipt-schema, q1-ranking-interval-method, q1-scene-role, q1-target-source-protocol, q2-certification-receipt-schema, q2-certification-schema, q2-decision-rule, q2-independent-unit-aggregation, q2-independent-unit-semantics, q2-selection-semantics, repeatability-decision-rule, report-store-population-evidence-valid, report-store-measurement-evidence-valid, report-store-candidate-support-evidence-valid, report-store-q1-evidence-valid, report-stores-q1-evidence-valid, report-store-q2-evidence-valid, sha256-hex
 
 #let digest-a = "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
 #let digest-b = "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
@@ -237,10 +237,10 @@
   "identity.ordered_test_store_manifests[" + str(index) + "]",
   manifest,
 ))
-#let q1-fixture-roster(store-manifests) = {
+#let q1-fixture-roster(store-manifests, overlap-scenes: false) = {
   let targets = store-manifests.enumerate().map(((store-index, _)) => range(5).map(scene-index => (
     store: store-index,
-    scene: "scene-" + str(store-index) + "-" + str(scene-index),
+    scene: "scene-" + str(if overlap-scenes { 0 } else { store-index }) + "-" + str(scene-index),
     row: scene-index,
     id: "target/" + str(store-index) + "/" + str(scene-index),
   )).flatten()).flatten()
@@ -251,29 +251,33 @@
     let root-identity = str(store-index) + "|" + str(scene-index)
     (
       store: store-index,
-      scene: "scene-" + str(store-index) + "-" + str(scene-index),
+      scene: "scene-" + str(if overlap-scenes { 0 } else { store-index }) + "-" + str(scene-index),
       rollout: scene-index,
       step-row: step-index,
       step: step-index,
       target-row: scene-index,
-      candidate-width: 2,
-      selected-row: 100 + state-index * 2,
+      candidate-width: 3,
+      selected-row: 100 + state-index * 3,
       candidate-config: "9292929292929292929292929292929292929292929292929292929292929292",
       root-observation: sha256-hex("root-observation|" + root-identity),
       root-reference-pose: sha256-hex("root-reference-pose|" + root-identity),
       candidate-pose-shell: sha256-hex("candidate-pose-shell|" + identity),
-      actor-action-support: sha256-hex("0|true\n1|false"),
+      actor-action-support: sha256-hex(if state-index == 1 {
+        "0|true\n1|true\n2|false"
+      } else {
+        "0|true\n1|true\n2|true"
+      }),
       remaining-budget: if scene-index == 0 { 2 - step-index } else { 1 },
       state-index: state-index,
     )
   }).flatten()).flatten()
-  let candidates = states.map(state => range(2).map(candidate-index => (
+  let candidates = states.map(state => range(3).map(candidate-index => (
     store: state.store,
     rollout: state.rollout,
     step-row: state.step-row,
-    row: 100 + state.state-index * 2 + candidate-index,
+    row: 100 + state.state-index * 3 + candidate-index,
     index: candidate-index,
-    action-mask: candidate-index == 0,
+    action-mask: state.state-index != 1 or candidate-index < 2,
   )).flatten()).flatten()
   (targets: targets, states: states, candidates: candidates)
 }
@@ -283,8 +287,9 @@
   bundle-manifest: qh-bundle-manifest,
   provenance-digest: "8383838383838383838383838383838383838383838383838383838383838383",
   store-manifests: (store-manifest,),
+  overlap-scenes: false,
 ) = {
-  let roster = q1-fixture-roster(store-manifests)
+  let roster = q1-fixture-roster(store-manifests, overlap-scenes: overlap-scenes)
   let target-identities = roster.targets.map(
     target => (target.store, target.scene, target.row, target.id, "9191919191919191919191919191919191919191919191919191919191919191").map(str).join("|"),
   ).sorted()
@@ -376,11 +381,12 @@
   sidecar-id: q1-audit-sidecar,
   population-digest: q1-population-digest,
   store-manifests: (store-manifest,),
+  overlap-scenes: false,
 ) = {
   let implementation-contract = "8484848484848484848484848484848484848484848484848484848484848484"
   let actor-contract = "8686868686868686868686868686868686868686868686868686868686868686"
   let learning-contract = "8585858585858585858585858585858585858585858585858585858585858585"
-  let roster = q1-fixture-roster(store-manifests)
+  let roster = q1-fixture-roster(store-manifests, overlap-scenes: overlap-scenes)
   let envelope = (
     typed-sidecar-row(sidecar-id, "schema_version", q1-protocol-receipt-schema),
     typed-sidecar-row(sidecar-id, "bundle_manifest_sha256", qh-bundle-manifest),
@@ -395,6 +401,12 @@
     typed-sidecar-row(sidecar-id, "selected_observation_protocol", q1-audit-selected-observation-protocol),
     typed-sidecar-row(sidecar-id, "action_mask_semantics", q1-audit-action-mask-semantics),
     typed-sidecar-row(sidecar-id, "actor_input_manifest_schema", q1-audit-actor-input-manifest-schema),
+    typed-sidecar-row(sidecar-id, "metric_contract.prediction_semantics", "decoded_actor_visible_conditional_q_h1_v1"),
+    typed-sidecar-row(sidecar-id, "metric_contract.label_semantics", "persisted_one_step_target_root_gain_v1"),
+    typed-sidecar-row(sidecar-id, "metric_contract.ranking_pair_policy", "unordered_unequal_label_pairs_prediction_ties_incorrect_v1"),
+    typed-sidecar-row(sidecar-id, "metric_contract.calibration_aggregation", "candidate_then_state_then_scene_macro_v1"),
+    typed-sidecar-row(sidecar-id, "metric_contract.independent_unit_semantics", "ase_scene_id_v1"),
+    typed-sidecar-row(sidecar-id, "metric_contract.interval_method", q1-ranking-interval-method),
     typed-sidecar-row(sidecar-id, "population.target_count", roster.targets.len()),
     typed-sidecar-row(sidecar-id, "population.state_count", roster.states.len()),
     typed-sidecar-row(sidecar-id, "population.candidate_count", roster.candidates.len()),
@@ -524,7 +536,19 @@
   }).flatten()
   let candidates = roster.candidates.enumerate().map(((record-index, candidate)) => {
     let prefix = "candidates[" + str(record-index) + "]"
-    let admitted = candidate.index == 0
+    let admitted = candidate.action-mask
+    let label = if candidate.index == 0 { 0.8 } else { 0.2 }
+    let prediction = label - 0.1
+    let prediction-row = if admitted {
+      typed-sidecar-row(sidecar-id, prefix + ".prediction", prediction)
+    } else {
+      missing-sidecar-row(sidecar-id, prefix + ".prediction")
+    }
+    let label-row = if admitted {
+      typed-sidecar-row(sidecar-id, prefix + ".label", label)
+    } else {
+      missing-sidecar-row(sidecar-id, prefix + ".label")
+    }
     (
       typed-sidecar-row(sidecar-id, prefix + ".store_index", candidate.store),
       typed-sidecar-row(sidecar-id, prefix + ".rollout_row_id", candidate.rollout),
@@ -534,7 +558,9 @@
       typed-sidecar-row(sidecar-id, prefix + "." + q1-actor-mask-key, admitted),
       typed-sidecar-row(sidecar-id, prefix + "." + q1-label-mask-key, admitted),
       typed-sidecar-row(sidecar-id, prefix + "." + q1-train-mask-key, admitted),
-      typed-sidecar-row(sidecar-id, prefix + ".prediction_finite", true),
+      prediction-row,
+      label-row,
+      typed-sidecar-row(sidecar-id, prefix + ".prediction_finite", admitted),
       typed-sidecar-row(sidecar-id, prefix + ".label_finite", admitted),
       typed-sidecar-row(sidecar-id, prefix + ".included_in_q1_metric", admitted),
     )
@@ -999,10 +1025,11 @@
   bundle-manifest: qh-bundle-manifest,
   audit-receipt: q1-audit-digest,
   count-value: 5,
-  ranking-value: 0.8,
-  ranking-ci-low: 0.65,
-  ranking-ci-high: 0.9,
-  interval-method: paired-interval-method,
+  row-n: none,
+  ranking-value: 1.0,
+  ranking-ci-low: 1.0,
+  ranking-ci-high: 1.0,
+  interval-method: q1-ranking-interval-method,
   ranking-unit: "fraction",
   ranking-aggregation: "state_then_scene_macro",
   calibration-value: 0.1,
@@ -1021,29 +1048,32 @@
   causal-history-only: true,
   source: protocol-source,
   gate-source: protocol-source,
-) = (
-  fact("q1.model.bundle_manifest_sha256", bundle-manifest, "sha256", 5, "model_identity", source: source),
-  fact("q1.protocol.audit_receipt_sha256", audit-receipt, "sha256", 5, "protocol_binding_sha256", source: source),
-  fact("q1.protocol.receipt_schema", receipt-schema, "identity", 5, "protocol_identity", source: source),
-  fact("q1.protocol.scene_role", scene-role, "identity", 5, "protocol_identity", source: source),
-  fact("q1.protocol.target_source", target-source, "identity", 5, "protocol_identity", source: source),
-  fact("q1.protocol.target_matching_passed", target-matching-passed, "bool", 5, "protocol_audit", source: source),
-  fact("q1.protocol.actor_input_manifest_audited", actor-input-manifest-audited, "bool", 5, "protocol_audit", source: source),
-  fact("q1.protocol.actor_oracle_mask_separation_audited", actor-oracle-mask-separation-audited, "bool", 5, "protocol_audit", source: source),
-  fact("q1.protocol.hard_mask_applied", hard-mask-applied, "bool", 5, "protocol_audit", source: source),
-  fact("q1.protocol.causal_history_only", causal-history-only, "bool", 5, "protocol_audit", source: source),
-  fact("q1.ranking.pairwise_accuracy", ranking-value, ranking-unit, 5, ranking-aggregation, source: source),
-  fact("q1.ranking.pairwise_accuracy.ci_low", ranking-ci-low, "fraction", 5, "scene_clustered_interval", source: source),
-  fact("q1.ranking.pairwise_accuracy.ci_high", ranking-ci-high, "fraction", 5, "scene_clustered_interval", source: source),
-  fact("q1.ranking.interval_method", interval-method, "identity", 5, "analysis_identity", source: source),
-  fact("q1.calibration.mae", calibration-value, "root_normalized_return", 5, "state_then_scene_macro", source: source),
-  fact("q1.population.n_scenes", count-value, "count", 5, "count", source: source),
-  fact("q1.ranking.chance", chance, "fraction", 5, "analysis_threshold", source: source),
-  fact("q1.ranking.pairwise_accuracy.minimum", ranking-minimum, "fraction", 5, "analysis_threshold", source: source),
-  fact("q1.calibration.mae.maximum", calibration-maximum, "root_normalized_return", 5, "analysis_threshold", source: source),
-  fact("q1.gate.rule", rule, "identity", 5, "analysis_identity", source: source),
-  fact("q1.gate.passed", passed, "bool", 5, "state_then_scene_decision", source: gate-source),
-)
+) = {
+  let denominator-n = if row-n == none { count-value } else { row-n }
+  (
+  fact("q1.model.bundle_manifest_sha256", bundle-manifest, "sha256", denominator-n, "model_identity", source: source),
+  fact("q1.protocol.audit_receipt_sha256", audit-receipt, "sha256", denominator-n, "protocol_binding_sha256", source: source),
+  fact("q1.protocol.receipt_schema", receipt-schema, "identity", denominator-n, "protocol_identity", source: source),
+  fact("q1.protocol.scene_role", scene-role, "identity", denominator-n, "protocol_identity", source: source),
+  fact("q1.protocol.target_source", target-source, "identity", denominator-n, "protocol_identity", source: source),
+  fact("q1.protocol.target_matching_passed", target-matching-passed, "bool", denominator-n, "protocol_audit", source: source),
+  fact("q1.protocol.actor_input_manifest_audited", actor-input-manifest-audited, "bool", denominator-n, "protocol_audit", source: source),
+  fact("q1.protocol.actor_oracle_mask_separation_audited", actor-oracle-mask-separation-audited, "bool", denominator-n, "protocol_audit", source: source),
+  fact("q1.protocol.hard_mask_applied", hard-mask-applied, "bool", denominator-n, "protocol_audit", source: source),
+  fact("q1.protocol.causal_history_only", causal-history-only, "bool", denominator-n, "protocol_audit", source: source),
+  fact("q1.ranking.pairwise_accuracy", ranking-value, ranking-unit, denominator-n, ranking-aggregation, source: source),
+  fact("q1.ranking.pairwise_accuracy.ci_low", ranking-ci-low, "fraction", denominator-n, "scene_clustered_interval", source: source),
+  fact("q1.ranking.pairwise_accuracy.ci_high", ranking-ci-high, "fraction", denominator-n, "scene_clustered_interval", source: source),
+  fact("q1.ranking.interval_method", interval-method, "identity", denominator-n, "analysis_identity", source: source),
+  fact("q1.calibration.mae", calibration-value, "root_normalized_return", denominator-n, "state_then_scene_macro", source: source),
+  fact("q1.population.n_scenes", count-value, "count", denominator-n, "count", source: source),
+  fact("q1.ranking.chance", chance, "fraction", denominator-n, "analysis_threshold", source: source),
+  fact("q1.ranking.pairwise_accuracy.minimum", ranking-minimum, "fraction", denominator-n, "analysis_threshold", source: source),
+  fact("q1.calibration.mae.maximum", calibration-maximum, "root_normalized_return", denominator-n, "analysis_threshold", source: source),
+  fact("q1.gate.rule", rule, "identity", denominator-n, "analysis_identity", source: source),
+  fact("q1.gate.passed", passed, "bool", denominator-n, "state_then_scene_decision", source: gate-source),
+  )
+}
 
 #let q2-rows(
   bundle-manifest: qh-bundle-manifest,
@@ -1812,9 +1842,130 @@
     -0.3,
   ),
 ), "store-a"))
+#let uniform-measurement-gain-rows(gain) = measurement-baseline-rows.map(row => if row.key.match(
+  regex("^oracle\\.metric\\.observations\\[[0-9]+\\]\\.root_normalized_gain$"),
+) != none {
+  row + (value: gain,)
+} else if row.key == "oracle.metric.repeatability.max_abs_diff" {
+  row + (value: 0.0,)
+} else { row })
+#for impossible-gain in (2.0, 1.000001, -1e308) {
+  assert(not report-store-measurement-evidence-valid(
+    report(uniform-measurement-gain-rows(impossible-gain)),
+    "store-a",
+  ))
+}
+#assert(report-store-measurement-evidence-valid(
+  report(uniform-measurement-gain-rows(1.0)),
+  "store-a",
+))
+#assert(report-store-measurement-evidence-valid(
+  report(uniform-measurement-gain-rows(-0.4)),
+  "store-a",
+))
 
 #let q1-audit-values = q1-audit-sidecar-value-rows()
+#let q1-audit-with-predictions(first, second, third) = {
+  let values = q1-audit-values
+  for record-index in range(18) {
+    if record-index != 5 {
+      let slot = calc.rem(record-index, 3)
+      values = mutate-sidecar-value(
+        values,
+        "candidates[" + str(record-index) + "].prediction",
+        if slot == 0 { first } else if slot == 1 { second } else { third },
+      )
+    }
+  }
+  values
+}
+#let q1-ranking-nonpass-values = q1-audit-with-predictions(0.1, 0.7, 0.9)
+#let q1-calibration-nonpass-values = q1-audit-with-predictions(1.1, 0.5, 0.5)
+#let q1-prediction-tie-values = q1-audit-with-predictions(0.5, 0.5, 0.5)
+#let q1-equal-label-state-values = mutate-sidecar-value(
+  q1-audit-values,
+  "candidates[1].label",
+  0.8,
+)
+#let q1-weighting-sensitive-values = {
+  let values = q1-audit-values
+  let labels = (
+    0.9, 0.5, 0.1,
+    0.8, 0.2, none,
+    0.9, 0.5, 0.1,
+    0.9, 0.5, 0.1,
+    0.9, 0.5, 0.1,
+    0.9, 0.5, 0.1,
+  )
+  let predictions = (
+    0.1, 0.9, 0.5,
+    0.8, 0.2, none,
+    0.9, 0.1, 0.5,
+    0.9, 0.1, 0.5,
+    0.9, 0.5, 0.1,
+    0.9, 0.5, 0.1,
+  )
+  for record-index in range(18) {
+    if record-index != 5 {
+      values = mutate-sidecar-value(
+        values,
+        "candidates[" + str(record-index) + "].label",
+        labels.at(record-index),
+      )
+      values = mutate-sidecar-value(
+        values,
+        "candidates[" + str(record-index) + "].prediction",
+        predictions.at(record-index),
+      )
+    }
+  }
+  values
+}
 #assert(report-store-q1-evidence-valid(report(q1-rows()), "store-a"))
+#for mutation in (
+  (key: "candidates[0].prediction", value: 1.0),
+  (key: "candidates[0].prediction", value: "0.7"),
+  (key: "candidates[0].label", value: 0.7),
+  (key: "candidates[0].label", value: 2.0),
+) {
+  assert(not report-store-q1-evidence-valid(report(
+    q1-rows(),
+    q1-audit-values: mutate-sidecar-value(q1-audit-values, mutation.key, mutation.value),
+  ), "store-a"), message: "Q1 numeric mutation must reject: " + mutation.key + "=" + str(mutation.value))
+}
+#assert(not report-store-q1-evidence-valid(report(
+  q1-rows(),
+  q1-audit-values: omit-sidecar-value(q1-audit-values, "candidates[0].prediction"),
+), "store-a"))
+#let q1-coordinated-training-row-omission = q1-audit-values.map(row => if row.key in (
+  "candidates[2].prediction",
+  "candidates[2].label",
+) {
+  missing-sidecar-row(row.sidecar_id, row.key)
+} else if row.key in (
+  "candidates[2].prediction_finite",
+  "candidates[2].label_finite",
+  "candidates[2].included_in_q1_metric",
+) {
+  row + (value_bool: false,)
+} else { row })
+#assert(not report-store-q1-evidence-valid(report(
+  q1-rows(),
+  q1-audit-values: q1-coordinated-training-row-omission,
+), "store-a"))
+#for contract-key in (
+  "metric_contract.prediction_semantics",
+  "metric_contract.label_semantics",
+  "metric_contract.ranking_pair_policy",
+  "metric_contract.calibration_aggregation",
+  "metric_contract.independent_unit_semantics",
+  "metric_contract.interval_method",
+) {
+  assert(not report-store-q1-evidence-valid(report(
+    q1-rows(),
+    q1-audit-values: mutate-sidecar-value(q1-audit-values, contract-key, "unfrozen"),
+  ), "store-a"))
+}
 #assert(not report-store-q1-evidence-valid(report(
   q1-rows(),
   q1-bundle-values: mutate-sidecar-value(
@@ -2047,21 +2198,21 @@
   q1-audit-values: mutate-sidecar-value(q1-audit-values, "candidates[1]." + q1-candidate-row-key, 999),
 ), "store-a"))
 #let self-adjusted-q1-truncation = mutate-sidecar-value(
-  q1-audit-values.filter(row => not row.key.starts-with("candidates[11].")),
+  q1-audit-values.filter(row => not row.key.starts-with("candidates[17].")),
   "population.candidate_count",
-  11,
+  17,
 )
 #assert(not report-store-q1-evidence-valid(report(
   q1-rows(),
   q1-audit-values: self-adjusted-q1-truncation,
 ), "store-a"))
 #let paired-q1-audit-truncation = mutate-sidecar-value(
-  q1-audit-values.filter(row => not row.key.starts-with("candidates[11].")),
+  q1-audit-values.filter(row => not row.key.starts-with("candidates[17].")),
   "population.candidate_count",
-  11,
+  17,
 )
 #let paired-q1-benchmark-truncation = q1-population-benchmark-sidecar-value-rows().filter(
-  row => not row.key.starts-with("expected_candidates[11]."),
+  row => not row.key.starts-with("expected_candidates[17]."),
 )
 #assert(not report-store-q1-evidence-valid(report(
   q1-rows(),
@@ -2078,7 +2229,7 @@
 ), "store-a"))
 #assert(not report-store-q1-evidence-valid(report(
   q1-rows(),
-  q1-audit-values: mutate-sidecar-value(q1-audit-values, "candidates[1].included_in_q1_metric", true),
+  q1-audit-values: mutate-sidecar-value(q1-audit-values, "candidates[1].included_in_q1_metric", false),
 ), "store-a"))
 #assert(not report-store-q1-evidence-valid(report(
   q1-rows(),
@@ -2114,13 +2265,58 @@
   q1-audit-values: mutate-sidecar-value(q1-audit-values, "summary.causal_history_only", false),
 ), "store-a"))
 #assert(not report-store-q1-evidence-valid(report(q1-rows(bundle-manifest: "invalid")), "store-a"))
-#assert(report-store-q1-evidence-valid(report(q1-rows(ranking-value: 0.6, passed: false)), "store-a"))
-#assert(report-store-q1-evidence-valid(report(q1-rows(calibration-value: 0.3, passed: false)), "store-a"))
-#assert(report-store-q1-evidence-valid(report(q1-rows(ranking-value: 0.7, calibration-value: 0.2)), "store-a"))
+#assert(not report-store-q1-evidence-valid(report(q1-rows(ranking-value: 0.6, passed: false)), "store-a"))
+#assert(not report-store-q1-evidence-valid(report(q1-rows(calibration-value: 0.3, passed: false)), "store-a"))
+#assert(report-store-q1-evidence-valid(report(q1-rows(
+  ranking-minimum: 1.0,
+  calibration-maximum: 0.1,
+)), "store-a"))
+#assert(report-store-q1-evidence-valid(report(
+  q1-rows(
+    ranking-value: 0.0,
+    ranking-ci-low: 0.0,
+    ranking-ci-high: 0.0,
+    calibration-value: 0.63,
+    passed: false,
+  ),
+  q1-audit-values: q1-ranking-nonpass-values,
+), "store-a"))
+#assert(report-store-q1-evidence-valid(report(
+  q1-rows(calibration-value: 0.3, passed: false),
+  q1-audit-values: q1-calibration-nonpass-values,
+), "store-a"))
+#assert(report-store-q1-evidence-valid(report(
+  q1-rows(
+    ranking-value: 0.0,
+    ranking-ci-low: 0.0,
+    ranking-ci-high: 0.0,
+    calibration-value: 0.3,
+    passed: false,
+  ),
+  q1-audit-values: q1-prediction-tie-values,
+), "store-a"))
+#assert(report-store-q1-evidence-valid(report(
+  q1-rows(
+    ranking-value: 0.95,
+    ranking-ci-low: 0.8520018007729973,
+    ranking-ci-high: 1.0,
+    calibration-value: 0.12,
+  ),
+  q1-audit-values: q1-equal-label-state-values,
+), "store-a"))
+#assert(report-store-q1-evidence-valid(report(
+  q1-rows(
+    ranking-value: 0.8,
+    ranking-ci-low: 0.6399696107881564,
+    ranking-ci-high: 0.9600303892118437,
+    calibration-value: 0.16,
+  ),
+  q1-audit-values: q1-weighting-sensitive-values,
+), "store-a"))
 #assert(not report-store-q1-evidence-valid(report(q1-rows(ranking-value: 0.6)), "store-a"))
 #assert(not report-store-q1-evidence-valid(report(q1-rows(calibration-value: 0.3)), "store-a"))
-#assert(report-store-q1-evidence-valid(report(q1-rows(ranking-value: 0, ranking-ci-low: 0, ranking-ci-high: 0.2, calibration-value: 10, passed: false)), "store-a"))
-#assert(report-store-q1-evidence-valid(report(q1-rows(ranking-ci-low: 0.5, passed: false)), "store-a"))
+#assert(not report-store-q1-evidence-valid(report(q1-rows(ranking-value: 0, ranking-ci-low: 0, ranking-ci-high: 0.2, calibration-value: 10, passed: false)), "store-a"))
+#assert(not report-store-q1-evidence-valid(report(q1-rows(ranking-ci-low: 0.5, passed: false)), "store-a"))
 #assert(not report-store-q1-evidence-valid(report(q1-rows(ranking-value: 0, ranking-ci-low: 0, ranking-ci-high: 0.2, calibration-value: 10)), "store-a"))
 #assert(not report-store-q1-evidence-valid(report(q1-rows(ranking-ci-low: 0.5)), "store-a"))
 #assert(not report-store-q1-evidence-valid(report(q1-rows(passed: false)), "store-a"))
@@ -2192,8 +2388,14 @@
 #assert(not report-store-q1-evidence-valid(report(q1-rows(source: "analysis/unbound.json", gate-source: "analysis/unbound.json")), "store-a"))
 #assert(not report-store-q1-evidence-valid(report(q1-rows(gate-source: "analysis/other.json|sidecar:" + sidecar-b)), "store-a"))
 
-#let q1-store-a-rows = q1-rows(audit-receipt: q1-multi-audit-digest)
-#let q1-store-b-rows = q1-rows(audit-receipt: q1-multi-audit-digest).map(row => row + (store_id: "store-b"))
+#let q1-store-a-rows = q1-rows(
+  audit-receipt: q1-multi-audit-digest,
+  count-value: 10,
+)
+#let q1-store-b-rows = q1-rows(
+  audit-receipt: q1-multi-audit-digest,
+  count-value: 10,
+).map(row => row + (store_id: "store-b"))
 #let q1-two-store-rows = q1-store-a-rows + q1-store-b-rows
 #let q1-two-store-table = (
   (store_id: "store-a", manifest_sha256: store-manifest),
@@ -2227,6 +2429,68 @@
 #assert(report-store-q1-evidence-valid(q1-two-store-report, "store-a"))
 #assert(report-store-q1-evidence-valid(q1-two-store-report, "store-b"))
 #assert(report-stores-q1-evidence-valid(q1-two-store-report))
+#let q1-two-store-reversed = report(
+  q1-two-store-rows,
+  sidecar-value-rows: analysis-sidecar-value-rows(
+    protocol-sidecar,
+    q1-analysis-receipt-name,
+    q1-two-store-rows,
+  ),
+  q1-audit-values: q1-multi-audit-values,
+  q1-population-values: q1-multi-population-values,
+  q1-bundle-values: q1-bundle-manifest-sidecar-value-rows(
+    population-digest: q1-multi-population-digest,
+    store-manifests: (store-manifest, store-manifest-b),
+  ),
+  store-rows: q1-two-store-table.rev(),
+)
+#assert(report-stores-q1-evidence-valid(q1-two-store-reversed))
+#let q1-wrong-global-count-rows = q1-rows(
+  audit-receipt: q1-multi-audit-digest,
+) + q1-rows(
+  audit-receipt: q1-multi-audit-digest,
+).map(row => row + (store_id: "store-b"))
+#assert(not report-stores-q1-evidence-valid(report(
+  q1-wrong-global-count-rows,
+  sidecar-value-rows: analysis-sidecar-value-rows(
+    protocol-sidecar,
+    q1-analysis-receipt-name,
+    q1-wrong-global-count-rows,
+  ),
+  q1-audit-values: q1-multi-audit-values,
+  q1-population-values: q1-multi-population-values,
+  q1-bundle-values: q1-bundle-manifest-sidecar-value-rows(
+    population-digest: q1-multi-population-digest,
+    store-manifests: (store-manifest, store-manifest-b),
+  ),
+  store-rows: q1-two-store-table,
+)))
+#let q1-overlap-rows = q1-wrong-global-count-rows
+#let q1-overlap-report = report(
+  q1-overlap-rows,
+  sidecar-value-rows: analysis-sidecar-value-rows(
+    protocol-sidecar,
+    q1-analysis-receipt-name,
+    q1-overlap-rows,
+  ),
+  q1-audit-values: q1-audit-sidecar-value-rows(
+    sidecar-id: q1-multi-audit-sidecar,
+    population-digest: q1-multi-population-digest,
+    store-manifests: (store-manifest, store-manifest-b),
+    overlap-scenes: true,
+  ),
+  q1-population-values: q1-population-benchmark-sidecar-value-rows(
+    sidecar-id: q1-multi-population-sidecar,
+    store-manifests: (store-manifest, store-manifest-b),
+    overlap-scenes: true,
+  ),
+  q1-bundle-values: q1-bundle-manifest-sidecar-value-rows(
+    population-digest: q1-multi-population-digest,
+    store-manifests: (store-manifest, store-manifest-b),
+  ),
+  store-rows: q1-two-store-table,
+)
+#assert(report-stores-q1-evidence-valid(q1-overlap-report))
 
 #let q1-two-store-value-mismatch-rows = q1-two-store-rows.map(row => if (
   row.store_id == "store-b" and row.key == "q1.ranking.pairwise_accuracy"
@@ -2248,7 +2512,7 @@
 )
 #let q1-two-store-value-mismatch = q1-two-store-value-mismatch-base
 #assert(report-store-q1-evidence-valid(q1-two-store-value-mismatch, "store-a"))
-#assert(report-store-q1-evidence-valid(q1-two-store-value-mismatch, "store-b"))
+#assert(not report-store-q1-evidence-valid(q1-two-store-value-mismatch, "store-b"))
 #assert(not report-stores-q1-evidence-valid(q1-two-store-value-mismatch))
 
 #let q1-alt-audit-digest = "eaeaeaeaeaeaeaeaeaeaeaeaeaeaeaeaeaeaeaeaeaeaeaeaeaeaeaeaeaeaeaea"
