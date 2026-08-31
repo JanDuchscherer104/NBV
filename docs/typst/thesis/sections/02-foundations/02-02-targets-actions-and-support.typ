@@ -28,14 +28,19 @@ the evaluated scene.
 // - @FisherRF-jiang2024 -> docs/literature/tex-src/arXiv-FisherRF/sec/method.tex:4-19 (Fisher information and active-view information gain)
 
 Direct quality utilities close this proxy gap by evaluating the reconstruction
-itself. VIN-NBV defines Relative Reconstruction Improvement from the reduction
-in Chamfer distance between reconstructed and ground-truth point clouds after
-adding a candidate observation, then learns to rank sampled query cameras by
-that quantity @VIN-NBV-frahm2025. ARIA-NBV later adapts this precedent to a
-target-cropped point--mesh error; that adaptation is not VIN-NBV's metric. The
-objective measures the desired geometric consequence directly, but the learned
-scorer remains myopic: each candidate is valued by the improvement attributed
-to that next observation rather than by the sequence it may enable.
+itself. VIN-NBV defines Relative Reconstruction Improvement (RRI) as the
+reduction in Chamfer distance between reconstructed and ground-truth point
+clouds after adding a candidate observation, and learns to rank sampled query
+cameras by this quantity @VIN-NBV-frahm2025. The present work follows this
+direct reconstruction-improvement principle but does not adopt VIN-NBV's metric
+unchanged. In seminar work preceding this thesis, the ARIA-NBV project
+specialized the objective to a target-conditioned setting by introducing a
+target-cropped point--mesh reconstruction error @ARIA-NBV-seminar2026. The
+thesis takes this project-specific metric definition as its starting point and
+develops the subsequent finite-horizon formulation and evaluation protocol from
+it. The seminar report therefore establishes the provenance of the metric
+specialization; VIN-NBV remains the external methodological precedent for
+direct reconstruction-improvement utility.
 
 // evidence:
 // - @VIN-NBV-frahm2025 -> docs/literature/tex-src/arXiv-VIN-NBV/sec/3_methods.tex:18-20, docs/literature/tex-src/arXiv-VIN-NBV/sec/3_methods.tex:36-44, docs/literature/tex-src/arXiv-VIN-NBV/sec/3_methods.tex:78-92 (sampled candidate scoring and point-cloud Chamfer RRI)
@@ -53,14 +58,18 @@ maintaining its identity from observations.
 // - @ObjectCentricNBV-jeong2026 -> docs/literature/tex-src/arXiv-Instance-NBV/ver3_rpm/3_method_ver3_rpm.tex:54-86, docs/literature/tex-src/arXiv-Instance-NBV/ver3_rpm/3_method_ver3_rpm.tex:123-139, docs/literature/tex-src/arXiv-Instance-NBV/ver3_rpm/3_method_ver3_rpm.tex:249-258 (object-associated features, target-aware information gain, and requested-object gate)
 
 The thesis therefore treats coverage and uncertainty as non-equivalent
-diagnostics and takes target-specific reconstruction quality as the endpoint of
-interest @VIN-NBV-frahm2025 @ObjectCentricNBV-jeong2026. This choice fixes what
-the decision should improve, but it does not determine which viewpoints can be
-proposed or reached. Candidate support and motion feasibility must be separated
-from utility before delayed consequences are embedded in a sequential decision
+diagnostics and adopts target-specific reconstruction quality as the endpoint
+of interest. VIN-NBV provides the precedent for directly measuring
+reconstruction improvement, while the preceding seminar work supplies the
+target-conditioned metric specialization used by ARIA-NBV
+@VIN-NBV-frahm2025 @ARIA-NBV-seminar2026. This choice determines what the
+decision should improve, but not which viewpoints may be proposed or reached.
+Candidate support and motion feasibility therefore remain separate from utility
+before delayed consequences are introduced through the finite-horizon decision
 problem @PB-NBV-jia2025.
 
 // evidence:
 // - @VIN-NBV-frahm2025 -> docs/literature/tex-src/arXiv-VIN-NBV/sec/3_methods.tex:36-44, docs/literature/tex-src/arXiv-VIN-NBV/sec/3_methods.tex:78-92 (direct reconstruction-improvement target and evaluation)
 // - @ObjectCentricNBV-jeong2026 -> docs/literature/tex-src/arXiv-Instance-NBV/ver3_rpm/3_method_ver3_rpm.tex:123-139, docs/literature/tex-src/arXiv-Instance-NBV/ver3_rpm/3_method_ver3_rpm.tex:249-258 (object-conditioned view utility)
+// - @ARIA-NBV-seminar2026 -> docs/literature/tex-src/arXiv-ARIA-NBV/sec/3_methods.tex:18-20, docs/literature/tex-src/arXiv-ARIA-NBV/sec/3_methods.tex:36-44, docs/literature/tex-src/arXiv-ARIA-NBV/sec/3_methods.tex:78-92 (target-cropped point--mesh reconstruction error)
 // - @PB-NBV-jia2025 -> docs/literature/tex-src/arXiv-PB-NBV/sections/method.tex:21-45 (candidate support set independently of its later score)
