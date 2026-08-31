@@ -24,6 +24,10 @@ from aria_nbv.pose_generation.candidate_interface import (
     CandidateConditioning,
     CandidateRequest,
     CandidateSet,
+    CriterionReasonCode,
+    CriterionReasonRevision,
+    CriterionSourceRole,
+    CriterionSourceRoleRevision,
     GeometrySourceRole,
     PreparedCandidateScene,
     candidate_set_to_legacy_result,
@@ -70,6 +74,31 @@ def _camera(device: torch.device | str = "cpu") -> CameraTW:
         valid_radius=torch.tensor([64.0], device=device),
         T_camera_rig=PoseTW.from_matrix3x4(torch.eye(3, 4, device=device).unsqueeze(0)),
     )
+
+
+def test_candidate_admission_codecs_are_closed_and_revisioned() -> None:
+    expected_reasons = {
+        CriterionReasonCode.PASSED: 0,
+        CriterionReasonCode.OUTSIDE_SUPPORT_ENVELOPE: 1,
+        CriterionReasonCode.MAX_STEP_DISTANCE_EXCEEDED: 2,
+        CriterionReasonCode.MAX_HEIGHT_DELTA_EXCEEDED: 3,
+        CriterionReasonCode.MAX_BACKWARD_STEP_EXCEEDED: 4,
+        CriterionReasonCode.MAX_YAW_DELTA_EXCEEDED: 5,
+        CriterionReasonCode.ENDPOINT_CLEARANCE_TOO_SMALL: 6,
+        CriterionReasonCode.PATH_CLEARANCE_TOO_SMALL: 7,
+    }
+    for reason, encoded in expected_reasons.items():
+        assert int(reason) == encoded
+        assert CriterionReasonCode(encoded) is reason
+    assert CriterionReasonCode(-1) is CriterionReasonCode.UNAVAILABLE
+    assert CriterionSourceRole(1) is CriterionSourceRole.ACTOR_VISIBLE
+    assert CriterionSourceRole(2) is CriterionSourceRole.ORACLE_ADMISSION
+    assert CriterionReasonRevision("candidate_admission_v1") is CriterionReasonRevision.CANDIDATE_ADMISSION_V1
+    assert CriterionSourceRoleRevision("candidate_admission_v1") is CriterionSourceRoleRevision.CANDIDATE_ADMISSION_V1
+    with pytest.raises(ValueError):
+        CriterionReasonCode(8)
+    with pytest.raises(ValueError):
+        CriterionReasonRevision("candidate_admission_v2")
 
 
 def _target() -> TargetDescriptor:

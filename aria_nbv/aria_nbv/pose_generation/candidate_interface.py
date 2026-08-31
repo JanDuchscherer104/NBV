@@ -47,21 +47,31 @@ class CriterionSourceRole(IntEnum):
 
 
 class CriterionReasonCode(IntEnum):
-    """Criterion-local reason availability without dynamic strings."""
+    """Closed criterion-local admission outcomes."""
 
     UNAVAILABLE = -1
+    PASSED = 0
+    OUTSIDE_SUPPORT_ENVELOPE = 1
+    MAX_STEP_DISTANCE_EXCEEDED = 2
+    MAX_HEIGHT_DELTA_EXCEEDED = 3
+    MAX_BACKWARD_STEP_EXCEEDED = 4
+    MAX_YAW_DELTA_EXCEEDED = 5
+    ENDPOINT_CLEARANCE_TOO_SMALL = 6
+    PATH_CLEARANCE_TOO_SMALL = 7
 
 
 class CriterionReasonRevision(StrEnum):
     """Owner/revision of criterion-local reason codes."""
 
     UNAVAILABLE_V1 = "unavailable_v1"
+    CANDIDATE_ADMISSION_V1 = "candidate_admission_v1"
 
 
 class CriterionSourceRoleRevision(StrEnum):
     """Owner/revision of criterion-local source-role codes."""
 
     UNAVAILABLE_V1 = "unavailable_v1"
+    CANDIDATE_ADMISSION_V1 = "candidate_admission_v1"
 
 
 class EvidenceAvailability(StrEnum):
