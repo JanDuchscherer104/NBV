@@ -17,6 +17,11 @@ Run from `aria_nbv/`:
 | `nbv-status-rollout-shards` | Validate and summarize shard completion. |
 | `nbv-rollout-campaign` | Run a bounded resumable rollout campaign. |
 
+Campaign `smoke` is a canonical single-work-unit guard for the deterministic
+first planned unit. It is not evidence that a multi-scene or replicated smoke
+population completed; population-level admission remains a separate WP18
+responsibility.
+
 Always validate configuration before generation:
 
 ```sh
@@ -27,6 +32,40 @@ uv run nbv-build-rollouts \
   --config-path ../.configs/build_rollouts_v1_smoke.toml \
   --dry-run
 ```
+
+The same campaign preflight command can materialize the no-render,
+no-reward-label Phase-A candidate-family proposal-support audit with
+privileged GT target instruction and mesh validity. It does not construct an
+oracle scorer, renderer, replay policy, or reward label, but it is not
+oracle-free because target instruction and physical validity remain
+privileged:
+
+```sh
+uv run nbv-rollout-campaign preflight \
+  --config-path ../.configs/build_rollouts_v1_cuda_campaign.toml \
+  --source-store /path/to/vin_offline_rollout_campaign100_v10_rebuilt \
+  --family-phase-a-output ../docs/contents/evidence/candidate_family_phase_a_wp02.json
+```
+
+The explicit source path is local acquisition only. Before evaluating any row,
+the command plans the source store through the canonical dataset owner and
+requires its native manifest, cache version, split identity, and ordered rows
+to match the reviewed manifest exactly. The emitted compact JSON binds those
+actual source identities, the manifest bytes, complete writer configuration,
+clean generation revision, CUDA/PyTorch/PyTorch3D/GPU runtime, every full
+candidate shell, and the canonical family gate. The dedicated reader verifies
+all bindings, the content hash, the complete reducer policy, and a fresh
+reduction before exposing the DTO. A failed gate is still written and exits
+with status 2. Broad rollout generation stays blocked until the separately
+versioned WP18 admission artifact exists.
+
+The current 100-scene control completed with a machine-readable no-go. Its
+canonical artifact and figures live in the
+[rollout evidence directory](../../../../docs/contents/evidence/candidate_family_phase_a_wp02.json):
+all source rows were evaluated, but applicable-family collapse and low support
+remain. A no-go command writes the complete artifact and exits with status 2;
+it completes issue #54's fail-closed mechanism/evidence checklist while
+remaining evidence for later sampler retuning, not campaign admission.
 
 ## Composition Boundaries
 

@@ -7,6 +7,7 @@ decisions remain owned by :func:`run_rollout_shard`.
 from __future__ import annotations
 
 import hashlib
+import importlib.metadata
 import json
 import math
 import os
@@ -17,7 +18,7 @@ import socket
 import subprocess
 import sys
 import time
-from collections.abc import Callable, Iterable, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import asdict, dataclass, replace
 from datetime import UTC, datetime
 from enum import StrEnum
@@ -26,6 +27,22 @@ from typing import Any, ClassVar, Protocol, cast
 
 from pydantic import BaseModel, Field, ValidationInfo, field_validator, model_validator
 
+from ...rollouts.candidate_benchmark import (
+    EVIDENCE_ASSEMBLY_REVISION,
+    PROVENANCE_CORRECTION_REVISION,
+    WRITER_CONFIG_IDENTITY_REVISION,
+    CandidateBenchmark,
+    CandidateFamilyCounts,
+    CandidateFamilyPhaseAEvidence,
+    CandidateFamilyPreflight,
+    CandidatePopulationCoverage,
+    EvidenceTransformationKind,
+    benchmark_from_sampling_result,
+    candidate_family_preflight_config_from_writer,
+    candidate_family_preflight_from_reader,
+    reduce_candidate_family_preflight,
+    scientific_writer_config_sha256,
+)
 from ...utils import TargetConfig
 from ...utils.config_paths import resolve_cache_artifact_dir
 from ...utils.fingerprints import stable_config_hash, stable_msgspec_hash
@@ -58,6 +75,33 @@ def write_json_atomic(path: Path, payload: Any, *, indent: int | None = None) ->
 def _claim_hash(payload: dict[str, Any]) -> str:
     """Hash claim identity with canonical key ordering."""
     return stable_msgspec_hash({key: payload[key] for key in sorted(payload)})
+
+
+def _phase_a_failure_record(
+    *,
+    scene_key: str,
+    state_key: str,
+    family_positions: Mapping[str, str],
+    target_families: frozenset[str],
+    failure: str,
+) -> CandidateBenchmark:
+    """Keep a failed source row explicit without fabricating candidate values."""
+
+    return CandidateBenchmark(
+        state_key=state_key,
+        scene_key=scene_key,
+        families=tuple(
+            CandidateFamilyCounts(
+                family=family,
+                applicable=False if family in target_families and "target:unavailable" in state_key else True,
+                reason=failure,
+                support_failure=failure,
+            )
+            for family in family_positions
+        ),
+        provenance={"phase_a_source_failure": failure},
+        lineage={"family_identity": "writer_config", "selection_semantics": "final_valid_action_shell"},
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -119,6 +163,31 @@ def current_generation_revision(
     return GenerationRevision(contract_revision, commit, tree, lock_hash, content_hash, revision_hash)
 
 
+def current_phase_a_runtime_identity() -> dict[str, str]:
+    """Capture the exact CUDA/PyTorch/PyTorch3D execution environment."""
+
+    import platform
+
+    import torch
+
+    if not torch.cuda.is_available():
+        raise RuntimeError("candidate family Phase-A requires an available CUDA device")
+    try:
+        pytorch3d_version = importlib.metadata.version("pytorch3d")
+    except importlib.metadata.PackageNotFoundError as exc:
+        raise RuntimeError("candidate family Phase-A requires an installed PyTorch3D distribution") from exc
+    device = torch.cuda.current_device()
+    major, minor = torch.cuda.get_device_capability(device)
+    return {
+        "python": platform.python_version(),
+        "torch": str(torch.__version__),
+        "cuda": str(torch.version.cuda or "unavailable"),
+        "pytorch3d": pytorch3d_version,
+        "gpu_name": torch.cuda.get_device_name(device),
+        "gpu_capability": f"{major}.{minor}",
+    }
+
+
 class CampaignOutcome(StrEnum):
     SUCCEEDED = "succeeded"
     SKIPPED = "skipped"
@@ -144,6 +213,22 @@ class CampaignMode(StrEnum):
 
     BROAD = "broad"
     PILOT = "pilot"
+
+
+class CampaignWorkerPurpose(StrEnum):
+    """Explicit public worker intent used by the broad-mode admission gate."""
+
+    CAMPAIGN = "campaign"
+    SMOKE = "smoke"
+
+
+class BroadGenerationAdmissionError(RuntimeError):
+    """Typed fail-closed blocker until WP18 owns a canonical evidence reader."""
+
+    code = "broad_generation_blocked_pending_wp18"
+
+    def __init__(self) -> None:
+        super().__init__(self.code)
 
 
 class CampaignProfileConfig(BaseModel):
@@ -960,6 +1045,223 @@ class CudaRolloutCampaign:
             candidate = candidate.parent
         return candidate
 
+    def candidate_family_preflight(self, reader: Any) -> CandidateFamilyPreflight:
+        """Evaluate campaign candidate support through the rollout-domain gate."""
+
+        return candidate_family_preflight_from_reader(reader)
+
+    def candidate_family_phase_a(
+        self,
+        writer_config: Any,
+        source_manifest: Any,
+        *,
+        source_manifest_sha256: str,
+    ) -> CandidateFamilyPhaseAEvidence:
+        """Generate the unchanged single-root Phase-A proposal-support audit.
+
+        This is a no-render, no-reward-label Phase-A proposal-support audit
+        with privileged GT target instruction and mesh validity. The adapter
+        applies the reviewed source manifest, uses the writer's existing target
+        task sampler and candidate mixture, and stops before any target scorer,
+        renderer, replay policy, or reward label is constructed. The resulting
+        full shells are reduced through the same rollout-domain preflight used
+        by stores, CLI serialization, plots, and Streamlit.
+
+        Args:
+            writer_config: Canonical `RolloutDatasetWriterConfig` for the run.
+            source_manifest: Reviewed ordered 100-scene source manifest.
+            source_manifest_sha256: SHA-256 of the exact manifest file bytes.
+
+        Returns:
+            Hash-ready benchmark records and the canonical go/no-go decision.
+        """
+
+        from ...data_handling.vin_store.dataset import VinOfflineSample
+        from ...pose_generation.types import CandidateGenerationRuntimeContext, CandidatePositionMode
+        from ..target_selection import OracleTargetTaskSampler
+        from .rollout_dataset import RolloutDatasetWriter
+
+        generation_revision = current_generation_revision(contract_revision="candidate-family-phase-a-v2")
+        runtime_identity = current_phase_a_runtime_identity()
+        writer_config_sha256 = scientific_writer_config_sha256(
+            writer_config.model_dump_jsonable(),
+            source_store_manifest_hash=str(source_manifest.source_manifest_hash),
+        )
+        phase_source = writer_config.source
+        if hasattr(phase_source, "model_copy"):
+            phase_source = phase_source.model_copy(
+                update={
+                    "load_backbone": False,
+                    "load_candidates": False,
+                    "load_depths": False,
+                    "load_candidate_pcs": False,
+                    "load_detected_obbs": False,
+                }
+            )
+        dataset = phase_source.setup_target()
+        if dataset is None:
+            raise RuntimeError("candidate Phase-A requires a VIN offline dataset")
+        RolloutDatasetWriter._apply_source_manifest(
+            dataset,
+            source_manifest,
+            sample_keys=writer_config.sample_keys,
+        )
+        source_rows = writer_config.selected_source_manifest_rows(source_manifest)
+        if len(dataset) != len(source_rows):
+            raise ValueError("candidate Phase-A dataset/manifest row count mismatch")
+
+        sampler = OracleTargetTaskSampler(writer_config.oracle_target_task_sampler)
+        generator = writer_config.candidate_mixture.setup_target()
+        component_positions: dict[str, str] = {}
+        target_families: list[str] = []
+        for component in writer_config.candidate_mixture.components:
+            assert component.position_mode is not None
+            component_positions[component.name] = component.position_mode.value
+            if component.paired_view_mode is not None:
+                paired_name = f"{component.name}__paired_{component.paired_view_mode.value}"
+                component_positions[paired_name] = component.position_mode.value
+            if component.position_mode in {
+                CandidatePositionMode.TARGET_BEARING_LOCAL,
+                CandidatePositionMode.LATERAL_TARGET_BYPASS,
+                CandidatePositionMode.TARGET_ORBIT,
+            }:
+                target_families.append(component.name)
+                if component.paired_view_mode is not None:
+                    target_families.append(paired_name)
+
+        records: list[CandidateBenchmark] = []
+        excluded: dict[str, str] = {}
+        for source_row, sample in zip(source_rows, dataset, strict=True):
+            if not isinstance(sample, VinOfflineSample):
+                raise TypeError("candidate Phase-A requires source.return_format='sample'")
+            if str(sample.sample_key) != source_row.sample_key:
+                raise ValueError("candidate Phase-A source-row identity mismatch")
+            target_result = sampler.sample(sample)
+            if not target_result.selected_rows:
+                reason = "no_geometry_valid_target_task" if target_result.rows else "no_target_task"
+                excluded[source_row.sample_key] = reason
+                records.append(
+                    _phase_a_failure_record(
+                        scene_key=source_row.scene_id,
+                        state_key=f"source:{source_row.sample_key}/target:unavailable",
+                        family_positions=component_positions,
+                        target_families=frozenset(target_families),
+                        failure=reason,
+                    )
+                )
+                continue
+            target = target_result.selected_rows[0]
+            state_key = f"source:{source_row.sample_key}/target:{target.target_id}"
+            if sample.efm_snippet_view is None or not sample.efm_snippet_view.has_mesh:
+                excluded[source_row.sample_key] = "missing_snippet_or_mesh"
+                records.append(
+                    _phase_a_failure_record(
+                        scene_key=source_row.scene_id,
+                        state_key=state_key,
+                        family_positions=component_positions,
+                        target_families=frozenset(target_families),
+                        failure="missing_snippet_or_mesh",
+                    )
+                )
+                continue
+            result = generator.generate_from_typed_sample(
+                sample.efm_snippet_view,
+                runtime_context=CandidateGenerationRuntimeContext(descriptor=target.descriptor),
+            )
+            records.append(
+                benchmark_from_sampling_result(
+                    result,
+                    scene_key=source_row.scene_id,
+                    state_key=state_key,
+                    family_positions=component_positions,
+                    target_center_world=target.descriptor.center_world,
+                    provenance={
+                        "sample_key": source_row.sample_key,
+                        "target_id": target.target_id,
+                        "target_source": str(target_result.source or "unknown"),
+                    },
+                )
+            )
+
+        config = candidate_family_preflight_config_from_writer(
+            writer_config,
+            expected_population_size=self.config.expected_scene_count,
+        )
+        target_state_count = sum("target:unavailable" not in record.state_key for record in records)
+        scene_count = len({record.scene_key for record in records})
+        preflight = reduce_candidate_family_preflight(
+            records,
+            config,
+            coverage=CandidatePopulationCoverage(
+                expected=self.config.expected_scene_count,
+                selected_source_rows=len(source_rows),
+                represented_rows=len(records),
+                target_states=target_state_count,
+                unique_scenes=scene_count,
+            ),
+        )
+        return CandidateFamilyPhaseAEvidence(
+            source_manifest_sha256=source_manifest_sha256,
+            source_store_manifest_hash=str(source_manifest.source_manifest_hash),
+            source_cache_version=str(source_manifest.source_cache_version),
+            split_manifest_hash=str(source_manifest.split_manifest_hash),
+            source_store_dir=str(source_manifest.source_store_dir),
+            writer_config_sha256=writer_config_sha256,
+            writer_config_identity_revision=WRITER_CONFIG_IDENTITY_REVISION,
+            provenance_correction_revision=PROVENANCE_CORRECTION_REVISION,
+            evidence_assembly_revision=EVIDENCE_ASSEMBLY_REVISION,
+            predecessor_artifact_sha256=None,
+            transformation_kind=EvidenceTransformationKind.ORIGINAL_GENERATION,
+            implementation_revision=generation_revision.clean_commit,
+            generation_revision=generation_revision.to_jsonable(),
+            runtime_identity=runtime_identity,
+            source_row_count=len(source_rows),
+            scene_count=scene_count,
+            target_state_count=target_state_count,
+            excluded_source_rows=excluded,
+            records=tuple(records),
+            preflight=preflight,
+        )
+
+    def admit_broad_generation(
+        self,
+        reader: Any,
+    ) -> CandidateFamilyPreflight:
+        """Evaluate family support, then fail closed pending the WP18 reader.
+
+        Phase-A generation may run to produce the candidate-only evidence.
+        This method owns admission of the broader rollout campaign: a passing
+        family result is necessary but deliberately insufficient until the
+        hash-bound final ``#120`` artifact is read by a canonical WP18 owner.
+        No caller-supplied mapping is accepted as an admission receipt.
+        """
+
+        result = self.candidate_family_preflight(reader)
+        if not result.go:
+            codes = ",".join(blocker.code.value for blocker in result.blockers)
+            raise RuntimeError(f"candidate family preflight blocked broad generation: {codes}")
+        raise BroadGenerationAdmissionError()
+
+    def require_execution_admission(self) -> None:
+        """Reject broad execution before claims, status, events, or outputs."""
+
+        if self.config.mode is CampaignMode.BROAD:
+            raise BroadGenerationAdmissionError()
+
+    def require_worker_admission(
+        self,
+        plan: CampaignPlan,
+        unit: CampaignWorkUnit,
+        *,
+        purpose: CampaignWorkerPurpose,
+    ) -> None:
+        """Permit only the exact canonical smoke unit before WP18 in broad mode."""
+
+        if self.config.mode is not CampaignMode.BROAD:
+            return
+        if purpose is not CampaignWorkerPurpose.SMOKE or unit != self._smoke_unit(plan):
+            raise BroadGenerationAdmissionError()
+
     def plan(
         self, source_rows: Iterable[Any], *, source_manifest_hash: str = "", writer_config_hash: str = ""
     ) -> CampaignPlan:
@@ -1412,6 +1714,7 @@ class CudaRolloutCampaign:
         nested_configs: Iterable[Any] = (),
         plan_path: Path | None = None,
         writer_config_path: Path | None = None,
+        source_store_path: Path | None = None,
     ) -> Any:
         # This gate intentionally runs before plan/status/evidence writes in
         # production entry points.  Nested writer and renderer configs are
@@ -1464,6 +1767,8 @@ class CudaRolloutCampaign:
                 stage_argv.extend(("--plan-path", str(plan_path)))
             if writer_config_path is not None:
                 stage_argv.extend(("--writer-config-path", str(writer_config_path)))
+            if source_store_path is not None:
+                stage_argv.extend(("--source-store-path", str(source_store_path)))
             stage_argv.extend(("--expected-scene-count", str(self.config.expected_scene_count)))
             self.run_preflight_stage(
                 tuple(stage_argv),
@@ -1518,10 +1823,17 @@ class CudaRolloutCampaign:
         config_path: Path | None = None,
         plan_path: Path | None = None,
     ) -> Any:
+        """Run the canonical per-unit smoke guard, not a smoke population."""
+
         unit = self._smoke_unit(plan)
         if config_path is None or plan_path is None:
             raise ValueError("production smoke requires canonical config_path and plan_path")
-        argv = self.worker_argv(plan_path, unit, config_path=config_path)
+        argv = self.worker_argv(
+            plan_path,
+            unit,
+            config_path=config_path,
+            purpose=CampaignWorkerPurpose.SMOKE,
+        )
         argv = tuple(plan.plan_hash if value == "PLAN_HASH" else value for value in argv)
         code, stdout, stderr = self.process_runner.run(
             argv, timeout=self.config.work_unit_timeout_seconds, stdout=subprocess.PIPE, stderr=subprocess.PIPE
@@ -1535,6 +1847,7 @@ class CudaRolloutCampaign:
         if result.get("outcome") != CampaignOutcome.SUCCEEDED.value or result.get("validated") is not True:
             raise RuntimeError("smoke evidence requires a structured succeeded+validated worker result")
         evidence = {
+            "scope": "canonical_single_work_unit",
             "campaign_id": self.config.campaign_id,
             "plan_hash": plan.plan_hash,
             "work_unit_hash": unit.work_unit_hash,
@@ -1597,6 +1910,8 @@ class CudaRolloutCampaign:
         if not isinstance(raw_evidence, dict) or not all(isinstance(key, str) for key in raw_evidence):
             raise RuntimeError("smoke evidence must be a JSON object with string keys")
         evidence: dict[str, Any] = raw_evidence
+        if evidence.get("scope") != "canonical_single_work_unit":
+            raise RuntimeError("smoke evidence must declare the canonical per-unit guard scope")
         if evidence.get("campaign_id") != self.config.campaign_id or evidence.get("plan_hash") != plan.plan_hash:
             raise RuntimeError("smoke evidence is stale for this campaign plan")
         if not evidence.get("work_unit_hash") or evidence.get("config_hash") != plan.config_hash:
@@ -1625,7 +1940,7 @@ class CudaRolloutCampaign:
         return evidence
 
     def _smoke_unit(self, plan: CampaignPlan) -> CampaignWorkUnit:
-        """Return the first deterministically planned unit used for smoke proof."""
+        """Return the first deterministic unit used only as a per-unit guard."""
         if not plan.work_units:
             raise ValueError("plan has no work units")
         unit = plan.work_units[0]
@@ -1643,8 +1958,10 @@ class CudaRolloutCampaign:
 
     def run_work_unit(
         self,
+        plan: CampaignPlan,
         unit: CampaignWorkUnit,
         *,
+        purpose: CampaignWorkerPurpose,
         writer_config: Any,
         shard_entry: Any,
         output_tmp: Path,
@@ -1652,7 +1969,9 @@ class CudaRolloutCampaign:
         invocation: Any = None,
         shard_runner: Callable[..., Any] | None = None,
     ) -> Any:
-        """Delegate one unit to the shard owner; campaign never decides skips."""
+        """Admit and delegate one immutable plan unit before any leaf side effect."""
+
+        self.require_worker_admission(plan, unit, purpose=purpose)
         if shard_runner is None:
             from .shards import run_rollout_shard
 
@@ -1739,7 +2058,7 @@ class CudaRolloutCampaign:
         if target_payload is not None and hasattr(cfg, "explicit_target"):
             from .rollout_dataset import ExplicitRolloutTargetConfig
 
-            target_payload = ExplicitRolloutTargetConfig.model_validate(target_payload)
+            explicit_target = ExplicitRolloutTargetConfig.model_validate(target_payload)
             from ...targets.protocol import TargetInputProtocol
 
             store = cfg.store.model_copy(update={"target_protocol_version": TargetInputProtocol.V1_OBSERVED})
@@ -1748,7 +2067,7 @@ class CudaRolloutCampaign:
             cfg = cfg.model_copy(
                 update={
                     "store": store,
-                    "explicit_target": target_payload,
+                    "explicit_target": explicit_target,
                     "max_targets_per_sample": 1,
                     "oracle_target_task_sampler": OracleTargetTaskSamplerConfig(),
                     "min_valid_root_candidates": 15,
@@ -1928,6 +2247,7 @@ class CudaRolloutCampaign:
         *,
         config_path: Path | None = None,
         writer_config_path: Path | None = None,
+        purpose: CampaignWorkerPurpose = CampaignWorkerPurpose.CAMPAIGN,
     ) -> tuple[str, ...]:
         """Build the only subprocess argv used for an opaque work unit."""
         argv = (
@@ -1944,6 +2264,8 @@ class CudaRolloutCampaign:
             "PLAN_HASH",
             "--work-unit-hash",
             unit.work_unit_hash,
+            "--purpose",
+            purpose.value,
         )
         writer_path = writer_config_path or self.config.writer_config_path
         return argv + (("--writer-config-path", str(writer_path)) if writer_path else ())
@@ -1962,6 +2284,7 @@ class CudaRolloutCampaign:
         free_disk_floor_gb: float | None = None,
     ) -> list[Any]:
         """Run a claimed campaign and always release its claim."""
+        self.require_execution_admission()
         if plan is None:
             raise ValueError("an immutable CampaignPlan is required")
         if plan.campaign_id != self.config.campaign_id or any(
@@ -3002,11 +3325,12 @@ class CudaRolloutCampaign:
             (event.timestamp for event in reversed(events) if event.kind == "campaign_finished"),
             None,
         )
-        elapsed_seconds = 0.0
         if state in {"completed", "completed_with_failures"}:
             elapsed_seconds = self._canonical_campaign_elapsed(events)
             if elapsed_seconds is None:
                 raise ValueError("canonical campaign finish lacks elapsed evidence")
+        else:
+            elapsed_seconds = 0.0
         rebuilt = self.status(
             plan,
             results,

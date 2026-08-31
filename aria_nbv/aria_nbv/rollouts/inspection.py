@@ -33,7 +33,7 @@ from .audits import candidate_policy_entropy
 from .manifest import read_rollout_store_manifest
 from .read_model import (
     StoredRollout,
-    _candidate_mixture_names,
+    candidate_mixture_family_names,
     decode_invalid_reason,
     decode_position_id,
     rollout_at,
@@ -764,6 +764,7 @@ def candidate_audit_rows(
                     "position": str(step.position_names[local]),
                     "mixture_id": int(step.mixture_ids[local]),
                     "mixture": str(step.mixture_names[local]),
+                    "gaze_variant_id": int(step.gaze_variant_ids[local]),
                     "sampler_probability": _finite_or_none(step.sampler_probabilities[local]),
                     "invalid_reason": str(step.primary_invalid_reason_names[local]),
                     "invalid_reason_bitset": int(step.invalid_reason_bitsets[local]),
@@ -5076,9 +5077,14 @@ def root_relative_candidate_rows(
         reader.array_rows("candidate_diagnostics/position_id", positions).astype(np.int32, copy=False).reshape(-1)
     )
     mixture_ids = reader.array_rows("candidates/mixture_id", positions).astype(np.int32, copy=False).reshape(-1)
+    gaze_variant_ids = (
+        reader.array_rows("candidates/gaze_variant_id", positions).astype(np.int8, copy=False).reshape(-1)
+        if "gaze_variant_id" in reader.root["candidates"]
+        else np.full(mixture_ids.shape, -1, dtype=np.int8)
+    )
     relative = pose_centers - root_poses[rollout_positions, 9:12]
     distances = np.linalg.norm(relative, axis=1)
-    mixture_names = _candidate_mixture_names(reader, mixture_ids)
+    mixture_names = candidate_mixture_family_names(reader, mixture_ids, gaze_variant_ids)
 
     return [
         {
@@ -7205,7 +7211,7 @@ def rollout_trajectory_geometry(
         target_center = target_pose[9:12]
         root_center = root_pose[9:12]
         scale = _positive_distance(target_center - root_center)
-        basis = _target_aligned_basis(target_center - root_center)
+        basis = target_aligned_z_up_basis(target_center - root_center)
         if scale is None or basis is None:
             issues.append(
                 GeometryIssue(
@@ -7858,13 +7864,15 @@ def _proposal_basis(
     reference_pose: np.ndarray, target_center: np.ndarray, alignment: ProposalAlignment
 ) -> np.ndarray | None:
     if alignment is ProposalAlignment.TARGET_ALIGNED_Z_UP:
-        return _target_aligned_basis(target_center - reference_pose[9:12])
+        return target_aligned_z_up_basis(target_center - reference_pose[9:12])
     if alignment is ProposalAlignment.RIG_FORWARD_Z_UP:
         return _z_up_basis(reference_pose[:9].reshape(3, 3)[:, 2])
     raise ValueError(f"Unsupported proposal alignment: {alignment!r}.")
 
 
-def _target_aligned_basis(target_delta: np.ndarray) -> np.ndarray | None:
+def target_aligned_z_up_basis(target_delta: np.ndarray) -> np.ndarray | None:
+    """Return the canonical world Z-up basis whose first axis faces the target."""
+
     return _z_up_basis(target_delta)
 
 
@@ -7965,6 +7973,7 @@ __all__ = [
     "mask_combination_rows",
     "paired_policy_comparison_rows",
     "proposal_support_geometry",
+    "target_aligned_z_up_basis",
     "promoted_store_validation_error",
     "root_relative_candidate_rows",
     "rollout_store_inventory_rows",

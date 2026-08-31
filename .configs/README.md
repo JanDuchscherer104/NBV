@@ -61,6 +61,12 @@ PY
 Plan the corrected paired pilot, run its smoke, launch at most ten new units,
 and inspect status:
 
+The `smoke` command is a canonical **single-work-unit guard**. It proves the
+leaf contract for the deterministic first planned unit only; it does not prove
+completion of the durable two-scene × two-proposal-replica pilot population.
+Population admission and completion remain owned by the planned campaign and
+the later WP18 gate.
+
 ```bash
 uv run nbv-rollout-campaign plan \
   --config-path ../.configs/build_rollouts_v1_cuda_campaign_pilot_corrected_v11.toml \

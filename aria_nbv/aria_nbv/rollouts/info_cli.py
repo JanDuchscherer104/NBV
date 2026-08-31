@@ -21,7 +21,7 @@ import typer
 from ..data_handling.identifiers import compact_ase_atek_identifiers
 from ..utils.cli_format import cli_console, counts_table, distribution_table, key_value_panel
 from ..utils.typer_cli import run_typer_app
-from .candidate_benchmark import benchmark_binding_from_reader
+from .candidate_benchmark import benchmark_binding_from_reader, candidate_family_preflight_from_reader
 from .inspection import build_compact_statistics, runtime_storage_statistics
 from .reporting import (
     THESIS_REPORT_BUNDLE_ROLE,
@@ -277,24 +277,14 @@ def _preflight_payload(
         else:
             warnings.append(message)
 
-    valid_components = stats_payload.get("valid_candidates", {}).get("component_counts", {})
-    selected_components = stats_payload.get("selected", {}).get("component_counts", {})
-    target_component_count = _target_component_count(valid_components) + _target_component_count(selected_components)
-    if target_component_count <= 0:
-        message = "degenerate_target_aware_family_contribution"
-        if profile == "production":
-            blockers.append(message)
-        else:
-            warnings.append(message)
-
     reward = _reward_signal_payload(reader)
-    reward_std = reward["std"]
-    if reward["finite_count"] <= 0 or reward_std is None or reward_std <= 1.0e-8:
-        message = "flat_reward_signal"
-        if profile == "production":
-            blockers.append(message)
-        else:
-            warnings.append(message)
+    family_preflight = candidate_family_preflight_from_reader(reader)
+    family_payload = family_preflight.to_payload()
+    family_blockers = [f"candidate_family:{item['code']}" for item in family_payload["blockers"]]
+    if profile == "production":
+        blockers.extend(family_blockers)
+    else:
+        warnings.extend(family_blockers)
 
     storage = runtime_storage_statistics(reader.store_dir, candidate_count=int(counts.get("candidates") or 0))
     bytes_per_candidate = storage["bytes_per_candidate"]
@@ -341,6 +331,7 @@ def _preflight_payload(
         },
         "coverage": coverage,
         "validity": validity,
+        "candidate_family": family_payload,
         "rewards": reward,
         "retention": retention,
         "storage": storage,

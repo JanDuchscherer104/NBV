@@ -18,8 +18,11 @@ from ....dataset_topology import build_dataset_topology
 from ....rollouts import RolloutZarrStoreReader
 from ....rollouts.candidate_benchmark import (
     CandidateBenchmark,
+    CandidateFamilyPreflight,
     benchmark_binding_from_reader,
     benchmarks_from_reader,
+    candidate_family_preflight_from_payload,
+    candidate_family_preflight_from_reader,
     read_bundle_bytes,
     reduce_candidate_records,
     serialize_bundle_bytes,
@@ -85,6 +88,7 @@ class CandidateBenchmarkBuildResult:
     candidate_limit: int
     records: tuple[CandidateBenchmark, ...]
     bundle_bytes: bytes
+    family_preflight: CandidateFamilyPreflight | None = None
 
 
 @st.cache_resource(show_spinner=False)
@@ -161,6 +165,18 @@ def _cached_candidate_benchmark_export_cached(
     payload = serialize_bundle_bytes(records, provenance=binding)
     read_bundle_bytes(payload, expected_binding=binding)
     return payload
+
+
+@st.cache_data(show_spinner="Evaluating complete candidate-family support…", max_entries=32)
+def _cached_candidate_family_preflight_cached(
+    store_path: str,
+    *,
+    store_identity: str = "",
+) -> dict[str, Any]:
+    """Cache a primitive family-gate payload by immutable store identity."""
+
+    reader, _, _ = _cached_store_bundle_cached(store_path, store_identity=store_identity)
+    return candidate_family_preflight_from_reader(reader).to_payload()
 
 
 def _store_projection_identity(store_path: str) -> str:
@@ -299,7 +315,21 @@ class StoredRolloutSession:
         records = self.candidate_benchmark_records(state_key=state_key, candidate_limit=candidate_limit)
         bundle_bytes = self.candidate_benchmark_export(state_key=state_key)
         self._assert_current_identity()
-        return CandidateBenchmarkBuildResult(identity, state_key, candidate_limit, records, bundle_bytes)
+        family_preflight = candidate_family_preflight_from_payload(
+            _cached_candidate_family_preflight_cached(
+                self._projection_path(),
+                store_identity=identity,
+            )
+        )
+        self._assert_current_identity()
+        return CandidateBenchmarkBuildResult(
+            identity,
+            state_key,
+            candidate_limit,
+            records,
+            bundle_bytes,
+            family_preflight,
+        )
 
     def invariants(self) -> Any:
         return _cached_invariants(self._projection_path(), store_identity=self.store_identity)
@@ -829,6 +859,7 @@ def _clear_stored_rollout_caches() -> None:
         _cached_candidate_population_cached,
         _cached_candidate_benchmark_records_cached,
         _cached_candidate_benchmark_export_cached,
+        _cached_candidate_family_preflight_cached,
         _cached_q_h,
         _cached_tree,
         _cached_root_geometry,

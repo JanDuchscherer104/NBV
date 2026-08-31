@@ -42,6 +42,7 @@ from ...pose_generation import (
     CandidateMixtureViewGeneratorConfig,
 )
 from ...rendering import CandidateDepthRenderer, CandidateDepthRendererConfig
+from ...rollouts.candidate_benchmark import candidate_family_preflight_config_from_writer
 from ...rollouts.manifest import RolloutStoreInvocation, RolloutStoreManifestContext, collect_runtime_provenance
 from ...rollouts.replay.engine import CounterfactualPoseGeneratorConfig
 from ...rollouts.replay.policy import CounterfactualSelectionPolicy, RolloutPolicySpec
@@ -882,6 +883,7 @@ class RolloutDatasetWriter:
                 invocation=invocation or RolloutStoreInvocation.programmatic(),
                 runtime=collect_runtime_provenance(),
                 shard=None if shard_entry is None else shard_entry.to_jsonable(),
+                candidate_family_preflight=candidate_family_preflight_config_from_writer(self.config).to_payload(),
             ),
             selected_depth_enabled=self.config.selected_depth.enabled,
             selected_depth_width_px=self.config.selected_depth.width_px,
