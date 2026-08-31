@@ -49,6 +49,6 @@
   log_gain: $J_(e,"log")^((H))$,
   // Remaining target-error reduction available to the look-ahead policy.
   lookahead_headroom: $Delta_"look"$,
-  // Recovery ratio attributed to the learned Q policy.
+  // Fraction of the learned-myopic-to-oracle-lookahead endpoint gap closed by Q.
   q_recovery: $eta_Q$,
 )

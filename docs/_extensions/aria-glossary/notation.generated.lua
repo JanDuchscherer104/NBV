@@ -59,7 +59,7 @@ return {
     ["entity.q_recovery"] = {
       tex = "\\eta_Q",
       typst = "#symb.entity.q_recovery",
-      description = "Fraction of oracle lookahead gain recovered by the Q policy.",
+      description = "Fraction of the learned-myopic-to-oracle-lookahead endpoint gap closed by the Q policy.",
       thesis_list = true,
     },
     ["entity.return_h"] = {

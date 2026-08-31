@@ -28,15 +28,20 @@ the evaluated scene.
 // - @FisherRF-jiang2024 -> docs/literature/tex-src/arXiv-FisherRF/sec/method.tex:4-19 (Fisher information and active-view information gain)
 
 Direct quality utilities close this proxy gap by evaluating the reconstruction
-itself. VIN-NBV defines Relative Reconstruction Improvement as the reduction in
-point--mesh reconstruction error after adding a candidate observation, then
-learns to rank sampled query cameras by that quantity @VIN-NBV-frahm2025. The
-objective measures the desired geometric consequence directly, but the learned
-scorer remains myopic: each candidate is valued by the improvement attributed
-to that next observation rather than by the sequence it may enable.
+itself. VIN-NBV defines Relative Reconstruction Improvement (RRI) as the
+reduction in Chamfer distance between reconstructed and ground-truth point
+clouds after adding a candidate observation, and learns to rank sampled query
+cameras by this quantity @VIN-NBV-frahm2025. The present work follows this
+direct reconstruction-improvement principle but not VIN-NBV's metric unchanged:
+it evaluates a target-cropped point--mesh error instead of scene-level
+point-cloud Chamfer distance. This project-specific definition makes the
+requested target, rather than all reconstructed geometry, determine which
+errors count. It does not remove the myopia of one-step scoring, because each
+candidate is still valued by its immediate improvement rather than by the
+sequence it may enable.
 
 // evidence:
-// - @VIN-NBV-frahm2025 -> docs/literature/tex-src/arXiv-VIN-NBV/sec/3_methods.tex:18-20, docs/literature/tex-src/arXiv-VIN-NBV/sec/3_methods.tex:36-44, docs/literature/tex-src/arXiv-VIN-NBV/sec/3_methods.tex:78-92 (sampled candidate scoring, RRI, and reconstruction-error evaluation)
+// - @VIN-NBV-frahm2025 -> docs/literature/tex-src/arXiv-VIN-NBV/sec/3_methods.tex:18-20, docs/literature/tex-src/arXiv-VIN-NBV/sec/3_methods.tex:36-44, docs/literature/tex-src/arXiv-VIN-NBV/sec/3_methods.tex:78-92 (sampled candidate scoring and point-cloud Chamfer RRI)
 
 Target conditioning changes which reconstruction errors contribute to that
 quality. Object-centric 3DGS planning associates features and confidence with
@@ -51,12 +56,14 @@ maintaining its identity from observations.
 // - @ObjectCentricNBV-jeong2026 -> docs/literature/tex-src/arXiv-Instance-NBV/ver3_rpm/3_method_ver3_rpm.tex:54-86, docs/literature/tex-src/arXiv-Instance-NBV/ver3_rpm/3_method_ver3_rpm.tex:123-139, docs/literature/tex-src/arXiv-Instance-NBV/ver3_rpm/3_method_ver3_rpm.tex:249-258 (object-associated features, target-aware information gain, and requested-object gate)
 
 The thesis therefore treats coverage and uncertainty as non-equivalent
-diagnostics and takes target-specific reconstruction quality as the endpoint of
-interest @VIN-NBV-frahm2025 @ObjectCentricNBV-jeong2026. This choice fixes what
-the decision should improve, but it does not determine which viewpoints can be
-proposed or reached. Candidate support and motion feasibility must be separated
-from utility before delayed consequences are embedded in a sequential decision
-problem @PB-NBV-jia2025.
+diagnostics and adopts target-specific reconstruction quality as the endpoint
+of interest @VIN-NBV-frahm2025 @ObjectCentricNBV-jeong2026. These works motivate
+direct reconstruction improvement and object conditioning separately; their
+combination in a target-cropped endpoint is the thesis-specific objective. This
+choice determines what the decision should improve, but not which viewpoints
+may be proposed or reached. Candidate support and motion feasibility therefore
+remain separate from utility before delayed consequences are introduced through
+the finite-horizon decision problem @PB-NBV-jia2025.
 
 // evidence:
 // - @VIN-NBV-frahm2025 -> docs/literature/tex-src/arXiv-VIN-NBV/sec/3_methods.tex:36-44, docs/literature/tex-src/arXiv-VIN-NBV/sec/3_methods.tex:78-92 (direct reconstruction-improvement target and evaluation)

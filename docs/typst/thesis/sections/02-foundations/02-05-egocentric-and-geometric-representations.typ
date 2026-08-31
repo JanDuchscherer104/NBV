@@ -2,81 +2,108 @@
 
 == Egocentric and Geometric Representations <sec:thesis-egocentric-geometric-representations>
 
-Project Aria records calibrated, time-aligned egocentric sensor streams, and
-EFM3D lifts posed image features together with semi-dense geometric evidence
-into a local gravity-aligned voxel representation @projectaria-engel2023
-@EFM3D-straub2024. This sensing geometry determines how observations from
-different cameras and times can be compared. It does not, by itself, reveal the
-complete scene or define which view is useful; an NBV representation must turn
-the available evidence into relations between the current observer, the target,
-and candidate viewpoints.
+The preceding section established that future view value depends on a causal
+information state rather than on a camera pose alone. Project Aria provides
+calibrated, time-aligned egocentric streams, and EFM3D lifts posed image features
+and semi-dense geometry into a local gravity-aligned representation
+@projectaria-engel2023 @EFM3D-straub2024. The representation question is
+therefore not how faithfully to reproduce the entire world, but which
+distinctions must survive so that target-specific counterfactual return remains
+predictable.
 
 // evidence:
 // - @projectaria-engel2023 -> docs/literature/tex-src/arXiv-project-aria/intro.tex:24-26, docs/literature/tex-src/arXiv-project-aria/device.tex:12-15 (wearable egocentric capture and calibrated time-aligned streams)
 // - @EFM3D-straub2024 -> docs/literature/tex-src/arXiv-EFM3D/intro.tex:42-50, docs/literature/tex-src/arXiv-EFM3D/method.tex:15-33 (posed Aria modalities and gravity-aligned voxel lifting)
 
-Because the physical scene is only partially observed, representation quality
-is a question of information preservation. EFM3D supplies strong local evidence
-but operates over a finite voxel extent, while Hestia's cumulative voxel-face
-state shows how viewing direction and observation history can change later
-decisions @EFM3D-straub2024 @Hestia-lu2026. A compact state is therefore not
-assumed sufficient merely because it is spatial: it must retain target identity,
-observed support, directional history, and the distinctions needed to compare
-future candidate consequences.
+Pretraining provenance and decision-time role must be distinguished. 3D-NVS
+uses ImageNet initialization in its NBV classifier, whereas MACARONS reuses
+pretrained image features within an online mapping pipeline
+@ThreeDNVS-ashutosh2020 @MACARONS-guedon2023. Next Best Sense instead uses SAM2
+and monocular-depth priors to improve 3DGS construction while retaining an
+analytic Fisher-information selector @NextBestSense-strong2024. EVL freezes its
+DINOv2.5 foundation feature extractor, then learns the feature upsampler, 3D
+U-Net, and task heads that form a local 3D field from posed egocentric streams
+and semidense geometry @EFM3D-straub2024. This structure may preserve semantic
+and geometric distinctions relevant to target visibility, but whether those
+distinctions improve candidate value is an empirical property of the downstream
+task rather than a consequence of pretraining alone.
+
+// evidence:
+// - @ThreeDNVS-ashutosh2020 -> docs/literature/tex-src/arXiv-3D-NVS/sections/method_new.tex:15-23 (ImageNet-pretrained VGG16 directly drives fixed-view NBV classification)
+// - @MACARONS-guedon2023 -> docs/literature/tex-src/arXiv-MACARONS/3_method.tex:27-34, docs/literature/tex-src/arXiv-MACARONS/7_appendix.tex:213-219 (pretrained image features and task-specific ShapeNet pretraining ablation)
+// - @NextBestSense-strong2024 -> docs/literature/tex-src/arXiv-Next-Best-Sense/ms.tex:156-217 (foundation-assisted scene construction and analytic Fisher-information selection)
+// - @EFM3D-straub2024 -> docs/literature/tex-src/arXiv-EFM3D/method.tex:4-45, docs/literature/tex-src/arXiv-EFM3D/supplemental_text.tex:11-18 (frozen 2D feature extractor plus learned upsampling, 3D U-Net processing, and task heads)
+
+Four requirements follow. First, *causal sufficiency* requires the actor state to
+retain the observation history relevant to future return without importing
+future or unselected evidence. EFM3D supplies strong local evidence but has a
+finite voxel extent, while Hestia demonstrates that accumulated directional
+history can alter later choices @EFM3D-straub2024 @Hestia-lu2026. A spatial state
+is therefore not sufficient merely because it is geometric; sufficiency is a
+hypothesis to be tested against the task.
 
 // evidence:
 // - @EFM3D-straub2024 -> docs/literature/tex-src/arXiv-EFM3D/method.tex:15-33, docs/literature/tex-src/arXiv-EFM3D/supplemental_text.tex:113-124 (local lifted representation and finite voxel extent)
 // - @Hestia-lu2026 -> docs/literature/tex-src/arXiv-Hestia/sec/3_method.tex:30-58, docs/literature/tex-src/arXiv-Hestia/sec/3_method.tex:70-93 (cumulative directional visibility and coverage reward)
 
-Coordinate choice controls which distinctions a learner can exploit cheaply.
-Query-centric models express scene elements in local frames and encode their
-relations through relative positions, reducing dependence on an arbitrary
-global origin @zhou2023query. Geometric deep learning generalizes this idea as a
-choice of symmetries and locality priors @GeometricDeepLearning-bronstein2021.
-For egocentric NBV, translation of the world origin should not change a score,
-but gravity, metric scale, camera direction, target orientation, and motion can
-remain meaningful. The appropriate prior is therefore disciplined relative
-geometry, not automatic invariance to every rigid transformation.
+Second, *spatial relationality* requires the target, observer, candidates, and
+observed support to be comparable in a common local geometry. Query-centric
+models express scene elements relative to the active query, reducing dependence
+on an arbitrary global origin @zhou2023query. For target-conditioned NBV, the
+relevant quantity is therefore not candidate position in isolation but candidate
+geometry relative to the current observer, target, and accumulated evidence.
+Coordinate choice also determines which changes should be treated as nuisances.
+Translating the world origin should not change a score, whereas gravity, metric
+scale, camera direction, target orientation, occlusion, and temporal order can
+remain informative @GeometricDeepLearning-bronstein2021. The useful prior is
+thus relative geometry that removes arbitrary coordinates without erasing
+task-relevant physical structure.
 
 // evidence:
 // - @zhou2023query -> docs/literature/tex-src/arXiv-QCNet/main.tex:159-161 (query-centric local frames and relative spatial-temporal positions)
 // - @GeometricDeepLearning-bronstein2021 -> docs/literature/tex-src/arXiv-Geometric-Deep-Learning/geometricpriors.tex:347-411, docs/literature/tex-src/arXiv-Geometric-Deep-Learning/geometricpriors.tex:952-967 (invariance, equivariance, locality, and geometric priors)
 
-Candidate ordering introduces another symmetry. A candidate table represents a
-set of physical viewpoints, so permuting its rows should permute the associated
-scores without changing their values. The required map is therefore
-permutation equivariant rather than invariant. Deep Sets supplies invariant
-aggregation for shared context, while Set Transformer supplies equivariant
-candidate interaction @DeepSets-zaheer2017 @SetTransformer-lee2019. This is a
-behavioral requirement rather than an architecture prescription: independent
-row scoring, pooled context, or attention can all satisfy it if a row
-permutation produces the same permutation of the output scores.
+Third, *candidate-order equivariance* follows from the action set itself. A
+candidate table denotes physical viewpoints rather than a ranked sequence, so
+permuting its rows must induce the same permutation of their scores; an invariant
+output would instead discard which score belongs to which action. Deep Sets
+provides invariant aggregation for shared set context, while Set Transformer
+provides permutation-equivariant candidate interaction @DeepSets-zaheer2017
+@SetTransformer-lee2019. This is a behavioral contract rather than an
+architecture prescription: independent row scoring, pooled context, and
+attention can all satisfy it.
 
 // evidence:
 // - @DeepSets-zaheer2017 -> docs/literature/tex-src/arXiv-Deep-Sets/nips_2017.tex:103-106 (permutation-invariant set-function decomposition)
 // - @SetTransformer-lee2019 -> docs/literature/tex-src/arXiv-Set-Transformer/03_main.tex:49-65 (permutation-equivariant self-attention and invariant pooling)
 
-The representation family determines how those priors are realized. Point
-models preserve irregular surface samples and local relative geometry; sparse
-voxel models provide structured neighborhoods without paying for a dense world
-grid; equivariant message-passing models impose stronger transformation rules
-@point-transformer-zhao2021 @MinkowskiEngine-choy2019 @EGNN-satorras2021. These
-families trade computational structure against inductive bias. None is an
-established improvement for this thesis until compared with the same observable
-inputs, target task, and endpoint utility.
+Fourth, *physical observability* requires the representation to preserve what
+the causal sensing process actually distinguishes. EFM3D derives a surface mask
+from observed semi-dense points and a free-space mask from camera-to-surface
+rays @EFM3D-straub2024. Voxels supported by neither mask remain unobserved;
+they must not be treated as observed free space or negative surface evidence.
+This surface/free/unobserved distinction is the observation contract. The
+choice of carrier is a separate architecture tradeoff: point models retain
+irregular samples and local relations, sparse-voxel models regularize space at
+a chosen resolution and extent, and equivariant message passing commits to a
+chosen symmetry family @point-transformer-zhao2021 @MinkowskiEngine-choy2019
+@EGNN-satorras2021. These families trade spatial fidelity, computational
+structure, and strength of geometric prior, but none by itself guarantees the
+observation contract or improves the endpoint utility.
 
 // evidence:
+// - @EFM3D-straub2024 -> docs/literature/tex-src/arXiv-EFM3D/method.tex:37-42 (surface-point mask, camera-to-surface free-space mask, and their concatenation with lifted features)
 // - @point-transformer-zhao2021 -> docs/literature/tex-src/arXiv-Point-Transformer/tex/method.tex:21-27, docs/literature/tex-src/arXiv-Point-Transformer/tex/method.tex:55-62 (local neighborhoods and relative position encoding)
 // - @MinkowskiEngine-choy2019 -> docs/literature/tex-src/arXiv-MinkowskiEngine/sections/1_intro.tex:53-62 (sparse coordinates and computational savings)
 // - @EGNN-satorras2021 -> docs/literature/tex-src/arXiv-EGNN/sections/model.tex:6-20, docs/literature/tex-src/arXiv-EGNN/sections/model.tex:42-60 (relative-coordinate message passing and E(n) equivariance)
 
-The foundation is thus a set of representational requirements rather than an
-architecture prescription: causal egocentric evidence, task-relevant spatial
-relations, candidate-order equivariance, and enough history to distinguish
-future consequences @EFM3D-straub2024 @GeometricDeepLearning-bronstein2021.
-These requirements provide the final comparison dimension for the literature
-synthesis and leave their concrete realization to the Method chapter.
+These four requirements—causal sufficiency, spatial relationality,
+candidate-order equivariance, and physical observability—complete the conceptual
+dependency chain. The literature synthesis can now compare methods by the
+scientific distinctions they preserve, while the Method chapter remains
+responsible for one concrete realization and its tests @EFM3D-straub2024
+@GeometricDeepLearning-bronstein2021.
 
 // evidence:
-// - @EFM3D-straub2024 -> docs/literature/tex-src/arXiv-EFM3D/method.tex:15-33, docs/literature/tex-src/arXiv-EFM3D/supplemental_text.tex:113-124 (local egocentric spatial representation and support extent)
-// - @GeometricDeepLearning-bronstein2021 -> docs/literature/tex-src/arXiv-Geometric-Deep-Learning/geometricmodels.tex:463-522 (unordered-set and Euclidean geometric representation principles)
+// - @EFM3D-straub2024 -> docs/literature/tex-src/arXiv-EFM3D/method.tex:15-33, docs/literature/tex-src/arXiv-EFM3D/supplemental_text.tex:113-124 (causal local evidence and finite support)
+// - @GeometricDeepLearning-bronstein2021 -> docs/literature/tex-src/arXiv-Geometric-Deep-Learning/geometricpriors.tex:347-411, docs/literature/tex-src/arXiv-Geometric-Deep-Learning/geometricmodels.tex:463-522 (geometric priors and set-structured representations)

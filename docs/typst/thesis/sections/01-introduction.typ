@@ -30,17 +30,14 @@ but add little scene-wide coverage. Target conditioning therefore specifies
 // - @FisherRF-jiang2024 -> docs/literature/tex-src/arXiv-FisherRF/sec/method.tex:4-19 (Fisher-information view utility)
 // - @VIN-NBV-frahm2025 -> docs/literature/tex-src/arXiv-VIN-NBV/sec/3_methods.tex:36-44,78-97 (reconstruction-quality objective, sampled candidates, and greedy selection)
 
-Existing methods resolve different parts of this problem. VIN-NBV greedily
-ranks sampled candidates by Relative Reconstruction Improvement
-@VIN-NBV-frahm2025. Object-aware 3D Gaussian Splatting conditions an information
-criterion on the requested object @ObjectCentricNBV-jeong2026. GenNBV and Hestia
-learn sequential coverage policies in continuous or hierarchical action spaces
-@GenNBV-chen2024 @Hestia-lu2026. The literature reviewed in this thesis thus
-provides direct reconstruction-quality scoring, target-aware utility, and
-sequential view selection under different assumptions. It does not establish
-their conjunction: whether target-specific reconstruction quality contains
-useful multi-step structure that can be recovered from a bounded egocentric
-information state.
+Existing methods supply the necessary ingredients under different assumptions.
+VIN-NBV ranks sampled candidates by direct reconstruction improvement,
+object-aware 3D Gaussian Splatting conditions an information criterion on a
+requested object, and GenNBV and Hestia learn sequential coverage policies
+@VIN-NBV-frahm2025 @ObjectCentricNBV-jeong2026 @GenNBV-chen2024 @Hestia-lu2026.
+What remains unresolved is their conjunction: whether target-specific
+reconstruction quality contains useful multi-step structure and whether that
+structure can be recovered from a bounded egocentric information state.
 
 // evidence:
 // - @VIN-NBV-frahm2025 -> docs/literature/tex-src/arXiv-VIN-NBV/sec/3_methods.tex:78-99,122-129 (greedy RRI prediction and oracle supervision)
@@ -48,33 +45,49 @@ information state.
 // - @GenNBV-chen2024 -> docs/literature/tex-src/arXiv-GenNBV/3-Method.tex:13-25,76-95 (history-conditioned continuous policy and coverage reward)
 // - @Hestia-lu2026 -> docs/literature/tex-src/arXiv-Hestia/sec/3_method.tex:30-58,70-118 (sequential coverage state and hierarchical action)
 
-Project Aria supplies calibrated egocentric observations
-@projectaria-engel2023, and EFM3D lifts such observations into local 3D evidence
-@EFM3D-straub2024. ARIA Synthetic Environments (ASE) adds the privileged
-geometry needed to construct controlled target tasks and evaluate
-counterfactual actions @ProjectAria-ASE-2025. This setting permits a strict
-deployable-path separation: the actor-visible path may use logged and causally
-derived observations, whereas ground-truth geometry, unselected renders, and
-reconstruction labels remain task-construction, supervision, or evaluation
-assets. Two explicitly non-deployable controls remain separate: the GT-target
-control supplies privileged target geometry, and the `CF-GT` selected-depth
-ablation may consume previously selected GT depth. Neither can support a
-deployable-input claim.
+The actor-state question includes a representation-transfer hypothesis. Prior
+NBV pipelines already use generic 2D pretraining or foundation-model components
+for view prediction, depth estimation, or scene construction
+@ThreeDNVS-ashutosh2020 @MACARONS-guedon2023 @NextBestSense-strong2024. These
+uses do not establish whether an egocentric 3D representation that combines a
+frozen 2D foundation feature extractor with learned upsampling and 3D processing
+improves target-conditioned endpoint-value learning. ARIA-NBV therefore treats
+EFM3D/EVL evidence as a hypothesis to be tested against matched actor-visible
+geometric controls, not as an assumed source of gain @EFM3D-straub2024.
+
+// evidence:
+// - @ThreeDNVS-ashutosh2020 -> docs/literature/tex-src/arXiv-3D-NVS/sections/method_new.tex:15-23 (fixed-view NBV classifier and ImageNet-pretrained VGG16 with frozen layers)
+// - @MACARONS-guedon2023 -> docs/literature/tex-src/arXiv-MACARONS/3_method.tex:27-34 (pretrained ResNet-18 image features in the depth module)
+// - @NextBestSense-strong2024 -> docs/literature/tex-src/arXiv-Next-Best-Sense/ms.tex:156-217 (SAM2/depth priors for 3DGS construction and Fisher-information view selection)
+// - @EFM3D-straub2024 -> docs/literature/tex-src/arXiv-EFM3D/method.tex:4-45, docs/literature/tex-src/arXiv-EFM3D/supplemental_text.tex:11-18 (frozen 2D foundation features followed by learned upsampling, 3D U-Net processing, and task heads)
+
+Project Aria supplies calibrated egocentric observations, EFM3D lifts them into
+local 3D evidence, and ARIA Synthetic Environments (ASE) provides the privileged
+geometry needed for controlled target tasks and counterfactual evaluation
+@projectaria-engel2023 @EFM3D-straub2024 @ProjectAria-ASE-2025. This combination
+makes the information boundary testable. Task construction, action-set
+construction, hard admission, supervision, and evaluation may use privileged
+geometry, while the scorer consumes only the fields admitted by its declared
+actor-facing protocol. Scientific interpretation must account for both paths.
+Chapter 3 therefore treats actor visibility as a property of the complete
+decision process, not merely of the scorer tensor.
 
 // evidence:
 // - @projectaria-engel2023 -> docs/literature/tex-src/arXiv-project-aria/device.tex:12-17,71-81 (calibrated and time-aligned egocentric sensing)
 // - @EFM3D-straub2024 -> docs/literature/tex-src/arXiv-EFM3D/intro.tex:42-50, docs/literature/tex-src/arXiv-EFM3D/method.tex:1-42 (local gravity-aligned lifting and semi-dense surface/free-space evidence)
 // - @ProjectAria-ASE-2025 -> docs/contents/ase_dataset.qmd:216-225,257-260 (GT depth and meshes as supervision, oracle, and evaluation assets)
-// - deployable and privileged input boundary -> docs/typst/thesis/sections/04-method/04-01-scene-representation-requirements.typ:19-23, docs/typst/thesis/sections/04-method/04-05-finite-candidate-value-model.typ:24-40, docs/typst/thesis/sections/04-method/04-04-architecture-contract.typ:39-43
+// - actor-visible and privileged information boundary -> docs/typst/thesis/sections/03-oracle-and-data-generation/03-01-state-and-visibility.typ, docs/typst/thesis/sections/04-method/04-01-scene-representation-requirements.typ
 
 == Aim and bounded problem <ssec:boundary>
 
-The thesis asks a two-stage question. First, does bounded oracle lookahead yield
-better fixed-budget endpoint reconstruction of a requested object than one-step
-oracle-greedy selection? Second, if such headroom exists, can an offline
-finite-horizon model recover a prespecified fraction of it from non-privileged
-inputs? This order separates the existence of a planning opportunity from the
-ability of a learned model to exploit it.
+The evaluation proceeds in two stages. First, it measures whether bounded
+oracle lookahead yields better fixed-budget endpoint reconstruction of a
+requested object than one-step oracle-greedy selection. Conditional on such
+headroom, it then measures how much of the endpoint gap from an actor-visible
+learned-myopic control to oracle lookahead an offline finite-horizon model
+closes. This order separates the existence of a planning opportunity from the
+ability of a learned model to exploit it; the gap-closure ratio and oracle
+headroom have different baselines.
 
 At every step, each policy selects from the same finite generated candidates;
 hard-invalid actions are excluded, and the target, horizon, candidate support,
@@ -93,25 +106,32 @@ objective invariant to other reconstruction protocols.
 
 == Contributions and current evidence
 
-The thesis turns this question into an auditable chain from objective to
-evidence:
+The thesis operationalizes this evaluation through four scientific functions:
 
-+ It distinguishes state-relative one-step RRI, an additive finite-horizon
-  training return, and fixed-budget endpoint gain so that training signals and
-  policy outcomes are not conflated.
-+ It defines finite target-task, candidate, label, and replay contracts that
-  preserve lineage, treat invalidity as a hard constraint, and keep actor inputs
-  separate from oracle-only assets.
-+ It specifies masked finite-horizon candidate scoring from target context,
-  causal history, remaining budget, and requested horizon.
-+ It predefines a scene-disjoint, matched-budget evaluation that first tests
-  oracle-lookahead headroom and only then measures learned recovery, while
-  reporting feasibility separately from policy performance.
++ It separates one-step RRI, finite-horizon return, and fixed-budget endpoint
+  gain within target-specific reconstruction quality.
++ It defines an end-to-end information boundary across task and action
+  construction, state updates, model inputs, supervision, and evaluation.
++ It defines candidate value relationally over target, causal state, admissible
+  action, budget, horizon, and continuation rule.
++ It evaluates measurement, support, oracle headroom, immediate-value learning,
+  recursion, and learned-control endpoint gap closure in that order.
 
 // evidence:
-// - objective and oracle contracts -> docs/typst/thesis/sections/03-oracle-and-data-generation/03-02-target-task-and-rri-labels.typ:15-32,257-314
-// - method status and interface -> docs/typst/thesis/sections/04-method/index.typ:13-17, docs/typst/thesis/sections/04-method/04-05-finite-candidate-value-model.typ:14-24,42-92
-// - evaluation contract -> docs/typst/thesis/sections/05-experimental-design/05-01-objectives-and-hypotheses.typ:15-54, docs/typst/thesis/sections/05-experimental-design/05-03-policy-comparison-and-failure-interpretation.typ:15-37
+// - one-step, finite-horizon, and endpoint estimands -> docs/typst/thesis/sections/01-research-questions.typ:9-61, docs/typst/thesis/sections/03-oracle-and-data-generation/03-02-target-task-and-rri-labels.typ:28-40
+// - end-to-end actor/oracle information boundary -> docs/typst/thesis/sections/03-oracle-and-data-generation/03-01-state-and-visibility.typ:22-30,94-110
+// - relational finite-horizon value -> docs/typst/thesis/sections/02-foundations/02-04-finite-horizon-value-learning.typ:30-45,76-82
+// - ordered scientific evidence gates -> docs/typst/thesis/sections/05-experimental-design/05-02-learning-objective-and-replay-evidence.typ:31-50, docs/typst/thesis/sections/05-experimental-design/05-03-policy-comparison-and-failure-interpretation.typ:15-42
+
+Before model capacity becomes the main question, the evidence needed to define
+the learning problem must itself be identifiable. The outcome must be
+repeatable, the study population and candidate support must contain the relevant
+opportunity, bounded lookahead must exhibit headroom, and factual replay must
+identify the required targets. Only after those conditions hold can a failure
+to recover non-myopic value be attributed primarily to representation or
+learning. The order makes a negative result informative: it distinguishes a
+measurement or support failure from a failure of immediate-value learning or
+finite-horizon recursion.
 
 The present evidence supports a methodological contribution rather than a
 policy result. The implementation executes target-specific oracle scoring and
@@ -128,16 +148,13 @@ readiness.
 
 == Thesis structure <ssec:thesis-structure>
 
-The remaining chapters follow the same dependency chain. @sec:thesis-foundations
-derives the view-utility, target-conditioning, sequential-decision, and
-geometric-representation concepts that define the research gap.
-@sec:thesis-oracle-data-generation turns that gap into data by separating
-actor-visible state from privileged task construction, oracle evaluation, and
-counterfactual replay. @sec:thesis-method specifies the finite-candidate scorer,
-its geometric inputs, masks, and finite-horizon learning interface.
-@sec:thesis-experimental-design defines the study population, evidence gates,
-baselines, and matched endpoint comparisons. @sec:thesis-results reports only
-the evidence admitted by those contracts. @sec:thesis-discussion interprets
-that evidence, alternative explanations, and limitations, and
-@sec:thesis-conclusion answers the research questions within the established
-scope.
+The remaining chapters follow that dependency chain. @sec:thesis-foundations
+derives the objective, support, temporal, and representation concepts needed to
+state the gap precisely. @sec:thesis-oracle-data-generation constructs the
+experimental world by defining information access, admissible actions, state
+transitions, and measured outcomes. @sec:thesis-method then specifies the one
+finite-horizon value interface evaluated within that world.
+@sec:thesis-experimental-design states which evidence admits or blocks each
+claim. @sec:thesis-results reports the admitted answers in gate order;
+@sec:thesis-discussion attributes their implications and alternatives; and
+@sec:thesis-conclusion synthesizes what those bounded answers establish.

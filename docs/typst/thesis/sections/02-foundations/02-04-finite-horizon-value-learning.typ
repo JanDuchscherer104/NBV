@@ -37,14 +37,18 @@ $
   #eqs.rl.q_h
 $
 where continuation policies choose only from the admissible candidates at each
-step. Fixed-Horizon TD defines horizon-indexed predictions with the boundary
-$Q_0=0$ and relates horizon $h$ to the shorter horizon $h-1$
-@FixedHorizonTD-deAsis2020. If an episode ends before all $h$ rewards are
-collected, later rewards are zero. The value thus states the consequence of
-taking a candidate now and then following a named continuation rule; it is not
-an intrinsic property of the camera pose alone.
+step. These equations specialize the standard discounted-return and
+action-value constructions to a requested target and finite horizon
+@ReinforcementLearning-sutton2018[Secs. 3.3–3.6, pp. 54–67]. Fixed-Horizon TD
+defines horizon-indexed predictions with the boundary $Q_0=0$ and relates
+horizon $h$ to the shorter horizon $h-1$ @FixedHorizonTD-deAsis2020. If an
+episode ends before all $h$ rewards are collected, later rewards are zero. The
+value thus states the consequence of taking a candidate now and then following
+a named continuation rule; it is not an intrinsic property of the camera pose
+alone.
 
 // evidence:
+// - @ReinforcementLearning-sutton2018 -> docs/literature/pdf/RLbook2020.pdf#page=76-89 (Ch. 3, Secs. 3.3-3.6, printed pp. 54-67; returns, action values, policies, and optimal values)
 // - @FixedHorizonTD-deAsis2020 -> docs/literature/tex-src/arXiv-Fixed-Horizon-TD/AAAI-DeasisK.9337.tex:164-164, docs/literature/tex-src/arXiv-Fixed-Horizon-TD/AAAI-DeasisK.9337.tex:245-290, docs/literature/tex-src/arXiv-Fixed-Horizon-TD/AAAI-DeasisK.9337.tex:331-339 (fixed-horizon returns, shorter-horizon bootstrap, and Q-learning target)
 
 The horizon is distinct from two related bounds. The requested horizon $h$
@@ -74,11 +78,12 @@ horizon does not create evidence for transitions that the data never resolves.
 // - @CQL-kumar2020 -> docs/literature/tex-src/arXiv-CQL/introduction.tex:3-12, docs/literature/tex-src/arXiv-CQL/method.tex:1-20 (offline distribution shift and conservative value learning)
 
 Together, partial observability, state-dependent choices, and finite-horizon
-return define what a non-myopic scorer must predict @POMDPRobotics-lauri2023
-@FixedHorizonTD-deAsis2020. They do not yet determine how the observation
-history, target, and candidate geometry should be represented. That question is
-the next dependency: the representation must retain the distinctions on which
-future target quality actually depends.
+return make candidate value explicitly relational @POMDPRobotics-lauri2023
+@FixedHorizonTD-deAsis2020. A camera pose has no context-free value. Its value
+depends on the causal information state, requested target, currently admissible
+support, horizon, state-update rule, and continuation policy. The next
+dependency is therefore representational. The actor state must preserve the
+distinctions on which those future consequences depend.
 
 // evidence:
 // - @POMDPRobotics-lauri2023 -> docs/literature/tex-src/arXiv-POMDP-Robotics-Survey/root.tex:505-505, docs/literature/tex-src/arXiv-POMDP-Robotics-Survey/root.tex:589-606 (history and belief-state role under partial observability)

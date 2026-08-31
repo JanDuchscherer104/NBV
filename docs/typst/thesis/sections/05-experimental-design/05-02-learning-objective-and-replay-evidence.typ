@@ -88,7 +88,27 @@ and the recursive target is
 
 #eqs.rl.qh_doubleq_target
 
-Here *recursion* means Bellman target recursion across factual successor states. For a nonterminal $h>1$ target, the current reward is combined with a shorter-horizon successor value queried at $h-1$; a terminal selected transition has zero continuation and requires no successor state. The lower-horizon prediction is treated as a fixed regression target by stop-gradient, a frozen stage checkpoint, or a delayed target copy. The defining relation is $Q_h arrow.l Q_(h-1)$ rather than $Q_h arrow.l Q_h$, and the executable learner rejects a nonterminal successor whose factual horizon is not exactly $h-1$. This terminology does not denote an RNN hidden-state loop, repeated invocation of a refinement block, or backpropagation through an unrolled future rollout. Fixed-horizon TD was introduced precisely for predictions over a bounded number of future rewards and avoids same-horizon self-bootstrapping; its horizon functions may use shared parameters and parallel updates @FixedHorizonTD-deAsis2020.
+Here *recursion* means Bellman target recursion across factual successor states.
+For a nonterminal $h>1$ target, the current reward is combined with a
+shorter-horizon successor value queried at $h-1$; a terminal selected transition
+has zero continuation and requires no successor state. This construction
+combines the Bellman decomposition of action value into immediate reward and
+successor value with temporal-difference bootstrapping from an estimate of that
+successor @ReinforcementLearning-sutton2018[Secs. 3.5–3.6 and 6.1, pp. 58–67 and
+119–124]. The lower-horizon prediction is treated as a fixed regression target
+by stop-gradient, a frozen stage checkpoint, or a delayed target copy. The
+defining relation is $Q_h arrow.l Q_(h-1)$ rather than $Q_h arrow.l Q_h$, and
+the executable learner rejects a nonterminal successor whose factual horizon
+is not exactly $h-1$. This terminology does not denote an RNN hidden-state loop,
+repeated invocation of a refinement block, or backpropagation through an
+unrolled future rollout. Fixed-horizon TD was introduced precisely for
+predictions over a bounded number of future rewards and avoids same-horizon
+self-bootstrapping; its horizon functions may use shared parameters and parallel
+updates @FixedHorizonTD-deAsis2020.
+
+// evidence:
+// - @ReinforcementLearning-sutton2018 -> docs/literature/pdf/RLbook2020.pdf#page=80-89, docs/literature/pdf/RLbook2020.pdf#page=141-146 (Ch. 3, Secs. 3.5-3.6, printed pp. 58-67, and Ch. 6, Sec. 6.1, printed pp. 119-124; Bellman action-value relations and temporal-difference bootstrapping)
+// - @FixedHorizonTD-deAsis2020 -> docs/literature/tex-src/arXiv-Fixed-Horizon-TD/AAAI-DeasisK.9337.tex:245-290, docs/literature/tex-src/arXiv-Fixed-Horizon-TD/AAAI-DeasisK.9337.tex:331-339 (shorter-horizon recursion and action-value targets)
 
 The executable joint objective uses one shared horizon-conditioned network. Its public scorer interface still admits one scalar $h$ per state. Privately, Lightning duplicates the complete actor batch along the leading batch axis and concatenates two query domains into one scorer transaction:
 
@@ -146,7 +166,9 @@ Double Q changes how a noisy learned successor maximum is estimated; it does not
 
 and the delayed path evaluates $Q_(bar(theta))(s_(t+1),e,j^star,h-1)$. This selector/evaluator split can reduce overestimation caused by maximizing noisy action values @DoubleDQN-vanHasselt2015. It remains an ablation against the simpler frozen lower-horizon maximum. It is relevant in an offline setting only because a learned maximum is present, not because online learning is planned.
 
-A retained chain also yields the truncated Monte-Carlo target
+As distinguished from the greedy value objective in
+@ssec:thesis-horizon-recursive-offline-learning, a retained chain also yields
+the truncated Monte-Carlo target
 
 #eqs.rl.finite_horizon_return
 

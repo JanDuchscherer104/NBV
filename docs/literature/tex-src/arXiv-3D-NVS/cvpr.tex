@@ -1,0 +1,90 @@
+% This version of CVPR template is provided by Ming-Ming Cheng.
+% Please leave an issue if you found a bug:
+% https://github.com/MCG-NKU/CVPR_Template.
+
+%\documentclass[review]{cvpr}
+\documentclass[final]{cvpr}
+
+\usepackage{times}
+\usepackage{epsfig}
+\usepackage{graphicx}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{ifthen}
+\usepackage{bbm}
+
+% Include other packages here, before hyperref.
+
+% If you comment hyperref and then uncomment it, you should delete
+% egpaper.aux before re-running latex.  (Or just hit 'q' on the first latex
+% run, let it finish, and you should be clear).
+\usepackage[pagebackref=true,breaklinks=true,colorlinks,bookmarks=false]{hyperref}
+
+
+\def\cvprPaperID{4209} % *** Enter the CVPR Paper ID here
+\def\confYear{CVPR 2021}
+%\setcounter{page}{4321} % For final version only
+
+\usepackage{array}
+\newcolumntype{P}[1]{>{\centering\arraybackslash}p{#1}}
+\DeclareMathOperator*{\argmax}{\arg\!\max}
+
+\begin{document}
+
+\newboolean{showcomments}
+\setboolean{showcomments}{true}
+\newcommand{\ka}[1]{\ifthenelse{\boolean{showcomments}} {\textcolor{magenta}{(Ashutosh says: #1)}} {} }
+\newcommand{\sk}[1]{\ifthenelse{\boolean{showcomments}} {\textcolor{red}{(Saurabh says: #1)}} {} }
+
+\newcommand{\blue}[1]{\textcolor{blue}{#1}} 
+\newcommand{\green}[1]{\textcolor{green}{#1}} 
+
+
+
+%%%%%%%%% TITLE
+\title{3D-NVS: A 3D Supervision Approach for Next View Selection}
+
+\author{Kumar Ashutosh\\
+IIT Bombay\\
+{\tt\small kumar.ashutosh@iitb.ac.in}
+% For a paper whose authors are all at the same institution,
+% omit the following lines up until the closing ``}''.
+% Additional authors and addresses can be added with ``\and'',
+% just like the second author.
+% To save space, use either the email address or home page, not both
+\and
+Saurabh Kumar\\
+IIT Bombay\\
+{\tt\small saurabhkm@iitb.ac.in}
+
+\and
+Subhasis Chaudhuri\\
+IIT Bombay\\
+{\tt\small sc@ee.iitb.ac.in}
+}
+
+\maketitle
+
+
+%%%%%%%%% ABSTRACT
+\input{sections/abstract.tex}
+%%%%%%%%% BODY TEXT
+\input{sections/intro_new.tex}
+%\input{sections/introduction.tex}
+%------------------------------------------------------------------------
+\input{sections/related_work_new.tex}
+%\input{sections/relatedwork.tex}
+\input{sections/method_new.tex}
+%\input{sections/method.tex}
+\input{sections/results_new.tex}
+%\input{sections/results.tex}
+%------------------------------------------------------------------------
+\input{sections/conclusion_new.tex}
+%\input{sections/conclusion.tex}
+
+{\small
+\bibliographystyle{ieee_fullname}
+\bibliography{refs}
+}
+
+\end{document}

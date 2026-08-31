@@ -1,0 +1,121 @@
+\section{Experiments and Observations}
+\label{sec:experiments}
+We conduct experiments with the proposed model on both synthetic dataset and real images. The details of dataset, implementations and observations are presented in next sub-sections.
+
+\begin{table*}
+\begin{center}
+{\renewcommand{\arraystretch}{1.1} 
+\begin{tabular}{P{0.14\textwidth}P{0.14\textwidth}P{0.14\textwidth}P{0.14\textwidth}P{0.14\textwidth}P{0.14\textwidth}}
+\hline
+Category & 3D-R2N2 \cite{3dr2n2} & Pix2Vox \cite{pix2vox} & 3D-NVS & 3D-NVS-R & 3D-NVS-F\\
+\hline
+airplane (810) & 0.486 & 0.619 & \textbf{0.627} & 0.418 & 0.384\\
+bench (364) & 0.336 & 0.442 & \textbf{0.522} & 0.345 & 0.311\\
+cabinet (315) & 0.645 & \textbf{0.709} & 0.656 & 0.619 & 0.595\\
+car (1501) & 0.781 & 0.815 & \textbf{0.836} & 0.740 & 0.730\\
+chair (1357) & 0.410 & 0.473 & \textbf{0.526} & 0.362 & 0.306\\
+display (220) & 0.433 & \textbf{0.508} & \textbf{0.508} & 0.416 & 0.402\\
+lamp (465) & 0.272 & 0.365 & \textbf{0.370} & 0.318 & 0.299\\
+speaker (325) & 0.619 & \textbf{0.649} & 0.631 & 0.585 & 0.583\\
+rifle (475) & 0.508 & \textbf{0.597} & 0.579 & 0.387 & 0.344\\
+sofa (635) & 0.568 & 0.602 & \textbf{0.640} & 0.503 & 0.456\\
+table (1703) & 0.405 & 0.438 & \textbf{0.510} & 0.343 & 0.293\\
+telephone (211) & 0.636 & \textbf{0.818} & 0.681 & 0.628 & 0.700\\
+watercraft (389) & 0.477 & 0.529 & \textbf{0.553} & 0.428 & 0.387\\
+\hline 
+Overall (8770) & 0.511 & 0.574 & \textbf{0.601} & 0.465 & 0.432\\
+\hline
+\end{tabular}
+}
+\end{center}
+\caption{Class-wise comparison between state of the art reconstruction methods and our proposed 3D-NVS. Details of the experiment are described in Section \ref{sec:synthetic-results}. We also compare 3D-NVS-R and 3D-NVS-F with 3D-NVS, details of which is included in Ablation Study (see Section \ref{sec:ablation}). We can observe that 3D-NVS has the best overall reconstruction IoU amongst previous reconstrution and NVS works.}
+\label{tab:result}
+\end{table*}
+
+\subsection{Dataset}
+\label{sec:dataset}
+ShapeNet \cite{shapenet} is a large-scale dataset containing 3D CAD models of common objects. We use a subset of ShapeNet with 13 categories having 43,782 models. This subset choice is same as that used in \cite{3dr2n2, pix2vox, yang2018active}. The 3D models are voxelized into 32x32x32 grid using the binvox package \cite{binvox, nooruddin03}. However, the rendered images for previous work \cite{pix2vox, 3dr2n2, yang2018active} positions the camera only on a circular trajectory over a fixed elevation (25$^\circ$ -- 30$^\circ$). Such highly-constrained acquisition of images is not particularly applicable to real-world acquisition followed by reconstruction. In fact, we show that if these previous models are trained and tested on images taken from positions away from such fixed locations, the reconstruction performance drops significantly. Besides, many real-world applications such as UAV acquisition and underwater acquisition can have images from arbitrary locations and requiring them to obtain images from a particular viewpoint may be infeasible.
+
+To mitigate this inconsistency and to increase the robustness of chosen camera positions, we render images from a much broader viewpoint. We use PyTorch3D \cite{pytorch3d} to render images from much broader viewpoints with Soft Phong Shader. We choose elevations of $-90^{\circ}, -60^{\circ}, -30^{\circ}, 0^{\circ}, 30^{\circ}, 60^{\circ}, 90^{\circ}$ and the azimuths also vary uniformly around the sphere to generate 24 views that span the whole view sphere to represent a real acquisition scenario. Also, some of the object textures are incompatible with PyTorch3D and thus, we use those models without adding any default texture. This choice also adds robustness to both textured and untextured images. We finally use 11 views in this experiment, since diametrically opposite images are degenerate for untextured images (images from both poles are also removed to maintain mathematical stability during rendering calculations). A schematic representation of the camera locations is provided in Figure \ref{fig:overview-model}.
+%The number of viewpoints decrases from either side of equator to account for decreasing spatial distance between two points at same azimuth. 
+
+To evaluate the performance of our proposed model on real images, we use the Pix3D dataset \cite{pix3d}. Pix3D offers real-world images of common objects, along with a 3D model of the same. The images are accompanied with mask for the respective object class. There are multiple images corresponding to one 3D object taken from various viewpoints. Although viewpoint-mapping is not provided explicitly, we use the camera position of the input image metadata and map it to the nearest viewpoint used in the previous synthetic data. However, we observe that the dataset does not contain as many images to cover the whole viewpoint. In such a scenario, the next-best view is the one which has the highest probability out of the available viewpoints.
+
+\subsection{Evaluation Metrics}
+We use the standard Intersection over Union (IoU) as the evaluation metrics. As the name suggests, this metric is the ratio of number of matching occupied voxels and the total number of occupied voxels. Mathematically,
+\begin{equation}
+   IoU = \frac{\sum\limits_{\forall x, \forall y, \forall z} \mathbbm{1}_{\{r_{(x,y,z)}>v_t\}} \land t_{(x,y,z)} }{ \sum\limits_{\forall x \forall y \forall z} \mathbbm{1}_{r_{(x,y,z)}>v_t} \lor t_{(x,y,z)} }
+\end{equation}
+
+Here $v_t$ denotes the binarization threshold and $\land$, $\lor$ denote logical AND and OR, respectively. Also, $r_{(x,y,z)}$ and $t_{(x,y,z)}$ denotes values at location $(x,y,z)$ for predicted voxel grid and ground truth, respectively. IoU ranges from 0 to 1, with higher value implying better reconstruction.
+
+\subsection{Network Parameters}
+We use PyTorch \cite{pytorch_paper} to train 3D-NVS described in the previous section. The network is trained until convergence which takes about 30 hours on an Nvidia 1080Ti GPU. The number of epochs is set to 20 with a batch size of 8. The learning time per epoch is high due to an increased number of gradient calculations for one sample. For all the possible next views, the model parameters are shared and hence the network computes gradients for all the images. Fortunately, it also leads to a considerable increase in learning per epoch. The learning rate of the network layers is set to 0.0001. We experiment with both SGD optimizer and Adam optimizer \cite{kingma:adam} and report the latter due to a better performance. We use standard data augmentation techniques like adding random jitter and using random colored background for better robustness. To recall, the input images are of size 228x228 and the output shape is a voxel grid of size 32x32x32.
+
+\begin{figure*}
+\begin{center}
+\includegraphics[scale=0.22]{figures/final_v7.pdf}
+\end{center}
+   \caption{Examples of rendered input images and corresponding reconstruction performance. The images are sorted according to the probability outputs of NVS-Net. The voxel grids below them represents the reconstruction performance with that view along with the input image. We see a good reconstruction for high probability views and the performance decreases as we choose less probable next views, showing that the selected next view is indeed the best. (zoom-in to compare voxel grids).}
+\label{fig:sample_ouputs}
+\end{figure*}
+
+\subsection{Reconstruction Evaluation}
+\label{sec:synthetic-results}
+\subsubsection{Synthetic Multi-view Images}
+To establish the effectiveness of our approach, we compare the reconstruction performance on various state of the art shape reconstruction methods. We conduct the experiment on rendered images discussed in Section \ref{sec:dataset}. Also, we again train 3D-NVS on the limited-elevation rendered images used in Pix2Vox \cite{pix2vox}, 3D-R2N2 \cite{3dr2n2} and Yang et. al \cite{yang2018active} for a fair baseline and to demonstrate the robustness of our model with respect to capturing locations.
+
+A comparison of our results with that of 3D-R2N2 and Pix2Vox is included in Table \ref{tab:result}. All the methods are trained on our rendered images with a wider viewing angles and a mix of textured and untextured images. The proposed 3D-NVS  achieves a mean IoU of 0.601, thus outperforming both Pix2Vox and 3D-R2N2 which achieves a mean IoU of 0.574 and 0.511 respectively. This improvement in 3D-NVS is due to a better selection of the second view, given the first input image. On the other hand, both Pix2Vox and 3D-R2N2 chooses a fixed set of views for two-view reconstruction -- thus not learning subsequent views. An illustration of reconstructed shapes is provided in Figure \ref{fig:sample_ouputs} where we also show reconstructed shapes when we choose $i^{th}$ view for $i>1$. We can observe that for 3D-NVS we obtain a good reconstruction (IoU $\approx$ 0.80) while the shape degrades as we choose less probable next views.
+
+Next, we use the texture-rich, limited-elevation rendered images used in Pix2Vox, 3D-R2N2 and Yang et. al and trained our model on that rendered images. We obtain a mean IoU of 0.651 which is better than two-view reconstruction in 3D-R2N2 (0.607) and Yang et. al (0.636) and less than Pix2Vox (0.686).
+
+In conclusion, we see that 3D-NVS outperforms all the other methods in both reconstruction using images captured from spread-out viewpoints and the ability to generalize to different input image settings. When moving from a texture-rich, limited-elevation data to a spread-out viewpoint, the performance of Pix2Vox and 3D-R2N2 drops by 11\% and 9\% respectively. In contrast, this decrease in performance is only 5\% in 3D-NVS. We could not compare results in Yang et. al on our rendered images due to unavailability of open-sourced, reproducible code. Most of the other state of the art techniques use range cameras with depth map for reconstruction or view selection and comparison with those methods is not relevant since 2D images contains much less information than RGBD images.
+%We compare our work with 3D-R2N2 \cite{3dr2n2} and Pix2Vox \cite{pix2vox} and tabulate the results in Table \ref{tab:result}. We obtain a mean IoU of 0.601 which outperforms 3D-R2N2 (0.511) and Pix2Vox (0.574). This improvement of 3D-NVS is due to a better selection of the second view, given the first input image. On the hand, both Pix2Vox and 3D-R2N2 chooses a fixed set of views for two-view reconstruction -- thus not learning the subsequent views. \ka{Can add something more here}. 
+We also the compare our view selection method with commonly used baselines in the literature, namely 3D-NVS-R, where we choose next views randomly, and 3D-NVS-F, which is choosing views so as to maximize the spatial distance between camera positions. This choice of view selection is a heuristic widely used in NBV prediction \cite{shapenet,yang2018active,delmerico2018comparison, hashim2019next, ly2019autonomous}. A detailed analysis of the setting and results is included in the Ablation Study (see Section \ref{sec:ablation}). Moreover, we are able to do this in real time unlike traditional methods in NBV prediction which use range sensors and optimize for surface coverage or information gain and take tens of seconds. This high speed of our method is made possible as it only requires a forward pass through the NVS-net and can also be highly parallelized using a GPU.
+%In the results presented above we train all the three methods on the same set of rendered images. The rendered images are obtained as described previously in section \blue{??}. These set of input images are spatially spread out compared to the input images used in their respective work. We observe a decrease due to this generalization in Pix2Vox (11\%), 3D-R2N2 (9\%) and our 3D-NBV (6\%). In conclusion, 3D-NBV outperforms the state of the art reconstructions techniques in more generalized viewpoints -- which is representative to image acquisition in many practical scenarios. Also, we perform competitively on image acquisition done on a circular trajectory \sk{numbers? Also we can push this to ablation}.
+%\ka{Small paragraph on some other method which is not done by us?}
+%\sk{MAjor difference is the dataset, we can just mention that. All others use range cameras someway or the other.}
+\subsubsection{Next-View Prediction}
+\begin{figure}
+\begin{center}
+\includegraphics[scale=0.41]{figures/nvs_class_wise.pdf}
+\end{center}
+   \caption{An example showing locations of next view selected by the proposed method for two object classes aeroplane and chair. For aeroplane class, both best and second best views are majorly above the equitorial position but for chair its indeed the equitorial position, which concurs with surface methods of view selection.}
+\label{fig:next-view-pattern}
+\end{figure}
+
+One of the advantage of our 3D-NVS over other previous methods is that we do not require ground-truth for next view selection despite it being posed as a classification problem. Consequently, our method learns this selection on the fly using supervision from 3D shape. It is expected that for some classes of objects, viewing from a particular position is generally more informative than some other viewpoints. For example, consider the class aeroplane. If we view aeroplane from equitorial plane, a significantly less area is captured in the image. Thus, it is less likely that the chosen next view will lie on the equitorial plane. Rather, viewing from an elevation will be more informative. Now consider the class chair. It is intuitive that the maximum area is exposed when it is viewed from an equitorial plane. 
+
+3D-NVS is able to learn this class-specific next view selection without explicit characterization. We illustrate this effect with two example classes as shown in Figure \ref{fig:next-view-pattern}. For both the classes, we choose a fixed position for base image. Next, we observe the number of best and second-best selection of NVS-Net in the test dataset which we denote as 3D-NVS and 3D-NVS-II respectively. As expected, we observe that for both aeroplane and chair classes, NVS is based on the 3D shape of the object. These observations are in conjunction with works that use range images and choose views to maximize the surface area that is scanned by the sensor reinforcing the effectiveness of 3D-NVS.
+\vspace{-2mm}
+\subsubsection{Real Images}
+We also test our model on real images from the Pix3D dataset. We generate a mapping of next views as described previously in section \ref{sec:dataset}. We encounter some missing images as Pix3D consists of common items and the images are taken from typical standing positions. Thus, we choose the next view based on the best NVS-Net output for which a mapping of next image exists. Denoting $Y$ as the output of NVS-Net and $A$ as a boolean vector corresponding to available viewpoints, the next view selection is 
+\begin{equation}
+   \argmax_i A_i Y_i
+\end{equation}
+We do not separately train the network again on real images unlike in Pix3D \cite{pix3d}, 3D-R2N2 \cite{3dr2n2} and Pix2Vox \cite{pix2vox}. 3D-NVS achieves an IoU of 0.105 while randomized view selection (NVS-R) achieves an IoU of 0.08. A similar performance is obtained in Pix2Vox when a model trained on synthetic images is used. Thus, we see that using NVS-Net for next view prediction improves the performance on real images even without an explicit training for such images. Therefore, 3D-NVS learns to better generalized on unseen data and seem to be better at scene understanding.
+%\sk{we can say here that the 3D-NVS better learns the 3D reconstruction process and generalizes well to unseen data compared to others.}
+
+\subsection{Ablation Study}
+\label{sec:ablation}
+In this section, we discuss the performance comparison when certain parts of 3D-NVS is replaced with other view selection method to show the effectiveness of our network. 
+\subsubsection{Individual Sub-network Performance}
+Our proposed 3D-NVS selects the next view based on features extracted from the base image. In contrast, some of the earlier work uses camera position as a parameter to select the next view. We show that if NVS-net is removed and replaced with these heuristics the performance decreases.
+
+We use two methods for view selection : random next view (3D-NVS-R) and farthest next view (3D-NVS-F), both are widely used baseline in NBV prediction \cite{shapenet,yang2018active,delmerico2018comparison, hashim2019next, ly2019autonomous}. In the former, given any input image, we choose the next image randomly from all the available views. On the other hand, for farthest next view, we incorporate the knowledge of camera position and find out the next view which is spatially the farthest. In both the cases, we observe that the mean reconstruction IoU is significantly less than the IoU obtained when using NVS-net output to select the next views. The results are presented in Table \ref{tab:result}.
+
+Another important feature of 3D-NVS is the Context-Aware Fusion followed by Refiner. We again observe that if we replace these sub-parts and replace with simple average of coarse volumes the performance decreases substantially. These findings are in coherence with the findings of Pix2Vox \cite{pix2vox} and hence, we omit a numerical comparison.
+\vspace{-1mm}
+\subsubsection{View selection orders}
+During testing, the NVS-Net gives a softMax output which is the probability distribution over next views. The next view with the highest probability is selected as the next best view. Now, to investigate if the NVS-Net indeed outputs the best possible view selection, we modify the network to choose the $i^{th}$-best view ($i>1$) and compare the results with NVS-Net. All the other parts of the network are kept the same.
+We observe a decrease in mean IoU of the reconstruction as we increase $i$. The results are plotted in Figure \ref{fig:ablation} and an example of reconstructed shapes is given in Figure \ref{fig:sample_ouputs}. This decrease in performance when we deter from the selection of the NVS-Net implies that NVS-Net is indeed effective in selecting the next view.
+
+\begin{figure}
+\begin{center}
+\includegraphics[scale=0.42]{figures/ablation.pdf}
+\end{center}
+   \caption{A comparison of 3D-NVS reconstruction performance with sub-optimal view selections. 3D-NVS-II denotes second best view is selected, and so on.  }
+\label{fig:ablation}
+\end{figure}
+%\subsection{Individual stage performance}
+%\sk{Here we show performance of the model by chipping away blocks for instance: only reconstruction network performance, without fusion-refiner stages.}

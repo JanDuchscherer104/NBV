@@ -5,13 +5,16 @@
 
 === Research aim and evaluation logic <ssec:rq-objectives>
 
-The research questions follow the hierarchy of the thesis argument. RQ1 fixes
-what is measured. RQ2 tests whether a non-myopic planning opportunity exists and
-whether a learned model can recover it. RQ3 and RQ4 test whether the
-actor-visible information and generated data support that comparison. RQ5 and
-RQ6 are conditional extensions beyond the core offline finite-candidate claim.
+The study evaluates a sequence of linked questions. RQ1 defines the endpoint
+outcome. RQ2 then asks whether bounded oracle lookahead improves that outcome
+relative to one-step oracle-greedy selection and, conditionally, how much of
+the separate actor-visible myopic-to-oracle-lookahead gap an offline model
+closes. RQ3 defines the admissible information, and RQ4 establishes the target,
+action, and replay support over which both comparisons are interpretable. RQ5
+and RQ6 extend the study only if the offline finite-candidate evidence warrants
+online or continuous-control claims.
 
-=== RQ1 — Target-specific objective and endpoint contract <ssec:rq1>
+=== RQ1 — Target-specific objective and endpoint outcome <ssec:rq1>
 
 *Can target-conditioned finite-candidate NBV be evaluated through a stable,
 target-specific reconstruction objective under a fixed acquisition budget?*
@@ -27,38 +30,55 @@ training reward, and endpoint gain remains the policy outcome. A positive answer
 requires a frozen, repeatable metric and equal acquisition horizons; runtime,
 invalid actions, and oracle calls are reported separately.
 
-=== RQ2 — Bounded lookahead and learned recovery <ssec:rq2>
+=== RQ2 — Bounded lookahead and learned gap closure <ssec:rq2>
 
-*Does bounded oracle lookahead improve fixed-budget target reconstruction over
-one-step oracle-greedy selection, and, if so, can an offline finite-horizon value
-model recover a prespecified fraction of that headroom?*
+*Does bounded oracle lookahead improve fixed-budget endpoint target gain over
+one-step oracle-greedy selection and, if so, how much of the actor-visible
+myopic-to-oracle-lookahead endpoint gap does an offline finite-horizon value
+model close?*
 
 The paired endpoint difference under the same scene, target, candidates,
 validity rules, horizon, and budget defines oracle-lookahead headroom:
 
 #eqs.entity.lookahead_headroom
 
-The learned comparison proceeds only if headroom passes a predeclared
-meaningful-effect and uncertainty rule. Because that rule and the required
-recovery fraction are not yet frozen, RQ2 remains prospective. Absent headroom
-is a negative result for the evaluated support, not a universal claim about
-target-aware planning.
+The learned comparison proceeds only if this headroom passes a predeclared
+meaningful-effect and uncertainty rule. Its ratio uses a different baseline:
 
-=== RQ3 — Actor-visible target and information state <ssec:rq3>
+#eqs.entity.q_recovery
 
-*Which actor-visible target and history representation supports one-step and
-finite-horizon candidate scoring without privileged target geometry, oracle
-labels, or unselected candidate renders at decision time?*
+Here the numerator is the gain of the finite-horizon learned policy over the
+actor-visible learned-myopic control, and the denominator is the full gap from
+that control to oracle lookahead. The ratio is therefore conditional learned
+gap closure, not a fraction of the oracle-lookahead headroom above
+oracle-greedy. It is reported only when the paired denominator
+$J_e^(H)(pi_"oracle-look") - J_e^(H)(pi_"learned-1")$ exceeds a predeclared
+positive tolerance $tau_"gap" > 0$; otherwise the analysis reports the raw
+paired policy effects and classifies gap closure as not estimable. Because the
+headroom rule and required gap-closure fraction are
+not yet frozen, RQ2 remains prospective. If headroom is absent, the evaluated
+support does not expose a non-myopic advantage; this does not establish its
+universal absence.
 
-Ground-truth target tasks remain restricted to supervision and evaluation. The
-actor-facing `V1` protocol admits an observed proposal only when exactly one
-same-class ground-truth box has oriented 3D IoU strictly greater than $0.20$.
-The scorer then receives the proposal-derived target descriptor, causal egocentric
-evidence, remaining budget, and requested horizon, but no privileged geometry,
-candidate renders, or oracle values. Evaluation covers held-out ranking and
-calibration, matching failures, and actor/oracle leakage.
+=== Conditions for interpretation
 
-=== RQ4 — Candidate, replay, and population support <ssec:rq4>
+==== RQ3 — Actor-visible target and information state <ssec:rq3>
+
+*Which end-to-end target, action-support, and history protocol supports
+one-step and finite-horizon candidate scoring without privileged target
+geometry, oracle labels, or unselected candidate renders at decision time?*
+
+Ground-truth target tasks may define supervision, evaluation, and a separately
+reported privileged `V0/GT` task-construction sanity control; they do not satisfy
+the core RQ3 gate. The core learned comparison requires an observation-derived
+target instruction and matching path (`V1/observed`) in addition to actor-visible
+candidate support, hard validity, selected-state updates, and scorer inputs.
+Until that route exists, the core actor-visible comparison remains unavailable.
+The scorer then receives only the declared target descriptor, causal egocentric
+evidence, remaining budget, and requested horizon; evaluation separately audits
+matching failures, ranking and calibration, and actor/oracle leakage.
+
+==== RQ4 — Candidate, replay, and population support <ssec:rq4>
 
 *Do the candidate generator, validity rules, rollout recipes, and replay
 population provide adequate and diverse support for the RQ1--RQ3 estimands?*
@@ -70,26 +90,29 @@ replay and horizon support, and resource cost. Scene-disjoint splits and
 scene-level aggregation prevent dense sampling from masquerading as population
 coverage.
 
-=== RQ5 — Conditional online discrete bridge <ssec:rq5>
+=== Scope extensions
+
+==== RQ5 — Online discrete bridge <ssec:rq5>
 
 *If offline headroom, replay support, and actor-visible scoring are established,
-does online interaction over the unchanged discrete candidate contract improve
-endpoint target gain or calibration over the offline policy?*
+does online interaction over the unchanged discrete candidate set and validity
+rules improve endpoint target gain or calibration over the offline policy?*
 
-RQ5 retains the target, information, candidate, validity, and endpoint contracts
-of RQ1--RQ4. It is not required for the core offline claim.
+RQ5 keeps the target, information, candidate, validity, and endpoint assumptions
+of RQ1--RQ4 unchanged. It is not required for the offline finite-candidate
+evaluation.
 
-=== RQ6 — Deferred continuous or simulator-backed control <ssec:rq6>
+==== RQ6 — Continuous or simulator-backed control <ssec:rq6>
 
 *If the finite-candidate evidence is stable, does a continuous or hierarchical
 target-then-pose policy provide measurable headroom over the best discrete
 policy under the same target-specific objective and a comparable acquisition or
 motion budget?*
 
-RQ6 changes the action and feasibility contracts and therefore requires separate
-support, safety, simulator-realism, and comparable-cost evidence. It remains
-deferred; the current implementation implies no continuous, simulator, or
-real-device result.
+RQ6 changes the action space and feasibility assumptions and therefore requires
+separate evidence for support, safety, simulator realism, and comparable cost.
+It remains deferred; the current implementation implies no continuous,
+simulator, or real-device result.
 
 === Shared evidence constraints <ssec:protocol>
 
@@ -107,12 +130,12 @@ rules before policy outcomes are inspected.
     columns: (0.42fr, 1.08fr, 1.32fr, 1.18fr),
     header: ([*RQ*], [*Question role*], [*Primary evidence*], [*Interpretation gate*]),
     rows: (
-      index-cell([RQ1]), [objective], [target reconstruction endpoint gain], [frozen repeatable metric; fixed horizon and budget],
-      index-cell([RQ2]), [policy comparison], [paired greedy, lookahead, and learned-policy outcomes], [meaningful headroom before recovery],
-      index-cell([RQ3]), [actor support], [ranking, calibration, matching failures, and leakage audits], [actor-visible inputs only],
-      index-cell([RQ4]), [population support], [candidate, replay, validity, and coverage diagnostics], [scene-disjoint aggregation],
+      index-cell([RQ1]), [outcome measurement], [target reconstruction endpoint gain], [frozen repeatable metric; fixed horizon and budget],
+      index-cell([RQ2]), [lookahead and learned gap closure], [paired greedy, lookahead, myopic-control, and learned-policy outcomes], [meaningful oracle headroom before learned gap closure],
+      index-cell([RQ3]), [information boundary], [matching, ranking, calibration, and leakage audits], [end-to-end actor-visible protocol],
+      index-cell([RQ4]), [population and support], [candidate, replay, validity, and coverage diagnostics], [scene-disjoint aggregation],
       index-cell([RQ5]), [conditional extension], [matched online discrete-policy evaluation], [offline gates satisfied first],
-      index-cell([RQ6]), [deferred extension], [continuous or simulator-backed evaluation], [separate action and cost contract],
+      index-cell([RQ6]), [deferred extension], [continuous or simulator-backed evaluation], [separate action space and cost comparison],
     ),
   ),
   caption: [Research-question-to-evidence map.],

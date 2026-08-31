@@ -4,8 +4,12 @@ The Introduction located this thesis within active perception: sensing actions
 change the evidence on which later inference depends @ActivePerception-bajcsy1988
 @ActiveVision-aloimonos1988. Three-dimensional view planning turns that principle
 into a repeated choice of where to observe next @ViewPlanningSurvey-scott2003.
-This chapter develops the concepts needed to make that choice scientifically
-meaningful before the oracle, data, and model contracts are introduced.
+The unresolved dependency is not another planner implementation but a precise
+account of what a view is valuable *for*, which actions are available, and what
+information a sequential score may condition on. By the end of the chapter,
+the thesis question is reduced to three coupled requirements—utility alignment,
+temporal dependence, and support/state adequacy—before the experimental world
+is constructed.
 
 The argument follows the dependencies of the decision problem. It first
 separates the next-best-view mechanism from the objective used to rank views,
