@@ -28,7 +28,12 @@ or repeatable workflows.
   mismatched artifacts cannot establish current truth.
 - **Reviewability:** Prefer small, owner-scoped, reversible changes and pull
   requests. Do not combine scaffold migration, domain changes, generated
-  artifacts, and unrelated cleanup into one review unit.
+  artifacts, and unrelated cleanup into one review unit. Prefer orthogonal
+  pull requests; when a real dependency remains, make it an explicit
+  bottom-up stack with one reviewable purpose and diff per layer.
+- **PR exposition:** Prefer pull-request descriptions that open with a
+  conceptual TL;DR, teach the governing theory and assumptions, and render
+  decision-relevant figures with enough context to review what they establish.
 - **Conceptual collaboration:** For meaningful Spatial-AI, ML, MLOps,
   data-science, or statistics work, prefer an explanation of the governing
   model, assumptions, and failure mode. Use diagrams when they clarify a real

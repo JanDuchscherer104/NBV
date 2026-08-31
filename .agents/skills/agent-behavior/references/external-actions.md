@@ -39,6 +39,18 @@ or another action that changes external state.
   request after its first coherent verified workpackage and push later completed
   workpackages to that same branch.
 
+## Pull Request Description
+
+- Open with a conceptual TL;DR that tells the reviewer what changed and why it
+  matters before listing implementation details.
+- Include a concise, educational account of the governing theory, assumptions,
+  and relevant failure boundary so the review does not depend on hidden task
+  context.
+- When the change adds or materially edits an important decision-relevant
+  figure, embed its rendered form with a caption or nearby explanation of what
+  it establishes.
+- Describe the published exact head and its current evidence accurately.
+
 ## Completion
 
 - Only request-owned paths entered the change.
