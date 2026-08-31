@@ -7,6 +7,10 @@ topics: [thesis, typst, figures, q-h, scientific-review]
 confidence: high
 canonical_updates_needed: []
 touched_owner_paths:
+  - aria_nbv/aria_nbv/lightning/qh_experiment.py
+  - aria_nbv/aria_nbv/lightning/qh_q2_certification.py
+  - aria_nbv/tests/lightning/test_qh_experiment.py
+  - aria_nbv/tests/lightning/test_qh_q2_certification.py
   - Makefile
   - docs/typst/thesis/experiment_data.typ
   - docs/typst/thesis/figures/qh_learning_evidence_loop.typ
@@ -26,7 +30,7 @@ touched_owner_paths:
   - scripts/tests/test_typst_report_data_contract.py
 codex_thread: codex://threads/01a04fd9-0c7c-7813-a9c5-dc49f2f867a6
 repo_object_format: sha1
-repo_head: 6583b7ec04efaaa04244eea6a0db82686d794547
+repo_head: f59d39c6976cbe8345413ce6e345bd6d82fdadb8
 repo_branch: "codex/thesis-figure-qh-evidence-gates"
 worktree_kind: linked
 ---
@@ -211,6 +215,23 @@ reviews until zero P0--P2 findings remained.
   metadata could abort Results rendering. Generic denominator presence now
   requires a positive integer obtained by fail-closed dictionary access;
   missing, string, float, zero, and negative denominators reject cleanly.
+- Exact-head review then found that a stored exact-$Q_2$ value was not bound to
+  the factual transition that defines it. Certification receipt V3 now carries
+  the nonterminal flag, complete successor action/backup counts, immediate
+  reward, discount, and factual successor maximum. The Python writer and Typst
+  validator independently reconstruct the Bellman target and reject incomplete
+  support, malformed types, Boolean numerics, non-finite or out-of-float32
+  values, overflowing products and tolerances, and coordinated target
+  fabrication. Zero discount and negative rewards remain valid.
+- A parallel exact-head finding showed that candidate-support receipts could
+  declare many admitted targets while measuring only one. Receipt and benchmark
+  schemas V2 now bind exact `(scene_id, target_id, root_id)` rosters, reconcile
+  distinct scene/target tasks with `study.population.targets`, and permit one
+  physical root to be reused across different target tasks. Missing, malformed,
+  collapsed, mismatched, or count-inconsistent target coverage is unavailable;
+  complete zero-valid attempts remain measured non-passes. Results language is
+  explicitly limited to the declared admitted-task population and does not
+  imply actor-visible target discovery or universal target coverage.
 
 ## Commits
 
@@ -233,6 +254,7 @@ reviews until zero P0--P2 findings remained.
 - https://github.com/JanDuchscherer104/ARIA-NBV/commit/87c907b39b72227c71c594f71b2f41e9bf8daeba
 - https://github.com/JanDuchscherer104/ARIA-NBV/commit/8a6733b981d6429900b2082ab2d37d0f175511fb
 - https://github.com/JanDuchscherer104/ARIA-NBV/commit/6583b7ec04efaaa04244eea6a0db82686d794547
+- https://github.com/JanDuchscherer104/ARIA-NBV/commit/f59d39c6976cbe8345413ce6e345bd6d82fdadb8
 
 ## Verification
 
@@ -361,6 +383,22 @@ reviewers approved exact four-source-file diff
 with zero P0--P2 findings after adversarial missing/malformed denominator,
 conflicting receipt/value, store-order reversal, census-present unselected,
 and selected zero-row cases.
+The transition- and target-population-binding repair passed 54 focused Python
+tests, Ruff, `make thesis-report-data-contract`,
+`make thesis-results-full-profile-render`, `make thesis-pdf-ci`,
+`make typst-authoring-contract`, `make thesis-pdf`, and `git diff --check`.
+The full-profile fixture remains exactly two A4 pages and the thesis remains
+129 A4 pages. Independent exact-$Q_2$ contract and candidate-support scientific
+reviews approved with zero P0--P2 findings. Adversarial coverage includes
+missing/malformed transition operands, terminal and incomplete-successor rows,
+float32 roundoff and overflow, Boolean tolerance values, valid zero discount
+and negative rewards, legitimate cross-target root reuse, and collapsed,
+missing, malformed, mismatched, or count-inconsistent target rosters. Exact
+source diff SHA-256 was
+`1b3ed7d3776f23beb0d8f078fefeabbc78c1a917b227b8300dfeed262a4af784`;
+the layout and thesis PDF SHA-256 values were
+`ca70712aeff7ffc1871e386eef957d49268db7045de6dce8413c7a3ddf96beaf`
+and `735bf3896de22929195cae9873c4a8d532a773964dc11ec20964569d6dfbfd2c`.
 
 ## Canonical Owner Impact
 
