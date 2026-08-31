@@ -620,6 +620,12 @@ return {
       description = "Candidate-target relation descriptor in the candidate/query local frame.",
       thesis_list = true,
     },
+    ["spatial.dir_moment"] = {
+      tex = "\\boldsymbol{M}^{\\mathrm{dir}}",
+      typst = "#symb.spatial.dir_moment",
+      description = "Second directional moment used to summarize selected target-relative approach directions.",
+      thesis_list = true,
+    },
     ["spatial.frustum_solid_angle"] = {
       tex = "\\Omega_{j,t}^{\\mathrm{FOV}}",
       typst = "#symb.spatial.frustum_solid_angle",

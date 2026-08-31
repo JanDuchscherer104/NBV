@@ -14,7 +14,7 @@
   gate: [preserve local-frame, mask, source, and strictly causal prefix tests; evaluate held-out ranking],
 )[The selected encoder materializes one target-conditioned query per candidate from root evidence, local relative geometry, H0 selected-pose history, remaining budget, and requested horizon. Its tensor contract is tested; scientific usefulness remains pending.]
 
-For target $e$ and candidate #symb.rl.candidate_qti, the scorer input is the
+For target $e$ and candidate #symb.oracle.candidate_qti, the scorer input is the
 structured relation
 
 $
