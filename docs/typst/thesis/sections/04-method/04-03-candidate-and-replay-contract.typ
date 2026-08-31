@@ -110,7 +110,11 @@ generation.
     artifact is bound to clean execution revision
     `2baf7cf6b276b81c50d01d45b152016d7cf68033`, generation revision
     `a2ae86b7463930c9`, and artifact SHA-256
-    `b04cf38ce1c7797d4cd660a89ccbcefabb2f5f0581fc73c1b7b569e99e48a65c`.
+    `6c7fa8cb249687b80867261db1d1c7d1906e6b01f54d3cca3db4bfcbfa7bc670`.
+    The stored shells and execution identity are unchanged; provenance
+    correction revision `phase-a-path-independent-config-reseal-v1` replaces
+    checkout-dependent configuration paths with the separately verified source
+    store identity.
   ],
 ) <fig:candidate-family-phase-a-support>
 

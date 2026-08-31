@@ -52,9 +52,9 @@ content-hashed evidence JSON; it does not reinterpret candidate support.
 
 The frozen 100-scene control is
 [`candidate_family_phase_a_wp02.json`](../../../docs/contents/evidence/candidate_family_phase_a_wp02.json)
-(artifact SHA-256 `b04cf38ce1c7797d4cd660a89ccbcefabb2f5f0581fc73c1b7b569e99e48a65c`;
+(artifact SHA-256 `6c7fa8cb249687b80867261db1d1c7d1906e6b01f54d3cca3db4bfcbfa7bc670`;
 compact file SHA-256
-`aad88d378e16114cb7108dd829c4f77abb21e3daea1cb90ce1c98ec96c5ba25a`).
+`8953fec21eec44680b34777dbcab1f97f78eeb2fafda1b3d76a7b908b58a4881`).
 It covers all 100 reviewed source rows, scenes, and target states with no
 exclusions. Of 6,000 attempted rows, 3,146 entered the compact valid shell, but
 the gate is a no-go: 44 state/family cells collapsed, 24 states missed the
@@ -65,10 +65,15 @@ denominators both zero because Phase A contains no reward labels. The full
 and [per-state funnels](../../../docs/contents/evidence/candidate_family_phase_a_wp02_funnels.html)
 are derived from that same canonical reducer result. The artifact binds native
 source-store identity `605453ba11869e40`, writer configuration SHA-256
-`603c5785c2163833fff466a29b5bc6039a1d23a397f4774161368016fce33055`,
+`4ae05a1e4066756a47f9ba00d914b8f4337321ae8dcd161a62228d02f71d0587`,
 generation revision `a2ae86b7463930c9`, and the recorded CUDA runtime. It
-satisfies issue #54's all-100-scene evidence step, but the failed sampler-pass
-criterion means issue #54 remains open; it does not admit broad generation.
+satisfies issue #54's mechanism and all-100-scene evidence checklist: the
+fail-closed gate exists and produced the required bounded no-go. Sampler
+remediation and a later passing rerun remain separate follow-up work; this
+artifact does not admit broad generation. The stored shells and execution
+revision are unchanged from the one real run; revision
+`phase-a-path-independent-config-reseal-v1` records only the authenticated
+path-independent provenance correction.
 
 ## Generate and Inspect
 

@@ -59,7 +59,8 @@ canonical artifact and figures live in the
 [rollout evidence directory](../../../../docs/contents/evidence/candidate_family_phase_a_wp02.json):
 all source rows were evaluated, but applicable-family collapse and low support
 remain. A no-go command writes the complete artifact and exits with status 2;
-it is evidence for retuning, not campaign admission or issue #54 closure.
+it completes issue #54's fail-closed mechanism/evidence checklist while
+remaining evidence for later sampler retuning, not campaign admission.
 
 ## Composition Boundaries
 
