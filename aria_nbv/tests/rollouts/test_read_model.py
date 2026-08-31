@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import numpy as np
+import pytest
 import zarr
 
 from aria_nbv.rollouts import RolloutZarrStoreReader
@@ -91,6 +92,80 @@ def test_rollout_steps_preserve_shell_ordered_candidate_columns(tmp_path) -> Non
     assert np.allclose(step.target_rri, np.arange(0.1, 1.3, 0.1, dtype=np.float32))
     assert np.allclose(step.selection_probabilities, [0.0] * 11 + [1.0])
     assert set(step.position_names.tolist()) == {"forward_local"}
+
+
+def test_rollout_steps_reuse_reader_local_candidate_shell_index(tmp_path) -> None:
+    """Repeated step projections must not rescan immutable shell metadata."""
+
+    reader = _reader(tmp_path)
+    rollout = rollout_at(reader, 0)
+    original = reader.array
+    calls: dict[str, int] = {}
+
+    def spy(path: str) -> np.ndarray:
+        calls[path] = calls.get(path, 0) + 1
+        return original(path)
+
+    reader.array = spy  # type: ignore[method-assign]
+    first = rollout_steps(reader, rollout)
+    expected_positions = first[0].candidate_row_positions.copy()
+    first[0].candidate_row_positions[:] = -1
+    second = rollout_steps(reader, rollout)
+
+    assert np.array_equal(second[0].candidate_row_positions, expected_positions)
+    assert [step.candidate_row_ids.tolist() for step in second] == [step.candidate_row_ids.tolist() for step in first]
+    assert calls == {
+        "candidates/candidate_row_id": 1,
+        "candidates/step_row_id": 1,
+        "candidates/shell_index": 1,
+    }
+
+
+def test_candidate_shell_index_caches_empty_candidate_table(tmp_path) -> None:
+    """A completed zero-candidate store still has a reusable empty index."""
+
+    reader = _reader(tmp_path)
+    calls: dict[str, int] = {}
+
+    def empty_array(path: str) -> np.ndarray:
+        calls[path] = calls.get(path, 0) + 1
+        dtype = np.int32 if path == "candidates/shell_index" else np.int64
+        return np.empty(0, dtype=dtype)
+
+    reader.array = empty_array  # type: ignore[method-assign]
+    first = reader.candidate_shell_index()
+    second = reader.candidate_shell_index()
+
+    assert first is second
+    assert first.candidate_ids.size == 0
+    assert first.positions_by_step == {}
+    assert calls == {
+        "candidates/candidate_row_id": 1,
+        "candidates/step_row_id": 1,
+        "candidates/shell_index": 1,
+    }
+
+
+def test_candidate_shell_index_is_deeply_immutable(tmp_path) -> None:
+    """Public index access cannot corrupt a reader-local cached projection."""
+
+    reader = _reader(tmp_path)
+    index = reader.candidate_shell_index()
+    expected_ids = index.candidate_ids.copy()
+    expected_positions = {step_id: positions.copy() for step_id, positions in index.positions_by_step.items()}
+
+    with pytest.raises(ValueError):
+        index.candidate_ids[0] = -1
+    with pytest.raises(ValueError):
+        next(iter(index.positions_by_step.values()))[0] = -1
+    with pytest.raises(TypeError):
+        index.positions_by_step[0] = np.empty(0, dtype=np.int64)  # type: ignore[index]
+
+    repeated = reader.candidate_shell_index()
+    assert np.array_equal(repeated.candidate_ids, expected_ids)
+    assert {step_id: positions.tolist() for step_id, positions in repeated.positions_by_step.items()} == {
+        step_id: positions.tolist() for step_id, positions in expected_positions.items()
+    }
 
 
 def test_target_rows_decode_factual_and_audit_fields(tmp_path) -> None:

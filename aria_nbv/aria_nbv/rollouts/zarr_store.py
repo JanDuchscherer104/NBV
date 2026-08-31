@@ -21,9 +21,10 @@ scene scores or low-quality invalid rows.
 from __future__ import annotations
 
 import json
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from pathlib import Path
+from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, Literal, Protocol, cast
 
 import numpy as np
@@ -548,6 +549,14 @@ class RolloutZarrStoreConfig(BaseConfig):
         return self
 
 
+@dataclass(frozen=True, slots=True)
+class _CandidateShellIndex:
+    """Reader-local candidate ids and shell-ordered positions grouped by step."""
+
+    candidate_ids: np.ndarray
+    positions_by_step: Mapping[int, np.ndarray]
+
+
 class RolloutZarrStoreReader:
     """Open a completed standalone rollout replay store in read-only mode.
 
@@ -560,6 +569,46 @@ class RolloutZarrStoreReader:
         # Zarr's dynamic path lookup stubs return broad Array/Group unions even
         # though this reader validates the concrete store schema before use.
         self.root: Any = zarr.open_group(store=LocalStore(str(self.store_dir), read_only=True), mode="r")
+        self._candidate_shell_index: _CandidateShellIndex | None = None
+
+    def candidate_shell_index(self) -> "_CandidateShellIndex":
+        """Return the immutable shell-ordered candidate-row lookup for this reader.
+
+        The index is reader-local and derived only from canonical candidate
+        columns. Reusing it prevents repeated whole-table scans in consumers
+        that project several rollout steps from the same completed store.
+        """
+
+        if self._candidate_shell_index is None:
+            candidate_ids = self.array("candidates/candidate_row_id").astype(np.int64, copy=False).reshape(-1)
+            step_ids = self.array("candidates/step_row_id").astype(np.int64, copy=False).reshape(-1)
+            shell_indices = self.array("candidates/shell_index").astype(np.int32, copy=False).reshape(-1)
+            if candidate_ids.size != step_ids.size or candidate_ids.size != shell_indices.size:
+                raise ValueError(
+                    "Candidate shell index requires aligned candidate_row_id, step_row_id, and shell_index arrays."
+                )
+            if candidate_ids.size == 0:
+                candidate_ids.setflags(write=False)
+                self._candidate_shell_index = _CandidateShellIndex(
+                    candidate_ids=candidate_ids,
+                    positions_by_step=MappingProxyType({}),
+                )
+                return self._candidate_shell_index
+            order = np.lexsort((candidate_ids, shell_indices, step_ids))
+            ordered_steps = step_ids[order]
+            boundaries = np.flatnonzero(np.r_[True, ordered_steps[1:] != ordered_steps[:-1]])
+            stops = np.r_[boundaries[1:], order.size]
+            positions = {
+                int(ordered_steps[start]): order[start:stop] for start, stop in zip(boundaries, stops, strict=True)
+            }
+            candidate_ids.setflags(write=False)
+            for position_array in positions.values():
+                position_array.setflags(write=False)
+            self._candidate_shell_index = _CandidateShellIndex(
+                candidate_ids=candidate_ids,
+                positions_by_step=MappingProxyType(positions),
+            )
+        return self._candidate_shell_index
 
     def array(self, path: str) -> np.ndarray:
         """Read an array by slash-separated Zarr path."""

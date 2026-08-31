@@ -290,9 +290,7 @@ def rollout_steps(reader: RolloutZarrStoreReader, rollout: StoredRollout) -> tup
     candidates = reader.root["candidates"]
     diagnostics = reader.root["candidate_diagnostics"]
     step_table = reader.root["steps"]
-    candidate_step_ids = np.asarray(candidates["step_row_id"], dtype=np.int64).reshape(-1)
-    candidate_ids = np.asarray(candidates["candidate_row_id"], dtype=np.int64).reshape(-1)
-    shell_indices = np.asarray(candidates["shell_index"], dtype=np.int32).reshape(-1)
+    shell_index = reader.candidate_shell_index()
     component_names: dict[int, str] = {}
     try:
         writer_config = reader.manifest().get("manifest", {}).get("generation", {}).get("writer_config")
@@ -310,9 +308,7 @@ def rollout_steps(reader: RolloutZarrStoreReader, rollout: StoredRollout) -> tup
     steps: list[StoredStep] = []
     for step_position in rollout.step_row_positions.tolist():
         step_row_id = int(step_table["step_row_id"][step_position])
-        row_positions = np.flatnonzero(candidate_step_ids == step_row_id).astype(np.int64)
-        order = np.argsort(shell_indices[row_positions], kind="stable")
-        row_positions = row_positions[order]
+        row_positions = shell_index.positions_by_step.get(step_row_id, np.empty(0, dtype=np.int64)).copy()
 
         def take(group: Any, name: str, dtype: Any, positions: np.ndarray = row_positions) -> np.ndarray:
             return np.asarray(group[name][positions], dtype=dtype)
@@ -338,8 +334,8 @@ def rollout_steps(reader: RolloutZarrStoreReader, rollout: StoredRollout) -> tup
                 cumulative_target_root_gain=float(step_table["cumulative_target_root_gain"][step_position]),
                 cumulative_scene_root_gain=float(step_table["cumulative_scene_root_gain"][step_position]),
                 candidate_row_positions=row_positions,
-                candidate_row_ids=candidate_ids[row_positions],
-                shell_indices=shell_indices[row_positions],
+                candidate_row_ids=shell_index.candidate_ids[row_positions],
+                shell_indices=take(candidates, "shell_index", np.int32),
                 compact_valid_indices=take(candidates, "compact_valid_index", np.int32),
                 actor_action_mask=take(candidates, "actor_action_mask", np.bool_),
                 selected_mask=selected_mask,
