@@ -10,6 +10,7 @@ from dataclasses import replace
 from pathlib import Path
 from typing import Any, get_type_hints
 
+import numpy as np
 import pytest
 import torch
 from efm3d.aria.camera import CameraTW
@@ -38,12 +39,15 @@ from aria_nbv.rollouts.candidate_benchmark import (
     read_candidate_family_phase_a,
     reduce_candidate_family_preflight,
     reduce_candidate_records,
+    reframe_candidate_benchmark_target_aligned,
     scientific_writer_config_sha256,
     select_candidate_family_shell,
     sha256_bytes,
+    target_side_count_balance,
     write_candidate_family_phase_a,
 )
 from aria_nbv.rollouts.candidate_support_plotting import candidate_family_preflight_figures
+from aria_nbv.rollouts.read_model import candidate_mixture_family_names
 
 FAMILIES = ("forward_local", "target_bearing_local", "lateral_target_bypass")
 
@@ -274,7 +278,7 @@ def test_sampling_result_reducer_preserves_full_shell_reasons_and_margins() -> N
         scene_key="scene",
         state_key="state",
         family_positions={"forward_local": "forward_local", "target_bearing_local": "target_bearing_local"},
-        target_center_world=(0.0, 0.0, 2.0),
+        target_center_world=(0.0, 2.0, 0.0),
     )
     forward, target = record.families
     assert (forward.attempted, forward.valid, forward.selected) == (1, 1, 1)
@@ -283,6 +287,110 @@ def test_sampling_result_reducer_preserves_full_shell_reasons_and_margins() -> N
     assert target.first_failure in {"POSE_OUT_OF_EXTENT", "CLEARANCE_TOO_SMALL"}
     assert target.margins == pytest.approx({"free_space_margin_m": -0.2, "mesh_distance_m": 0.05})
     assert all(point.oracle_label is False and point.selected is False for point in record.points)
+
+
+def test_sampling_result_rotates_nonzero_rig_target_yaw_into_target_aligned_z_up() -> None:
+    reference_rotation = torch.tensor(
+        [[0.0, 0.0, 1.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]],
+        dtype=torch.float32,
+    )
+    world_offsets = torch.tensor([[-1.0, 2.0, 0.0], [1.0, 2.0, 0.0]])
+    offsets_ref = world_offsets @ reference_rotation
+    view_rotations = torch.stack(
+        (
+            torch.tensor([[0.0, 0.0, -1.0], [0.0, 1.0, 0.0], [1.0, 0.0, 0.0]]),
+            torch.tensor([[0.0, 0.0, 1.0], [0.0, 1.0, 0.0], [-1.0, 0.0, 0.0]]),
+        )
+    )
+    result = CandidateSamplingResult(
+        views=CameraTW.from_surreal(
+            width=torch.tensor([64.0]),
+            height=torch.tensor([64.0]),
+            type_str="Pinhole",
+            params=torch.tensor([[60.0, 60.0, 32.0, 32.0]]),
+            gain=torch.zeros(1),
+            exposure_s=torch.zeros(1),
+            valid_radius=torch.full((1,), 64.0),
+            T_camera_rig=PoseTW.from_matrix3x4(torch.eye(3, 4).reshape(1, 3, 4)),
+        ),
+        reference_pose=PoseTW.from_Rt(reference_rotation, torch.zeros(3)),
+        mask_valid=torch.ones(2, dtype=torch.bool),
+        masks={},
+        shell_poses=PoseTW.from_Rt(view_rotations, world_offsets),
+        shell_offsets_ref=offsets_ref,
+        component_name=("target_bearing_local", "target_bearing_local"),
+    )
+
+    record = benchmark_from_sampling_result(
+        result,
+        scene_key="scene",
+        state_key="yawed",
+        family_positions={"target_bearing_local": "target_bearing_local"},
+        target_center_world=(0.0, 2.0, 0.0),
+    )
+
+    assert np.allclose(record.coordinates, ((1.0, 0.5, 0.0), (1.0, -0.5, 0.0)))
+    assert np.allclose(tuple(point.target_relative_xyz for point in record.points), ((0.0, 0.5, 0.0), (0.0, -0.5, 0.0)))
+    assert np.allclose(tuple(point.view_direction_xyz for point in record.points), ((0.0, 1.0, 0.0), (0.0, -1.0, 0.0)))
+    assert all(
+        tuple(np.asarray(point.xyz) - np.asarray(point.target_relative_xyz)) == pytest.approx((1.0, 0.0, 0.0))
+        for point in record.points
+    )
+    assert target_side_count_balance(record.points) == pytest.approx(1.0)
+
+
+def test_authenticated_geometry_correction_preserves_support_and_rotates_all_vectors() -> None:
+    record = CandidateBenchmark(
+        scene_key="scene",
+        state_key="legacy-reference-frame",
+        families=(CandidateFamilyCounts("target_bearing_local", True, 2, 2, 2, 2),),
+        candidate_ids=(0, 1),
+        coordinates=((2.0, -1.0, 0.0), (2.0, 1.0, 0.0)),
+        points=(
+            CandidatePoint(
+                candidate_id=0,
+                xyz=(2.0, -1.0, 0.0),
+                family="target_bearing_local",
+                position="target_bearing_local",
+                actor_valid=True,
+                selected=False,
+                state_key="legacy-reference-frame",
+                target_relative_xyz=(0.0, -1.0, 0.0),
+                view_direction_xyz=(-1.0, 0.0, 0.0),
+            ),
+            CandidatePoint(
+                candidate_id=1,
+                xyz=(2.0, 1.0, 0.0),
+                family="target_bearing_local",
+                position="target_bearing_local",
+                actor_valid=True,
+                selected=False,
+                state_key="legacy-reference-frame",
+                target_relative_xyz=(0.0, 1.0, 0.0),
+                view_direction_xyz=(1.0, 0.0, 0.0),
+            ),
+        ),
+    )
+    reference_rotation = ((0.0, 0.0, 1.0), (1.0, 0.0, 0.0), (0.0, 1.0, 0.0))
+
+    corrected = reframe_candidate_benchmark_target_aligned(
+        record,
+        reference_rotation_world_from_ref=reference_rotation,
+    )
+
+    assert corrected.families == record.families
+    assert corrected.candidate_ids == record.candidate_ids
+    assert np.allclose(corrected.coordinates, ((1.0, 0.5, 0.0), (1.0, -0.5, 0.0)))
+    assert np.allclose(
+        tuple(point.target_relative_xyz for point in corrected.points),
+        ((0.0, 0.5, 0.0), (0.0, -0.5, 0.0)),
+    )
+    assert np.allclose(
+        tuple(point.view_direction_xyz for point in corrected.points),
+        ((0.0, 1.0, 0.0), (0.0, -1.0, 0.0)),
+    )
+    assert corrected.lineage["geometry_frame"] == "target_aligned_z_up"
+    assert target_side_count_balance(corrected.points) == pytest.approx(1.0)
 
 
 def test_margins_are_immutable_while_preflight_payload_is_pickleable() -> None:
@@ -620,6 +728,80 @@ def test_reader_preflight_does_not_materialize_geometry(monkeypatch: pytest.Monk
     result = candidate_family_preflight_from_reader(Reader())
 
     assert result.cells
+
+
+def test_reader_preflight_preserves_paired_gaze_family_identity(monkeypatch: pytest.MonkeyPatch) -> None:
+    from aria_nbv.rollouts import inspection
+
+    base = "target_bearing_local"
+    paired = f"{base}__paired_forward_rig"
+    policy = CandidateFamilyPreflightConfig(
+        query_width=24,
+        configured_families=(base, paired),
+        target_aware_families=(base, paired),
+        forward_family="forward_local",
+    )
+
+    class Reader:
+        def manifest(self) -> dict[str, object]:
+            return {
+                "manifest": {
+                    "generation": {
+                        "candidate_family_preflight": policy.to_payload(),
+                        "writer_config": {
+                            "candidate_mixture": {"components": [{"name": base, "paired_view_mode": "forward_rig"}]}
+                        },
+                    }
+                }
+            }
+
+    reader: Any = Reader()
+    decoded = candidate_mixture_family_names(
+        reader,
+        np.asarray([0, 0], dtype=np.int32),
+        np.asarray([0, 1], dtype=np.int8),
+    )
+    assert decoded.tolist() == [base, paired]
+
+    def audit(_reader: object, **kwargs: object) -> list[dict[str, object]]:
+        callback = kwargs.get("row_callback")
+        assert callable(callback)
+        for candidate_id in range(24):
+            family = str(decoded[candidate_id % 2])
+            callback(
+                {
+                    "scene": "scene",
+                    "rollout_row_id": 1,
+                    "step_row_id": 2,
+                    "mixture": family,
+                    "candidate_row_id": candidate_id,
+                    "position": base,
+                    "actor_action": True,
+                    "compact_valid_index": candidate_id,
+                    "selected": False,
+                }
+            )
+        return []
+
+    monkeypatch.setattr(inspection, "candidate_audit_rows", audit)
+    result = candidate_family_preflight_from_reader(reader)
+
+    assert [(cell.family, cell.attempted) for _, _, cell in result.cells] == [(base, 12), (paired, 12)]
+    assert not any(
+        blocker.code
+        in {
+            CandidateSupportFailure.UNKNOWN_FAMILY_APPLICABILITY,
+            CandidateSupportFailure.FAMILY_COLLAPSE,
+            CandidateSupportFailure.UNCONFIGURED_FAMILY,
+        }
+        for blocker in result.blockers
+    )
+    with pytest.raises(ValueError, match="missing canonical gaze-variant"):
+        candidate_mixture_family_names(
+            reader,
+            np.asarray([0], dtype=np.int32),
+            np.asarray([-1], dtype=np.int8),
+        )
 
 
 def test_lightweight_reader_is_constant_row_memory_and_matches_materialized_reduction(

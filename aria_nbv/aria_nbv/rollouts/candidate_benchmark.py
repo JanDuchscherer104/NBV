@@ -16,7 +16,7 @@ import re
 import tempfile
 import zipfile
 from collections.abc import Collection, Iterable, Mapping
-from dataclasses import asdict, dataclass, field, fields
+from dataclasses import asdict, dataclass, field, fields, replace
 from enum import StrEnum
 from pathlib import Path
 from types import MappingProxyType
@@ -42,6 +42,7 @@ FLAT_GAIN_AGGREGATION = "minimum-per-state-range"
 WRITER_CONFIG_IDENTITY_REVISION = "phase-a-scientific-config-v1"
 PROVENANCE_CORRECTION_REVISION = "phase-a-path-independent-config-reseal-v1"
 EVIDENCE_ASSEMBLY_REVISION = "phase-a-evidence-assembly-v1"
+GEOMETRY_CORRECTION_REVISION = "phase-a-target-aligned-z-up-v1"
 MANIFEST_NAME = "manifest.json"
 DATA_NAME = "candidates.parquet"
 MULTI_STORE_BINDING_ALGORITHM = "sha256-canonical-json-v1"
@@ -290,6 +291,7 @@ class EvidenceTransformationKind(StrEnum):
 
     ORIGINAL_GENERATION = "original_generation"
     AUTHENTICATED_METADATA_RESEAL = "authenticated_metadata_reseal_no_candidate_rerun"
+    AUTHENTICATED_GEOMETRY_CORRECTION = "authenticated_target_frame_correction_no_candidate_rerun"
 
 
 @dataclass(frozen=True, slots=True)
@@ -1133,14 +1135,20 @@ def benchmark_from_sampling_result(
     target_ref = result.reference_pose.inverse().transform(target_world.to(result.reference_pose.t.device))
     target_ref = target_ref.detach().to(device="cpu", dtype=torch.float32).reshape(3)
     normalization = max(float(torch.linalg.norm(target_ref).item()), 1.0e-6)
-    coordinates_tensor = offsets_ref / normalization
-    target_relative_tensor = (offsets_ref - target_ref.reshape(1, 3)) / normalization
-
     shell_rotations = result.shell_poses.R.detach().to(device="cpu", dtype=torch.float32).reshape(-1, 3, 3)
     reference_rotation = result.reference_pose.R.detach().to(device="cpu", dtype=torch.float32).reshape(3, 3)
     forward_world = shell_rotations[:, :, 2]
-    forward_ref = forward_world @ reference_rotation
-    forward_ref = forward_ref / torch.linalg.norm(forward_ref, dim=1, keepdim=True).clamp_min(1.0e-8)
+    from .inspection import target_aligned_z_up_basis
+
+    target_delta_world = reference_rotation @ target_ref
+    basis = target_aligned_z_up_basis(target_delta_world.numpy())
+    if basis is None:
+        raise ValueError("Phase-A candidate evidence requires a non-degenerate horizontal target direction.")
+    reference_to_target = reference_rotation.T @ torch.as_tensor(basis, dtype=torch.float32)
+    coordinates_tensor = offsets_ref @ reference_to_target / normalization
+    target_relative_tensor = (offsets_ref - target_ref.reshape(1, 3)) @ reference_to_target / normalization
+    forward_target = forward_world @ torch.as_tensor(basis, dtype=torch.float32)
+    forward_target = forward_target / torch.linalg.norm(forward_target, dim=1, keepdim=True).clamp_min(1.0e-8)
 
     family_indices: dict[str, list[int]] = {}
     for index, family in enumerate(result.component_name):
@@ -1200,7 +1208,7 @@ def benchmark_from_sampling_result(
             selected=False,
             state_key=state_key,
             target_relative_xyz=_coordinate3(target_relative_tensor[index].tolist()),
-            view_direction_xyz=_coordinate3(forward_ref[index].tolist()),
+            view_direction_xyz=_coordinate3(forward_target[index].tolist()),
         )
         for index in range(shell_count)
     )
@@ -1212,8 +1220,71 @@ def benchmark_from_sampling_result(
         provenance=dict(provenance or {}),
         candidate_ids=tuple(range(shell_count)),
         coordinates=coordinates,
-        lineage={"family_identity": "component_name", "selection_semantics": "final_valid_action_shell"},
+        lineage={
+            "family_identity": "component_name",
+            "selection_semantics": "final_valid_action_shell",
+            "geometry_frame": "target_aligned_z_up",
+            "geometry_revision": GEOMETRY_CORRECTION_REVISION,
+        },
         points=points,
+    )
+
+
+def reframe_candidate_benchmark_target_aligned(
+    record: CandidateBenchmark,
+    *,
+    reference_rotation_world_from_ref: Iterable[Iterable[float]],
+) -> CandidateBenchmark:
+    """Rotate an authenticated reference-frame shell into canonical target axes.
+
+    This metadata-only correction uses the target displacement already bound
+    into every point and the source sample's factual reference rotation. It
+    never regenerates candidates, changes validity, or changes family counts.
+    """
+
+    if not record.points:
+        return record
+    rotation = np.asarray(tuple(tuple(row) for row in reference_rotation_world_from_ref), dtype=np.float64)
+    if rotation.shape != (3, 3) or not np.all(np.isfinite(rotation)):
+        raise ValueError("reference rotation must be a finite 3x3 world-from-reference matrix")
+    if not np.allclose(rotation.T @ rotation, np.eye(3), atol=1.0e-5) or np.linalg.det(rotation) <= 0.0:
+        raise ValueError("reference rotation must be a proper orthonormal rotation")
+    if any(point.target_relative_xyz is None for point in record.points):
+        raise ValueError("geometry correction requires target-relative vectors for every point")
+    target_vectors = np.asarray(
+        [np.asarray(point.xyz) - np.asarray(point.target_relative_xyz) for point in record.points],
+        dtype=np.float64,
+    )
+    if not np.allclose(target_vectors, target_vectors[0], atol=1.0e-5):
+        raise ValueError("geometry correction requires one consistent target vector per state")
+    from .inspection import target_aligned_z_up_basis
+
+    basis = target_aligned_z_up_basis(rotation @ target_vectors[0])
+    if basis is None:
+        raise ValueError("geometry correction requires a non-degenerate horizontal target direction")
+    transform = rotation.T @ basis
+
+    def rotate(values: tuple[float, float, float]) -> tuple[float, float, float]:
+        return _coordinate3((np.asarray(values, dtype=np.float64) @ transform).tolist())
+
+    points = tuple(
+        replace(
+            point,
+            xyz=rotate(point.xyz),
+            target_relative_xyz=rotate(cast(tuple[float, float, float], point.target_relative_xyz)),
+            view_direction_xyz=(None if point.view_direction_xyz is None else rotate(point.view_direction_xyz)),
+        )
+        for point in record.points
+    )
+    return replace(
+        record,
+        coordinates=tuple(point.xyz for point in points),
+        points=points,
+        lineage={
+            **record.lineage,
+            "geometry_frame": "target_aligned_z_up",
+            "geometry_revision": GEOMETRY_CORRECTION_REVISION,
+        },
     )
 
 
@@ -1698,12 +1769,17 @@ def _configured_family_names(reader: Any) -> tuple[str, ...]:
     for component in components if isinstance(components, Collection) else ():
         if isinstance(component, Mapping):
             name = component.get("name") or component.get("family") or component.get("position")
+            paired = component.get("paired_view_mode")
         elif isinstance(component, (list, tuple)) and component:
             name = component[0]
+            paired = None
         else:
             name = None
+            paired = None
         if name is not None:
             names.append(str(name))
+            if paired is not None:
+                names.append(f"{name}__paired_{paired}")
     return tuple(dict.fromkeys(names))
 
 
@@ -2592,6 +2668,7 @@ __all__ = [
     "read_candidate_family_phase_a",
     "benchmarks_from_reader",
     "read_bundle_bytes",
+    "reframe_candidate_benchmark_target_aligned",
     "reduce_candidate_records",
     "reduce_candidate_family_preflight",
     "select_candidate_family_shell",
