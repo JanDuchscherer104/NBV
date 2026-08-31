@@ -20,12 +20,6 @@ or repeatable workflows.
 - **Upstream first:** Prefer maintained upstream behavior and native tool
   interfaces. Add repository-owned adapters only for a demonstrated local gap,
   and keep their code and policy surface minimal.
-- **Parsimony:** Keep solutions as simple as the evidence permits. Prefer
-  deletion, consolidation, and existing owners over another abstraction,
-  compatibility layer, control plane, or source of truth.
-- **Upstream traceability:** Local adaptations of external guidance retain
-  pinned provenance and one explicit update route. Upstream refresh remains an
-  opt-in maintenance action rather than part of a skill's default task path.
 - **Evidence before assertion:** Exact source and fresh verification establish
   current truth. Retrieval, inferred links, similarity, plans, and agent
   confidence are discovery aids only.
@@ -37,23 +31,13 @@ or repeatable workflows.
   artifacts, and unrelated cleanup into one review unit. Prefer orthogonal
   pull requests; when a real dependency remains, make it an explicit
   bottom-up stack with one reviewable purpose and diff per layer.
-- **PR exposition:** Every pull-request description opens with a conceptual
-  TL;DR and includes an educational theoretical account of the governing model,
-  assumptions, and relevant failure boundary. When a change adds or materially
-  edits a decision-relevant figure, embed its rendered form in the description
-  with enough context to review what it establishes.
+- **PR exposition:** Prefer pull-request descriptions that open with a
+  conceptual TL;DR, teach the governing theory and assumptions, and render
+  decision-relevant figures with enough context to review what they establish.
 - **Conceptual collaboration:** For meaningful Spatial-AI, ML, MLOps,
   data-science, or statistics work, prefer an explanation of the governing
   model, assumptions, and failure mode. Use diagrams when they clarify a real
   relationship; reserve durable teaching artifacts for deliberate learning.
-- **Scientific status:** Preserve sound conceptual targets and hypotheses when
-  they enrich the argument, while labeling implemented state, target state,
-  and speculative ideas distinctly. Concision must not erase useful reasoning
-  or make planned behavior read as current evidence.
-- **Scientific taste:** Let active perception organize the research narrative.
-  Favor geometric reasoning and elegance, self-consistency, and parsimony when
-  the evidence supports them; use these as lenses rather than slogans or
-  constraints that overfit the thesis.
 
 ## Ownership
 

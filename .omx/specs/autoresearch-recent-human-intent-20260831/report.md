@@ -2,14 +2,14 @@
 
 ## Conceptual TL;DR
 
-The two-week prompt corpus supports five additions to the durable human-intent
-owner: parsimony, explicit upstream traceability, orthogonal or explicitly
-stacked pull requests with explanatory descriptions, preservation of useful
-scientific target-state reasoning with clear status labels, and a bounded
-scientific taste for active perception, geometry, self-consistency, and
-elegance. The proposed owner edit records those preferences without promoting
-task-local implementation requests, scientific claims, runtime instructions,
-or workflow mechanics.
+The two-week prompt corpus supports five reusable candidate groups: parsimony,
+explicit upstream traceability, orthogonal or explicitly stacked pull requests
+with explanatory descriptions, preservation of useful scientific target-state
+reasoning with clear status labels, and a bounded scientific taste for active
+perception, geometry, self-consistency, and elegance. Transcript mining alone
+does not promote them into policy. The current user's direct PR instruction
+promotes only the reviewability and exposition group; the other four remain
+episodic candidates for specific current-user acceptance.
 
 ## Corpus and method
 
@@ -72,15 +72,15 @@ transcript material are intentionally absent from this report. Date and
 truncated content-hash locators provide local auditability without publishing
 the underlying conversation corpus.
 
-## Accepted candidates
+## Candidate findings and disposition
 
-| Candidate | Bounded evidence | Why it belongs in human intent |
+| Candidate | Bounded evidence | Disposition |
 | --- | --- | --- |
-| Parsimony | 2026-08-18 `cb560d979b07`; 2026-08-25 `ecdc78b7b5d7`; 2026-08-28 `34d7064af526` | Repeated requests for the simplest adequate solution and welcomed simplification express a cross-task design preference. The existing owner favored minimal adapters, but did not state the general preference clearly. |
-| Upstream traceability | 2026-08-24 `4ba4098a52f9`; 2026-08-26 `1a884e1ab287` | Repeated requests require externally grounded local guidance to retain provenance and one explicit, opt-in refresh route. Concrete update commands remain workflow-owned. |
-| Orthogonal or explicit stacked PRs, with explanatory PR bodies | 2026-08-26 `682a3c07ab5c`, `9b742e96de4c`; 2026-08-27 `c1f988cefefb`; 2026-08-29 `ba798f3fb7f`, `da2a2e4ee3c`; 2026-08-31 `812537e8c478`, `7568f974880e` | Review unit shape and the desired reviewer-facing explanation recur across unrelated work. Exact Git operations remain workflow-owned; the durable preference is small orthogonal units, explicit dependency stacks, a conceptual TL;DR, educational theory, and rendered decision-relevant figures. |
-| Preserve scientific status distinctions | 2026-08-31 `b8ee2e509661`, `3f45d2b1fd4c` | The user repeatedly asks not to erase useful conceptual targets while requiring implemented, target, and speculative states to remain distinct. This governs cross-document reasoning rather than one thesis passage. |
-| Bounded scientific taste | 2026-08-26 `308bb319b4ab` | The prompt explicitly identifies active perception, geometric reasoning, self-consistency, parsimony, and elegance as preferences while warning against overfitting to them. Recording the qualifier keeps this a lens, not a scientific claim or hard constraint. |
+| Parsimony | 2026-08-18 `cb560d979b07`; 2026-08-25 `ecdc78b7b5d7`; 2026-08-28 `34d7064af526` | Proposed in the debrief for specific current-user review. The existing owner favors minimal adapters, but does not state this general preference clearly. |
+| Upstream traceability | 2026-08-24 `4ba4098a52f9`; 2026-08-26 `1a884e1ab287` | Proposed in the debrief for specific current-user review. Concrete update commands remain workflow-owned. |
+| Orthogonal or explicit stacked PRs, with explanatory PR bodies | 2026-08-26 `682a3c07ab5c`, `9b742e96de4c`; 2026-08-27 `c1f988cefefb`; 2026-08-29 `ba798f3fb7f`, `da2a2e4ee3c`; 2026-08-31 `812537e8c478`, `7568f974880e` | Promoted because the current user directly restated this specific preference. The general preference belongs in human intent; mandatory description mechanics belong in the publication workflow. |
+| Preserve scientific status distinctions | 2026-08-31 `b8ee2e509661`, `3f45d2b1fd4c` | Proposed in the debrief for specific current-user review. This may govern cross-document reasoning, but is not current policy yet. |
+| Bounded scientific taste | 2026-08-26 `308bb319b4ab` | Proposed in the debrief for specific current-user review. Its qualifier must remain part of any later acceptance. |
 
 ## Already captured or routed elsewhere
 
@@ -98,14 +98,17 @@ the underlying conversation corpus.
 
 ## Canonical edit
 
-The owner update is deliberately limited to:
+The accepted current-user update is deliberately limited to:
 
-- two new core principles for parsimony and upstream traceability;
 - a sharper reviewability principle for orthogonal PRs and necessary stacks;
-- a PR-exposition principle covering conceptual TL;DRs, theory, and rendered
-  decision-relevant figures; and
-- two scientific-collaboration principles covering status distinctions and the
-  user's explicitly qualified scientific taste.
+- a general PR-exposition preference covering conceptual TL;DRs, theory, and
+  rendered decision-relevant figures; and
+- the corresponding mandatory mechanics in the external-action workflow that
+  every PR publication loads.
+
+Parsimony, upstream traceability, scientific-status preservation, and bounded
+scientific taste remain debrief candidates with status
+`proposed for current-user review`.
 
 No executable behavior, scientific claim, backlog item, or external-system
 state is changed.

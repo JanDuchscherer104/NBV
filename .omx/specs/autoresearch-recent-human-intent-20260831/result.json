@@ -2,10 +2,10 @@
   "validator_prompt": "Approve only if the report is corpus-accountable, conservative about promotion, traceable without publishing raw transcripts, and the owner edit contains every and only justified reusable preferences.",
   "architect_review": {
     "verdict": "approved",
-    "summary": "The revised branch-split ledger and tag-family predicate reproduce the reported corpus path and counts; candidate accounting is adequate, and the owner additions are supported, conservative, and public-safe."
+    "summary": "The corpus ledger is reproducible; human intent contains only the current-user-accepted PR preferences; the reachable publication workflow owns their mandatory mechanics; and the other four mined statements remain proposed-only debrief evidence."
   },
   "output_artifact_path": ".omx/specs/autoresearch-recent-human-intent-20260831/report.md",
-  "output_artifact_sha256": "1e0158f18cd4e208c10eb974eb29844f1794ffc6de3189bcbb0847649c49d61e",
+  "output_artifact_sha256": "2301fbf683601f3d88d73fbdeedc5f5742f3153be2a147adbaaf2621c9c719cb",
   "canonical_owner_path": ".agents/references/human_owner_intent.md",
-  "canonical_owner_sha256": "95a6c9cc5e02d354cda8496ddbd05aee1b1cc7dc096188ffab3f797da4d0091e"
+  "canonical_owner_sha256": "797a5a9312fe1a007dac5d10914032aa7be2c73f2d9b15aaf3bcdbbeabc04a22"
 }
