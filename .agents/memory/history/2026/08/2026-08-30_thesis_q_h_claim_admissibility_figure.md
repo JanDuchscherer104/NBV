@@ -26,7 +26,7 @@ touched_owner_paths:
   - scripts/tests/test_typst_report_data_contract.py
 codex_thread: codex://threads/01a04fd9-0c7c-7813-a9c5-dc49f2f867a6
 repo_object_format: sha1
-repo_head: 6ba2e3fbb122b0ae51f10fd48fdec2289aab3a1f
+repo_head: 4cea0ec3ea021aa04b7eadf8f78c318c4c1dbf6f
 repo_branch: "codex/thesis-figure-qh-evidence-gates"
 worktree_kind: linked
 ---
@@ -183,6 +183,11 @@ reviews until zero P0--P2 findings remained.
   retain explicit types, so stringification cannot erase an invalid identity.
   Adversarial malformed-value fixtures now fail closed without aborting Typst,
   while measured non-passes remain admissible evidence.
+- The next exact-head audit found that endpoint target-gain estimates were typed
+  but not bounded by the metric's mathematical maximum. All oracle and learned
+  endpoint means and interval bounds now require values at most one. The bound
+  is inclusive for finite-precision summaries, while no artificial lower bound
+  is imposed because target error can worsen without a universal ratio floor.
 
 ## Commits
 
@@ -201,6 +206,7 @@ reviews until zero P0--P2 findings remained.
 - https://github.com/JanDuchscherer104/ARIA-NBV/commit/ae85a33ab218d943c837599f3dbf836fccf64686
 - https://github.com/JanDuchscherer104/ARIA-NBV/commit/8dcd0cb539997bd41788a0190ec0c2ae7a009691
 - https://github.com/JanDuchscherer104/ARIA-NBV/commit/6ba2e3fbb122b0ae51f10fd48fdec2289aab3a1f
+- https://github.com/JanDuchscherer104/ARIA-NBV/commit/4cea0ec3ea021aa04b7eadf8f78c318c4c1dbf6f
 
 ## Verification
 
@@ -289,6 +295,15 @@ Independent contract and scientific reviewers approved exact two-source-file
 diff `861c4db105a7ccff85050d303f1fc0b93b44590e21c6d0383bb6dc30d234609b`
 with zero P0--P2 findings; eleven dynamic malformed-value cases returned false
 without a Typst evaluation abort.
+The endpoint-gain bound repair passed `make thesis-report-data-contract`,
+`make thesis-results-full-profile-render`, `make thesis-pdf-ci`,
+`make typst-authoring-contract`, `make thesis-pdf`, and `git diff --check`.
+The thesis remains 129 A4 pages and its PDF SHA-256 is
+`3b3dd4dc1d1a8e90313e0f993a2fc371f6ca75a11571a9d1347252cf9232cbc7`.
+Independent contract and scientific reviewers approved exact two-source-file
+diff `60cff93e91b7414f953eac7fb1a17ea40afc2f6d8449eac2154a82d82c23b974`
+with zero P0--P2 findings. All nine point and interval fields reject values
+above one; exactly one and scientifically valid negative gains remain accepted.
 
 ## Canonical Owner Impact
 
