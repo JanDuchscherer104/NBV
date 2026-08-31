@@ -46,7 +46,7 @@ from ..data_handling.qh_data import QhBatch, QhChain, collate_qh_chains
 from ..rollouts.qh_reader import QhRolloutChainIdentity
 from .qh_module import QhLightningModule
 
-QH_EXACT_Q2_CERTIFICATION_SCHEMA_VERSION = "qh-exact-q2-certification-v4"
+QH_EXACT_Q2_CERTIFICATION_SCHEMA_VERSION = "qh-exact-q2-certification-v5"
 QH_EXACT_Q2_SELECTION_SEMANTICS = "balanced-hash-within-scene-target-support-strata-v2"
 QH_EXACT_Q2_INDEPENDENT_UNIT_SEMANTICS = "ordered-store-manifest-and-scene-v1"
 QH_EXACT_Q2_INDEPENDENT_UNIT_AGGREGATION = "all_units_v1"
@@ -433,6 +433,13 @@ class QhExactQ2Certifier:
         census = {
             "selection_semantics": QH_EXACT_Q2_SELECTION_SEMANTICS,
             "candidate_branch_bins": list(QH_CANDIDATE_BRANCH_BINS),
+            "chains": [
+                {
+                    "dataset_index": index,
+                    "identity": asdict(identity),
+                }
+                for index, identity in enumerate(identities)
+            ],
             "population_chain_count": len(identities),
             "selected_chain_count": len(allocated),
             "selected_chain_fraction": selected_fraction,

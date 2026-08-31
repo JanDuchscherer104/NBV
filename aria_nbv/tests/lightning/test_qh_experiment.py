@@ -970,7 +970,8 @@ def test_qh_fit_publishes_new_bundle_and_hashed_receipts(tmp_path) -> None:
     assert certification_receipt["bundle_manifest_sha256"] == result.bundle.manifest_sha256
     assert certification_receipt["exact_q2"]["population_census"]["near_exhaustive"] is True
     assert certification_receipt["exact_q2"]["aggregate"]["factual_selected_action_exact_q2_row_count"] == 1
-    assert certification_receipt["schema_version"] == "qh-exact-q2-certification-receipt-v4"
+    assert certification_receipt["schema_version"] == "qh-exact-q2-certification-receipt-v5"
+    assert len(certification_receipt["exact_q2"]["population_census"]["chains"]) == 1
     bound_contract = certification_receipt["bound_contract"]
     assert len(bound_contract["actor_state_contract_hash"]) == 16
     assert len(bound_contract["learning_contract_hash"]) == 16

@@ -478,6 +478,27 @@ with zero valid P0--P2 findings. The thesis remains 129 A4 pages; physical page
 94 was inspected at final size and the PDF SHA-256 is
 `5f7bbd67be19ebd1cb54e42f8cbd6dd63701136dc224829c252b2449219ec036`.
 
+The Q2 population-boundary repair advances the certification receipt and
+producer schema to V5. The producer captures the complete metadata-only
+held-out chain-identity roster before bounded selection. The Typst consumer
+reconstructs population size, selected coverage, per-stratum populations,
+current-store presence, and scene/target counts from that roster; it then
+requires each selected chain and reported census stratum to reconcile exactly.
+Identity equality is component-wise, while all grouping keys use length-prefixed
+component encoding so delimiter-containing scene, target, strategy, and rule
+identities cannot collapse distinct strata. Adversarial fixtures reject a
+missing census chain, source-sample drift, a census-only extra store, and a
+coordinated delimiter-collision mutation. The Python producer fixture also
+compares the emitted census roster to every dataset chain identity in order.
+
+Fresh verification passed 61 focused Python tests, Ruff check and formatting,
+`make thesis-report-data-contract`, `make typst-authoring-contract`,
+`make thesis-results-full-profile-render`, `make thesis-pdf-ci`,
+`make thesis-marker-contract`, `make thesis-pdf`, and `git diff --check`.
+The thesis remains 129 A4 pages; physical page 95 was inspected at final size,
+and the PDF SHA-256 is
+`21b1e3ed95c6c33e2a0f3464dbf145ec08395f87e4785139c983312e7dc45194`.
+
 ## Canonical Owner Impact
 
 Current thesis truth now lives in the touched Typst figure, report-data,

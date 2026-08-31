@@ -191,8 +191,8 @@
   (name: "selected_observation_prefix_absent", role: "actor_selected_observation", schema-id: "selected_observation_prefix_none_v1", source-owner: "actor_state_contract", derivation: "qh_cf0_absence_v1", presence: false),
 )
 #let q2-decision-rule = "all_units_support_and_rowwise_abs_plus_relative_tolerance_v1"
-#let q2-certification-receipt-schema = "qh-exact-q2-certification-receipt-v4"
-#let q2-certification-schema = "qh-exact-q2-certification-v4"
+#let q2-certification-receipt-schema = "qh-exact-q2-certification-receipt-v5"
+#let q2-certification-schema = "qh-exact-q2-certification-v5"
 #let q2-selection-semantics = "balanced-hash-within-scene-target-support-strata-v2"
 #let q2-independent-unit-semantics = "ordered-store-manifest-and-scene-v1"
 #let q2-independent-unit-aggregation = "all_units_v1"
@@ -2582,27 +2582,60 @@
   })
 }
 
-#let q2-support-key(chain) = (
+#let q2-structured-key(parts) = parts.map(part => {
+  let encoded = str(part)
+  str(encoded.len()) + ":" + encoded
+}).join("|")
+
+#let q2-support-key(chain) = q2-structured-key((
   chain.scene,
-  str(chain.store),
-  str(chain.target),
-  str(chain.horizon),
+  chain.store,
+  chain.target,
+  chain.horizon,
   q2-candidate-branch-bin(chain.width-max),
   chain.candidate-config,
   chain.rollout-config,
   chain.policy,
-).join("|")
+))
 
-#let q2-row-stratum-key(row) = (
+#let q2-chain-identities-equal(left, right) = (
+  left.store == right.store,
+  left.rollout == right.rollout,
+  left.source-sample == right.source-sample,
+  left.scene == right.scene,
+  left.target == right.target,
+  left.horizon == right.horizon,
+  left.width-min == right.width-min,
+  left.width-max == right.width-max,
+  left.candidate-config == right.candidate-config,
+  left.rollout-config == right.rollout-config,
+  left.policy == right.policy,
+).all(check => check)
+
+#let q2-chain-identity-key(chain) = q2-structured-key((
+  chain.store,
+  chain.rollout,
+  chain.source-sample,
+  chain.scene,
+  chain.target,
+  chain.horizon,
+  chain.width-min,
+  chain.width-max,
+  chain.candidate-config,
+  chain.rollout-config,
+  chain.policy,
+))
+
+#let q2-row-stratum-key(row) = q2-structured-key((
   row.scene,
-  str(row.store),
-  str(row.target),
+  row.store,
+  row.target,
   row.branch-bin,
   row.candidate-config,
   row.rollout-config,
   row.policy,
-  str(row.horizon),
-).join("|")
+  row.horizon,
+))
 
 #let report-store-q2-certification-receipt-valid(report, store-id) = {
   let fact-index = report-store-fact-index(report)
@@ -2743,6 +2776,54 @@
     chain => str(chain.store) + "|" + str(chain.rollout),
   ).dedup().len() == selected.len()
   if not selected-valid { return false }
+  let population-prefixes = report-sidecar-record-prefixes(
+    receipt-index,
+    "exact_q2.population_census.chains",
+    "dataset_index",
+  )
+  let population = population-prefixes.map(prefix => (
+    prefix: prefix,
+    dataset: value(prefix + ".dataset_index"),
+    store: value(prefix + ".identity.store_index"),
+    rollout: value(prefix + ".identity.rollout_row_id"),
+    source-sample: value(prefix + ".identity.source_sample_index"),
+    scene: value(prefix + ".identity.scene_id"),
+    target: value(prefix + ".identity.target_row_id"),
+    horizon: value(prefix + ".identity.configured_horizon"),
+    width-min: value(prefix + ".identity.candidate_width_min"),
+    width-max: value(prefix + ".identity.candidate_width_max"),
+    candidate-config: value(prefix + ".identity.candidate_config_hash"),
+    rollout-config: value(prefix + ".identity.rollout_config_hash"),
+    policy: value(prefix + ".identity.selection_policy"),
+  ))
+  let population-valid = population.len() > 0 and population.all(chain => (
+    type(chain.dataset) == int and chain.dataset >= 0,
+    type(chain.store) == int and chain.store >= 0 and chain.store < manifest-values.len(),
+    type(chain.rollout) == int and chain.rollout >= 0,
+    type(chain.source-sample) == int and chain.source-sample >= 0,
+    type(chain.scene) == str and chain.scene.len() > 0,
+    type(chain.target) == int and chain.target >= 0,
+    type(chain.horizon) == int and chain.horizon >= 1,
+    type(chain.width-min) == int and chain.width-min >= 1,
+    type(chain.width-max) == int and type(chain.width-min) == int and chain.width-max >= chain.width-min,
+    type(chain.candidate-config) == str and chain.candidate-config.len() > 0,
+    type(chain.rollout-config) == str and chain.rollout-config.len() > 0,
+    type(chain.policy) == str and chain.policy.len() > 0,
+  ).all(check => check)) and population.map(chain => chain.dataset).sorted() == range(
+    population.len(),
+  ) and population.map(
+    chain => str(chain.store) + "|" + str(chain.rollout),
+  ).dedup().len() == population.len() and population.map(q2-chain-identity-key).dedup().len() == population.len()
+  if not population-valid { return false }
+  let population-by-dataset = (:)
+  for chain in population {
+    population-by-dataset.insert(str(chain.dataset), chain)
+  }
+  let selected-population-binding-valid = selected.all(chain => {
+    let population-chain = population-by-dataset.at(str(chain.dataset), default: none)
+    population-chain != none and q2-chain-identities-equal(population-chain, chain)
+  })
+  if not selected-population-binding-valid { return false }
   let current-store-index = manifest-values.position(
     manifest => manifest == store-manifest,
   )
@@ -2908,7 +2989,7 @@
       )
     }
     if report-sha256-value-valid(row.unit-manifest) and type(row.unit-scene) == str {
-      let unit-key = row.unit-manifest + "|" + row.unit-scene
+      let unit-key = q2-structured-key((row.unit-manifest, row.unit-scene))
       unit-row-groups.insert(
         unit-key,
         unit-row-groups.at(unit-key, default: ()) + (row,),
@@ -2920,11 +3001,11 @@
     default: (),
   ).len() == chain.exact-rows)
   let selected-unit-keys = selected.map(
-    chain => chain.unit-manifest + "|" + chain.unit-scene,
+    chain => q2-structured-key((chain.unit-manifest, chain.unit-scene)),
   ).dedup()
   let selected-unit-chain-groups = (:)
   for chain in selected {
-    let unit-key = chain.unit-manifest + "|" + chain.unit-scene
+    let unit-key = q2-structured-key((chain.unit-manifest, chain.unit-scene))
     selected-unit-chain-groups.insert(
       unit-key,
       selected-unit-chain-groups.at(unit-key, default: ()) + (chain,),
@@ -2966,6 +3047,14 @@
       row-stratum-groups.at(stratum-key, default: ()) + (row,),
     )
   }
+  let population-stratum-groups = (:)
+  for chain in population {
+    let stratum-key = q2-support-key(chain)
+    population-stratum-groups.insert(
+      stratum-key,
+      population-stratum-groups.at(stratum-key, default: ()) + (chain,),
+    )
+  }
   let population-chain-count = value("exact_q2.population_census.population_chain_count")
   let selected-chain-count = value("exact_q2.population_census.selected_chain_count")
   let reported-coverage = value("exact_q2.population_census.selected_chain_fraction")
@@ -2983,7 +3072,7 @@
     minimum-unit-rows-required,
   ) == int and minimum-unit-rows-required >= 1 and type(
     population-chain-count,
-  ) == int and population-chain-count >= selected.len() and type(
+  ) == int and population-chain-count == population.len() and type(
     selected-chain-count,
   ) == int and selected-chain-count == selected.len() and report-value-matches-kind(
     reported-coverage,
@@ -2996,8 +3085,8 @@
   let safe-minimum-unit-rows-required = if type(minimum-unit-rows-required) == int {
     minimum-unit-rows-required
   } else { 0 }
-  let derived-coverage = if type(population-chain-count) == int and population-chain-count > 0 {
-    selected.len() / population-chain-count
+  let derived-coverage = if population.len() > 0 {
+    selected.len() / population.len()
   } else { none }
   let derived-minimum-support-rows = if support-groups.len() > 0 {
     support-groups.values().sorted().first()
@@ -3042,28 +3131,29 @@
     selected: value(prefix + ".selected_chain_count"),
     fraction: value(prefix + ".selected_chain_fraction"),
   ))
-  let census-keys = census-strata.map(stratum => (
-    str(stratum.scene),
-    str(stratum.store),
-    str(stratum.target),
-    str(stratum.horizon),
-    str(stratum.branch-bin),
-    str(stratum.candidate-config),
-    str(stratum.rollout-config),
-    str(stratum.policy),
-  ).join("|"))
+  let census-keys = census-strata.map(stratum => q2-structured-key((
+    stratum.scene,
+    stratum.store,
+    stratum.target,
+    stratum.horizon,
+    stratum.branch-bin,
+    stratum.candidate-config,
+    stratum.rollout-config,
+    stratum.policy,
+  )))
   let census-valid = census-strata.len() > 0 and census-strata.all(stratum => {
-    let key = (
-      str(stratum.scene),
-      str(stratum.store),
-      str(stratum.target),
-      str(stratum.horizon),
-      str(stratum.branch-bin),
-      str(stratum.candidate-config),
-      str(stratum.rollout-config),
-      str(stratum.policy),
-    ).join("|")
+    let key = q2-structured-key((
+      stratum.scene,
+      stratum.store,
+      stratum.target,
+      stratum.horizon,
+      stratum.branch-bin,
+      stratum.candidate-config,
+      stratum.rollout-config,
+      stratum.policy,
+    ))
     let selected-count = support-chain-groups.at(key, default: ()).len()
+    let population-count = population-stratum-groups.at(key, default: ()).len()
     type(stratum.scene) == str and stratum.scene.len() > 0 and type(
       stratum.store,
     ) == int and stratum.store >= 0 and stratum.store < manifest-values.len() and type(stratum.target) == int and stratum.target >= 0 and type(
@@ -3072,7 +3162,7 @@
       stratum.candidate-config,
     ) == str and stratum.candidate-config.len() > 0 and type(stratum.rollout-config) == str and stratum.rollout-config.len() > 0 and type(
       stratum.policy,
-    ) == str and stratum.policy.len() > 0 and type(stratum.population) == int and stratum.population >= 1 and type(
+    ) == str and stratum.policy.len() > 0 and type(stratum.population) == int and stratum.population == population-count and stratum.population >= 1 and type(
       stratum.selected,
     ) == int and stratum.selected >= 0 and stratum.selected <= stratum.population and report-value-matches-kind(
       stratum.fraction,
@@ -3081,28 +3171,28 @@
       stratum.fraction,
       stratum.selected / stratum.population,
     )
-  }) and census-keys.dedup().len() == census-keys.len() and support-chain-groups.keys().all(
+  }) and census-keys.dedup().len() == census-keys.len() and census-keys.sorted() == population-stratum-groups.keys().sorted() and support-chain-groups.keys().all(
     key => census-keys.contains(key),
-  ) and census-strata.map(stratum => stratum.population).sum(default: 0) == population-chain-count and census-strata.map(
+  ) and census-strata.map(stratum => stratum.population).sum(default: 0) == population.len() and census-strata.map(
     stratum => stratum.selected,
   ).sum(default: 0) == selected.len()
   if not census-valid { return false }
-  let current-store-in-population = current-store-index != none and census-strata.any(
-    stratum => stratum.store == current-store-index,
+  let current-store-in-population = current-store-index != none and population.any(
+    chain => chain.store == current-store-index,
   )
   if not current-store-in-population { return false }
-  let census-scenes = census-strata.map(stratum => stratum.scene).dedup()
-  let census-targets = census-strata.map(
-    stratum => str(stratum.scene) + "|" + str(stratum.target),
+  let census-scenes = population.map(chain => chain.scene).dedup()
+  let census-targets = population.map(
+    chain => q2-structured-key((chain.scene, chain.target)),
   ).dedup()
   let branch-bin-values = range(6).map(index => value(
     "exact_q2.population_census.candidate_branch_bins[" + str(index) + "]",
   ))
   let census-summary-valid = branch-bin-values == (1, 4, 8, 16, 32, 64) and (
-    (key: "exact_q2.population_census.near_exhaustive", value: selected.len() == population-chain-count),
+    (key: "exact_q2.population_census.near_exhaustive", value: selected.len() == population.len()),
     (key: "exact_q2.population_census.eligible_scene_count", value: census-scenes.len()),
     (key: "exact_q2.population_census.eligible_target_count", value: census-targets.len()),
-    (key: "exact_q2.population_census.eligible_chain_count", value: population-chain-count),
+    (key: "exact_q2.population_census.eligible_chain_count", value: population.len()),
     (key: "exact_q2.population_census.independent_unit_count", value: census-scenes.len()),
   ).all(expected => report-sidecar-indexed-value-matches(
     receipt-index,
@@ -3125,16 +3215,16 @@
     type(value(prefix + ".stratum.rollout_config_hash")) == str,
     type(value(prefix + ".stratum.selection_policy")) == str,
   ).all(check => check))
-  let support-aggregate-keys = support-prefixes.map(prefix => (
-    str(value(prefix + ".stratum.scene_id")),
-    str(value(prefix + ".stratum.store_index")),
-    str(value(prefix + ".stratum.target_row_id")),
-    str(value(prefix + ".stratum.configured_horizon")),
-    str(value(prefix + ".stratum.candidate_branch_bin")),
-    str(value(prefix + ".stratum.candidate_config_hash")),
-    str(value(prefix + ".stratum.rollout_config_hash")),
-    str(value(prefix + ".stratum.selection_policy")),
-  ).join("|"))
+  let support-aggregate-keys = support-prefixes.map(prefix => q2-structured-key((
+    value(prefix + ".stratum.scene_id"),
+    value(prefix + ".stratum.store_index"),
+    value(prefix + ".stratum.target_row_id"),
+    value(prefix + ".stratum.configured_horizon"),
+    value(prefix + ".stratum.candidate_branch_bin"),
+    value(prefix + ".stratum.candidate_config_hash"),
+    value(prefix + ".stratum.rollout_config_hash"),
+    value(prefix + ".stratum.selection_policy"),
+  )))
   let support-aggregates-valid = support-key-types-valid and support-prefixes.len() == support-chain-groups.len() and support-aggregate-keys.dedup().len() == support-aggregate-keys.len() and support-aggregate-keys.sorted() == support-chain-groups.keys().sorted() and support-prefixes.enumerate().all(((index, prefix)) => {
     let key = support-aggregate-keys.at(index)
     let chains = support-chain-groups.at(key)
@@ -3181,16 +3271,16 @@
     type(value(prefix + ".stratum.selection_policy")) == str,
     type(value(prefix + ".stratum.configured_horizon")) == int,
   ).all(check => check))
-  let stored-stratum-keys = stored-stratum-prefixes.map(prefix => (
-    str(value(prefix + ".stratum.scene_id")),
-    str(value(prefix + ".stratum.store_index")),
-    str(value(prefix + ".stratum.target_row_id")),
-    str(value(prefix + ".stratum.candidate_branch_bin")),
-    str(value(prefix + ".stratum.candidate_config_hash")),
-    str(value(prefix + ".stratum.rollout_config_hash")),
-    str(value(prefix + ".stratum.selection_policy")),
-    str(value(prefix + ".stratum.configured_horizon")),
-  ).join("|"))
+  let stored-stratum-keys = stored-stratum-prefixes.map(prefix => q2-structured-key((
+    value(prefix + ".stratum.scene_id"),
+    value(prefix + ".stratum.store_index"),
+    value(prefix + ".stratum.target_row_id"),
+    value(prefix + ".stratum.candidate_branch_bin"),
+    value(prefix + ".stratum.candidate_config_hash"),
+    value(prefix + ".stratum.rollout_config_hash"),
+    value(prefix + ".stratum.selection_policy"),
+    value(prefix + ".stratum.configured_horizon"),
+  )))
   let stratum-aggregates-valid = stored-stratum-key-types-valid and stored-stratum-prefixes.len() == row-stratum-groups.len() and stored-stratum-keys.dedup().len() == stored-stratum-keys.len() and stored-stratum-keys.sorted() == row-stratum-groups.keys().sorted() and stored-stratum-prefixes.enumerate().all(((index, prefix)) => q2-sidecar-aggregate-matches(
     receipt-index,
     prefix,
@@ -3202,7 +3292,7 @@
     ordered-unit-manifests.first()
   } else { "" }
   let population-unit-keys = census-scenes.map(
-    scene => ordered-unit-manifest + "|" + str(scene),
+    scene => q2-structured-key((ordered-unit-manifest, scene)),
   )
   let unit-prefixes = report-sidecar-record-prefixes(
     receipt-index,
@@ -3212,9 +3302,10 @@
   let unit-key-types-valid = unit-prefixes.all(prefix => report-sha256-value-valid(value(
     prefix + ".independent_unit.ordered_store_manifest_sha256",
   )) and type(value(prefix + ".independent_unit.scene_id")) == str)
-  let stored-unit-keys = unit-prefixes.map(prefix => str(value(
-    prefix + ".independent_unit.ordered_store_manifest_sha256",
-  )) + "|" + str(value(prefix + ".independent_unit.scene_id")))
+  let stored-unit-keys = unit-prefixes.map(prefix => q2-structured-key((
+    value(prefix + ".independent_unit.ordered_store_manifest_sha256"),
+    value(prefix + ".independent_unit.scene_id"),
+  )))
   let unit-aggregates-valid = unit-key-types-valid and ordered-unit-manifests.len() == 1 and unit-prefixes.len() == population-unit-keys.len() and stored-unit-keys.dedup().len() == stored-unit-keys.len() and stored-unit-keys.sorted() == population-unit-keys.sorted() and unit-prefixes.enumerate().all(((index, prefix)) => {
     let unit-key = stored-unit-keys.at(index)
     let scene = value(prefix + ".independent_unit.scene_id")

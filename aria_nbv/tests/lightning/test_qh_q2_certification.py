@@ -4,7 +4,7 @@
 
 from __future__ import annotations
 
-from dataclasses import replace
+from dataclasses import asdict, replace
 
 import pytest
 import torch
@@ -64,16 +64,17 @@ def test_exact_q2_certifier_is_bounded_deterministic_and_semantically_explicit()
         selection_seed=17,
     )
     certifier = QhExactQ2Certifier(spec)
+    dataset = _dataset(10, scene_count=5)
 
     first = certifier.certify(
         module=module,
-        dataset=_dataset(10, scene_count=5),
+        dataset=dataset,
         device=torch.device("cpu"),
         ordered_store_manifest_sha256=_ORDERED_STORE_MANIFEST_SHA256,
     )
     second = certifier.certify(
         module=module,
-        dataset=_dataset(10, scene_count=5),
+        dataset=dataset,
         device=torch.device("cpu"),
         ordered_store_manifest_sha256=_ORDERED_STORE_MANIFEST_SHA256,
     )
@@ -83,6 +84,9 @@ def test_exact_q2_certifier_is_bounded_deterministic_and_semantically_explicit()
     assert census["selected_chain_count"] == 5
     assert census["selected_chain_fraction"] == pytest.approx(0.5)
     assert census["near_exhaustive"] is False
+    assert census["chains"] == [
+        {"dataset_index": index, "identity": asdict(dataset.chain_identity(index))} for index in range(len(dataset))
+    ]
     assert first["selected_chain_support"] == second["selected_chain_support"]
     assert first["factual_selected_action_exact_q2_rows"] == second["factual_selected_action_exact_q2_rows"]
     assert first["aggregate"] == {
@@ -97,7 +101,7 @@ def test_exact_q2_certifier_is_bounded_deterministic_and_semantically_explicit()
         "tolerance_passed": True,
     }
     assert first["learned_recursion_passed"] is True
-    assert first["schema_version"] == "qh-exact-q2-certification-v4"
+    assert first["schema_version"] == "qh-exact-q2-certification-v5"
     assert sum(row["factual_selected_action_exact_q2_row_count"] for row in first["support_stratum_aggregates"]) == 5
     assert first["evidence_semantics"] == {
         "quantity": "learned_recursive_q2_target_error_against_factual_dense_successor_control",

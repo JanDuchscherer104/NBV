@@ -82,7 +82,10 @@ its declared maximum. This supports point-estimated threshold attainment and
 evidence above chance, not the stronger claim that the population ranking
 exceeds the declared threshold.
 
-The exact-$Q_2$ receipt keeps aggregate MAE diagnostic. Promotion instead
+The exact-$Q_2$ receipt keeps aggregate MAE diagnostic. Its coverage
+denominator is reconstructed from the complete metadata-only held-out chain
+identity roster captured before bounded selection; every selected chain and
+reported stratum must reconcile to that roster. Promotion instead
 mirrors the executable `all_units_v1` contract: selected-chain coverage reaches
 its frozen minimum, every selected support stratum contains an exact factual
 row, the selected independent-unit count and minimum rows per unit meet their

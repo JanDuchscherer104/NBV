@@ -1132,6 +1132,7 @@
   store-indices: none,
 ) = {
   let selected-count = row-counts.len()
+  assert(population-count >= selected-count)
   let selected-store-indices = if store-indices == none {
     row-counts.map(_ => 0)
   } else { store-indices }
@@ -1206,6 +1207,29 @@
     "bound_contract.ordered_test_store_manifests[" + str(index) + "]",
     manifest,
   ))
+  let population-roster = range(population-count).map(chain-index => {
+    let store-index = if chain-index < selected-count {
+      selected-store-indices.at(chain-index)
+    } else {
+      selected-store-indices.first()
+    }
+    let scene-index = if chain-index < selected-count { chain-index } else { 0 }
+    let prefix = "exact_q2.population_census.chains[" + str(chain-index) + "]"
+    (
+      typed-sidecar-row(q2-receipt-sidecar, prefix + ".dataset_index", chain-index),
+      typed-sidecar-row(q2-receipt-sidecar, prefix + ".identity.store_index", store-index),
+      typed-sidecar-row(q2-receipt-sidecar, prefix + ".identity.rollout_row_id", chain-index),
+      typed-sidecar-row(q2-receipt-sidecar, prefix + ".identity.source_sample_index", chain-index),
+      typed-sidecar-row(q2-receipt-sidecar, prefix + ".identity.scene_id", "scene-" + str(scene-index)),
+      typed-sidecar-row(q2-receipt-sidecar, prefix + ".identity.target_row_id", scene-index),
+      typed-sidecar-row(q2-receipt-sidecar, prefix + ".identity.configured_horizon", 2),
+      typed-sidecar-row(q2-receipt-sidecar, prefix + ".identity.candidate_width_min", 4),
+      typed-sidecar-row(q2-receipt-sidecar, prefix + ".identity.candidate_width_max", 4),
+      typed-sidecar-row(q2-receipt-sidecar, prefix + ".identity.candidate_config_hash", candidate-config),
+      typed-sidecar-row(q2-receipt-sidecar, prefix + ".identity.rollout_config_hash", rollout-config),
+      typed-sidecar-row(q2-receipt-sidecar, prefix + ".identity.selection_policy", "oracle-lookahead"),
+    )
+  }).flatten()
   let selected = row-counts.enumerate().map(((scene-index, row-count)) => {
     let prefix = "exact_q2.selected_chain_support[" + str(scene-index) + "]"
     let store-index = selected-store-indices.at(scene-index)
@@ -1406,7 +1430,7 @@
     typed-sidecar-row(q2-receipt-sidecar, "exact_q2.independent_unit_gate.all_selected_units_passed", all-selected-pass),
     typed-sidecar-row(q2-receipt-sidecar, "exact_q2.independent_unit_gate.passed", minimum-units-met and all-selected-pass),
   )
-  envelope + manifest-roster + population-summary + census + selected + denominators + support-aggregates + rows + aggregate + stratum-aggregates + unit-aggregates + gate
+  envelope + manifest-roster + population-summary + population-roster + census + selected + denominators + support-aggregates + rows + aggregate + stratum-aggregates + unit-aggregates + gate
 }
 
 #let q2-report(
@@ -2665,6 +2689,9 @@
   receipt-values: mutate-sidecar-value(q2-receipt-values, "schema_version", "qh-exact-q2-certification-receipt-v3"),
 ), "store-a"))
 #assert(not report-store-q2-evidence-valid(q2-report(
+  receipt-values: mutate-sidecar-value(q2-receipt-values, "schema_version", "qh-exact-q2-certification-receipt-v4"),
+), "store-a"))
+#assert(not report-store-q2-evidence-valid(q2-report(
   receipt-values: mutate-sidecar-value(q2-receipt-values, "bundle_manifest_sha256", "invalid"),
 ), "store-a"))
 #assert(not report-store-q2-evidence-valid(q2-report(
@@ -2910,6 +2937,43 @@
     "exact_q2.independent_unit_aggregates[5]",
   ),
 ), "store-a"))
+#let q2-missing-population-chain = q2-certification-sidecar-value-rows(
+  population-count: 6,
+).filter(row => not row.key.starts-with("exact_q2.population_census.chains[5]."))
+#assert(not report-store-q2-evidence-valid(q2-report(
+  population-count: 6,
+  receipt-values: q2-missing-population-chain,
+), "store-a"))
+#assert(not report-store-q2-evidence-valid(q2-report(
+  receipt-values: mutate-sidecar-value(
+    q2-receipt-values,
+    "exact_q2.population_census.chains[0].identity.source_sample_index",
+    99,
+  ),
+), "store-a"))
+#let q2-delimiter-collision = {
+  let values = q2-receipt-values
+  for prefix in (
+    "exact_q2.selected_chain_support[0].identity",
+    "exact_q2.support_stratum_aggregates[0].stratum",
+    "exact_q2.factual_selected_action_exact_q2_rows[0]",
+    "exact_q2.stratum_aggregates[0].stratum",
+  ) {
+    values = mutate-sidecar-value(values, prefix + ".candidate_config_hash", "a")
+    values = mutate-sidecar-value(values, prefix + ".rollout_config_hash", "b|c")
+  }
+  for prefix in (
+    "exact_q2.population_census.chains[0].identity",
+    "exact_q2.population_census.strata[0].stratum",
+  ) {
+    values = mutate-sidecar-value(values, prefix + ".candidate_config_hash", "a|b")
+    values = mutate-sidecar-value(values, prefix + ".rollout_config_hash", "c")
+  }
+  values
+}
+#assert(not report-store-q2-evidence-valid(q2-report(
+  receipt-values: q2-delimiter-collision,
+), "store-a"))
 #assert(not report-store-q2-evidence-valid(q2-report(
   receipt-values: q2-receipt-values.filter(row => not row.key.starts-with("exact_q2.support_stratum_aggregates[0].")),
 ), "store-a"))
@@ -2957,6 +3021,7 @@
     "exact_q2.population_census.strata[5]",
   )
   values = mutate-sidecar-value(values, "exact_q2.population_census.strata[5].stratum.store_index", 1)
+  values = mutate-sidecar-value(values, "exact_q2.population_census.chains[5].identity.store_index", 1)
   values = mutate-sidecar-value(values, "exact_q2.population_census.strata[5].selected_chain_count", 0)
   values = mutate-sidecar-value(values, "exact_q2.population_census.strata[5].selected_chain_fraction", 0.0)
   values
