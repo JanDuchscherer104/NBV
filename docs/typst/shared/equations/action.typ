@@ -2,11 +2,6 @@
 
 #let action = (
     space: $ cal(A)^"cont" subset bb(R)^3 times op("SO")(2) $,
-    unit_vector: $
-      op("normalize")(bold(v)) = bold(v) / norm(bold(v))_2,
-      quad
-      bold(v) != bold(0)
-    $,
     candidate_shell: $
       #symb.rl.candidate_table = {q_(t,i)}_(i=1)^(#symb.shape.Nq),
       quad
@@ -26,28 +21,37 @@
     $,
     capped_direction: $
       bold(d)_i^0 =
-      op("normalize")((sqrt(1 - y'^2) sin psi', y', sqrt(1 - y'^2) cos psi'))
+      (sqrt(1 - y'^2) sin psi', y', sqrt(1 - y'^2) cos psi'),
+      quad
+      norm(bold(d)_i^0)_2 = 1
     $,
     family_directions: $
-      bold(d)_i^"forward"
+      bold(g)_i^"forward"
       =
-      op("normalize")(bold(f) + alpha_f (bold(d)_i^0 - (bold(d)_i^0 dot bold(f)) bold(f))),
+      bold(f) + alpha_f (bold(d)_i^0 - (bold(d)_i^0 dot bold(f)) bold(f)),
+      quad
+      bold(d)_i^"forward"
+      = bold(g)_i^"forward" / norm(bold(g)_i^"forward")_2,
       quad
       alpha_f = 0.45
       \
-      bold(d)_i^"target"
+      bold(g)_i^"target"
       =
-      op("normalize")(bold(b)_e + alpha_t (bold(d)_i^0 - (bold(d)_i^0 dot bold(b)_e) bold(b)_e)),
+      bold(b)_e + alpha_t (bold(d)_i^0 - (bold(d)_i^0 dot bold(b)_e) bold(b)_e),
+      quad
+      bold(d)_i^"target"
+      = bold(g)_i^"target" / norm(bold(g)_i^"target")_2,
       quad
       alpha_t = 0.4
       \
-      bold(d)_i^"bypass"
+      bold(g)_i^"bypass"
       =
-      op("normalize")(
-        0.55 bold(b)_e
-        + 0.85 op("sign")(d_(i,x)^0) bold(l)_e
-        + op("clip")(d_(i,y)^0, -0.35, 0.35) bold(e)_y
-      )
+      0.55 bold(b)_e
+      + 0.85 op("sign")(d_(i,x)^0) bold(l)_e
+      + op("clip")(d_(i,y)^0, -0.35, 0.35) bold(e)_y,
+      quad
+      bold(d)_i^"bypass"
+      = bold(g)_i^"bypass" / norm(bold(g)_i^"bypass")_2
     $,
     candidate_center_world: $
       r_i ~ cal(U)(r_"min"^(k(i)), r_"max"^(k(i))),
@@ -55,10 +59,13 @@
       bold(c)_i^w = bold(T)_r^w (r_i bold(d)_i^(k(i)))
     $,
     target_lookat_frame: $
-      bold(z)_i^w = op("normalize")(bold(p)_e - bold(c)_i^w),
+      bold(z)_i^w =
+      (bold(p)_e - bold(c)_i^w) / norm(bold(p)_e - bold(c)_i^w)_2,
+      quad
+      bold(g)_i^"up" = bold(e)_y - (bold(e)_y^T bold(z)_i^w) bold(z)_i^w,
       quad
       bold(y)_i^w =
-      op("normalize")(bold(e)_y - (bold(e)_y^T bold(z)_i^w) bold(z)_i^w),
+      bold(g)_i^"up" / norm(bold(g)_i^"up")_2,
       quad
       bold(x)_i^w = bold(y)_i^w times bold(z)_i^w
     $,

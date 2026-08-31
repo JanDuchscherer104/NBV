@@ -683,7 +683,7 @@ return {
       thesis_list = false,
     },
     ["action.capped_direction"] = {
-      tex = "\\boldsymbol{d}_i^0=\\operatorname{normalize}((\\sqrt{1-y_{\\mathrm{cap}}^2}\\sin\\psi_{\\mathrm{cap}},y_{\\mathrm{cap}},\\sqrt{1-y_{\\mathrm{cap}}^2}\\cos\\psi_{\\mathrm{cap}}))",
+      tex = "\\boldsymbol{d}_i^0=(\\sqrt{1-y_{\\mathrm{cap}}^2}\\sin\\psi_{\\mathrm{cap}},y_{\\mathrm{cap}},\\sqrt{1-y_{\\mathrm{cap}}^2}\\cos\\psi_{\\mathrm{cap}}),\\quad\\lVert\\boldsymbol{d}_i^0\\rVert_2=1",
       typst = "#eqs.action.capped_direction",
       description = "",
       thesis_list = false,
@@ -719,15 +719,9 @@ return {
       thesis_list = false,
     },
     ["action.target_lookat_frame"] = {
-      tex = "\\boldsymbol{z}_i^w=\\operatorname{normalize}(\\boldsymbol{p}_e-\\boldsymbol{c}_i^w),\\quad\\boldsymbol{x}_i^w=\\boldsymbol{y}_i^w\\times\\boldsymbol{z}_i^w",
+      tex = "\\boldsymbol{z}_i^w=(\\boldsymbol{p}_e-\\boldsymbol{c}_i^w)/\\lVert\\boldsymbol{p}_e-\\boldsymbol{c}_i^w\\rVert_2,\\quad\\boldsymbol{x}_i^w=\\boldsymbol{y}_i^w\\times\\boldsymbol{z}_i^w",
       typst = "#eqs.action.target_lookat_frame",
       description = "",
-      thesis_list = false,
-    },
-    ["action.unit_vector"] = {
-      tex = "\\operatorname{normalize}(\\boldsymbol{v})=\\boldsymbol{v}/\\lVert\\boldsymbol{v}\\rVert_2,\\quad \\boldsymbol{v}\\neq\\boldsymbol{0}",
-      typst = "#eqs.action.unit_vector",
-      description = "Unit-vector normalization used by candidate-direction and look-at constructions.",
       thesis_list = false,
     },
     ["action.valid_support_threshold"] = {

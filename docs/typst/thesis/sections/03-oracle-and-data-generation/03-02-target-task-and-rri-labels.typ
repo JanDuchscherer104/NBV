@@ -111,17 +111,13 @@ $
 
 The sampler draws a capped direction in the reference rig frame and reinterprets it as egocentric forward motion, target-bearing motion, lateral bypass, local refinement, or backtracking according to component provenance. Target-looking families orient their optical axis toward the oracle instruction. In this chapter that point is privileged; calling the generator target-conditioned does not make the point actor-visible.
 
-The three core position families then reinterpret this capped direction. The
-shared normalization operator is
-
-$
-  #eqs.action.unit_vector
-$
-
 Let $bold(f)=bold(e)_z$ be the rig-forward unit vector, $bold(b)_e$ the supplied
-target bearing in the reference frame, $bold(l)_e = op("normalize")(bold(e)_y times
-bold(b)_e)$ the horizontal lateral direction, and $bold(e)_y$ the world-up
-direction expressed in the sampling frame. The family directions are:
+target bearing in the reference frame,
+$bold(l)_e = (bold(e)_y times bold(b)_e) / norm(bold(e)_y times bold(b)_e)_2$
+the horizontal lateral direction, and $bold(e)_y$ the world-up direction
+expressed in the sampling frame. The three core position families reinterpret
+the capped direction through raw family vectors $bold(g)_i^(k)$ and their
+explicit Euclidean normalization:
 
 $
   #eqs.action.family_directions
