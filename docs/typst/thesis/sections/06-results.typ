@@ -147,7 +147,9 @@ a development fixture, training pilot, or incomplete store. The report keeps
 three states separate: whether a gate's evidence is available, whether its
 predeclared decision passes, and whether all prerequisites make its scientific
 claim admissible. A measured non-pass remains reported. It neither becomes zero
-nor suppresses independently measured evidence on the other lane.
+nor suppresses independently measured evidence on the other lane. An immutable
+digest is provenance only; evidence additionally requires its exact sidecar
+payload to reproduce every claimed row.
 
 #figure(
   publication-table(
@@ -155,12 +157,12 @@ nor suppresses independently measured evidence on the other lane.
     columns: (0.62fr, 0.62fr, 0.6fr, 0.65fr, 1.3fr, 1.42fr),
     header: ([*Gate / RQ*], [*Evidence*], [*Decision*], [*Claim*], [*Interpretation if admissible*], [*Blocking condition*]),
     rows: (
-      [measurement / RQ1], [#evidence-status(measurement-state)], [#gate-status(measurement-state)], [#claim-status(measurement-state)], [metric comparisons are stable under the frozen protocol], [absent repeats, identity mismatch, or tolerance non-pass],
-      [population/action / RQ4], [#evidence-status(support-state)], [#gate-status(support-state)], [#claim-status(support-state)], [the held-out population meets its minimum lower-tail action-support rule], [missing denominators, insufficient lower-tail support, or excessive failed roots],
-      [headroom / RQ2a], [#evidence-status(headroom-state)], [#gate-status(headroom-state)], [#claim-status(headroom-state)], [the frozen setup exposes meaningful non-myopic endpoint headroom], [a shared foundation or meaningful-effect rule does not pass],
-      [actor $Q_1$ / RQ3], [#evidence-status(q1-state)], [#gate-status(q1-state)], [#claim-status(q1-state)], [an immutable receipt verifies the held-out actor protocol, observation-derived target matching, leakage exclusion, hard masking, and causal history; ranking and calibration also pass], [a shared foundation, actor protocol, matching, leakage, ranking, uncertainty, or calibration rule does not pass],
-      [learned/exact $Q_2$ / RQ2], [#evidence-status(q2-state)], [#gate-status(q2-state)], [#claim-status(q2-state)], [selected-chain coverage and every admitted row, support stratum, and unit pass the exact-$Q_2$ receipt], [the $Q_1$ claim, selected-chain coverage, exact support, or rowwise tolerance rule does not pass],
-      [endpoint recovery / RQ2b], [#evidence-status(recovery-state)], [#gate-status(recovery-state)], [#claim-status(recovery-state)], [the recovery point estimate reaches its threshold and its interval supports positive mean recovery], [headroom, the learned-value lane, or the recovery rule does not pass],
+      [measurement / RQ1], [#evidence-status(measurement-state)], [#gate-status(measurement-state)], [#claim-status(measurement-state)], [matched-unit error and rank stability pass], [missing pairs, rank mismatch, or tolerance non-pass],
+      [population/action / RQ4], [#evidence-status(support-state)], [#gate-status(support-state)], [#claim-status(support-state)], [held-out attempts pass the lower-tail support rule], [missing attempts, low support, or excessive failed roots],
+      [headroom / RQ2a], [#evidence-status(headroom-state)], [#gate-status(headroom-state)], [#claim-status(headroom-state)], [meaningful non-myopic endpoint headroom passes], [shared foundation or effect rule non-pass],
+      [actor $Q_1$ / RQ3], [#evidence-status(q1-state)], [#gate-status(q1-state)], [#claim-status(q1-state)], [actor-protocol receipt and ranking/calibration rule pass], [shared foundation or actor-$Q_1$ rule non-pass],
+      [learned/exact $Q_2$ / RQ2], [#evidence-status(q2-state)], [#gate-status(q2-state)], [#claim-status(q2-state)], [exact-$Q_2$ coverage, support, and rowwise tolerance pass], [$Q_1$ claim or exact-$Q_2$ rule non-pass],
+      [endpoint recovery / RQ2b], [#evidence-status(recovery-state)], [#gate-status(recovery-state)], [#claim-status(recovery-state)], [threshold and positive interval support recovery], [headroom, learned-value, or recovery rule non-pass],
     ),
   ),
   caption: [Evidence state, gate decision, and claim admissibility by inferential stage. Available evidence remains reported after a non-pass; only claims whose prerequisites pass are admitted.],
@@ -173,6 +175,8 @@ nor suppresses independently measured evidence on the other lane.
 ))
 #let measurement-summary-family = (band: "foundations", label: [Measurement], metrics: (
   (label: [Maximum repeat discrepancy], key: "oracle.metric.repeatability.max_abs_diff", denominator-key: "oracle.metric.repeatability.n_repeats", digits: 5),
+  (label: [Measurement units], key: "oracle.metric.repeatability.n_measurement_units"),
+  (label: [Matched-unit rank identity], key: "oracle.metric.repeatability.ranking_agreement"),
   (label: [Declared repeatability tolerance], key: "oracle.metric.repeatability.tolerance", digits: 5),
   (label: [Repeatability gate], key: "oracle.metric.repeatability.passed"),
 ))
@@ -363,33 +367,43 @@ nor suppresses independently measured evidence on the other lane.
 == Measurement Validity
 
 #if measurement-state.evidence_available [
-  The confirmatory bundle contains the frozen repeatability population,
-  statistic, tolerance decision, and provenance; values appear in
+  The confirmatory bundle contains an immutable matched-unit receipt whose
+  repeat--measurement pairs bind inputs, metric-output artifacts, protocol,
+  configuration, and store manifest. An independent benchmark plan fixes the
+  expected repeat identifiers and count, measurement identities, and
+  ranking-group membership. The report verifies rectangular
+  completeness, reproduces the maximum discrepancy, and derives rank identity
+  from the bound gains under the frozen order and tie rule. The values appear in
   @tab:thesis-confirmatory-values. The measurement gate
   #if measurement-state.gate_passed [passes, so its dependent claims may use
   the metric.] else [does not pass; the observed result remains auditable, but
   dependent claims are blocked.]
 ] else [
-  No confirmatory repeatability statistic and decision are loaded for the
-  frozen endpoint metric. Dependent claims are blocked without converting
-  separate diagnostics to zero.
+  No qualifying benchmark-plan and receipt pair binds a complete repeated
+  matched-unit roster with recomputed error and rank stability for the frozen
+  endpoint metric. Dependent claims are blocked without converting separate
+  diagnostics to zero.
 ]
 
 == Population and Action Support
 
 #if support-state.evidence_available [
-  The report supplies scene, target, and exclusion denominators together with
-  actor-valid fraction, lower-tail valid support, failed-root rate, configured-
-  family zero rate, target-side balance, and circular orbit span. These state--
-  scene summaries delimit the action population; they are not paired policy
-  effects. The rule-checked minimum factual-support decision
+  An independently frozen benchmark plan fixes the scene/root roster, while an
+  immutable per-attempt receipt binds each planned identity to valid count,
+  threshold, outcome, configuration, and store manifest. The report recomputes
+  lower-tail valid support and failed-root rate from those rows, then
+  supplies actor-valid fraction, configured-family zero rate, target-side
+  balance, and circular orbit span as diagnostics. These state--scene summaries
+  delimit the action population; they are not paired policy effects. The
+  rule-checked minimum factual-support decision
   #if support-state.gate_passed [passes.] else [is a non-pass, so dependent
   claims are blocked.] Family survival and target-relative diversity remain
   diagnostics rather than being promoted by this minimum-support gate.
 ] else [
-  No held-out bundle supplies the study population, complete candidate-support
-  denominators, and prespecified support decision. Training-source reachability
-  and renderer failures remain feasibility observations.
+  No held-out bundle supplies the study population, independent benchmark
+  roster, and per-attempt receipt from which the support summary and decision
+  can be recomputed. Training-source
+  reachability and renderer failures remain feasibility observations.
 ]
 
 == Oracle Headroom

@@ -52,13 +52,20 @@ throughput or support, but it cannot estimate held-out policy performance.
 
 The confirmatory report treats scenes, admitted targets, and exclusions as
 integer counts tied to the same positive scene denominator and immutable
-analysis sidecar. Repeatability likewise reports a nonnegative maximum absolute
-root-normalized-gain discrepancy over at least two repeated executions, a
-nonnegative declared tolerance, the repeat count, and the frozen rule
-`max_abs_diff_lte_tolerance_v1`. Its boolean decision must equal the literal
-comparison between discrepancy and tolerance under one source and denominator.
-Malformed values or metadata leave these foundations unavailable; they are not
-interpreted as measured non-passes.
+analysis sidecar. Repeatability reports the maximum matched-unit absolute
+root-normalized-gain discrepancy over at least two executions, exact derived-
+rank agreement, a nonnegative tolerance, both repeat and measurement-unit
+counts, and the frozen rule
+`max_abs_diff_lte_tolerance_and_rank_identity_v2`. Its decision is the literal
+conjunction of discrepancy within tolerance and rank identity. An immutable
+benchmark plan independently freezes the repeat identifiers and count,
+measurement identities, and ranking-group membership.
+An immutable receipt binds every repeat--measurement pair to its input,
+metric-output artifact, protocol and configuration, and store manifest; the
+report recomputes roster completeness, maximum discrepancy, and ranks from the
+bound gains under the frozen ordering and tie rule. Aggregates,
+missing pairs, or inconsistent bindings leave the foundation unavailable rather
+than becoming measured non-passes.
 
 The current task generator samples geometry-valid ground-truth boxes. It can
 therefore establish oracle-task coverage, not actor-visible target discovery.

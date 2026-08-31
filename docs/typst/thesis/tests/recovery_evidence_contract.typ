@@ -21,6 +21,61 @@
   status: "confirmatory",
   source: source,
 )
+#let typed-sidecar-row(sidecar-id, key, value) = {
+  let base = (
+    sidecar_id: sidecar-id,
+    key: key,
+    value_bool: none,
+    value_int: none,
+    value_float: none,
+    value_text: none,
+    is_missing: false,
+  )
+  if type(value) == bool {
+    base + (value_type: "bool", value_bool: value)
+  } else if type(value) == int {
+    base + (value_type: "int", value_int: value)
+  } else if type(value) == float {
+    base + (value_type: "float", value_float: value)
+  } else if type(value) == str {
+    base + (value_type: "str", value_text: value)
+  } else {
+    assert(false, message: "unsupported synthetic sidecar value")
+  }
+}
+#let analysis-sidecar-value-rows(sidecar-id, logical-name, rows) = {
+  let output = (
+    typed-sidecar-row(sidecar-id, "schema_version", "aria-nbv-analysis-facts-v1"),
+    typed-sidecar-row(sidecar-id, "bundle_role", "analysis_facts"),
+    typed-sidecar-row(sidecar-id, "logical_name", logical-name),
+    typed-sidecar-row(sidecar-id, "status", "confirmatory"),
+  )
+  for (index, row) in rows.enumerate() {
+    let prefix = "facts[" + str(index) + "]"
+    let provenance = row.source.replace("|sidecar:" + sidecar-id, "")
+    output += (
+      typed-sidecar-row(sidecar-id, prefix + ".store_id", row.store_id),
+      typed-sidecar-row(sidecar-id, prefix + ".key", row.key),
+      typed-sidecar-row(sidecar-id, prefix + ".value", row.value),
+      typed-sidecar-row(sidecar-id, prefix + ".unit", row.unit),
+      typed-sidecar-row(sidecar-id, prefix + ".n", row.n),
+      typed-sidecar-row(sidecar-id, prefix + ".aggregation", row.aggregation),
+      typed-sidecar-row(sidecar-id, prefix + ".provenance", provenance),
+    )
+  }
+  output
+}
+#let mutate-sidecar-fact-value(sidecar-value-rows, fact-key, replacement) = {
+  let key-row = sidecar-value-rows.find(row => (
+    row.key.match(regex("^facts\\[[0-9]+\\]\\.key$")) != none,
+    row.value_type == "str",
+    row.value_text == fact-key,
+  ).all(value => value))
+  let prefix = key-row.key.replace(regex("\\.key$"), "")
+  sidecar-value-rows.map(row => if row.key == prefix + ".value" {
+    typed-sidecar-row(row.sidecar_id, row.key, replacement)
+  } else { row })
+}
 #let endpoint-rows(cohort: cohort-a, source: source, scene-value: 5) = (
   fact("policy.endpoint_gain.oracle_one_step.mean", 0.20, "fraction", 5, "paired_scene_endpoint_gain", source: source),
   fact("policy.endpoint_gain.oracle_one_step.ci_low", 0.10, "fraction", 5, "paired_scene_endpoint_gain", source: source),
@@ -81,13 +136,25 @@
   fact("policy.q_recovery.rule", rule, "identity", row-n, "analysis_identity", source: source),
   fact("policy.q_recovery.passed", passed, "bool", row-n, "paired_scene_decision", source: source),
 )
-#let report(rows, sidecar-rows: sidecars) = (
-  tables: (
-    stores: (rows: ((store_id: "store-a"),)),
-    facts: (rows: rows),
-    sidecars: (rows: sidecar-rows),
-  ),
-)
+#let report(rows, sidecar-rows: sidecars, sidecar-value-rows: none) = {
+  let projected-sidecar-values = if sidecar-value-rows != none {
+    sidecar-value-rows
+  } else {
+    let sidecar-id = rows.first().source.split("|sidecar:").last()
+    let matches = sidecar-rows.filter(sidecar => sidecar.sidecar_id == sidecar-id)
+    if matches.len() == 1 {
+      analysis-sidecar-value-rows(sidecar-id, matches.first().name, rows)
+    } else { () }
+  }
+  (
+    tables: (
+      stores: (rows: ((store_id: "store-a"),)),
+      facts: (rows: rows),
+      sidecars: (rows: sidecar-rows),
+      sidecar_values: (rows: projected-sidecar-values),
+    ),
+  )
+}
 #let accepted = report(endpoint-rows() + headroom-rows() + recovery-rows())
 #let endpoint-valid = report-store-endpoint-evidence-valid(accepted, "store-a", 5)
 #let headroom-valid = report-store-headroom-evidence-valid(accepted, "store-a", 5)
@@ -95,6 +162,36 @@
 #assert(endpoint-valid)
 #assert(headroom-valid)
 #assert(recovery-valid)
+#let accepted-rows = endpoint-rows() + headroom-rows() + recovery-rows()
+#let accepted-payload = analysis-sidecar-value-rows(
+  sidecar-a,
+  "paired-policy",
+  accepted-rows,
+)
+#assert(not report-store-endpoint-evidence-valid(report(
+  accepted-rows,
+  sidecar-value-rows: mutate-sidecar-fact-value(
+    accepted-payload,
+    "policy.endpoint_gain.oracle_lookahead.mean",
+    0.49,
+  ),
+), "store-a", 5))
+#assert(not report-store-headroom-evidence-valid(report(
+  accepted-rows,
+  sidecar-value-rows: mutate-sidecar-fact-value(
+    accepted-payload,
+    "policy.paired_scene_endpoint.effect",
+    0.29,
+  ),
+), "store-a", 5))
+#assert(not report-store-recovery-evidence-valid(report(
+  accepted-rows,
+  sidecar-value-rows: mutate-sidecar-fact-value(
+    accepted-payload,
+    "policy.q_recovery.fraction",
+    0.59,
+  ),
+), "store-a", 5))
 #assert(report-store-recovery-evidence-valid(
   report(recovery-rows(metric-value: 0.5, ci-low: 0.2)),
   "store-a",
@@ -285,7 +382,23 @@
     "policy.q_recovery.cohort_sha256",
   ),
 ))
-#let mismatched-source = report(endpoint-rows() + headroom-rows() + recovery-rows(source: "analysis/other.json|sidecar:" + sidecar-b, ci-source: "analysis/other.json|sidecar:" + sidecar-b))
+#let mismatched-source-primary-rows = endpoint-rows() + headroom-rows()
+#let mismatched-source-recovery-rows = recovery-rows(
+  source: "analysis/other.json|sidecar:" + sidecar-b,
+  ci-source: "analysis/other.json|sidecar:" + sidecar-b,
+)
+#let mismatched-source = report(
+  mismatched-source-primary-rows + mismatched-source-recovery-rows,
+  sidecar-value-rows: analysis-sidecar-value-rows(
+    sidecar-a,
+    "paired-policy",
+    mismatched-source-primary-rows,
+  ) + analysis-sidecar-value-rows(
+    sidecar-b,
+    "other",
+    mismatched-source-recovery-rows,
+  ),
+)
 #assert(report-store-recovery-evidence-valid(mismatched-source, "store-a", 5))
 #assert(not report-store-facts-share-source(
   mismatched-source,

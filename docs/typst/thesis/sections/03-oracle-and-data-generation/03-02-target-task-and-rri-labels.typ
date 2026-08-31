@@ -335,8 +335,9 @@ diagnostic; passage does not imply diverse proposal geometry. Missing, malformed
 or contradictory rows leave the gate unresolved.
 
 The writer retains rejection outcomes but not passing-root counts. Admission
-therefore awaits an immutable per-attempt sidecar of scene and root identity,
-valid count, threshold, and outcome.
+therefore awaits an independently frozen benchmark roster plus an immutable
+receipt that records every planned scene/root identity, valid count, threshold,
+and outcome. The observed receipt cannot define its own completeness criterion.
 
 === Rollout Branch Sampling and Dataset Impact
 
@@ -419,7 +420,10 @@ The completeness reduction gives every mesh face equal weight. It is deliberatel
 === Reliability under the Frozen Protocol
 
 Reliability asks whether repeated execution of the same declared intervention
-produces stable errors and candidate rankings. It therefore covers rendering,
+produces stable errors and candidate rankings. A frozen benchmark roster fixes
+the expected repeat identifiers and count, measurement identities, and ranking
+groups before the observed receipt is read; ranks are derived from bound gains
+under a declared direction and tie rule. Reliability therefore covers rendering,
 backprojection, crop construction, point fusion and capping, numerical failure
 handling, and any stochastic sampling used by the metric. Deterministic code
 paths and a fixed mesh make the protocol reproducible in principle, but they do

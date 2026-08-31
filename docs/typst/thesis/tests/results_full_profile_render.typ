@@ -82,7 +82,7 @@ This page set exercises every current result family at final A4 size. Values are
 synthetic layout tokens only.
 
 #let bands = (
-  (id: "foundations", expected: 15, caption: [Population, measurement, and candidate-support rows]),
+  (id: "foundations", expected: 17, caption: [Population, measurement, and candidate-support rows]),
   (id: "policy", expected: 14, caption: [Endpoint, headroom, actor-$Q_1$, and recovery rows]),
   (id: "q2", expected: 12, caption: [Exact-$Q_2$ agreement and threshold rows]),
   (id: "resources", expected: 3, caption: [Resource rows]),
