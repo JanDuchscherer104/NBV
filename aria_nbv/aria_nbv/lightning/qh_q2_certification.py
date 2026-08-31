@@ -46,7 +46,7 @@ from ..data_handling.qh_data import QhBatch, QhChain, collate_qh_chains
 from ..rollouts.qh_reader import QhRolloutChainIdentity
 from .qh_module import QhLightningModule
 
-QH_EXACT_Q2_CERTIFICATION_SCHEMA_VERSION = "qh-exact-q2-certification-v3"
+QH_EXACT_Q2_CERTIFICATION_SCHEMA_VERSION = "qh-exact-q2-certification-v4"
 QH_EXACT_Q2_SELECTION_SEMANTICS = "balanced-hash-within-scene-target-support-strata-v2"
 QH_EXACT_Q2_INDEPENDENT_UNIT_SEMANTICS = "ordered-store-manifest-and-scene-v1"
 QH_EXACT_Q2_INDEPENDENT_UNIT_AGGREGATION = "all_units_v1"
@@ -474,20 +474,43 @@ class QhExactQ2Certifier:
             if not all(_is_finite_float32(value) for value in (absolute_error, tolerance, relative_error)):
                 raise ValueError("Q_H exact-Q2 error evidence must remain within the finite float32 domain.")
             current_width = int(actor.candidate_mask[0, step].sum().item())
-            successor_action_width = int(successor_action_mask[0, step].sum().item())
-            successor_width = int(successor_backup_mask[0, step].sum().item())
+            successor_action = successor_action_mask[0, step]
+            successor_backup = successor_backup_mask[0, step]
+            successor_action_width = int(successor_action.sum().item())
+            successor_width = int(successor_backup.sum().item())
             selected_index = int(supervision.selected_index[0, step].item())
             immediate_reward = float(supervision.candidate_reward[0, step, selected_index].item())
             discount = float(supervision.discount[0, step].item())
             terminal = bool(supervision.terminal[0, step].item())
             if terminal or step + 1 >= supervision.candidate_reward.shape[1]:
                 raise ValueError("Q_H exact-Q2 row must have a factual nonterminal successor state.")
-            successor_rewards = supervision.candidate_reward[0, step + 1][successor_backup_mask[0, step]]
-            if successor_action_width < 1 or successor_width != successor_action_width:
+            successor_candidate_count = int(actor.candidate_mask[0, step + 1].sum().item())
+            if not (
+                identity.candidate_width_min <= current_width <= identity.candidate_width_max
+                and identity.candidate_width_min <= successor_candidate_count <= identity.candidate_width_max
+            ):
+                raise ValueError("Q_H exact-Q2 materialized width is outside the declared candidate-width range.")
+            if successor_action_width < 1 or not torch.equal(successor_backup, successor_action):
                 raise ValueError("Q_H exact-Q2 row must bind every hard-valid successor reward.")
-            if successor_rewards.numel() != successor_width:
+            successor_indices = torch.nonzero(successor_backup, as_tuple=False).flatten().tolist()
+            if (
+                len(successor_indices) != successor_width
+                or successor_indices != sorted(set(successor_indices))
+                or any(index < 0 or index >= successor_candidate_count for index in successor_indices)
+            ):
                 raise ValueError("Q_H exact-Q2 successor reward count is inconsistent with its support mask.")
-            successor_max_reward = float(successor_rewards.max().item())
+            successor_reward_ledger = [
+                {
+                    "candidate_index": index,
+                    "reward": float(supervision.candidate_reward[0, step + 1, index].item()),
+                }
+                for index in successor_indices
+            ]
+            if len(successor_reward_ledger) != successor_action_width or not all(
+                _is_finite_float32(entry["reward"]) for entry in successor_reward_ledger
+            ):
+                raise ValueError("Q_H exact-Q2 successor reward ledger must contain finite float32 evidence.")
+            successor_max_reward = max(float(entry["reward"]) for entry in successor_reward_ledger)
             transition_values = (immediate_reward, discount, successor_max_reward)
             if not all(_is_finite_float32(value) for value in transition_values) or discount < 0.0:
                 raise ValueError("Q_H exact-Q2 transition evidence must be finite with nonnegative discount.")
@@ -522,12 +545,14 @@ class QhExactQ2Certifier:
                     "selection_policy": identity.selection_policy,
                     "current_candidate_count": current_width,
                     "successor_action_count": successor_action_width,
+                    "successor_candidate_count": successor_candidate_count,
                     "successor_backup_count": successor_width,
                     "candidate_branch_bin": _candidate_branch_bin(successor_width),
                     "selected_index": selected_index,
                     "immediate_reward": immediate_reward,
                     "discount": discount,
                     "terminal": terminal,
+                    "successor_reward_ledger": successor_reward_ledger,
                     "successor_max_reward": successor_max_reward,
                     "recursive_target": recursive,
                     "exact_target": exact,

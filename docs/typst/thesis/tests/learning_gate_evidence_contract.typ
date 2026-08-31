@@ -1,21 +1,31 @@
-#import "../experiment_data.typ": candidate-support-benchmark-name, candidate-support-benchmark-schema, candidate-support-decision-rule, candidate-support-receipt-name, candidate-support-receipt-schema, canonical-sidecar-id, measurement-benchmark-name, measurement-benchmark-schema, measurement-protocol-receipt-name, measurement-protocol-receipt-schema, measurement-rank-direction, measurement-rank-tie-policy, paired-interval-method, q1-decision-rule, q1-pairwise-chance, q1-protocol-receipt-name, q1-protocol-receipt-schema, q1-scene-role, q1-target-source-protocol, q2-certification-receipt-schema, q2-certification-schema, q2-decision-rule, q2-independent-unit-aggregation, q2-independent-unit-semantics, q2-selection-semantics, repeatability-decision-rule, report-store-population-evidence-valid, report-store-measurement-evidence-valid, report-store-candidate-support-evidence-valid, report-store-q1-evidence-valid, report-store-q2-evidence-valid, sha256-hex
+#import "../experiment_data.typ": candidate-support-benchmark-name, candidate-support-benchmark-schema, candidate-support-decision-rule, candidate-support-receipt-name, candidate-support-receipt-schema, canonical-sidecar-id, measurement-benchmark-name, measurement-benchmark-schema, measurement-protocol-receipt-name, measurement-protocol-receipt-schema, measurement-rank-direction, measurement-rank-tie-policy, paired-interval-method, q1-analysis-receipt-name, q1-audit-action-mask-semantics, q1-audit-actor-input-leaves, q1-audit-actor-input-manifest-schema, q1-audit-campaign-descriptor-provenance, q1-audit-campaign-target-source, q1-audit-experiment-profile, q1-audit-gt-match-status, q1-audit-selected-observation-protocol, q1-audit-target-protocol, q1-bundle-manifest-name, q1-decision-rule, q1-pairwise-chance, q1-population-benchmark-name, q1-population-benchmark-schema, q1-protocol-receipt-name, q1-protocol-receipt-schema, q1-scene-role, q1-target-source-protocol, q2-certification-receipt-schema, q2-certification-schema, q2-decision-rule, q2-independent-unit-aggregation, q2-independent-unit-semantics, q2-selection-semantics, repeatability-decision-rule, report-store-population-evidence-valid, report-store-measurement-evidence-valid, report-store-candidate-support-evidence-valid, report-store-q1-evidence-valid, report-stores-q1-evidence-valid, report-store-q2-evidence-valid, sha256-hex
 
 #let digest-a = "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
 #let digest-b = "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
 #let protocol-digest = "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+#let q1-audit-digest = "edededededededededededededededededededededededededededededededed"
+#let q1-population-digest = "8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d"
+#let q1-multi-audit-digest = "e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7"
+#let q1-multi-population-digest = "8e8e8e8e8e8e8e8e8e8e8e8e8e8e8e8e8e8e8e8e8e8e8e8e8e8e8e8e8e8e8e8e"
 #let support-digest = "1212121212121212121212121212121212121212121212121212121212121212"
 #let measurement-digest = "3434343434343434343434343434343434343434343434343434343434343434"
 #let measurement-benchmark = "3636363636363636363636363636363636363636363636363636363636363636"
 #let q2-receipt-digest = "4545454545454545454545454545454545454545454545454545454545454545"
 #let q2-receipt-name = "exact-q2-certification.json"
 #let qh-bundle-manifest = "8181818181818181818181818181818181818181818181818181818181818181"
+#let qh-bundle-sidecar = canonical-sidecar-id(q1-bundle-manifest-name, qh-bundle-manifest)
 #let store-manifest = "5555555555555555555555555555555555555555555555555555555555555555"
+#let store-manifest-b = "5656565656565656565656565656565656565656565656565656565656565656"
 #let support-benchmark = "6666666666666666666666666666666666666666666666666666666666666666"
 #let support-config = "7777777777777777777777777777777777777777777777777777777777777777"
 #let measurement-config = "8888888888888888888888888888888888888888888888888888888888888888"
 #let sidecar-a = canonical-sidecar-id("qh-gates", digest-a)
 #let sidecar-b = canonical-sidecar-id("other", digest-b)
-#let protocol-sidecar = canonical-sidecar-id(q1-protocol-receipt-name, protocol-digest)
+#let protocol-sidecar = canonical-sidecar-id(q1-analysis-receipt-name, protocol-digest)
+#let q1-audit-sidecar = canonical-sidecar-id(q1-protocol-receipt-name, q1-audit-digest)
+#let q1-population-sidecar = canonical-sidecar-id(q1-population-benchmark-name, q1-population-digest)
+#let q1-multi-audit-sidecar = canonical-sidecar-id(q1-protocol-receipt-name, q1-multi-audit-digest)
+#let q1-multi-population-sidecar = canonical-sidecar-id(q1-population-benchmark-name, q1-multi-population-digest)
 #let support-sidecar = canonical-sidecar-id(candidate-support-receipt-name, support-digest)
 #let support-benchmark-sidecar = canonical-sidecar-id(candidate-support-benchmark-name, support-benchmark)
 #let measurement-sidecar = canonical-sidecar-id(measurement-protocol-receipt-name, measurement-digest)
@@ -42,13 +52,22 @@
 )
 #let measurement-protocol = "target-rri-measurement-v1"
 #let source = "analysis/qh-gates.json|sidecar:" + sidecar-a
-#let protocol-source = "analysis/q1-actor-protocol.json|sidecar:" + protocol-sidecar
+#let protocol-source = "analysis/q1-actor-analysis.json|sidecar:" + protocol-sidecar
+#let q1-candidate-row-key = "candidate" + "_" + "row" + "_" + "id"
+#let q1-actor-mask-key = "actor" + "_" + "action" + "_" + "mask"
+#let q1-label-mask-key = "oracle" + "_" + "label" + "_" + "mask"
+#let q1-train-mask-key = "q" + "_" + "train" + "_" + "mask"
 #let support-source = "analysis/candidate-support-attempts.json|sidecar:" + support-sidecar
 #let measurement-source = "analysis/oracle-measurement-repeatability.json|sidecar:" + measurement-sidecar
 #let sidecars = (
+  (sidecar_id: qh-bundle-sidecar, path: q1-bundle-manifest-name, name: q1-bundle-manifest-name, sha256: qh-bundle-manifest, format: "json", status: "confirmatory"),
   (sidecar_id: sidecar-a, path: "qh-gates", name: "qh-gates", sha256: digest-a, format: "json", status: "confirmatory"),
   (sidecar_id: sidecar-b, path: "other", name: "other", sha256: digest-b, format: "json", status: "confirmatory"),
-  (sidecar_id: protocol-sidecar, path: q1-protocol-receipt-name, name: q1-protocol-receipt-name, sha256: protocol-digest, format: "json", status: "confirmatory"),
+  (sidecar_id: protocol-sidecar, path: q1-analysis-receipt-name, name: q1-analysis-receipt-name, sha256: protocol-digest, format: "json", status: "confirmatory"),
+  (sidecar_id: q1-audit-sidecar, path: q1-protocol-receipt-name, name: q1-protocol-receipt-name, sha256: q1-audit-digest, format: "json", status: "confirmatory"),
+  (sidecar_id: q1-population-sidecar, path: q1-population-benchmark-name, name: q1-population-benchmark-name, sha256: q1-population-digest, format: "json", status: "confirmatory"),
+  (sidecar_id: q1-multi-audit-sidecar, path: q1-protocol-receipt-name, name: q1-protocol-receipt-name, sha256: q1-multi-audit-digest, format: "json", status: "confirmatory"),
+  (sidecar_id: q1-multi-population-sidecar, path: q1-population-benchmark-name, name: q1-population-benchmark-name, sha256: q1-multi-population-digest, format: "json", status: "confirmatory"),
   (sidecar_id: support-sidecar, path: candidate-support-receipt-name, name: candidate-support-receipt-name, sha256: support-digest, format: "json", status: "confirmatory"),
   (sidecar_id: support-benchmark-sidecar, path: candidate-support-benchmark-name, name: candidate-support-benchmark-name, sha256: support-benchmark, format: "json", status: "confirmatory"),
   (sidecar_id: measurement-sidecar, path: measurement-protocol-receipt-name, name: measurement-protocol-receipt-name, sha256: measurement-digest, format: "json", status: "confirmatory"),
@@ -206,12 +225,333 @@
   }).flatten()
   envelope + repeats + units
 }
+#let q1-bundle-manifest-sidecar-value-rows(
+  population-digest: q1-population-digest,
+  provenance-digest: "8383838383838383838383838383838383838383838383838383838383838383",
+  store-manifests: (store-manifest,),
+) = (
+  typed-sidecar-row(qh-bundle-sidecar, "identity.q1_population_benchmark_sha256", population-digest),
+  typed-sidecar-row(qh-bundle-sidecar, "identity.q1_test_provenance_sha256", provenance-digest),
+) + store-manifests.enumerate().map(((index, manifest)) => typed-sidecar-row(
+  qh-bundle-sidecar,
+  "identity.ordered_test_store_manifests[" + str(index) + "]",
+  manifest,
+))
+#let q1-fixture-roster(store-manifests) = {
+  let targets = store-manifests.enumerate().map(((store-index, _)) => range(5).map(scene-index => (
+    store: store-index,
+    scene: "scene-" + str(store-index) + "-" + str(scene-index),
+    row: scene-index,
+    id: "target/" + str(store-index) + "/" + str(scene-index),
+  )).flatten()).flatten()
+  let states = store-manifests.enumerate().map(((store-index, _)) => range(6).map(state-index => {
+    let scene-index = if state-index < 2 { 0 } else { state-index - 1 }
+    let step-index = if state-index == 1 { 1 } else { 0 }
+    let identity = str(store-index) + "|" + str(state-index)
+    let root-identity = str(store-index) + "|" + str(scene-index)
+    (
+      store: store-index,
+      scene: "scene-" + str(store-index) + "-" + str(scene-index),
+      rollout: scene-index,
+      step-row: step-index,
+      step: step-index,
+      target-row: scene-index,
+      candidate-width: 2,
+      selected-row: 100 + state-index * 2,
+      candidate-config: "9292929292929292929292929292929292929292929292929292929292929292",
+      root-observation: sha256-hex("root-observation|" + root-identity),
+      root-reference-pose: sha256-hex("root-reference-pose|" + root-identity),
+      candidate-pose-shell: sha256-hex("candidate-pose-shell|" + identity),
+      actor-action-support: sha256-hex("0|true\n1|false"),
+      remaining-budget: if scene-index == 0 { 2 - step-index } else { 1 },
+      state-index: state-index,
+    )
+  }).flatten()).flatten()
+  let candidates = states.map(state => range(2).map(candidate-index => (
+    store: state.store,
+    rollout: state.rollout,
+    step-row: state.step-row,
+    row: 100 + state.state-index * 2 + candidate-index,
+    index: candidate-index,
+    action-mask: candidate-index == 0,
+  )).flatten()).flatten()
+  (targets: targets, states: states, candidates: candidates)
+}
+
+#let q1-population-benchmark-sidecar-value-rows(
+  sidecar-id: q1-population-sidecar,
+  bundle-manifest: qh-bundle-manifest,
+  provenance-digest: "8383838383838383838383838383838383838383838383838383838383838383",
+  store-manifests: (store-manifest,),
+) = {
+  let roster = q1-fixture-roster(store-manifests)
+  let target-identities = roster.targets.map(
+    target => (target.store, target.scene, target.row, target.id, "9191919191919191919191919191919191919191919191919191919191919191").map(str).join("|"),
+  ).sorted()
+  let state-identities = roster.states.map(state => (
+    state.store,
+    state.scene,
+    state.rollout,
+    state.step-row,
+    state.step,
+    state.target-row,
+    state.candidate-width,
+    state.selected-row,
+    state.candidate-config,
+    state.root-observation,
+    state.root-reference-pose,
+    state.candidate-pose-shell,
+    state.actor-action-support,
+    state.remaining-budget,
+  ).map(str).join("|")).sorted()
+  let candidate-identities = roster.candidates.map(candidate => (
+    candidate.store,
+    candidate.rollout,
+    candidate.step-row,
+    candidate.row,
+    candidate.index,
+    if candidate.action-mask { "true" } else { "false" },
+  ).map(str).join("|")).sorted()
+  let roster-payload = "targets\n" + target-identities.join("\n") + "\nstates\n" + state-identities.join(
+    "\n",
+  ) + "\ncandidates\n" + candidate-identities.join("\n")
+  let envelope = (
+    typed-sidecar-row(sidecar-id, "schema_version", q1-population-benchmark-schema),
+    typed-sidecar-row(sidecar-id, "bundle_role", "q1_population_benchmark"),
+    typed-sidecar-row(sidecar-id, "logical_name", q1-population-benchmark-name),
+    typed-sidecar-row(sidecar-id, "status", "confirmatory"),
+    typed-sidecar-row(sidecar-id, "bundle_manifest_sha256", bundle-manifest),
+    typed-sidecar-row(sidecar-id, "test_provenance_sha256", provenance-digest),
+    typed-sidecar-row(sidecar-id, "roster_sha256", sha256-hex(roster-payload)),
+  )
+  let manifests = store-manifests.enumerate().map(((index, manifest)) => typed-sidecar-row(
+    sidecar-id,
+    "ordered_test_store_manifests[" + str(index) + "]",
+    manifest,
+  ))
+  let targets = roster.targets.enumerate().map(((index, target)) => {
+    let prefix = "expected_targets[" + str(index) + "]"
+    (
+      typed-sidecar-row(sidecar-id, prefix + ".store_index", target.store),
+      typed-sidecar-row(sidecar-id, prefix + ".scene_id", target.scene),
+      typed-sidecar-row(sidecar-id, prefix + ".target_row_id", target.row),
+      typed-sidecar-row(sidecar-id, prefix + ".target_id", target.id),
+      typed-sidecar-row(sidecar-id, prefix + ".descriptor_hash", "9191919191919191919191919191919191919191919191919191919191919191"),
+    )
+  }).flatten()
+  let states = roster.states.enumerate().map(((index, state)) => {
+    let prefix = "expected_states[" + str(index) + "]"
+    (
+      typed-sidecar-row(sidecar-id, prefix + ".store_index", state.store),
+      typed-sidecar-row(sidecar-id, prefix + ".scene_id", state.scene),
+      typed-sidecar-row(sidecar-id, prefix + ".rollout_row_id", state.rollout),
+      typed-sidecar-row(sidecar-id, prefix + ".step_row_id", state.step-row),
+      typed-sidecar-row(sidecar-id, prefix + ".step_index", state.step),
+      typed-sidecar-row(sidecar-id, prefix + ".target_row_id", state.target-row),
+      typed-sidecar-row(sidecar-id, prefix + ".candidate_width", state.candidate-width),
+      typed-sidecar-row(sidecar-id, prefix + ".selected_candidate_row_id", state.selected-row),
+      typed-sidecar-row(sidecar-id, prefix + ".candidate_config_hash", state.candidate-config),
+      typed-sidecar-row(sidecar-id, prefix + ".root_observation_evidence_sha256", state.root-observation),
+      typed-sidecar-row(sidecar-id, prefix + ".root_reference_pose_sha256", state.root-reference-pose),
+      typed-sidecar-row(sidecar-id, prefix + ".candidate_pose_shell_sha256", state.candidate-pose-shell),
+      typed-sidecar-row(sidecar-id, prefix + ".actor_action_support_sha256", state.actor-action-support),
+      typed-sidecar-row(sidecar-id, prefix + ".remaining_budget", state.remaining-budget),
+    )
+  }).flatten()
+  let candidates = roster.candidates.enumerate().map(((index, candidate)) => {
+    let prefix = "expected_candidates[" + str(index) + "]"
+    (
+      typed-sidecar-row(sidecar-id, prefix + ".store_index", candidate.store),
+      typed-sidecar-row(sidecar-id, prefix + ".rollout_row_id", candidate.rollout),
+      typed-sidecar-row(sidecar-id, prefix + ".step_row_id", candidate.step-row),
+      typed-sidecar-row(sidecar-id, prefix + "." + q1-candidate-row-key, candidate.row),
+      typed-sidecar-row(sidecar-id, prefix + ".candidate_index", candidate.index),
+      typed-sidecar-row(sidecar-id, prefix + "." + q1-actor-mask-key, candidate.action-mask),
+    )
+  }).flatten()
+  envelope + manifests + targets + states + candidates
+}
+
+#let q1-audit-sidecar-value-rows(
+  sidecar-id: q1-audit-sidecar,
+  population-digest: q1-population-digest,
+  store-manifests: (store-manifest,),
+) = {
+  let implementation-contract = "8484848484848484848484848484848484848484848484848484848484848484"
+  let actor-contract = "8686868686868686868686868686868686868686868686868686868686868686"
+  let learning-contract = "8585858585858585858585858585858585858585858585858585858585858585"
+  let roster = q1-fixture-roster(store-manifests)
+  let envelope = (
+    typed-sidecar-row(sidecar-id, "schema_version", q1-protocol-receipt-schema),
+    typed-sidecar-row(sidecar-id, "bundle_manifest_sha256", qh-bundle-manifest),
+    typed-sidecar-row(sidecar-id, "test_population_sha256", population-digest),
+    typed-sidecar-row(sidecar-id, "test_provenance_sha256", "8383838383838383838383838383838383838383838383838383838383838383"),
+    typed-sidecar-row(sidecar-id, "bound_contract.actor_manifest_payload_sha256", qh-bundle-manifest),
+    typed-sidecar-row(sidecar-id, "bound_contract.implementation_contract_payload_sha256", implementation-contract),
+    typed-sidecar-row(sidecar-id, "bound_contract.actor_state_contract_payload_sha256", actor-contract),
+    typed-sidecar-row(sidecar-id, "bound_contract.learning_contract_payload_sha256", learning-contract),
+    typed-sidecar-row(sidecar-id, "target_protocol", q1-audit-target-protocol),
+    typed-sidecar-row(sidecar-id, "experiment_profile", q1-audit-experiment-profile),
+    typed-sidecar-row(sidecar-id, "selected_observation_protocol", q1-audit-selected-observation-protocol),
+    typed-sidecar-row(sidecar-id, "action_mask_semantics", q1-audit-action-mask-semantics),
+    typed-sidecar-row(sidecar-id, "actor_input_manifest_schema", q1-audit-actor-input-manifest-schema),
+    typed-sidecar-row(sidecar-id, "population.target_count", roster.targets.len()),
+    typed-sidecar-row(sidecar-id, "population.state_count", roster.states.len()),
+    typed-sidecar-row(sidecar-id, "population.candidate_count", roster.candidates.len()),
+    typed-sidecar-row(sidecar-id, "summary.target_matching_passed", true),
+    typed-sidecar-row(sidecar-id, "summary.actor_input_manifest_audited", true),
+    typed-sidecar-row(sidecar-id, "summary.actor_oracle_mask_separation_audited", true),
+    typed-sidecar-row(sidecar-id, "summary.hard_mask_applied", true),
+    typed-sidecar-row(sidecar-id, "summary.causal_history_only", true),
+  )
+  let manifests = store-manifests.enumerate().map(((index, manifest)) => typed-sidecar-row(
+    sidecar-id,
+    "bound_contract.ordered_test_store_manifests[" + str(index) + "]",
+    manifest,
+  ))
+  let targets = roster.targets.enumerate().map(((record-index, target)) => {
+    let prefix = "targets[" + str(record-index) + "]"
+    (
+      typed-sidecar-row(sidecar-id, prefix + ".store_index", target.store),
+      typed-sidecar-row(sidecar-id, prefix + ".scene_id", target.scene),
+      typed-sidecar-row(sidecar-id, prefix + ".target_row_id", target.row),
+      typed-sidecar-row(sidecar-id, prefix + ".target_id", target.id),
+      typed-sidecar-row(sidecar-id, prefix + ".target_protocol", q1-audit-target-protocol),
+      typed-sidecar-row(sidecar-id, prefix + ".target_source", q1-audit-campaign-target-source),
+      typed-sidecar-row(sidecar-id, prefix + ".descriptor_source", q1-audit-campaign-target-source),
+      typed-sidecar-row(sidecar-id, prefix + ".descriptor_provenance", q1-audit-campaign-descriptor-provenance),
+      typed-sidecar-row(sidecar-id, prefix + ".descriptor_hash", "9191919191919191919191919191919191919191919191919191919191919191"),
+      typed-sidecar-row(sidecar-id, prefix + ".explicit_target_hash", "a1a1a1a1a1a1a1a1"),
+      typed-sidecar-row(sidecar-id, prefix + ".gt_match_status", q1-audit-gt-match-status),
+      typed-sidecar-row(sidecar-id, prefix + ".matched_target_row_id", target.row),
+      typed-sidecar-row(sidecar-id, prefix + ".matched_target_id", "gt-" + target.id),
+      typed-sidecar-row(sidecar-id, prefix + ".match_iou", 0.5),
+      typed-sidecar-row(sidecar-id, prefix + ".target_valid", true),
+      typed-sidecar-row(sidecar-id, prefix + ".gt_label_valid", true),
+    )
+  }).flatten()
+  let states = roster.states.enumerate().map(((record-index, state)) => {
+    let prefix = "states[" + str(record-index) + "]"
+    let history = if state.step == 0 { () } else {
+      (
+        typed-sidecar-row(sidecar-id, prefix + ".history[0].history_position", 0),
+        typed-sidecar-row(sidecar-id, prefix + ".history[0].source_step_index", 0),
+        typed-sidecar-row(sidecar-id, prefix + ".history[0].selected_candidate_row_id", 100),
+      )
+    }
+    let history-content = sha256-hex(if state.step == 0 { "" } else { "0|0|100" })
+    let leaves = q1-audit-actor-input-leaves.map(leaf => {
+      let content = if leaf.name == "observed_target_descriptor" {
+        "9191919191919191919191919191919191919191919191919191919191919191"
+      } else if leaf.name == "root_observation_evidence" {
+        state.root-observation
+      } else if leaf.name == "root_reference_pose" {
+        state.root-reference-pose
+      } else if leaf.name == "candidate_pose_shell" {
+        state.candidate-pose-shell
+      } else if leaf.name == "actor_action_support" {
+        state.actor-action-support
+      } else if leaf.name == "factual_pose_history" {
+        history-content
+      } else if leaf.name == "remaining_budget" {
+        sha256-hex(str(state.remaining-budget))
+      } else if leaf.name == "requested_horizon_q1" {
+        sha256-hex("1")
+      } else if leaf.name == "selected_observation_prefix_absent" {
+        sha256-hex("absent")
+      } else {
+        sha256-hex(leaf.name + "|" + str(state.store) + "|" + str(state.state-index))
+      }
+      (
+        name: leaf.name,
+        role: leaf.role,
+        member-schema-sha256: sha256-hex(leaf.schema-id),
+        content-sha256: content,
+        source-owner: leaf.source-owner,
+        source-manifest-sha256: if leaf.source-owner == "actor_manifest" {
+          qh-bundle-manifest
+        } else if leaf.source-owner == "rollout_manifest" {
+          store-manifests.at(state.store)
+        } else if leaf.source-owner == "implementation_contract" {
+          implementation-contract
+        } else {
+          actor-contract
+        },
+        derivation: leaf.derivation,
+        presence: leaf.presence,
+      )
+    }).sorted(key: leaf => leaf.name + "|" + leaf.role + "|" + leaf.derivation)
+    let actor-payload = sha256-hex(leaves.map(leaf => (
+      leaf.name,
+      leaf.role,
+      leaf.member-schema-sha256,
+      leaf.content-sha256,
+      leaf.source-owner,
+      leaf.source-manifest-sha256,
+      leaf.derivation,
+      if leaf.presence { "true" } else { "false" },
+    ).join("|")).join("\n"))
+    let leaf-rows = leaves.enumerate().map(((leaf-index, leaf)) => {
+      let leaf-prefix = prefix + ".actor_input_leaves[" + str(leaf-index) + "]"
+      (
+        typed-sidecar-row(sidecar-id, leaf-prefix + ".name", leaf.name),
+        typed-sidecar-row(sidecar-id, leaf-prefix + ".role", leaf.role),
+        typed-sidecar-row(sidecar-id, leaf-prefix + ".member_schema_sha256", leaf.member-schema-sha256),
+        typed-sidecar-row(sidecar-id, leaf-prefix + ".content_sha256", leaf.content-sha256),
+        typed-sidecar-row(sidecar-id, leaf-prefix + ".source_owner", leaf.source-owner),
+        typed-sidecar-row(sidecar-id, leaf-prefix + ".source_manifest_sha256", leaf.source-manifest-sha256),
+        typed-sidecar-row(sidecar-id, leaf-prefix + ".derivation", leaf.derivation),
+        typed-sidecar-row(sidecar-id, leaf-prefix + ".presence", leaf.presence),
+      )
+    }).flatten()
+    (
+      typed-sidecar-row(sidecar-id, prefix + ".store_index", state.store),
+      typed-sidecar-row(sidecar-id, prefix + ".scene_id", state.scene),
+      typed-sidecar-row(sidecar-id, prefix + ".rollout_row_id", state.rollout),
+      typed-sidecar-row(sidecar-id, prefix + ".step_row_id", state.step-row),
+      typed-sidecar-row(sidecar-id, prefix + ".step_index", state.step),
+      typed-sidecar-row(sidecar-id, prefix + ".target_row_id", state.target-row),
+      typed-sidecar-row(sidecar-id, prefix + ".selected_candidate_row_id", state.selected-row),
+      typed-sidecar-row(sidecar-id, prefix + ".candidate_config_hash", state.candidate-config),
+      typed-sidecar-row(sidecar-id, prefix + ".root_observation_evidence_sha256", state.root-observation),
+      typed-sidecar-row(sidecar-id, prefix + ".root_reference_pose_sha256", state.root-reference-pose),
+      typed-sidecar-row(sidecar-id, prefix + ".candidate_pose_shell_sha256", state.candidate-pose-shell),
+      typed-sidecar-row(sidecar-id, prefix + ".actor_action_support_sha256", state.actor-action-support),
+      typed-sidecar-row(sidecar-id, prefix + ".remaining_budget", state.remaining-budget),
+      typed-sidecar-row(sidecar-id, prefix + ".actor_input_payload_sha256", actor-payload),
+      typed-sidecar-row(sidecar-id, prefix + ".actor_state_contract_payload_sha256", actor-contract),
+    ) + leaf-rows + history
+  }).flatten()
+  let candidates = roster.candidates.enumerate().map(((record-index, candidate)) => {
+    let prefix = "candidates[" + str(record-index) + "]"
+    let admitted = candidate.index == 0
+    (
+      typed-sidecar-row(sidecar-id, prefix + ".store_index", candidate.store),
+      typed-sidecar-row(sidecar-id, prefix + ".rollout_row_id", candidate.rollout),
+      typed-sidecar-row(sidecar-id, prefix + ".step_row_id", candidate.step-row),
+      typed-sidecar-row(sidecar-id, prefix + "." + q1-candidate-row-key, candidate.row),
+      typed-sidecar-row(sidecar-id, prefix + ".candidate_index", candidate.index),
+      typed-sidecar-row(sidecar-id, prefix + "." + q1-actor-mask-key, admitted),
+      typed-sidecar-row(sidecar-id, prefix + "." + q1-label-mask-key, admitted),
+      typed-sidecar-row(sidecar-id, prefix + "." + q1-train-mask-key, admitted),
+      typed-sidecar-row(sidecar-id, prefix + ".prediction_finite", true),
+      typed-sidecar-row(sidecar-id, prefix + ".label_finite", admitted),
+      typed-sidecar-row(sidecar-id, prefix + ".included_in_q1_metric", admitted),
+    )
+  }).flatten()
+  envelope + manifests + targets + states + candidates
+}
+
 #let report(
   rows,
   sidecar-rows: sidecars,
   sidecar-value-rows: none,
+  q1-audit-values: q1-audit-sidecar-value-rows(),
+  q1-population-values: q1-population-benchmark-sidecar-value-rows(),
+  q1-bundle-values: none,
   support-plan-values: none,
   measurement-plan-values: none,
+  store-rows: ((store_id: "store-a", manifest_sha256: store-manifest),),
 ) = {
   let projected-sidecar-values = if sidecar-value-rows != none {
     sidecar-value-rows
@@ -228,12 +568,17 @@
   let projected-measurement-plan = if measurement-plan-values == none {
     measurement-benchmark-sidecar-value-rows(2, repeat-count: 3)
   } else { measurement-plan-values }
+  let projected-q1-bundle = if q1-bundle-values == none {
+    q1-bundle-manifest-sidecar-value-rows(
+      store-manifests: store-rows.map(row => row.manifest_sha256),
+    )
+  } else { q1-bundle-values }
   (
     tables: (
-      stores: (rows: ((store_id: "store-a", manifest_sha256: store-manifest),)),
+      stores: (rows: store-rows),
       facts: (rows: rows),
       sidecars: (rows: sidecar-rows),
-      sidecar_values: (rows: projected-sidecar-values + projected-support-plan + projected-measurement-plan),
+      sidecar_values: (rows: projected-sidecar-values + q1-audit-values + q1-population-values + projected-q1-bundle + projected-support-plan + projected-measurement-plan),
     ),
   )
 }
@@ -254,9 +599,95 @@
 #let mutate-sidecar-value(sidecar-value-rows, key, replacement) = sidecar-value-rows.map(
   row => if row.key == key { typed-sidecar-row(row.sidecar_id, key, replacement) } else { row },
 )
+#let omit-sidecar-value(sidecar-value-rows, key) = sidecar-value-rows.map(
+  row => if row.key == key { missing-sidecar-row(row.sidecar_id, key) } else { row },
+)
 #let clone-sidecar-prefix(sidecar-value-rows, source-prefix, target-prefix) = sidecar-value-rows.filter(
   row => row.key.starts-with(source-prefix),
 ).map(row => row + (key: row.key.replace(source-prefix, target-prefix),))
+#let synthetic-sidecar-value(row) = if row.is_missing {
+  none
+} else if row.value_type == "bool" {
+  row.value_bool
+} else if row.value_type == "int" {
+  row.value_int
+} else if row.value_type == "float" {
+  row.value_float
+} else {
+  row.value_text
+}
+#let rebind-q1-state-actor-payload(sidecar-value-rows, state-index) = {
+  let state-prefix = "states[" + str(state-index) + "]"
+  let leaf-prefixes = sidecar-value-rows.filter(row => (
+    row.key.starts-with(state-prefix + ".actor_input_leaves["),
+    row.key.ends-with(".name"),
+  ).all(check => check)).map(row => row.key.replace(regex("\\.name$"), ""))
+  let value(key) = {
+    let rows = sidecar-value-rows.filter(row => row.key == key)
+    assert(rows.len() == 1, message: "expected one synthetic Q1 leaf value")
+    synthetic-sidecar-value(rows.first())
+  }
+  let payload = leaf-prefixes.map(prefix => (
+    value(prefix + ".name"),
+    value(prefix + ".role"),
+    value(prefix + ".member_schema_sha256"),
+    value(prefix + ".content_sha256"),
+    value(prefix + ".source_owner"),
+    value(prefix + ".source_manifest_sha256"),
+    value(prefix + ".derivation"),
+    if value(prefix + ".presence") { "true" } else { "false" },
+  ).map(str).join("|")).join("\n")
+  mutate-sidecar-value(
+    sidecar-value-rows,
+    state-prefix + ".actor_input_payload_sha256",
+    sha256-hex(payload),
+  )
+}
+#let rebind-q1-benchmark-roster(sidecar-value-rows) = {
+  let value(key) = {
+    let rows = sidecar-value-rows.filter(row => row.key == key)
+    assert(rows.len() == 1, message: "expected one synthetic Q1 benchmark value")
+    synthetic-sidecar-value(rows.first())
+  }
+  let prefixes(suffix) = sidecar-value-rows.filter(row => row.key.ends-with(suffix)).map(
+    row => row.key.replace(regex(suffix.replace(".", "\\.") + "$"), ""),
+  )
+  let targets = prefixes(".target_id").filter(prefix => prefix.starts-with("expected_targets[")).map(prefix => (
+    value(prefix + ".store_index"),
+    value(prefix + ".scene_id"),
+    value(prefix + ".target_row_id"),
+    value(prefix + ".target_id"),
+    value(prefix + ".descriptor_hash"),
+  ).map(str).join("|")).sorted()
+  let states = prefixes(".step_row_id").filter(prefix => prefix.starts-with("expected_states[")).map(prefix => (
+    value(prefix + ".store_index"),
+    value(prefix + ".scene_id"),
+    value(prefix + ".rollout_row_id"),
+    value(prefix + ".step_row_id"),
+    value(prefix + ".step_index"),
+    value(prefix + ".target_row_id"),
+    value(prefix + ".candidate_width"),
+    value(prefix + ".selected_candidate_row_id"),
+    value(prefix + ".candidate_config_hash"),
+    value(prefix + ".root_observation_evidence_sha256"),
+    value(prefix + ".root_reference_pose_sha256"),
+    value(prefix + ".candidate_pose_shell_sha256"),
+    value(prefix + ".actor_action_support_sha256"),
+    value(prefix + ".remaining_budget"),
+  ).map(str).join("|")).sorted()
+  let candidates = prefixes("." + q1-candidate-row-key).filter(prefix => prefix.starts-with("expected_candidates[")).map(prefix => (
+    value(prefix + ".store_index"),
+    value(prefix + ".rollout_row_id"),
+    value(prefix + ".step_row_id"),
+    value(prefix + "." + q1-candidate-row-key),
+    value(prefix + ".candidate_index"),
+    if value(prefix + "." + q1-actor-mask-key) { "true" } else { "false" },
+  ).map(str).join("|")).sorted()
+  let payload = "targets\n" + targets.join("\n") + "\nstates\n" + states.join(
+    "\n",
+  ) + "\ncandidates\n" + candidates.join("\n")
+  mutate-sidecar-value(sidecar-value-rows, "roster_sha256", sha256-hex(payload))
+}
 
 #let population-rows(
   scene-count-value: 5,
@@ -566,6 +997,7 @@
 
 #let q1-rows(
   bundle-manifest: qh-bundle-manifest,
+  audit-receipt: q1-audit-digest,
   count-value: 5,
   ranking-value: 0.8,
   ranking-ci-low: 0.65,
@@ -583,18 +1015,21 @@
   scene-role: q1-scene-role,
   target-source: q1-target-source-protocol,
   target-matching-passed: true,
-  actor-oracle-leakage-absent: true,
+  actor-input-manifest-audited: true,
+  actor-oracle-mask-separation-audited: true,
   hard-mask-applied: true,
   causal-history-only: true,
   source: protocol-source,
   gate-source: protocol-source,
 ) = (
   fact("q1.model.bundle_manifest_sha256", bundle-manifest, "sha256", 5, "model_identity", source: source),
+  fact("q1.protocol.audit_receipt_sha256", audit-receipt, "sha256", 5, "protocol_binding_sha256", source: source),
   fact("q1.protocol.receipt_schema", receipt-schema, "identity", 5, "protocol_identity", source: source),
   fact("q1.protocol.scene_role", scene-role, "identity", 5, "protocol_identity", source: source),
   fact("q1.protocol.target_source", target-source, "identity", 5, "protocol_identity", source: source),
   fact("q1.protocol.target_matching_passed", target-matching-passed, "bool", 5, "protocol_audit", source: source),
-  fact("q1.protocol.actor_oracle_leakage_absent", actor-oracle-leakage-absent, "bool", 5, "protocol_audit", source: source),
+  fact("q1.protocol.actor_input_manifest_audited", actor-input-manifest-audited, "bool", 5, "protocol_audit", source: source),
+  fact("q1.protocol.actor_oracle_mask_separation_audited", actor-oracle-mask-separation-audited, "bool", 5, "protocol_audit", source: source),
   fact("q1.protocol.hard_mask_applied", hard-mask-applied, "bool", 5, "protocol_audit", source: source),
   fact("q1.protocol.causal_history_only", causal-history-only, "bool", 5, "protocol_audit", source: source),
   fact("q1.ranking.pairwise_accuracy", ranking-value, ranking-unit, 5, ranking-aggregation, source: source),
@@ -651,12 +1086,13 @@
 #let q2-certification-sidecar-value-rows(
   bundle-manifest: qh-bundle-manifest,
   population-count: 5,
-  row-counts: (2, 2, 2, 2, 2),
+  row-counts: (1, 1, 1, 1, 1),
   error: 0.1,
   exact-target: 1.0,
   immediate-reward: 0.25,
   discount: 0.5,
   successor-max-reward: 1.5,
+  successor-reward-ledger: none,
   absolute-tolerance: 0.11,
   relative-tolerance: 0.0,
   coverage-minimum: 0.8,
@@ -672,6 +1108,11 @@
   assert(selected-store-indices.len() == selected-count)
   assert(selected-store-indices.all(index => type(index) == int and index >= 0 and index < ordered-test-manifests.len()))
   let coverage = selected-count / population-count
+  let successor-rewards = if successor-reward-ledger == none {
+    range(4).map(index => successor-max-reward - index)
+  } else { successor-reward-ledger }
+  assert(successor-rewards.len() == 4)
+  assert(successor-rewards.sorted().last() == successor-max-reward)
   let absolute-error = calc.abs(error)
   let relative-error = absolute-error / calc.max(calc.abs(exact-target), 0.00000011920928955078125)
   let tolerance = absolute-tolerance + relative-tolerance * calc.abs(exact-target)
@@ -694,10 +1135,22 @@
     typed-sidecar-row(q2-receipt-sidecar, "test_population_sha256", "8282828282828282828282828282828282828282828282828282828282828282"),
     typed-sidecar-row(q2-receipt-sidecar, "test_provenance_sha256", "8383838383838383838383838383838383838383838383838383838383838383"),
     typed-sidecar-row(q2-receipt-sidecar, "bound_contract.scorer_config_hash", "8484848484848484848484848484848484848484848484848484848484848484"),
-    typed-sidecar-row(q2-receipt-sidecar, "bound_contract.learning_contract_hash", "8585858585858585858585858585858585858585858585858585858585858585"),
-    typed-sidecar-row(q2-receipt-sidecar, "bound_contract.actor_state_contract_hash", "8686868686868686868686868686868686868686868686868686868686868686"),
-    typed-sidecar-row(q2-receipt-sidecar, "bound_contract.geometry_contract_hash", "8787878787878787878787878787878787878787878787878787878787878787"),
+    typed-sidecar-row(q2-receipt-sidecar, "bound_contract.learning_contract_hash", "8585858585858585"),
+    typed-sidecar-row(q2-receipt-sidecar, "bound_contract.learning_contract_payload_sha256", "8585858585858585858585858585858585858585858585858585858585858585"),
+    typed-sidecar-row(q2-receipt-sidecar, "bound_contract.actor_state_contract_hash", "8686868686868686"),
+    typed-sidecar-row(q2-receipt-sidecar, "bound_contract.actor_state_contract_payload_sha256", "8686868686868686868686868686868686868686868686868686868686868686"),
+    missing-sidecar-row(q2-receipt-sidecar, "bound_contract.geometry_contract_hash"),
+    typed-sidecar-row(q2-receipt-sidecar, "bound_contract.scorer_config.experiment_profile", "qh_cf0_v1"),
+    typed-sidecar-row(q2-receipt-sidecar, "bound_contract.module_config.experiment_profile", "qh_cf0_v1"),
+    typed-sidecar-row(q2-receipt-sidecar, "bound_contract.module_config.root_evl_profile", "evl_v1"),
+    typed-sidecar-row(q2-receipt-sidecar, "bound_contract.module_config.selected_observation_protocol", "none"),
+    missing-sidecar-row(q2-receipt-sidecar, "bound_contract.module_config.geometry_contract_hash"),
+    typed-sidecar-row(q2-receipt-sidecar, "bound_contract.actor_state_contract.experiment_profile", "qh_cf0_v1"),
+    typed-sidecar-row(q2-receipt-sidecar, "bound_contract.actor_state_contract.root_evl_profile", "evl_v1"),
+    typed-sidecar-row(q2-receipt-sidecar, "bound_contract.actor_state_contract.selected_observation_protocol", "none"),
+    missing-sidecar-row(q2-receipt-sidecar, "bound_contract.actor_state_contract.geometry_contract_hash"),
     typed-sidecar-row(q2-receipt-sidecar, "bound_contract.learning_contract.objective_profile", "qh_dense_valid_fitted_q_v1"),
+    typed-sidecar-row(q2-receipt-sidecar, "bound_contract.learning_contract.data_contract.target_protocol", "v1_observed"),
     typed-sidecar-row(q2-receipt-sidecar, "exact_q2.schema_version", q2-certification-schema),
     typed-sidecar-row(q2-receipt-sidecar, "exact_q2.evidence_semantics.quantity", "learned_recursive_q2_target_error_against_factual_dense_successor_control"),
     typed-sidecar-row(q2-receipt-sidecar, "exact_q2.evidence_semantics.implementation_recursion_parity", false),
@@ -754,6 +1207,10 @@
     let row-index = row-counts.slice(0, scene-index).sum(default: 0) + step-index
     let prefix = "exact_q2.factual_selected_action_exact_q2_rows[" + str(row-index) + "]"
     let store-index = selected-store-indices.at(scene-index)
+    let ledger = successor-rewards.enumerate().map(((candidate-index, reward)) => (
+      typed-sidecar-row(q2-receipt-sidecar, prefix + ".successor_reward_ledger[" + str(candidate-index) + "].candidate_index", candidate-index),
+      typed-sidecar-row(q2-receipt-sidecar, prefix + ".successor_reward_ledger[" + str(candidate-index) + "].reward", reward),
+    )).flatten()
     (
       typed-sidecar-row(q2-receipt-sidecar, prefix + ".dataset_index", scene-index),
       typed-sidecar-row(q2-receipt-sidecar, prefix + ".selection_rank", scene-index),
@@ -772,6 +1229,7 @@
       typed-sidecar-row(q2-receipt-sidecar, prefix + ".rollout_config_hash", rollout-config),
       typed-sidecar-row(q2-receipt-sidecar, prefix + ".selection_policy", "oracle-lookahead"),
       typed-sidecar-row(q2-receipt-sidecar, prefix + ".current_candidate_count", 4),
+      typed-sidecar-row(q2-receipt-sidecar, prefix + ".successor_candidate_count", 4),
       typed-sidecar-row(q2-receipt-sidecar, prefix + ".successor_action_count", 4),
       typed-sidecar-row(q2-receipt-sidecar, prefix + ".successor_backup_count", 4),
       typed-sidecar-row(q2-receipt-sidecar, prefix + ".candidate_branch_bin", "2-4"),
@@ -786,7 +1244,7 @@
       typed-sidecar-row(q2-receipt-sidecar, prefix + ".relative_error", relative-error),
       typed-sidecar-row(q2-receipt-sidecar, prefix + ".tolerance", tolerance),
       typed-sidecar-row(q2-receipt-sidecar, prefix + ".within_tolerance", absolute-error <= tolerance),
-    )
+    ) + ledger
   }).flatten()).flatten()
   let population-summary = (
     typed-sidecar-row(q2-receipt-sidecar, "exact_q2.population_census.candidate_branch_bins[0]", 1),
@@ -925,12 +1383,13 @@
   bundle-manifest: qh-bundle-manifest,
   receipt-bundle-manifest: none,
   population-count: 5,
-  row-counts: (2, 2, 2, 2, 2),
+  row-counts: (1, 1, 1, 1, 1),
   error: 0.1,
   exact-target: 1.0,
   immediate-reward: 0.25,
   discount: 0.5,
   successor-max-reward: 1.5,
+  successor-reward-ledger: none,
   absolute-tolerance: 0.11,
   relative-tolerance: 0.0,
   coverage-minimum: 0.8,
@@ -979,6 +1438,7 @@
       immediate-reward: immediate-reward,
       discount: discount,
       successor-max-reward: successor-max-reward,
+      successor-reward-ledger: successor-reward-ledger,
       absolute-tolerance: absolute-tolerance,
       relative-tolerance: relative-tolerance,
       coverage-minimum: coverage-minimum,
@@ -1353,7 +1813,306 @@
   ),
 ), "store-a"))
 
+#let q1-audit-values = q1-audit-sidecar-value-rows()
 #assert(report-store-q1-evidence-valid(report(q1-rows()), "store-a"))
+#assert(not report-store-q1-evidence-valid(report(
+  q1-rows(),
+  q1-bundle-values: mutate-sidecar-value(
+    q1-bundle-manifest-sidecar-value-rows(),
+    "identity.q1_population_benchmark_sha256",
+    digest-b,
+  ),
+), "store-a"))
+#assert(not report-store-q1-evidence-valid(report(
+  q1-rows(),
+  q1-bundle-values: mutate-sidecar-value(
+    q1-bundle-manifest-sidecar-value-rows(),
+    "identity.q1_test_provenance_sha256",
+    digest-b,
+  ),
+), "store-a"))
+#assert(not report-store-q1-evidence-valid(report(
+  q1-rows(),
+  q1-population-values: mutate-sidecar-value(
+    q1-population-benchmark-sidecar-value-rows(),
+    "bundle_manifest_sha256",
+    digest-b,
+  ),
+), "store-a"))
+#assert(not report-store-q1-evidence-valid(report(
+  q1-rows(),
+  q1-population-values: mutate-sidecar-value(
+    q1-population-benchmark-sidecar-value-rows(),
+    "test_provenance_sha256",
+    digest-b,
+  ),
+), "store-a"))
+#let q1-state-zero-leaf-prefixes = q1-audit-values.filter(row => (
+  row.key.starts-with("states[0].actor_input_leaves["),
+  row.key.ends-with(".name"),
+).all(check => check)).map(row => row.key.replace(regex("\\.name$"), ""))
+#for leaf-prefix in q1-state-zero-leaf-prefixes {
+  for mutation in (
+    (suffix: ".member_schema_sha256", value: digest-b),
+    (suffix: ".content_sha256", value: digest-b),
+    (suffix: ".source_owner", value: "forged_owner"),
+    (suffix: ".source_manifest_sha256", value: digest-b),
+  ) {
+    let mutated = rebind-q1-state-actor-payload(
+      mutate-sidecar-value(q1-audit-values, leaf-prefix + mutation.suffix, mutation.value),
+      0,
+    )
+    assert(not report-store-q1-evidence-valid(report(
+      q1-rows(),
+      q1-audit-values: mutated,
+    ), "store-a"))
+  }
+}
+#let coordinated-q1-shell-change = {
+  let values = mutate-sidecar-value(
+    q1-audit-values,
+    "states[0].actor_input_leaves[1].content_sha256",
+    digest-b,
+  )
+  values = mutate-sidecar-value(values, "states[0].candidate_pose_shell_sha256", digest-b)
+  rebind-q1-state-actor-payload(values, 0)
+}
+#assert(not report-store-q1-evidence-valid(report(
+  q1-rows(),
+  q1-audit-values: coordinated-q1-shell-change,
+), "store-a"))
+#assert(not report-store-q1-evidence-valid(report(
+  q1-rows(audit-receipt: "invalid"),
+), "store-a"))
+#assert(not report-store-q1-evidence-valid(report(
+  q1-rows().filter(row => row.key != "q1.protocol.audit_receipt_sha256"),
+), "store-a"))
+#assert(not report-store-q1-evidence-valid(report(
+  q1-rows(),
+  sidecar-rows: sidecars.filter(sidecar => sidecar.sidecar_id != q1-audit-sidecar),
+), "store-a"))
+#assert(not report-store-q1-evidence-valid(report(
+  q1-rows(),
+  sidecar-rows: sidecars.filter(sidecar => sidecar.sidecar_id != q1-population-sidecar),
+), "store-a"))
+#assert(not report-store-q1-evidence-valid(report(
+  q1-rows(),
+  q1-audit-values: q1-audit-values.filter(row => not (
+    row.key.starts-with("targets[") or row.key.starts-with("states[") or row.key.starts-with("candidates[")
+  )),
+), "store-a"))
+#assert(not report-store-q1-evidence-valid(report(
+  q1-rows(),
+  q1-audit-values: mutate-sidecar-value(q1-audit-values, "schema_version", "actor_visible_q1_protocol_receipt_v1"),
+), "store-a"))
+#assert(not report-store-q1-evidence-valid(report(
+  q1-rows(),
+  q1-audit-values: mutate-sidecar-value(q1-audit-values, "action_mask_semantics", "oracle_action_mask_v1"),
+), "store-a"))
+#assert(not report-store-q1-evidence-valid(report(
+  q1-rows(),
+  q1-audit-values: mutate-sidecar-value(q1-audit-values, "selected_observation_protocol", "cf_gt"),
+), "store-a"))
+#for malformed-step in ("1", -1) {
+  assert(not report-store-q1-evidence-valid(report(
+    q1-rows(),
+    q1-audit-values: mutate-sidecar-value(q1-audit-values, "states[1].step_index", malformed-step),
+  ), "store-a"))
+}
+#assert(not report-store-q1-evidence-valid(report(
+  q1-rows(),
+  q1-audit-values: omit-sidecar-value(q1-audit-values, "states[1].step_index"),
+), "store-a"))
+#assert(not report-store-q1-evidence-valid(report(
+  q1-rows(),
+  q1-audit-values: mutate-sidecar-value(q1-audit-values, "bound_contract.ordered_test_store_manifests[0]", digest-b),
+), "store-a"))
+#assert(not report-store-q1-evidence-valid(report(
+  q1-rows(),
+  q1-audit-values: q1-audit-values + (
+    typed-sidecar-row(q1-audit-sidecar, "bound_contract.ordered_test_store_manifests[1]", store-manifest),
+  ),
+), "store-a"))
+#assert(not report-store-q1-evidence-valid(report(
+  q1-rows(),
+  q1-audit-values: q1-audit-values + (
+    typed-sidecar-row(q1-audit-sidecar, "bound_contract.ordered_test_store_manifests[1]", store-manifest-b),
+  ),
+), "store-a"))
+#assert(not report-store-q1-evidence-valid(report(
+  q1-rows(),
+  q1-audit-values: q1-audit-values.filter(
+    row => row.key != "bound_contract.ordered_test_store_manifests[0]",
+  ),
+), "store-a"))
+#assert(not report-store-q1-evidence-valid(report(
+  q1-rows(),
+  store-rows: (
+    (store_id: "store-a", manifest_sha256: store-manifest),
+    (store_id: "store-b", manifest_sha256: store-manifest),
+  ),
+), "store-a"))
+#assert(not report-store-q1-evidence-valid(report(
+  q1-rows(),
+  q1-audit-values: mutate-sidecar-value(q1-audit-values, "targets[0].match_iou", 0.20),
+), "store-a"))
+#assert(not report-store-q1-evidence-valid(report(
+  q1-rows(),
+  q1-audit-values: mutate-sidecar-value(q1-audit-values, "targets[0].target_valid", false),
+), "store-a"))
+#for mutation in (
+  (key: "targets[0].target_source", value: "gt_obbs_oracle"),
+  (key: "targets[0].descriptor_source", value: "other_actor_source"),
+  (key: "targets[0].descriptor_provenance", value: "oracle_gt"),
+  (key: "targets[0].gt_match_status", value: "matched"),
+  (key: "targets[0].matched_target_id", value: ""),
+  (key: "targets[0].descriptor_hash", value: "invalid"),
+  (key: "targets[0].explicit_target_hash", value: "invalid"),
+) {
+  assert(not report-store-q1-evidence-valid(report(
+    q1-rows(),
+    q1-audit-values: mutate-sidecar-value(q1-audit-values, mutation.key, mutation.value),
+  ), "store-a"))
+}
+#assert(not report-store-q1-evidence-valid(report(
+  q1-rows(),
+  q1-audit-values: mutate-sidecar-value(q1-audit-values, "targets[0].target_id", "self-adjusted-target"),
+), "store-a"))
+#assert(not report-store-q1-evidence-valid(report(
+  q1-rows(),
+  q1-audit-values: mutate-sidecar-value(q1-audit-values, "states[0].step_row_id", 99),
+), "store-a"))
+#assert(not report-store-q1-evidence-valid(report(
+  q1-rows(),
+  q1-audit-values: mutate-sidecar-value(q1-audit-values, "states[1].step_index", 0),
+), "store-a"))
+#assert(not report-store-q1-evidence-valid(report(
+  q1-rows(),
+  q1-audit-values: mutate-sidecar-value(q1-audit-values, "states[1].scene_id", "scene-0-1"),
+), "store-a"))
+#assert(not report-store-q1-evidence-valid(report(
+  q1-rows(),
+  q1-audit-values: mutate-sidecar-value(q1-audit-values, "states[1].target_row_id", 1),
+), "store-a"))
+#assert(not report-store-q1-evidence-valid(report(
+  q1-rows(),
+  q1-audit-values: mutate-sidecar-value(q1-audit-values, "states[1].candidate_config_hash", digest-b),
+), "store-a"))
+#let coordinated-q1-root-drift = {
+  let audit = mutate-sidecar-value(q1-audit-values, "states[1].root_observation_evidence_sha256", digest-b)
+  audit = mutate-sidecar-value(audit, "states[1].actor_input_leaves[6].content_sha256", digest-b)
+  audit = rebind-q1-state-actor-payload(audit, 1)
+  let benchmark = rebind-q1-benchmark-roster(mutate-sidecar-value(
+    q1-population-benchmark-sidecar-value-rows(),
+    "expected_states[1].root_observation_evidence_sha256",
+    digest-b,
+  ))
+  (audit: audit, benchmark: benchmark)
+}
+#assert(not report-store-q1-evidence-valid(report(
+  q1-rows(),
+  q1-audit-values: coordinated-q1-root-drift.audit,
+  q1-population-values: coordinated-q1-root-drift.benchmark,
+), "store-a"))
+#let coordinated-q1-budget-drift = {
+  let audit = mutate-sidecar-value(q1-audit-values, "states[1].remaining_budget", 2)
+  audit = mutate-sidecar-value(
+    audit,
+    "states[1].actor_input_leaves[4].content_sha256",
+    sha256-hex("2"),
+  )
+  audit = rebind-q1-state-actor-payload(audit, 1)
+  let benchmark = rebind-q1-benchmark-roster(mutate-sidecar-value(
+    q1-population-benchmark-sidecar-value-rows(),
+    "expected_states[1].remaining_budget",
+    2,
+  ))
+  (audit: audit, benchmark: benchmark)
+}
+#assert(not report-store-q1-evidence-valid(report(
+  q1-rows(),
+  q1-audit-values: coordinated-q1-budget-drift.audit,
+  q1-population-values: coordinated-q1-budget-drift.benchmark,
+), "store-a"))
+#assert(not report-store-q1-evidence-valid(report(
+  q1-rows(),
+  q1-audit-values: mutate-sidecar-value(
+    q1-audit-values,
+    "states[0].actor_input_leaves[5].role",
+    "oracle_supervision",
+  ),
+), "store-a"))
+#assert(not report-store-q1-evidence-valid(report(
+  q1-rows(),
+  q1-audit-values: mutate-sidecar-value(q1-audit-values, "candidates[1]." + q1-candidate-row-key, 999),
+), "store-a"))
+#let self-adjusted-q1-truncation = mutate-sidecar-value(
+  q1-audit-values.filter(row => not row.key.starts-with("candidates[11].")),
+  "population.candidate_count",
+  11,
+)
+#assert(not report-store-q1-evidence-valid(report(
+  q1-rows(),
+  q1-audit-values: self-adjusted-q1-truncation,
+), "store-a"))
+#let paired-q1-audit-truncation = mutate-sidecar-value(
+  q1-audit-values.filter(row => not row.key.starts-with("candidates[11].")),
+  "population.candidate_count",
+  11,
+)
+#let paired-q1-benchmark-truncation = q1-population-benchmark-sidecar-value-rows().filter(
+  row => not row.key.starts-with("expected_candidates[11]."),
+)
+#assert(not report-store-q1-evidence-valid(report(
+  q1-rows(),
+  q1-audit-values: paired-q1-audit-truncation,
+  q1-population-values: paired-q1-benchmark-truncation,
+), "store-a"))
+#assert(not report-store-q1-evidence-valid(report(
+  q1-rows(),
+  q1-population-values: mutate-sidecar-value(
+    q1-population-benchmark-sidecar-value-rows(),
+    "expected_states[0].candidate_width",
+    1,
+  ),
+), "store-a"))
+#assert(not report-store-q1-evidence-valid(report(
+  q1-rows(),
+  q1-audit-values: mutate-sidecar-value(q1-audit-values, "candidates[1].included_in_q1_metric", true),
+), "store-a"))
+#assert(not report-store-q1-evidence-valid(report(
+  q1-rows(),
+  q1-audit-values: mutate-sidecar-value(q1-audit-values, "candidates[0]." + q1-actor-mask-key, false),
+), "store-a"))
+#let self-consistent-invalid-selected = mutate-sidecar-value(
+  mutate-sidecar-value(
+    mutate-sidecar-value(
+      q1-audit-values,
+      "candidates[0]." + q1-actor-mask-key,
+      false,
+    ),
+    "candidates[0]." + q1-train-mask-key,
+    false,
+  ),
+  "candidates[0].included_in_q1_metric",
+  false,
+)
+#assert(not report-store-q1-evidence-valid(report(
+  q1-rows(),
+  q1-audit-values: self-consistent-invalid-selected,
+), "store-a"))
+#assert(not report-store-q1-evidence-valid(report(
+  q1-rows(),
+  q1-audit-values: mutate-sidecar-value(q1-audit-values, "states[1].history[0].selected_candidate_row_id", 999),
+), "store-a"))
+#assert(not report-store-q1-evidence-valid(report(
+  q1-rows(),
+  q1-audit-values: mutate-sidecar-value(q1-audit-values, "states[1].history[0].source_step_index", 1),
+), "store-a"))
+#assert(not report-store-q1-evidence-valid(report(
+  q1-rows(),
+  q1-audit-values: mutate-sidecar-value(q1-audit-values, "summary.causal_history_only", false),
+), "store-a"))
 #assert(not report-store-q1-evidence-valid(report(q1-rows(bundle-manifest: "invalid")), "store-a"))
 #assert(report-store-q1-evidence-valid(report(q1-rows(ranking-value: 0.6, passed: false)), "store-a"))
 #assert(report-store-q1-evidence-valid(report(q1-rows(calibration-value: 0.3, passed: false)), "store-a"))
@@ -1374,7 +2133,8 @@
 #assert(not report-store-q1-evidence-valid(report(q1-rows(scene-role: "training_scene")), "store-a"))
 #assert(not report-store-q1-evidence-valid(report(q1-rows(target-source: "privileged_gt_obb")), "store-a"))
 #assert(not report-store-q1-evidence-valid(report(q1-rows(target-matching-passed: false)), "store-a"))
-#assert(not report-store-q1-evidence-valid(report(q1-rows(actor-oracle-leakage-absent: false)), "store-a"))
+#assert(not report-store-q1-evidence-valid(report(q1-rows(actor-input-manifest-audited: false)), "store-a"))
+#assert(not report-store-q1-evidence-valid(report(q1-rows(actor-oracle-mask-separation-audited: false)), "store-a"))
 #assert(not report-store-q1-evidence-valid(report(q1-rows(hard-mask-applied: false)), "store-a"))
 #assert(not report-store-q1-evidence-valid(report(q1-rows(causal-history-only: false)), "store-a"))
 #assert(not report-store-q1-evidence-valid(report(
@@ -1390,7 +2150,7 @@
 #let q1-baseline-rows = q1-rows()
 #let q1-baseline-payload = analysis-sidecar-value-rows(
   protocol-sidecar,
-  q1-protocol-receipt-name,
+  q1-analysis-receipt-name,
   q1-baseline-rows,
 )
 #for mutation in (
@@ -1399,7 +2159,8 @@
   (key: "q1.protocol.scene_role", value: "training_scene"),
   (key: "q1.protocol.target_source", value: "privileged_gt_obb"),
   (key: "q1.protocol.target_matching_passed", value: false),
-  (key: "q1.protocol.actor_oracle_leakage_absent", value: false),
+  (key: "q1.protocol.actor_input_manifest_audited", value: false),
+  (key: "q1.protocol.actor_oracle_mask_separation_audited", value: false),
   (key: "q1.protocol.hard_mask_applied", value: false),
   (key: "q1.protocol.causal_history_only", value: false),
 ) {
@@ -1431,13 +2192,196 @@
 #assert(not report-store-q1-evidence-valid(report(q1-rows(source: "analysis/unbound.json", gate-source: "analysis/unbound.json")), "store-a"))
 #assert(not report-store-q1-evidence-valid(report(q1-rows(gate-source: "analysis/other.json|sidecar:" + sidecar-b)), "store-a"))
 
+#let q1-store-a-rows = q1-rows(audit-receipt: q1-multi-audit-digest)
+#let q1-store-b-rows = q1-rows(audit-receipt: q1-multi-audit-digest).map(row => row + (store_id: "store-b"))
+#let q1-two-store-rows = q1-store-a-rows + q1-store-b-rows
+#let q1-two-store-table = (
+  (store_id: "store-a", manifest_sha256: store-manifest),
+  (store_id: "store-b", manifest_sha256: store-manifest-b),
+)
+#let q1-multi-audit-values = q1-audit-sidecar-value-rows(
+  sidecar-id: q1-multi-audit-sidecar,
+  population-digest: q1-multi-population-digest,
+  store-manifests: (store-manifest, store-manifest-b),
+)
+#let q1-multi-population-values = q1-population-benchmark-sidecar-value-rows(
+  sidecar-id: q1-multi-population-sidecar,
+  store-manifests: (store-manifest, store-manifest-b),
+)
+#let q1-two-store-base = report(
+  q1-two-store-rows,
+  sidecar-value-rows: analysis-sidecar-value-rows(
+    protocol-sidecar,
+    q1-analysis-receipt-name,
+    q1-two-store-rows,
+  ),
+  q1-audit-values: q1-multi-audit-values,
+  q1-population-values: q1-multi-population-values,
+  q1-bundle-values: q1-bundle-manifest-sidecar-value-rows(
+    population-digest: q1-multi-population-digest,
+    store-manifests: (store-manifest, store-manifest-b),
+  ),
+  store-rows: q1-two-store-table,
+)
+#let q1-two-store-report = q1-two-store-base
+#assert(report-store-q1-evidence-valid(q1-two-store-report, "store-a"))
+#assert(report-store-q1-evidence-valid(q1-two-store-report, "store-b"))
+#assert(report-stores-q1-evidence-valid(q1-two-store-report))
+
+#let q1-two-store-value-mismatch-rows = q1-two-store-rows.map(row => if (
+  row.store_id == "store-b" and row.key == "q1.ranking.pairwise_accuracy"
+) { row + (value: 0.81) } else { row })
+#let q1-two-store-value-mismatch-base = report(
+  q1-two-store-value-mismatch-rows,
+  sidecar-value-rows: analysis-sidecar-value-rows(
+    protocol-sidecar,
+    q1-analysis-receipt-name,
+    q1-two-store-value-mismatch-rows,
+  ),
+  q1-audit-values: q1-multi-audit-values,
+  q1-population-values: q1-multi-population-values,
+  q1-bundle-values: q1-bundle-manifest-sidecar-value-rows(
+    population-digest: q1-multi-population-digest,
+    store-manifests: (store-manifest, store-manifest-b),
+  ),
+  store-rows: q1-two-store-table,
+)
+#let q1-two-store-value-mismatch = q1-two-store-value-mismatch-base
+#assert(report-store-q1-evidence-valid(q1-two-store-value-mismatch, "store-a"))
+#assert(report-store-q1-evidence-valid(q1-two-store-value-mismatch, "store-b"))
+#assert(not report-stores-q1-evidence-valid(q1-two-store-value-mismatch))
+
+#let q1-alt-audit-digest = "eaeaeaeaeaeaeaeaeaeaeaeaeaeaeaeaeaeaeaeaeaeaeaeaeaeaeaeaeaeaeaea"
+#let q1-alt-audit-sidecar = canonical-sidecar-id(q1-protocol-receipt-name, q1-alt-audit-digest)
+#let q1-alt-audit-meta = (sidecar_id: q1-alt-audit-sidecar, path: q1-protocol-receipt-name, name: q1-protocol-receipt-name, sha256: q1-alt-audit-digest, format: "json", status: "confirmatory")
+#let q1-alt-audit-values = q1-audit-values.map(
+  row => row + (sidecar_id: q1-alt-audit-sidecar),
+)
+#let q1-two-store-receipt-mismatch-rows = q1-two-store-rows.map(row => if (
+  row.store_id == "store-b" and row.key == "q1.protocol.audit_receipt_sha256"
+) { row + (value: q1-alt-audit-digest) } else { row })
+#let q1-two-store-receipt-mismatch-base = report(
+  q1-two-store-receipt-mismatch-rows,
+  sidecar-rows: sidecars + (q1-alt-audit-meta,),
+  sidecar-value-rows: analysis-sidecar-value-rows(
+    protocol-sidecar,
+    q1-analysis-receipt-name,
+    q1-two-store-receipt-mismatch-rows,
+  ),
+  q1-audit-values: q1-multi-audit-values + q1-alt-audit-values,
+  q1-population-values: q1-multi-population-values,
+  q1-bundle-values: q1-bundle-manifest-sidecar-value-rows(
+    population-digest: q1-multi-population-digest,
+    store-manifests: (store-manifest, store-manifest-b),
+  ),
+  store-rows: q1-two-store-table,
+)
+#let q1-two-store-receipt-mismatch = q1-two-store-receipt-mismatch-base
+#assert(report-store-q1-evidence-valid(q1-two-store-receipt-mismatch, "store-a"))
+#assert(not report-store-q1-evidence-valid(q1-two-store-receipt-mismatch, "store-b"))
+#assert(not report-stores-q1-evidence-valid(q1-two-store-receipt-mismatch))
+
+#let q1-alt-analysis-digest = "ebebebebebebebebebebebebebebebebebebebebebebebebebebebebebebebeb"
+#let q1-alt-analysis-sidecar = canonical-sidecar-id(q1-analysis-receipt-name, q1-alt-analysis-digest)
+#let q1-alt-analysis-source = "analysis/q1-alt.json|sidecar:" + q1-alt-analysis-sidecar
+#let q1-alt-analysis-meta = (sidecar_id: q1-alt-analysis-sidecar, path: q1-analysis-receipt-name, name: q1-analysis-receipt-name, sha256: q1-alt-analysis-digest, format: "json", status: "confirmatory")
+#let q1-store-b-other-source = q1-store-b-rows.map(
+  row => row + (source: q1-alt-analysis-source),
+)
+#let q1-two-store-source-mismatch-rows = q1-store-a-rows + q1-store-b-other-source
+#let q1-two-store-source-mismatch-base = report(
+  q1-two-store-source-mismatch-rows,
+  sidecar-rows: sidecars + (q1-alt-analysis-meta,),
+  sidecar-value-rows: analysis-sidecar-value-rows(
+    protocol-sidecar,
+    q1-analysis-receipt-name,
+    q1-store-a-rows,
+  ) + analysis-sidecar-value-rows(
+    q1-alt-analysis-sidecar,
+    q1-analysis-receipt-name,
+    q1-store-b-other-source,
+  ),
+  q1-audit-values: q1-multi-audit-values,
+  q1-population-values: q1-multi-population-values,
+  q1-bundle-values: q1-bundle-manifest-sidecar-value-rows(
+    population-digest: q1-multi-population-digest,
+    store-manifests: (store-manifest, store-manifest-b),
+  ),
+  store-rows: q1-two-store-table,
+)
+#let q1-two-store-source-mismatch = q1-two-store-source-mismatch-base
+#assert(report-store-q1-evidence-valid(q1-two-store-source-mismatch, "store-a"))
+#assert(report-store-q1-evidence-valid(q1-two-store-source-mismatch, "store-b"))
+#assert(not report-stores-q1-evidence-valid(q1-two-store-source-mismatch))
+
 #assert(report-store-q2-evidence-valid(q2-report(), "store-a"))
+#let q2-contract-values = q2-certification-sidecar-value-rows()
+#for mutation in (
+  (key: "bound_contract.learning_contract_hash", value: "8585858585858585858585858585858585858585858585858585858585858585"),
+  (key: "bound_contract.actor_state_contract_hash", value: "invalid"),
+  (key: "bound_contract.learning_contract_payload_sha256", value: "8585858585858585"),
+  (key: "bound_contract.actor_state_contract_payload_sha256", value: "invalid"),
+  (key: "bound_contract.scorer_config.experiment_profile", value: "qh_cfplus_gt_depth_v1"),
+  (key: "bound_contract.module_config.experiment_profile", value: "qh_cfplus_gt_depth_v1"),
+  (key: "bound_contract.module_config.selected_observation_protocol", value: "cf_gt"),
+  (key: "bound_contract.module_config.root_evl_profile", value: "none"),
+  (key: "bound_contract.actor_state_contract.experiment_profile", value: "qh_cfplus_gt_depth_v1"),
+  (key: "bound_contract.actor_state_contract.root_evl_profile", value: "none"),
+  (key: "bound_contract.actor_state_contract.selected_observation_protocol", value: "cf_gt"),
+  (key: "bound_contract.learning_contract.data_contract.target_protocol", value: "v1_gt"),
+) {
+  assert(not report-store-q2-evidence-valid(q2-report(
+    receipt-values: mutate-sidecar-value(q2-contract-values, mutation.key, mutation.value),
+  ), "store-a"))
+}
+#assert(not report-store-q2-evidence-valid(q2-report(
+  receipt-values: mutate-sidecar-value(
+    q2-contract-values,
+    "bound_contract.geometry_contract_hash",
+    "8787878787878787",
+  ),
+), "store-a"))
+#for geometry-key in (
+  "bound_contract.module_config.geometry_contract_hash",
+  "bound_contract.actor_state_contract.geometry_contract_hash",
+) {
+  assert(not report-store-q2-evidence-valid(q2-report(
+    receipt-values: mutate-sidecar-value(q2-contract-values, geometry-key, "8787878787878787"),
+  ), "store-a"))
+}
+#let coordinated-q2-cfplus-values = {
+  let values = q2-contract-values
+  for key in (
+    "bound_contract.scorer_config.experiment_profile",
+    "bound_contract.module_config.experiment_profile",
+    "bound_contract.actor_state_contract.experiment_profile",
+  ) {
+    values = mutate-sidecar-value(values, key, "qh_cfplus_gt_depth_v1")
+  }
+  for key in (
+    "bound_contract.module_config.selected_observation_protocol",
+    "bound_contract.actor_state_contract.selected_observation_protocol",
+  ) {
+    values = mutate-sidecar-value(values, key, "cf_gt")
+  }
+  for key in (
+    "bound_contract.geometry_contract_hash",
+    "bound_contract.module_config.geometry_contract_hash",
+    "bound_contract.actor_state_contract.geometry_contract_hash",
+  ) {
+    values = mutate-sidecar-value(values, key, "8787878787878787")
+  }
+  values
+}
+#assert(not report-store-q2-evidence-valid(q2-report(
+  receipt-values: coordinated-q2-cfplus-values,
+), "store-a"))
 #assert(not report-store-q2-evidence-valid(q2-report(bundle-manifest: "invalid"), "store-a"))
 #assert(not report-store-q2-evidence-valid(q2-report(receipt-bundle-manifest: digest-b), "store-a"))
-#assert(report-store-q2-evidence-valid(q2-report(row-counts: (20, 20, 20, 20, 20)), "store-a"))
+#assert(not report-store-q2-evidence-valid(q2-report(row-counts: (2, 1, 1, 1, 1)), "store-a"))
 #assert(report-store-q2-evidence-valid(q2-report(population-count: 10), "store-a"))
 #assert(report-store-q2-evidence-valid(q2-report(error: 0.2), "store-a"))
-#assert(report-store-q2-evidence-valid(q2-report(row-counts: (0, 2, 2, 2, 2)), "store-a"))
+#assert(report-store-q2-evidence-valid(q2-report(row-counts: (0, 1, 1, 1, 1)), "store-a"))
 #assert(report-store-q2-evidence-valid(q2-report(
   exact-target: 0.0,
   immediate-reward: -0.75,
@@ -1452,6 +2396,9 @@
 ), "store-a"))
 #assert(not report-store-q2-evidence-valid(q2-report(
   receipt-values: mutate-sidecar-value(q2-receipt-values, "schema_version", "qh-exact-q2-certification-receipt-v1"),
+), "store-a"))
+#assert(not report-store-q2-evidence-valid(q2-report(
+  receipt-values: mutate-sidecar-value(q2-receipt-values, "schema_version", "qh-exact-q2-certification-receipt-v3"),
 ), "store-a"))
 #assert(not report-store-q2-evidence-valid(q2-report(
   receipt-values: mutate-sidecar-value(q2-receipt-values, "bundle_manifest_sha256", "invalid"),
@@ -1513,6 +2460,49 @@
   ),
 ), "store-a"))
 #assert(not report-store-q2-evidence-valid(q2-report(
+  receipt-values: q2-receipt-values.filter(
+    row => row.key != "exact_q2.factual_selected_action_exact_q2_rows[0].successor_candidate_count",
+  ),
+), "store-a"))
+#assert(not report-store-q2-evidence-valid(q2-report(
+  receipt-values: omit-sidecar-value(
+    q2-receipt-values,
+    "exact_q2.factual_selected_action_exact_q2_rows[0].requested_horizon",
+  ),
+), "store-a"))
+#for malformed-q2-horizon in ("2", true) {
+  assert(not report-store-q2-evidence-valid(q2-report(
+    receipt-values: mutate-sidecar-value(
+      q2-receipt-values,
+      "exact_q2.factual_selected_action_exact_q2_rows[0].requested_horizon",
+      malformed-q2-horizon,
+    ),
+  ), "store-a"))
+}
+#assert(not report-store-q2-evidence-valid(q2-report(
+  receipt-values: q2-receipt-values.filter(
+    row => row.key != "exact_q2.factual_selected_action_exact_q2_rows[0].current_candidate_count",
+  ),
+), "store-a"))
+#for invalid-current-count in (0, 3, 5) {
+  assert(not report-store-q2-evidence-valid(q2-report(
+    receipt-values: mutate-sidecar-value(
+      q2-receipt-values,
+      "exact_q2.factual_selected_action_exact_q2_rows[0].current_candidate_count",
+      invalid-current-count,
+    ),
+  ), "store-a"))
+}
+#assert(not report-store-q2-evidence-valid(q2-report(
+  receipt-values: mutate-sidecar-value(q2-receipt-values, "exact_q2.factual_selected_action_exact_q2_rows[0].successor_candidate_count", 0),
+), "store-a"))
+#assert(not report-store-q2-evidence-valid(q2-report(
+  receipt-values: mutate-sidecar-value(q2-receipt-values, "exact_q2.factual_selected_action_exact_q2_rows[0].successor_candidate_count", 3),
+), "store-a"))
+#assert(not report-store-q2-evidence-valid(q2-report(
+  receipt-values: mutate-sidecar-value(q2-receipt-values, "exact_q2.factual_selected_action_exact_q2_rows[0].successor_candidate_count", 5),
+), "store-a"))
+#assert(not report-store-q2-evidence-valid(q2-report(
   receipt-values: mutate-sidecar-value(q2-receipt-values, "exact_q2.factual_selected_action_exact_q2_rows[0].terminal", true),
 ), "store-a"))
 #assert(not report-store-q2-evidence-valid(q2-report(
@@ -1532,6 +2522,55 @@
 ), "store-a"))
 #assert(not report-store-q2-evidence-valid(q2-report(
   receipt-values: mutate-sidecar-value(q2-receipt-values, "exact_q2.factual_selected_action_exact_q2_rows[0].successor_max_reward", 0.5),
+), "store-a"))
+#assert(not report-store-q2-evidence-valid(q2-report(
+  receipt-values: q2-receipt-values.filter(
+    row => not row.key.starts-with("exact_q2.factual_selected_action_exact_q2_rows[0].successor_reward_ledger"),
+  ),
+), "store-a"))
+#assert(not report-store-q2-evidence-valid(q2-report(
+  receipt-values: q2-receipt-values.filter(
+    row => not row.key.starts-with("exact_q2.factual_selected_action_exact_q2_rows[0].successor_reward_ledger[3]"),
+  ),
+), "store-a"))
+#assert(not report-store-q2-evidence-valid(q2-report(
+  receipt-values: mutate-sidecar-value(q2-receipt-values, "exact_q2.factual_selected_action_exact_q2_rows[0].successor_reward_ledger[1].candidate_index", 0),
+), "store-a"))
+#assert(not report-store-q2-evidence-valid(q2-report(
+  receipt-values: mutate-sidecar-value(q2-receipt-values, "exact_q2.factual_selected_action_exact_q2_rows[0].successor_reward_ledger[0].candidate_index", -1),
+), "store-a"))
+#assert(not report-store-q2-evidence-valid(q2-report(
+  receipt-values: mutate-sidecar-value(q2-receipt-values, "exact_q2.factual_selected_action_exact_q2_rows[0].successor_reward_ledger[0].candidate_index", "0"),
+), "store-a"))
+#assert(not report-store-q2-evidence-valid(q2-report(
+  receipt-values: mutate-sidecar-value(q2-receipt-values, "exact_q2.factual_selected_action_exact_q2_rows[0].successor_reward_ledger[3].candidate_index", 4),
+), "store-a"))
+#assert(not report-store-q2-evidence-valid(q2-report(
+  receipt-values: mutate-sidecar-value(q2-receipt-values, "exact_q2.factual_selected_action_exact_q2_rows[0].successor_reward_ledger[3].candidate_index", 99),
+), "store-a"))
+#let reordered-q2-ledger = mutate-sidecar-value(
+  mutate-sidecar-value(
+    q2-receipt-values,
+    "exact_q2.factual_selected_action_exact_q2_rows[0].successor_reward_ledger[0].candidate_index",
+    1,
+  ),
+  "exact_q2.factual_selected_action_exact_q2_rows[0].successor_reward_ledger[1].candidate_index",
+  0,
+)
+#assert(not report-store-q2-evidence-valid(q2-report(
+  receipt-values: reordered-q2-ledger,
+), "store-a"))
+#assert(not report-store-q2-evidence-valid(q2-report(
+  receipt-values: mutate-sidecar-value(q2-receipt-values, "exact_q2.factual_selected_action_exact_q2_rows[0].successor_reward_ledger[0].reward", "1.5"),
+), "store-a"))
+#assert(not report-store-q2-evidence-valid(q2-report(
+  receipt-values: mutate-sidecar-value(q2-receipt-values, "exact_q2.factual_selected_action_exact_q2_rows[0].successor_reward_ledger[0].reward", true),
+), "store-a"))
+#assert(not report-store-q2-evidence-valid(q2-report(
+  receipt-values: mutate-sidecar-value(q2-receipt-values, "exact_q2.factual_selected_action_exact_q2_rows[0].successor_reward_ledger[0].reward", 1e308),
+), "store-a"))
+#assert(not report-store-q2-evidence-valid(q2-report(
+  receipt-values: mutate-sidecar-value(q2-receipt-values, "exact_q2.factual_selected_action_exact_q2_rows[0].successor_reward_ledger[0].reward", 0.5),
 ), "store-a"))
 #assert(not report-store-q2-evidence-valid(q2-report(
   receipt-values: mutate-sidecar-value(q2-receipt-values, "exact_q2.factual_selected_action_exact_q2_rows[0].discount", -0.5),
@@ -1559,6 +2598,10 @@
   immediate-reward: -0.5,
   discount: 0.5,
   successor-max-reward: -1.0,
+), "store-a"))
+#assert(report-store-q2-evidence-valid(q2-report(
+  successor-max-reward: 1.5,
+  successor-reward-ledger: (1.5, 1.5, 0.5, -1.0),
 ), "store-a"))
 #assert(not report-store-q2-evidence-valid(q2-report(
   exact-target: 0.5,
@@ -1674,7 +2717,7 @@
 )
 #assert(report-store-q2-evidence-valid(two-store-current-report, "store-a"))
 #let two-store-current-zero-support-base = q2-report(
-  row-counts: (0, 2, 2, 2, 2),
+  row-counts: (0, 1, 1, 1, 1),
   ordered-test-manifests: (second-store-manifest, store-manifest),
   store-indices: (1, 0, 0, 0, 0),
 )

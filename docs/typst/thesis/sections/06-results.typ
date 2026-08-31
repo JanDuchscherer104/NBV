@@ -1,6 +1,6 @@
 = Results <sec:thesis-results>
 
-#import "../experiment_data.typ": thesis-report-settings, load-thesis-report, endpoint-evidence-facts, oracle-endpoint-evidence-facts, headroom-evidence-facts, recovery-evidence-facts, q2-evidence-facts, report-store-fact, report-store-endpoint-evidence-valid, report-store-oracle-endpoint-evidence-valid, report-store-headroom-evidence-valid, report-store-recovery-evidence-valid, report-store-headroom-identity-valid, report-store-recovery-identity-valid, report-store-population-evidence-valid, report-store-measurement-evidence-valid, report-store-candidate-support-evidence-valid, report-store-q1-evidence-valid, report-store-q2-evidence-valid, report-store-facts-share-value, report-store-facts-share-source, report-stores-facts-share-sha256, report-stores-facts-share-values, report-stores-have-facts, report-stores-decision-passed, evidence-gate-state, conditional-ratio-gate-state, short-store-label, format-report-value
+#import "../experiment_data.typ": thesis-report-settings, load-thesis-report, endpoint-evidence-facts, oracle-endpoint-evidence-facts, headroom-evidence-facts, recovery-evidence-facts, q2-evidence-facts, report-store-fact, report-store-endpoint-evidence-valid, report-store-oracle-endpoint-evidence-valid, report-store-headroom-evidence-valid, report-store-recovery-evidence-valid, report-store-headroom-identity-valid, report-store-recovery-identity-valid, report-store-population-evidence-valid, report-store-measurement-evidence-valid, report-store-candidate-support-evidence-valid, report-stores-q1-evidence-valid, report-store-q2-evidence-valid, report-store-facts-share-value, report-store-facts-share-source, report-stores-facts-share-sha256, report-stores-facts-share-values, report-stores-have-facts, report-stores-decision-passed, evidence-gate-state, conditional-ratio-gate-state, short-store-label, format-report-value
 #import "../draft_markers.typ": validation_todo
 #import "../../shared/tables.typ": publication-table, index-cell
 
@@ -96,10 +96,9 @@
   report-stores-decision-passed(thesis_data, "headroom_gate.passed"),
   prerequisites-passed: shared-foundations-pass,
 )
-#let q1-evidence-available = confirmatory-evidence and thesis_data.tables.stores.rows.all(store => report-store-q1-evidence-valid(
+#let q1-evidence-available = confirmatory-evidence and report-stores-q1-evidence-valid(
   thesis_data,
-  store.store_id,
-))
+)
 #let q1-state = evidence-gate-state(
   q1-evidence-available,
   report-stores-decision-passed(thesis_data, "q1.gate.passed"),
@@ -457,9 +456,19 @@ payload to reproduce every claimed row.
 == Actor-Visible One-Step Value
 
 #if q1-state.evidence_available [
-  A content-addressed protocol receipt verifies held-out scene role,
-  observation-derived target matching, absent actor/oracle leakage, hard-mask
-  use, and strictly causal history. Actor-visible ranking with its interval,
+  The content-addressed bundle manifest freezes the independent population
+  benchmark, test provenance, and ordered store manifests; the protocol receipt
+  must agree with that anchor and with the complete held-out target,
+  realized-state, candidate, and selected-history rosters. For this campaign's
+  detector-admitted targets, the report checks the observed-target admission
+  rule, an exact allowlisted
+  $Q_1$ actor-input leaf manifest, actor-action versus oracle-label mask
+  separation, hard-mask use, and strictly causal history rather than trusting
+  summary flags. Each leaf has a fixed schema, source owner, and independently
+  anchored or derived content binding to the actor, rollout, implementation, or
+  actor-state contract; the receipt does not establish provenance upstream of
+  those bound artifacts.
+  Actor-visible ranking with its interval,
   calibration, declared thresholds, scene denominators, and their rule-checked
   decision are also available.
   The actor-$Q_1$ claim is
@@ -481,7 +490,9 @@ payload to reproduce every claimed row.
   frozen `all_units_v1` decision are available from one global receipt in
   @tab:thesis-confirmatory-q2-values. Coverage is measured against the complete
   certified census; error and tolerance summaries condition on selected admitted
-  support. Aggregate MAE remains diagnostic;
+  support. Every exact row carries the complete identity-bearing successor
+  reward ledger from which its factual maximum and Bellman target are
+  recomputed. Aggregate MAE remains diagnostic;
   it cannot compensate for a failed row, stratum, or unit. The recursive claim
   is #if q2-state.claim_admissible [admissible on the passed
   actor-$Q_1$ path.] else [blocked by its shared foundations, actor-$Q_1$, or

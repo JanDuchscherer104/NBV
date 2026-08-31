@@ -649,10 +649,11 @@ class QhExperiment:
             and headroom.get("positive_lookahead_headroom", False)
         )
         receipt = {
-            "schema_version": "qh-exact-q2-certification-receipt-v3",
+            "schema_version": "qh-exact-q2-certification-receipt-v4",
             "historical_compatibility": {
                 "qh-exact-q2-certification-receipt-v1": "inspection_only_not_promotable",
                 "qh-exact-q2-certification-receipt-v2": "inspection_only_not_promotable",
+                "qh-exact-q2-certification-receipt-v3": "inspection_only_not_promotable",
             },
             "bundle_manifest_sha256": request.bundle.manifest_sha256,
             "test_population_sha256": _json_payload_hash(request.test),
@@ -664,8 +665,10 @@ class QhExperiment:
                 "module_config": manifest["module_config"],
                 "learning_contract_hash": identity["learning_contract_hash"],
                 "learning_contract": identity["learning_contract"],
+                "learning_contract_payload_sha256": _json_payload_hash(identity["learning_contract"]),
                 "actor_state_contract_hash": identity["actor_state_contract_hash"],
                 "actor_state_contract": identity["actor_state_contract"],
+                "actor_state_contract_payload_sha256": _json_payload_hash(identity["actor_state_contract"]),
                 "geometry_contract_hash": identity["geometry_contract_hash"],
                 "action_mask_semantics": identity["action_mask_semantics"],
                 "representation_semantics": identity["representation_semantics"],

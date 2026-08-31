@@ -157,13 +157,36 @@
 #let candidate-support-benchmark-name = "candidate-support-benchmark-plan-v2"
 #let candidate-support-benchmark-schema = "candidate_support_benchmark_plan_v2"
 #let q1-decision-rule = "ranking_gte_minimum_and_ci_low_gt_chance_and_calibration_mae_lte_maximum_v1"
-#let q1-protocol-receipt-name = "q1-actor-protocol-v1"
-#let q1-protocol-receipt-schema = "actor_visible_q1_protocol_receipt_v1"
+#let q1-analysis-receipt-name = "q1-actor-analysis-v2"
+#let q1-protocol-receipt-name = "q1-actor-protocol-audit-v5"
+#let q1-protocol-receipt-schema = "actor_visible_q1_protocol_receipt_v5"
+#let q1-population-benchmark-name = "q1-population-benchmark-v1"
+#let q1-population-benchmark-schema = "q1_population_benchmark_v1"
+#let q1-bundle-manifest-name = "manifest.json"
 #let q1-scene-role = "held_out_scene_v1"
 #let q1-target-source-protocol = "observation_derived_actor_visible_target_v1"
+#let q1-audit-target-protocol = "v1_observed"
+#let q1-audit-campaign-target-source = "detected_obbs"
+#let q1-audit-campaign-descriptor-provenance = "actor_visible_detector"
+#let q1-audit-gt-match-status = "admitted"
+#let q1-audit-experiment-profile = "qh_cf0_v1"
+#let q1-audit-selected-observation-protocol = "none"
+#let q1-audit-action-mask-semantics = "actor_observed_action_mask_v1"
+#let q1-audit-actor-input-manifest-schema = "qh_cf0_actor_input_leaf_manifest_v2"
+#let q1-audit-actor-input-leaves = (
+  (name: "root_observation_evidence", role: "actor_root_evidence", schema-id: "qh_root_observation_evidence_v1", source-owner: "actor_manifest", derivation: "actor_manifest_member_v1", presence: true),
+  (name: "root_reference_pose", role: "actor_reference_frame", schema-id: "pose_tw_12_float32_v1", source-owner: "rollout_manifest", derivation: "rollout_state_projection_v1", presence: true),
+  (name: "observed_target_descriptor", role: "actor_target_condition", schema-id: "observed_target_obb_pose12_extents3_float32_v1", source-owner: "rollout_manifest", derivation: "v1_observed_target_projection_v1", presence: true),
+  (name: "candidate_pose_shell", role: "actor_candidate_geometry", schema-id: "candidate_pose_shell_s_n_pose12_float32_v1", source-owner: "rollout_manifest", derivation: "rollout_state_projection_v1", presence: true),
+  (name: "actor_action_support", role: "actor_action_mask", schema-id: "actor_action_mask_s_n_bool_v1", source-owner: "rollout_manifest", derivation: "rollout_state_projection_v1", presence: true),
+  (name: "factual_pose_history", role: "actor_causal_history", schema-id: "factual_pose_history_s_s_pose12_mask_v1", source-owner: "rollout_manifest", derivation: "prior_selected_rows_v1", presence: true),
+  (name: "remaining_budget", role: "actor_budget", schema-id: "horizon_remaining_int64_v1", source-owner: "rollout_manifest", derivation: "rollout_state_projection_v1", presence: true),
+  (name: "requested_horizon_q1", role: "actor_requested_horizon", schema-id: "requested_horizon_int64_v1", source-owner: "implementation_contract", derivation: "constant_one_v1", presence: true),
+  (name: "selected_observation_prefix_absent", role: "actor_selected_observation", schema-id: "selected_observation_prefix_none_v1", source-owner: "actor_state_contract", derivation: "qh_cf0_absence_v1", presence: false),
+)
 #let q2-decision-rule = "all_units_support_and_rowwise_abs_plus_relative_tolerance_v1"
-#let q2-certification-receipt-schema = "qh-exact-q2-certification-receipt-v3"
-#let q2-certification-schema = "qh-exact-q2-certification-v3"
+#let q2-certification-receipt-schema = "qh-exact-q2-certification-receipt-v4"
+#let q2-certification-schema = "qh-exact-q2-certification-v4"
 #let q2-selection-semantics = "balanced-hash-within-scene-target-support-strata-v2"
 #let q2-independent-unit-semantics = "ordered-store-manifest-and-scene-v1"
 #let q2-independent-unit-aggregation = "all_units_v1"
@@ -341,11 +364,13 @@
 )
 #let q1-evidence-facts = (
   "q1.model.bundle_manifest_sha256",
+  "q1.protocol.audit_receipt_sha256",
   "q1.protocol.receipt_schema",
   "q1.protocol.scene_role",
   "q1.protocol.target_source",
   "q1.protocol.target_matching_passed",
-  "q1.protocol.actor_oracle_leakage_absent",
+  "q1.protocol.actor_input_manifest_audited",
+  "q1.protocol.actor_oracle_mask_separation_audited",
   "q1.protocol.hard_mask_applied",
   "q1.protocol.causal_history_only",
   "q1.ranking.pairwise_accuracy",
@@ -362,11 +387,13 @@
 )
 #let q1-evidence-contract = (
   (key: "q1.model.bundle_manifest_sha256", aggregation: "model_identity", unit: "sha256", value_kind: "string"),
+  (key: "q1.protocol.audit_receipt_sha256", aggregation: "protocol_binding_sha256", unit: "sha256", value_kind: "string"),
   (key: "q1.protocol.receipt_schema", aggregation: "protocol_identity", unit: "identity", value_kind: "string"),
   (key: "q1.protocol.scene_role", aggregation: "protocol_identity", unit: "identity", value_kind: "string"),
   (key: "q1.protocol.target_source", aggregation: "protocol_identity", unit: "identity", value_kind: "string"),
   (key: "q1.protocol.target_matching_passed", aggregation: "protocol_audit", unit: "bool", value_kind: "boolean"),
-  (key: "q1.protocol.actor_oracle_leakage_absent", aggregation: "protocol_audit", unit: "bool", value_kind: "boolean"),
+  (key: "q1.protocol.actor_input_manifest_audited", aggregation: "protocol_audit", unit: "bool", value_kind: "boolean"),
+  (key: "q1.protocol.actor_oracle_mask_separation_audited", aggregation: "protocol_audit", unit: "bool", value_kind: "boolean"),
   (key: "q1.protocol.hard_mask_applied", aggregation: "protocol_audit", unit: "bool", value_kind: "boolean"),
   (key: "q1.protocol.causal_history_only", aggregation: "protocol_audit", unit: "bool", value_kind: "boolean"),
   (key: "q1.ranking.pairwise_accuracy", aggregation: "state_then_scene_macro", unit: "fraction", value_kind: "number", minimum: 0, maximum: 1),
@@ -632,6 +659,21 @@
   })
 }
 
+// Cross-store source equality is separate from value equality: two profiles
+// must not reproduce the same numbers from different analysis projections.
+#let report-stores-facts-share-sources(report, keys) = {
+  let stores = report.tables.stores.rows
+  let rows = stores.map(store => keys.map(key => {
+    let matches = report.tables.facts.rows.filter(
+      row => row.store_id == store.store_id and row.key == key,
+    )
+    if matches.len() == 1 { matches.first() } else { none }
+  })).flatten()
+  stores.len() > 0 and rows.len() == stores.len() * keys.len() and rows.all(
+    row => row != none and type(row.source) == str and row.source.len() > 0,
+  ) and rows.map(row => row.source).dedup().len() == 1
+}
+
 #let evidence-gate-state(
   evidence-available,
   decision-passed,
@@ -894,13 +936,19 @@
         for row in sidecar-value-index.rows.values() {
           if row.key.match(regex("^facts\\[[0-9]+\\]\\.key$")) != none and row.value_type == "str" {
             let fact-key = row.at("value_text", default: none)
-            if fact-key != none {
-              if fact-key in fact-prefix-index {
-                duplicate-fact-keys.push(fact-key)
+            let fact-prefix = row.key.replace(regex("\\.key$"), "")
+            let fact-store = report-sidecar-indexed-value-or-none(
+              sidecar-value-index,
+              fact-prefix + ".store_id",
+            )
+            if fact-key != none and type(fact-store) == str {
+              let fact-identity = fact-store + "\u{1f}" + fact-key
+              if fact-identity in fact-prefix-index {
+                duplicate-fact-keys.push(fact-identity)
               } else {
                 fact-prefix-index.insert(
-                  fact-key,
-                  row.key.replace(regex("\\.key$"), ""),
+                  fact-identity,
+                  fact-prefix,
                 )
               }
             }
@@ -939,8 +987,9 @@
           )
         } else { true }
         let payload-valid = fact-rows.all(fact => {
-          let prefix = fact-prefix-index.at(fact.key, default: none)
-          prefix != none and not duplicate-fact-keys.contains(fact.key) and {
+          let fact-identity = store-id + "\u{1f}" + fact.key
+          let prefix = fact-prefix-index.at(fact-identity, default: none)
+          prefix != none and not duplicate-fact-keys.contains(fact-identity) and {
             let provenance = source.split("|sidecar:").first()
             (
               (key: prefix + ".store_id", value: store-id),
@@ -964,6 +1013,10 @@
 
 #let report-sha256-value-valid(value) = type(value) == str and value.match(
   regex("^[0-9a-f]{64}$"),
+) != none
+
+#let report-identity16-value-valid(value) = type(value) == str and value.match(
+  regex("^[0-9a-f]{16}$"),
 ) != none
 
 #let report-store-manifest-sha256(report, store-id) = {
@@ -1638,6 +1691,615 @@
   )
 }
 
+#let report-store-q1-protocol-audit-valid(report, store-id) = {
+  let fact-index = report-store-fact-index(report)
+  let receipt-row = report-store-indexed-row-or-none(
+    fact-index,
+    store-id,
+    "q1.protocol.audit_receipt_sha256",
+  )
+  let receipt-digest = if receipt-row != none and report-sha256-value-valid(
+    receipt-row.value,
+  ) { receipt-row.value } else { "" }
+  let receipt-sidecar = report-confirmatory-sidecar-by-digest(
+    report,
+    receipt-digest,
+    required-name: q1-protocol-receipt-name,
+  )
+  if receipt-sidecar == none { return false }
+  let index = report-sidecar-value-index(report, receipt-sidecar.sidecar_id)
+  let value(key) = report-sidecar-indexed-value-or-none(index, key)
+  let store-manifest = report-store-manifest-sha256(report, store-id)
+  let bundle-manifest = report-store-indexed-row-or-none(
+    fact-index,
+    store-id,
+    "q1.model.bundle_manifest_sha256",
+  )
+  let declared-scenes = report-store-number-value(
+    report,
+    store-id,
+    "q1.population.n_scenes",
+  )
+  let manifest-rows = index.rows.values().filter(
+    row => row.key.match(regex("^bound_contract\\.ordered_test_store_manifests\\[[0-9]+\\]$")) != none,
+  ).sorted(key: row => row.key)
+  let manifests = manifest-rows.map(report-sidecar-row-value-or-none)
+  let report-store-rows = report.tables.stores.rows
+  let report-store-ids = report-store-rows.map(row => row.store_id)
+  let report-manifests = report-store-rows.map(row => row.manifest_sha256)
+  let current-store-index = manifests.position(manifest => manifest == store-manifest)
+  let bundle-sidecar = if bundle-manifest != none and report-sha256-value-valid(
+    bundle-manifest.value,
+  ) {
+    report-confirmatory-sidecar-by-digest(
+      report,
+      bundle-manifest.value,
+      required-name: q1-bundle-manifest-name,
+    )
+  } else { none }
+  let bundle-index = report-sidecar-value-index(
+    report,
+    if bundle-sidecar == none { "" } else { bundle-sidecar.sidecar_id },
+  )
+  let bundle-value(key) = report-sidecar-indexed-value-or-none(bundle-index, key)
+  let bundle-manifest-rows = bundle-index.rows.values().filter(
+    row => row.key.match(regex("^identity\\.ordered_test_store_manifests\\[[0-9]+\\]$")) != none,
+  ).sorted(key: row => row.key)
+  let bundle-manifests = bundle-manifest-rows.map(report-sidecar-row-value-or-none)
+  let frozen-population-digest = bundle-value("identity.q1_population_benchmark_sha256")
+  let frozen-provenance-digest = bundle-value("identity.q1_test_provenance_sha256")
+  let header-valid = bundle-manifest != none and report-sha256-value-valid(
+    bundle-manifest.value,
+  ) and bundle-sidecar != none and report-sha256-value-valid(
+    frozen-population-digest,
+  ) and report-sha256-value-valid(frozen-provenance-digest) and bundle-manifests == manifests and value("schema_version") == q1-protocol-receipt-schema and value(
+    "bundle_manifest_sha256",
+  ) == bundle-manifest.value and value("test_population_sha256") == frozen-population-digest and value(
+    "test_provenance_sha256",
+  ) == frozen-provenance-digest and (
+    "actor_manifest_payload_sha256",
+    "implementation_contract_payload_sha256",
+    "actor_state_contract_payload_sha256",
+    "learning_contract_payload_sha256",
+  ).all(key => report-sha256-value-valid(value("bound_contract." + key))) and value(
+    "target_protocol",
+  ) == q1-audit-target-protocol and value(
+    "experiment_profile",
+  ) == q1-audit-experiment-profile and value(
+    "selected_observation_protocol",
+  ) == q1-audit-selected-observation-protocol and value(
+    "action_mask_semantics",
+  ) == q1-audit-action-mask-semantics and value(
+    "actor_input_manifest_schema",
+  ) == q1-audit-actor-input-manifest-schema and manifests.len() > 0 and manifests.all(
+    report-sha256-value-valid,
+  ) and manifests.dedup().len() == manifests.len() and manifests == manifests.sorted() and report-store-ids.len() == report-store-ids.dedup().len() and report-manifests.len() > 0 and report-manifests.all(
+    report-sha256-value-valid,
+  ) and report-manifests.dedup().len() == report-manifests.len() and manifests == report-manifests.sorted() and current-store-index != none
+  if not header-valid { return false }
+
+  // The content-addressed benchmark owns the expected roster independently of
+  // the observed audit receipt. The audit header binds it by digest.
+  let benchmark-sidecar = report-confirmatory-sidecar-by-digest(
+    report,
+    frozen-population-digest,
+    required-name: q1-population-benchmark-name,
+  )
+  if benchmark-sidecar == none { return false }
+  let benchmark-index = report-sidecar-value-index(report, benchmark-sidecar.sidecar_id)
+  let benchmark-value(key) = report-sidecar-indexed-value-or-none(benchmark-index, key)
+  let benchmark-manifest-rows = benchmark-index.rows.values().filter(
+    row => row.key.match(regex("^ordered_test_store_manifests\\[[0-9]+\\]$")) != none,
+  ).sorted(key: row => row.key)
+  let benchmark-manifests = benchmark-manifest-rows.map(report-sidecar-row-value-or-none)
+  let benchmark-header-valid = benchmark-value(
+    "schema_version",
+  ) == q1-population-benchmark-schema and benchmark-value(
+    "bundle_role",
+  ) == "q1_population_benchmark" and benchmark-value(
+    "logical_name",
+  ) == q1-population-benchmark-name and benchmark-value(
+    "status",
+  ) == "confirmatory" and benchmark-value(
+    "bundle_manifest_sha256",
+  ) == bundle-manifest.value and benchmark-value(
+    "test_provenance_sha256",
+  ) == frozen-provenance-digest and benchmark-manifests == bundle-manifests and benchmark-manifests == manifests
+  if not benchmark-header-valid { return false }
+  let expected-target-prefixes = report-sidecar-record-prefixes(
+    benchmark-index,
+    "expected_targets",
+    "target_row_id",
+  )
+  let expected-targets = expected-target-prefixes.map(prefix => (
+    store: benchmark-value(prefix + ".store_index"),
+    scene: benchmark-value(prefix + ".scene_id"),
+    row: benchmark-value(prefix + ".target_row_id"),
+    id: benchmark-value(prefix + ".target_id"),
+    descriptor-hash: benchmark-value(prefix + ".descriptor_hash"),
+  ))
+  let expected-state-prefixes = report-sidecar-record-prefixes(
+    benchmark-index,
+    "expected_states",
+    "step_row_id",
+  )
+  let expected-states = expected-state-prefixes.map(prefix => (
+    store: benchmark-value(prefix + ".store_index"),
+    scene: benchmark-value(prefix + ".scene_id"),
+    rollout: benchmark-value(prefix + ".rollout_row_id"),
+    step-row: benchmark-value(prefix + ".step_row_id"),
+    step: benchmark-value(prefix + ".step_index"),
+    target-row: benchmark-value(prefix + ".target_row_id"),
+    candidate-width: benchmark-value(prefix + ".candidate_width"),
+    selected-row: benchmark-value(prefix + ".selected_candidate_row_id"),
+    candidate-config: benchmark-value(prefix + ".candidate_config_hash"),
+    root-observation: benchmark-value(prefix + ".root_observation_evidence_sha256"),
+    root-reference-pose: benchmark-value(prefix + ".root_reference_pose_sha256"),
+    candidate-pose-shell: benchmark-value(prefix + ".candidate_pose_shell_sha256"),
+    actor-action-support: benchmark-value(prefix + ".actor_action_support_sha256"),
+    remaining-budget: benchmark-value(prefix + ".remaining_budget"),
+  ))
+  let expected-candidate-prefixes = report-sidecar-record-prefixes(
+    benchmark-index,
+    "expected_candidates",
+    "candidate_row_id",
+  )
+  let expected-candidates = expected-candidate-prefixes.map(prefix => (
+    store: benchmark-value(prefix + ".store_index"),
+    rollout: benchmark-value(prefix + ".rollout_row_id"),
+    step-row: benchmark-value(prefix + ".step_row_id"),
+    row: benchmark-value(prefix + ".candidate_row_id"),
+    index: benchmark-value(prefix + ".candidate_index"),
+    action-mask: benchmark-value(prefix + ".actor_action_mask"),
+  ))
+  let expected-target-identities = expected-targets.map(
+    target => (target.store, target.scene, target.row, target.id, target.descriptor-hash).map(str).join("|"),
+  ).sorted()
+  let expected-state-identities = expected-states.map(state => (
+    state.store,
+    state.scene,
+    state.rollout,
+    state.step-row,
+    state.step,
+    state.target-row,
+    state.candidate-width,
+    state.selected-row,
+    state.candidate-config,
+    state.root-observation,
+    state.root-reference-pose,
+    state.candidate-pose-shell,
+    state.actor-action-support,
+    state.remaining-budget,
+  ).map(str).join("|")).sorted()
+  let expected-candidate-identities = expected-candidates.map(candidate => (
+    candidate.store,
+    candidate.rollout,
+    candidate.step-row,
+    candidate.row,
+    candidate.index,
+    if candidate.action-mask { "true" } else { "false" },
+  ).map(str).join("|")).sorted()
+  let expected-roster-payload = "targets\n" + expected-target-identities.join(
+    "\n",
+  ) + "\nstates\n" + expected-state-identities.join(
+    "\n",
+  ) + "\ncandidates\n" + expected-candidate-identities.join("\n")
+  let expected-roster-valid = expected-targets.len() > 0 and expected-states.len() > 0 and expected-candidates.len() > 0 and expected-targets.all(target => (
+    type(target.store) == int and target.store >= 0 and target.store < manifests.len(),
+    type(target.scene) == str and target.scene.len() > 0,
+    type(target.row) == int and target.row >= 0,
+    type(target.id) == str and target.id.len() > 0,
+    report-sha256-value-valid(target.descriptor-hash),
+  ).all(check => check)) and expected-states.all(state => (
+    type(state.store) == int and state.store >= 0 and state.store < manifests.len(),
+    type(state.scene) == str and state.scene.len() > 0,
+    type(state.rollout) == int and state.rollout >= 0,
+    type(state.step-row) == int and state.step-row >= 0,
+    type(state.step) == int and state.step >= 0,
+    type(state.target-row) == int and state.target-row >= 0,
+    type(state.candidate-width) == int and state.candidate-width >= 1,
+    type(state.selected-row) == int and state.selected-row >= 0,
+    report-sha256-value-valid(state.candidate-config),
+    report-sha256-value-valid(state.root-observation),
+    report-sha256-value-valid(state.root-reference-pose),
+    report-sha256-value-valid(state.candidate-pose-shell),
+    report-sha256-value-valid(state.actor-action-support),
+    type(state.remaining-budget) == int and state.remaining-budget >= 1,
+  ).all(check => check)) and expected-candidates.all(candidate => (
+    type(candidate.store) == int and candidate.store >= 0 and candidate.store < manifests.len(),
+    type(candidate.rollout) == int and candidate.rollout >= 0,
+    type(candidate.step-row) == int and candidate.step-row >= 0,
+    type(candidate.row) == int and candidate.row >= 0,
+    type(candidate.index) == int and candidate.index >= 0,
+    type(candidate.action-mask) == bool,
+  ).all(check => check)) and expected-target-identities.dedup().len() == expected-targets.len() and expected-state-identities.dedup().len() == expected-states.len() and expected-candidate-identities.dedup().len() == expected-candidates.len() and benchmark-value(
+    "roster_sha256",
+  ) == sha256-hex(expected-roster-payload)
+  if not expected-roster-valid { return false }
+
+  let target-prefixes = report-sidecar-record-prefixes(
+    index,
+    "targets",
+    "target_row_id",
+  )
+  let targets = target-prefixes.map(prefix => (
+    prefix: prefix,
+    store: value(prefix + ".store_index"),
+    scene: value(prefix + ".scene_id"),
+    row: value(prefix + ".target_row_id"),
+    id: value(prefix + ".target_id"),
+    protocol: value(prefix + ".target_protocol"),
+    target-source: value(prefix + ".target_source"),
+    descriptor-source: value(prefix + ".descriptor_source"),
+    descriptor-provenance: value(prefix + ".descriptor_provenance"),
+    descriptor-hash: value(prefix + ".descriptor_hash"),
+    explicit-hash: value(prefix + ".explicit_target_hash"),
+    match-status: value(prefix + ".gt_match_status"),
+    matched-row: value(prefix + ".matched_target_row_id"),
+    matched-id: value(prefix + ".matched_target_id"),
+    match-iou: value(prefix + ".match_iou"),
+    target-valid: value(prefix + ".target_valid"),
+    label-valid: value(prefix + ".gt_label_valid"),
+  ))
+  let target-trainable(target) = (
+    target.protocol == q1-audit-target-protocol,
+    target.target-source == q1-audit-campaign-target-source,
+    target.descriptor-source == target.target-source,
+    target.descriptor-provenance == q1-audit-campaign-descriptor-provenance,
+    report-sha256-value-valid(target.descriptor-hash),
+    type(target.explicit-hash) == str and target.explicit-hash.match(regex("^[0-9a-f]{16}$")) != none,
+    target.match-status == q1-audit-gt-match-status,
+    type(target.matched-row) == int and target.matched-row >= 0,
+    type(target.matched-id) == str and target.matched-id.len() > 0,
+    report-value-is-finite-float32(target.match-iou) and target.match-iou > 0.20 and target.match-iou <= 1,
+    target.target-valid == true,
+  ).all(check => check)
+  let target-identities = targets.map(
+    target => (target.store, target.scene, target.row, target.id, target.descriptor-hash).map(str).join("|"),
+  )
+  let targets-valid = targets.len() > 0 and targets.all(target => (
+    type(target.store) == int and target.store >= 0 and target.store < manifests.len(),
+    type(target.scene) == str and target.scene.len() > 0,
+    type(target.row) == int and target.row >= 0,
+    type(target.id) == str and target.id.len() > 0,
+    type(target.target-source) == str and target.target-source.len() > 0,
+    type(target.target-valid) == bool,
+    type(target.label-valid) == bool and target.label-valid == target-trainable(target),
+  ).all(check => check)) and target-identities.dedup().len() == targets.len() and targets.map(
+    target => (target.store, target.row).map(str).join("|"),
+  ).dedup().len() == targets.len()
+  if not targets-valid { return false }
+  let target-by-identity = (:)
+  for target in targets {
+    target-by-identity.insert(str(target.store) + "|" + str(target.row), target)
+  }
+
+  let state-prefixes = report-sidecar-record-prefixes(index, "states", "step_row_id")
+  let states = state-prefixes.map(prefix => {
+    let history-prefixes = index.rows.values().filter(row => (
+      row.key.starts-with(prefix + ".history["),
+      row.key.ends-with(".history_position"),
+    ).all(check => check)).map(
+      row => row.key.replace(regex("\\.history_position$"), ""),
+    )
+    let history = history-prefixes.map(history-prefix => (
+      position: value(history-prefix + ".history_position"),
+      source-step: value(history-prefix + ".source_step_index"),
+      selected-row: value(history-prefix + ".selected_candidate_row_id"),
+    )).sorted(key: entry => entry.position)
+    let actor-leaf-prefixes = index.rows.values().filter(row => (
+      row.key.starts-with(prefix + ".actor_input_leaves["),
+      row.key.ends-with(".name"),
+    ).all(check => check)).map(row => row.key.replace(regex("\\.name$"), ""))
+    let actor-leaves = actor-leaf-prefixes.map(leaf-prefix => (
+      name: value(leaf-prefix + ".name"),
+      role: value(leaf-prefix + ".role"),
+      member-schema-sha256: value(leaf-prefix + ".member_schema_sha256"),
+      content-sha256: value(leaf-prefix + ".content_sha256"),
+      source-owner: value(leaf-prefix + ".source_owner"),
+      source-manifest-sha256: value(leaf-prefix + ".source_manifest_sha256"),
+      derivation: value(leaf-prefix + ".derivation"),
+      presence: value(leaf-prefix + ".presence"),
+    )).sorted(key: leaf => str(leaf.name) + "|" + str(leaf.role) + "|" + str(leaf.derivation))
+    (
+      prefix: prefix,
+      store: value(prefix + ".store_index"),
+      scene: value(prefix + ".scene_id"),
+      rollout: value(prefix + ".rollout_row_id"),
+      step-row: value(prefix + ".step_row_id"),
+      step: value(prefix + ".step_index"),
+      target-row: value(prefix + ".target_row_id"),
+      selected-row: value(prefix + ".selected_candidate_row_id"),
+      candidate-config: value(prefix + ".candidate_config_hash"),
+      root-observation: value(prefix + ".root_observation_evidence_sha256"),
+      root-reference-pose: value(prefix + ".root_reference_pose_sha256"),
+      candidate-pose-shell: value(prefix + ".candidate_pose_shell_sha256"),
+      actor-action-support: value(prefix + ".actor_action_support_sha256"),
+      remaining-budget: value(prefix + ".remaining_budget"),
+      actor-payload: value(prefix + ".actor_input_payload_sha256"),
+      actor-contract: value(prefix + ".actor_state_contract_payload_sha256"),
+      actor-leaves: actor-leaves,
+      history: history,
+    )
+  })
+  let state-identities = states.map(
+    state => (state.store, state.rollout, state.step-row).map(str).join("|"),
+  )
+  let states-valid = states.len() > 0 and states.all(state => {
+    let target = target-by-identity.at(
+      str(state.store) + "|" + str(state.target-row),
+      default: none,
+    )
+    let scalar-fields-valid = target != none and (
+      type(state.store) == int and state.store >= 0 and state.store < manifests.len(),
+      type(state.scene) == str and state.scene.len() > 0,
+      type(state.rollout) == int and state.rollout >= 0,
+      type(state.step-row) == int and state.step-row >= 0,
+      type(state.step) == int and state.step >= 0,
+      type(state.target-row) == int and state.target-row >= 0,
+      type(state.selected-row) == int and state.selected-row >= 0,
+      report-sha256-value-valid(state.candidate-config),
+      report-sha256-value-valid(state.root-observation),
+      report-sha256-value-valid(state.root-reference-pose),
+      report-sha256-value-valid(state.candidate-pose-shell),
+      report-sha256-value-valid(state.actor-action-support),
+      type(state.remaining-budget) == int and state.remaining-budget >= 1,
+      report-sha256-value-valid(state.actor-payload),
+      state.actor-contract == value("bound_contract.actor_state_contract_payload_sha256"),
+    ).all(check => check)
+    if not scalar-fields-valid { false } else {
+      let expected-leaf-identities = q1-audit-actor-input-leaves.map(
+        leaf => leaf.name + "|" + leaf.role + "|" + leaf.schema-id + "|" + leaf.source-owner + "|" + leaf.derivation + "|" + if leaf.presence { "true" } else { "false" },
+      ).sorted()
+      let leaf-identities = state.actor-leaves.map(
+        leaf => str(leaf.name) + "|" + str(leaf.role) + "|" + if type(leaf.name) == str {
+          let expected = q1-audit-actor-input-leaves.find(spec => spec.name == leaf.name)
+          if expected == none { "" } else { expected.schema-id + "|" + expected.source-owner }
+        } else { "" } + "|" + str(leaf.derivation) + "|" + if leaf.presence { "true" } else { "false" },
+      )
+      let actor-payload = state.actor-leaves.map(leaf => (
+        leaf.name,
+        leaf.role,
+        leaf.member-schema-sha256,
+        leaf.content-sha256,
+        leaf.source-owner,
+        leaf.source-manifest-sha256,
+        leaf.derivation,
+        if leaf.presence { "true" } else { "false" },
+      ).map(str).join("|")).join("\n")
+      let leaf-by-name = (:)
+      for leaf in state.actor-leaves { leaf-by-name.insert(leaf.name, leaf) }
+      let target-leaf = leaf-by-name.at("observed_target_descriptor", default: none)
+      let root-observation-leaf = leaf-by-name.at("root_observation_evidence", default: none)
+      let root-reference-pose-leaf = leaf-by-name.at("root_reference_pose", default: none)
+      let candidate-pose-shell-leaf = leaf-by-name.at("candidate_pose_shell", default: none)
+      let actor-action-support-leaf = leaf-by-name.at("actor_action_support", default: none)
+      let history-leaf = leaf-by-name.at("factual_pose_history", default: none)
+      let remaining-budget-leaf = leaf-by-name.at("remaining_budget", default: none)
+      let horizon-leaf = leaf-by-name.at("requested_horizon_q1", default: none)
+      let absent-prefix-leaf = leaf-by-name.at("selected_observation_prefix_absent", default: none)
+      let history-payload = if state.history.len() == 0 { "" } else {
+        state.history.map(entry => (
+          entry.position,
+          entry.source-step,
+          entry.selected-row,
+        ).map(str).join("|")).join("\n")
+      }
+      let expected-history-content = sha256-hex(history-payload)
+      let leaves-exact = state.actor-leaves.all(leaf => if type(leaf.name) == str {
+        let expected = q1-audit-actor-input-leaves.find(spec => spec.name == leaf.name)
+        if expected == none { false } else {
+          let expected-source = if expected.source-owner == "actor_manifest" {
+            value("bound_contract.actor_manifest_payload_sha256")
+          } else if expected.source-owner == "rollout_manifest" {
+            manifests.at(state.store)
+          } else if expected.source-owner == "implementation_contract" {
+            value("bound_contract.implementation_contract_payload_sha256")
+          } else if expected.source-owner == "actor_state_contract" {
+            value("bound_contract.actor_state_contract_payload_sha256")
+          } else { none }
+          leaf.member-schema-sha256 == sha256-hex(expected.schema-id) and leaf.source-owner == expected.source-owner and leaf.source-manifest-sha256 == expected-source and report-sha256-value-valid(leaf.content-sha256)
+        }
+      } else { false })
+      target.scene == state.scene and state.history.len() == state.step and state.history.map(
+        entry => entry.position,
+      ) == range(state.step) and state.history.all(entry => (
+        type(entry.source-step) == int and entry.source-step == entry.position,
+        type(entry.selected-row) == int and entry.selected-row >= 0,
+      ).all(check => check)) and state.actor-leaves.len() == q1-audit-actor-input-leaves.len() and leaf-identities == expected-leaf-identities and leaves-exact and root-observation-leaf != none and root-observation-leaf.content-sha256 == state.root-observation and root-reference-pose-leaf != none and root-reference-pose-leaf.content-sha256 == state.root-reference-pose and target-leaf != none and target-leaf.content-sha256 == target.descriptor-hash and candidate-pose-shell-leaf != none and candidate-pose-shell-leaf.content-sha256 == state.candidate-pose-shell and actor-action-support-leaf != none and actor-action-support-leaf.content-sha256 == state.actor-action-support and history-leaf != none and history-leaf.content-sha256 == expected-history-content and remaining-budget-leaf != none and remaining-budget-leaf.content-sha256 == sha256-hex(str(state.remaining-budget)) and horizon-leaf != none and horizon-leaf.content-sha256 == sha256-hex("1") and absent-prefix-leaf != none and absent-prefix-leaf.content-sha256 == sha256-hex("absent") and state.actor-payload == sha256-hex(actor-payload)
+    }
+  }) and state-identities.dedup().len() == states.len()
+  if not states-valid { return false }
+  let state-chain-groups = (:)
+  for state in states {
+    let chain-key = (state.store, state.rollout).map(str).join("|")
+    state-chain-groups.insert(
+      chain-key,
+      state-chain-groups.at(chain-key, default: ()) + (state,),
+    )
+  }
+  let fixed-chain-states-valid = state-chain-groups.values().all(chain => {
+    let ordered = chain.sorted(key: state => state.step)
+    (
+      ordered.map(state => state.step) == range(ordered.len()),
+      chain.map(state => state.scene).dedup().len() == 1,
+      chain.map(state => state.target-row).dedup().len() == 1,
+      chain.map(state => state.candidate-config).dedup().len() == 1,
+      chain.map(state => state.root-observation).dedup().len() == 1,
+      chain.map(state => state.root-reference-pose).dedup().len() == 1,
+      ordered.map(state => state.remaining-budget + state.step).dedup().len() == 1,
+      chain.map(state => state.step-row).dedup().len() == chain.len(),
+    ).all(check => check)
+  })
+  if not fixed-chain-states-valid { return false }
+  let state-by-step = (:)
+  let state-by-row = (:)
+  for state in states {
+    state-by-step.insert((state.store, state.rollout, state.step).map(str).join("|"), state)
+    state-by-row.insert((state.store, state.rollout, state.step-row).map(str).join("|"), state)
+  }
+  let causal-history-only = states.all(state => state.history.all(entry => {
+    let prior = state-by-step.at(
+      (state.store, state.rollout, entry.source-step).map(str).join("|"),
+      default: none,
+    )
+    prior != none and prior.scene == state.scene and prior.target-row == state.target-row and prior.candidate-config == state.candidate-config and entry.source-step < state.step and entry.selected-row == prior.selected-row
+  }))
+
+  let candidate-prefixes = report-sidecar-record-prefixes(
+    index,
+    "candidates",
+    "candidate_row_id",
+  )
+  let candidates = candidate-prefixes.map(prefix => (
+    prefix: prefix,
+    store: value(prefix + ".store_index"),
+    rollout: value(prefix + ".rollout_row_id"),
+    step-row: value(prefix + ".step_row_id"),
+    row: value(prefix + ".candidate_row_id"),
+    index: value(prefix + ".candidate_index"),
+    action-mask: value(prefix + ".actor_action_mask"),
+    label-mask: value(prefix + ".oracle_label_mask"),
+    q-train-mask: value(prefix + ".q_train_mask"),
+    prediction-finite: value(prefix + ".prediction_finite"),
+    label-finite: value(prefix + ".label_finite"),
+    included: value(prefix + ".included_in_q1_metric"),
+  ))
+  let candidate-identities = candidates.map(
+    candidate => (candidate.store, candidate.rollout, candidate.step-row, candidate.row).map(str).join("|"),
+  )
+  let candidates-valid = candidates.len() > 0 and candidates.all(candidate => {
+    let state = state-by-row.at(
+      (candidate.store, candidate.rollout, candidate.step-row).map(str).join("|"),
+      default: none,
+    )
+    state != none and (
+      type(candidate.store) == int and candidate.store >= 0 and candidate.store < manifests.len(),
+      type(candidate.rollout) == int and candidate.rollout >= 0,
+      type(candidate.step-row) == int and candidate.step-row >= 0,
+      type(candidate.row) == int and candidate.row >= 0,
+      type(candidate.index) == int and candidate.index >= 0,
+      type(candidate.action-mask) == bool,
+      type(candidate.label-mask) == bool,
+      type(candidate.q-train-mask) == bool and candidate.q-train-mask == (candidate.action-mask and candidate.label-mask),
+      type(candidate.prediction-finite) == bool,
+      type(candidate.label-finite) == bool,
+      type(candidate.included) == bool and candidate.included == (
+        candidate.q-train-mask and candidate.prediction-finite and candidate.label-finite
+      ),
+    ).all(check => check)
+  }) and candidate-identities.dedup().len() == candidates.len()
+  if not candidates-valid { return false }
+  let measured-state-identities = states.map(state => {
+    let roster = candidates.filter(candidate => (
+      candidate.store == state.store,
+      candidate.rollout == state.rollout,
+      candidate.step-row == state.step-row,
+    ).all(check => check))
+    (
+      state.store,
+      state.scene,
+      state.rollout,
+      state.step-row,
+      state.step,
+      state.target-row,
+      roster.len(),
+      state.selected-row,
+      state.candidate-config,
+      state.root-observation,
+      state.root-reference-pose,
+      state.candidate-pose-shell,
+      state.actor-action-support,
+      state.remaining-budget,
+    ).map(str).join("|")
+  }).sorted()
+  let measured-candidate-identities = candidates.map(candidate => (
+    candidate.store,
+    candidate.rollout,
+    candidate.step-row,
+    candidate.row,
+    candidate.index,
+    if candidate.action-mask { "true" } else { "false" },
+  ).map(str).join("|")).sorted()
+  let state-candidate-roster-valid = states.all(state => {
+    let roster = candidates.filter(candidate => (
+      candidate.store == state.store,
+      candidate.rollout == state.rollout,
+      candidate.step-row == state.step-row,
+    ).all(check => check))
+    let selected = roster.filter(candidate => candidate.row == state.selected-row)
+    let expected-state = expected-states.filter(expected => (
+      expected.store == state.store,
+      expected.rollout == state.rollout,
+      expected.step-row == state.step-row,
+    ).all(check => check))
+    let expected-candidate-roster = expected-candidates.filter(candidate => (
+      candidate.store == state.store,
+      candidate.rollout == state.rollout,
+      candidate.step-row == state.step-row,
+    ).all(check => check))
+    expected-state.len() == 1 and {
+      let width = expected-state.first().candidate-width
+      let expected = expected-state.first()
+      let support-payload = roster.sorted(key: candidate => candidate.index).map(
+        candidate => str(candidate.index) + "|" + if candidate.action-mask { "true" } else { "false" },
+      ).join("\n")
+      roster.len() == width and state.selected-row == expected.selected-row and state.candidate-config == expected.candidate-config and state.root-observation == expected.root-observation and state.root-reference-pose == expected.root-reference-pose and state.candidate-pose-shell == expected.candidate-pose-shell and state.actor-action-support == expected.actor-action-support and state.actor-action-support == sha256-hex(support-payload) and state.remaining-budget == expected.remaining-budget and roster.map(
+        candidate => candidate.index,
+      ).sorted() == range(width) and expected-candidate-roster.len() == width and expected-candidate-roster.map(
+        candidate => candidate.index,
+      ).sorted() == range(width) and roster.sorted(key: candidate => candidate.index).map(
+        candidate => candidate.action-mask,
+      ) == expected-candidate-roster.sorted(key: candidate => candidate.index).map(
+        candidate => candidate.action-mask,
+      ) and selected.len() == 1 and selected.first().action-mask
+    }
+  }) and target-identities.sorted() == expected-target-identities and measured-state-identities == expected-state-identities and measured-candidate-identities == expected-candidate-identities
+  let target-matching-passed = targets.all(target-trainable)
+  let actor-input-manifest-audited = states.all(state => state.actor-leaves.len() == q1-audit-actor-input-leaves.len())
+  let actor-oracle-mask-separation-audited = value(
+    "action_mask_semantics",
+  ) == q1-audit-action-mask-semantics and candidates.all(
+    candidate => candidate.q-train-mask == (candidate.action-mask and candidate.label-mask),
+  )
+  let hard-mask-applied = candidates.all(
+    candidate => not candidate.included or candidate.action-mask,
+  )
+  let current-store-state-scenes = states.filter(
+    state => state.store == current-store-index,
+  ).map(state => state.scene).dedup()
+  let declared-counts-valid = type(declared-scenes) == int and declared-scenes > 0 and type(
+    value("population.target_count"),
+  ) == int and value("population.target_count") == targets.len() and type(
+    value("population.state_count"),
+  ) == int and value("population.state_count") == states.len() and type(
+    value("population.candidate_count"),
+  ) == int and value("population.candidate_count") == candidates.len()
+  declared-counts-valid and state-candidate-roster-valid and current-store-state-scenes.len() == declared-scenes and targets.filter(
+    target => target.store == current-store-index,
+  ).len() > 0 and states.filter(
+    state => state.store == current-store-index,
+  ).len() > 0 and candidates.filter(
+    candidate => candidate.store == current-store-index,
+  ).len() > 0 and (
+    (key: "summary.target_matching_passed", value: target-matching-passed),
+    (key: "summary.actor_input_manifest_audited", value: actor-input-manifest-audited),
+    (key: "summary.actor_oracle_mask_separation_audited", value: actor-oracle-mask-separation-audited),
+    (key: "summary.hard_mask_applied", value: hard-mask-applied),
+    (key: "summary.causal_history_only", value: causal-history-only),
+  ).all(item => value(item.key) == item.value) and report-store-fact-values-match(
+    report,
+    store-id,
+    (
+      (key: "q1.protocol.target_matching_passed", value: target-matching-passed),
+      (key: "q1.protocol.actor_input_manifest_audited", value: actor-input-manifest-audited),
+      (key: "q1.protocol.actor_oracle_mask_separation_audited", value: actor-oracle-mask-separation-audited),
+      (key: "q1.protocol.hard_mask_applied", value: hard-mask-applied),
+      (key: "q1.protocol.causal_history_only", value: causal-history-only),
+    ),
+  )
+}
+
 #let report-store-q1-evidence-valid(report, store-id) = {
   let fact-index = report-store-fact-index(report)
   let bundle-row = report-store-indexed-row-or-none(
@@ -1658,7 +2320,7 @@
     q1-evidence-facts,
     q1-evidence-contract,
     "q1.population.n_scenes",
-  ) and report-store-fact-values-match(
+  ) and report-store-q1-protocol-audit-valid(report, store-id) and report-store-fact-values-match(
     report,
     store-id,
     (
@@ -1666,7 +2328,8 @@
       (key: "q1.protocol.scene_role", value: q1-scene-role),
       (key: "q1.protocol.target_source", value: q1-target-source-protocol),
       (key: "q1.protocol.target_matching_passed", value: true),
-      (key: "q1.protocol.actor_oracle_leakage_absent", value: true),
+      (key: "q1.protocol.actor_input_manifest_audited", value: true),
+      (key: "q1.protocol.actor_oracle_mask_separation_audited", value: true),
       (key: "q1.protocol.hard_mask_applied", value: true),
       (key: "q1.protocol.causal_history_only", value: true),
       (key: "q1.ranking.interval_method", value: paired-interval-method),
@@ -1677,7 +2340,7 @@
     report,
     store-id,
     q1-evidence-facts,
-    required-name: q1-protocol-receipt-name,
+    required-name: q1-analysis-receipt-name,
   ) and report-sha256-value-valid(bundle-manifest) and report-store-interval-is-ordered(
     report,
     store-id,
@@ -1688,6 +2351,16 @@
   ) and ranking-minimum > q1-pairwise-chance and calibration-maximum > 0 and passed != none and passed == (
     ranking >= ranking-minimum and ranking-ci-low > q1-pairwise-chance and calibration <= calibration-maximum
   )
+}
+
+#let report-stores-q1-evidence-valid(report) = {
+  let stores = report.tables.stores.rows
+  stores.len() > 0 and stores.all(
+    store => report-store-q1-evidence-valid(report, store.store_id),
+  ) and report-stores-facts-share-values(
+    report,
+    q1-evidence-facts,
+  ) and report-stores-facts-share-sources(report, q1-evidence-facts)
 }
 
 #let q2-candidate-branch-bin(width) = {
@@ -1826,15 +2499,46 @@
   let report-manifests = report.tables.stores.rows.map(
     row => row.at("manifest_sha256", default: none),
   )
+  let scorer-experiment-profile = value("bound_contract.scorer_config.experiment_profile")
+  let experiment-profile = value("bound_contract.module_config.experiment_profile")
+  let actor-experiment-profile = value("bound_contract.actor_state_contract.experiment_profile")
+  let module-root-evl-profile = value("bound_contract.module_config.root_evl_profile")
+  let actor-root-evl-profile = value("bound_contract.actor_state_contract.root_evl_profile")
+  let learning-target-protocol = value("bound_contract.learning_contract.data_contract.target_protocol")
+  let selected-observation-protocol = value(
+    "bound_contract.module_config.selected_observation_protocol",
+  )
+  let actor-selected-observation-protocol = value(
+    "bound_contract.actor_state_contract.selected_observation_protocol",
+  )
+  let geometry-rows = (
+    report-sidecar-indexed-row-or-none(
+      receipt-index,
+      "bound_contract.geometry_contract_hash",
+    ),
+    report-sidecar-indexed-row-or-none(
+      receipt-index,
+      "bound_contract.module_config.geometry_contract_hash",
+    ),
+    report-sidecar-indexed-row-or-none(
+      receipt-index,
+      "bound_contract.actor_state_contract.geometry_contract_hash",
+    ),
+  )
+  let geometry-valid = experiment-profile == "qh_cf0_v1" and selected-observation-protocol == "none" and actor-selected-observation-protocol == "none" and geometry-rows.all(
+    row => row != none and row.is_missing == true,
+  )
   let lineage-valid = receipt-sidecar != none and store-manifest != none and (
     "bundle_manifest_sha256",
     "test_population_sha256",
     "test_provenance_sha256",
     "bound_contract.scorer_config_hash",
+    "bound_contract.learning_contract_payload_sha256",
+    "bound_contract.actor_state_contract_payload_sha256",
+  ).all(key => report-sha256-value-valid(value(key))) and (
     "bound_contract.learning_contract_hash",
     "bound_contract.actor_state_contract_hash",
-    "bound_contract.geometry_contract_hash",
-  ).all(key => report-sha256-value-valid(value(key))) and manifest-values.len() > 0 and manifest-values.all(
+  ).all(key => report-identity16-value-valid(value(key))) and scorer-experiment-profile == experiment-profile and actor-experiment-profile == experiment-profile and module-root-evl-profile == "evl_v1" and actor-root-evl-profile == "evl_v1" and learning-target-protocol == "v1_observed" and geometry-valid and manifest-values.len() > 0 and manifest-values.all(
     report-sha256-value-valid,
   ) and manifest-values.dedup().len() == manifest-values.len() and report-manifests.all(
     report-sha256-value-valid,
@@ -1907,7 +2611,18 @@
     if type(chain.rank) == int { selected-by-rank.insert(str(chain.rank), chain) }
   }
 
-  let rows = row-prefixes.map(prefix => (
+  let rows = row-prefixes.map(prefix => {
+    let ledger-prefixes = receipt-index.rows.values().filter(row => (
+      row.key.starts-with(prefix + ".successor_reward_ledger["),
+      row.key.ends-with(".candidate_index"),
+    ).all(check => check)).map(
+      row => row.key.replace(regex("\\.candidate_index$"), ""),
+    )
+    let successor-ledger = ledger-prefixes.map(ledger-prefix => (
+      candidate: value(ledger-prefix + ".candidate_index"),
+      reward: value(ledger-prefix + ".reward"),
+    ))
+    (
     prefix: prefix,
     rank: value(prefix + ".selection_rank"),
     dataset: value(prefix + ".dataset_index"),
@@ -1926,6 +2641,7 @@
     rollout-config: value(prefix + ".rollout_config_hash"),
     policy: value(prefix + ".selection_policy"),
     current-count: value(prefix + ".current_candidate_count"),
+    successor-candidate-count: value(prefix + ".successor_candidate_count"),
     successor-action-count: value(prefix + ".successor_action_count"),
     successor-count: value(prefix + ".successor_backup_count"),
     branch-bin: value(prefix + ".candidate_branch_bin"),
@@ -1940,7 +2656,9 @@
     relative-error: value(prefix + ".relative_error"),
     tolerance: value(prefix + ".tolerance"),
     within: value(prefix + ".within_tolerance"),
-  ))
+    successor-ledger: successor-ledger,
+    )
+  })
   let absolute-tolerance = value("exact_q2.spec.absolute_tolerance")
   let relative-tolerance = value("exact_q2.spec.relative_tolerance")
   let rows-valid = rows.len() > 0 and report-value-is-finite-float32(
@@ -1965,13 +2683,28 @@
     ) and report-value-is-finite-float32(derived-tolerance) {
       derived-absolute-error / calc.max(calc.abs(row.exact), float32-epsilon)
     } else { none }
+    let successor-candidates = row.successor-ledger.map(entry => entry.candidate)
+    let successor-cardinality-valid = if chain != none and type(
+      row.successor-candidate-count,
+    ) == int and type(row.successor-action-count) == int {
+      row.successor-candidate-count >= 1 and row.successor-candidate-count >= chain.width-min and row.successor-candidate-count <= chain.width-max and row.successor-action-count >= 1 and row.successor-action-count <= row.successor-candidate-count
+    } else { false }
+    let successor-ledger-valid = successor-cardinality-valid and row.successor-ledger.len() > 0 and row.successor-ledger.all(entry => if type(entry.candidate) == int {
+      entry.candidate >= 0 and entry.candidate < row.successor-candidate-count and report-value-is-finite-float32(entry.reward)
+    } else { false }) and successor-candidates == successor-candidates.sorted() and successor-candidates.dedup().len() == successor-candidates.len()
+    let ledger-max-reward = if successor-ledger-valid {
+      row.successor-ledger.map(entry => entry.reward).sorted().last()
+    } else { none }
     let transition-operands-valid = report-value-is-finite-float32(
       row.immediate-reward,
     ) and report-value-is-finite-float32(row.discount) and row.discount >= 0 and report-value-is-finite-float32(
       row.successor-max-reward,
+    ) and report-value-is-finite-float32(ledger-max-reward) and q2-values-equal(
+      row.successor-max-reward,
+      ledger-max-reward,
     )
     let discounted-successor = if transition-operands-valid {
-      row.discount * row.successor-max-reward
+      row.discount * ledger-max-reward
     } else { none }
     let derived-exact = if report-value-is-finite-float32(discounted-successor) {
       row.immediate-reward + discounted-successor
@@ -1987,6 +2720,11 @@
         ),
       )
     } else { none }
+    let exact-q2-provenance-valid = if chain != none and type(
+      chain.horizon,
+    ) == int and type(row.step) == int and type(row.requested-horizon) == int {
+      chain.horizon >= 2 and row.requested-horizon == 2 and row.step >= 0 and row.step + 1 < chain.factual-states and row.step == chain.horizon - row.requested-horizon
+    } else { false }
     chain != none and (
       row.dataset == chain.dataset,
       row.store == chain.store,
@@ -2001,11 +2739,11 @@
       row.candidate-config == chain.candidate-config,
       row.rollout-config == chain.rollout-config,
       row.policy == chain.policy,
-      type(row.step) == int and row.step >= 0 and row.step + 1 < chain.factual-states,
-      row.requested-horizon == 2,
-      type(row.successor-action-count) == int and row.successor-action-count >= 1,
+      exact-q2-provenance-valid,
+      successor-cardinality-valid,
       type(row.successor-count) == int and row.successor-count >= 1 and row.successor-count == row.successor-action-count and row.branch-bin == q2-candidate-branch-bin(row.successor-count),
-      type(row.current-count) == int and row.current-count >= 1 and type(row.selected-index) == int and row.selected-index >= 0 and row.selected-index < row.current-count,
+      successor-ledger-valid and row.successor-ledger.len() == row.successor-action-count,
+      type(row.current-count) == int and row.current-count >= chain.width-min and row.current-count <= chain.width-max and type(row.selected-index) == int and row.selected-index >= 0 and row.selected-index < row.current-count,
       transition-operands-valid,
       type(row.terminal) == bool and row.terminal == false,
       report-value-is-finite-float32(derived-exact) and report-value-is-finite-float32(exact-identity-tolerance) and calc.abs(row.exact - derived-exact) <= exact-identity-tolerance,
