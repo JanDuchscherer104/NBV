@@ -400,6 +400,38 @@ the layout and thesis PDF SHA-256 values were
 `ca70712aeff7ffc1871e386eef957d49268db7045de6dce8413c7a3ddf96beaf`
 and `735bf3896de22929195cae9873c4a8d532a773964dc11ec20964569d6dfbfd2c`.
 
+The final Q1/Q2 trust-boundary repair replaced self-selected evidence with
+content-addressed anchors and fail-closed producer parity. The Q1 v5 receipt is
+checked against a bundle-manifest-frozen population benchmark, test provenance,
+and ordered store manifests. Every one of the nine actor-input leaves has an
+exact schema, source owner, content binding, and aggregate-payload
+recomputation. Fixed-task chains require contiguous unique steps; invariant
+scene, target, candidate configuration, root observation, and root reference
+pose; a decrementing remaining budget; and causal selected-row history.
+Adversarial fixtures coordinate audit and benchmark mutations, recompute leaf
+payloads and roster hashes, and still reject root, budget, schema, source, and
+content drift.
+
+Exact-Q2 v4 now validates the canonical successor reward ledger, current and
+successor candidate widths, the unique exact-Q2 row implied by configured
+horizon, and the full deployable CF0 profile: scorer/module/actor profile
+agreement, `evl_v1` root encoding, `v1_observed` target protocol, absent selected
+observation, and null geometry contracts. Missing and malformed requested
+horizons fail false without aborting Typst evaluation. The producer emits full
+learning- and actor-contract payload digests rather than relying only on short
+identity aids.
+
+Fresh verification passed 61 focused Python tests, Ruff,
+`make thesis-report-data-contract`, `make typst-authoring-contract`,
+`make thesis-results-full-profile-render`, `make thesis-pdf-ci`,
+`make thesis-pdf`, `make thesis-marker-contract`, and `git diff --check`.
+Three independent final reviewers approved exact Typst diff
+`b1446f2c8150bc41e8d9afe26d4a705d9b2863538a46e459eb4934e30aa1cbf3`
+with zero valid P0--P2 findings. The non-PDF tracked diff before this debrief was
+`135f81d5473ff5099c9aa1fbf27d15bda2c34ddc6bd948d894b0fdfaa326e653`.
+The thesis remains 129 A4 pages; its pre-debrief PDF SHA-256 is
+`0ed88722f33e07b53fda245bc97cc787f510c91b297796ae71468e2007920477`.
+
 ## Canonical Owner Impact
 
 Current thesis truth now lives in the touched Typst figure, report-data,
