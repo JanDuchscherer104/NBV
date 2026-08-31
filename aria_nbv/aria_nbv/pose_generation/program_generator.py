@@ -11,8 +11,10 @@ import torch
 from efm3d.aria.camera import CameraTW
 from efm3d.aria.pose import PoseTW
 
+from ..geometry import TargetRelativeFrame
 from ._candidate_centers import _needs_target_center, _sample_centers
 from ._candidate_gaze import _assign_gaze, _PoseProposalBatch
+from .admission import AdmissionCriterionOutcome, _compose_admission_evidence
 from .candidate_errors import (
     CandidateAlignmentCorruptionError,
     CandidateBackendFailureError,
@@ -35,14 +37,10 @@ from .candidate_generation_rules import (
     Rule,
 )
 from .candidate_interface import (
-    AdmissionEvidence,
     CandidateMeasurements,
     CandidateRequest,
     CandidateSet,
     CandidateTable,
-    CriterionEvidence,
-    CriterionReasonRevision,
-    CriterionSourceRoleRevision,
     EvidenceAvailability,
     _LegacyProjectionGroup,
     _LegacyProjectionVariant,
@@ -91,6 +89,7 @@ class ProgramCandidateGenerator:
                 "Prepared mesh query must be omitted when all query-dependent admission is disabled."
             )
         contexts: list[CandidateContext] = []
+        admission_outcomes: list[tuple[AdmissionCriterionOutcome, ...]] = []
         metadata: list[tuple[str, str, str, str, int, int, int | None]] = []
         total_rows = sum(group.center_count * len(group.gaze_variants) for group in request.program.groups)
         target = (
@@ -103,7 +102,7 @@ class ProgramCandidateGenerator:
 
         for group_index, group in enumerate(request.program.groups):
             try:
-                group_contexts, group_metadata = _generate_group(
+                group_contexts, group_outcomes, group_metadata = _generate_group(
                     request,
                     group,
                     group_index=group_index,
@@ -120,9 +119,10 @@ class ProgramCandidateGenerator:
                     f"Candidate backend failed for {group.semantic_group_id!r}."
                 ) from error
             contexts.extend(group_contexts)
+            admission_outcomes.extend(group_outcomes)
             metadata.extend(group_metadata)
 
-        return _assemble_candidate_set(request, contexts, metadata, target, total_rows)
+        return _assemble_candidate_set(request, contexts, admission_outcomes, metadata, target, total_rows)
 
 
 def _primary_seed(request: CandidateRequest, group_index: int) -> int | None:
@@ -143,11 +143,16 @@ def _generate_group(
     *,
     group_index: int,
     target: torch.Tensor | None,
-) -> tuple[list[CandidateContext], list[tuple[str, str, str, str, int, int, int | None]]]:
+) -> tuple[
+    list[CandidateContext],
+    list[tuple[AdmissionCriterionOutcome, ...]],
+    list[tuple[str, str, str, str, int, int, int | None]],
+]:
     """Generate one center batch and expand its ordered gaze variants."""
 
     primary_seed = _primary_seed(request, group_index)
     contexts: list[CandidateContext] = []
+    admission_outcomes: list[tuple[AdmissionCriterionOutcome, ...]] = []
     metadata: list[tuple[str, str, str, str, int, int, int | None]] = []
     is_mixture = any(item.legacy_direct_component_index is not None for item in request.program.groups)
     with _maybe_seed(primary_seed, device=request.scene.device):
@@ -169,15 +174,15 @@ def _generate_group(
         variants.append((proposal, seed))
     for variant_index, (proposal, seed) in enumerate(variants):
         variant = group.gaze_variants[variant_index]
-        contexts.append(
-            _admit_proposal(
-                request,
-                group,
-                proposal,
-                target=target,
-                is_mixture=is_mixture,
-            )
+        context, outcomes = _admit_proposal(
+            request,
+            group,
+            proposal,
+            target=target,
+            is_mixture=is_mixture,
         )
+        contexts.append(context)
+        admission_outcomes.append(outcomes)
         metadata.append(
             (
                 group.semantic_group_id,
@@ -189,7 +194,7 @@ def _generate_group(
                 seed,
             )
         )
-    return contexts, metadata
+    return contexts, admission_outcomes, metadata
 
 
 @dataclass(frozen=True, slots=True)
@@ -219,7 +224,7 @@ def _admit_proposal(
     *,
     target: torch.Tensor | None,
     is_mixture: bool,
-) -> CandidateContext:
+) -> tuple[CandidateContext, tuple[AdmissionCriterionOutcome, ...]]:
     """Run unchanged shipped admission independently for one gaze variant."""
 
     admission = request.program.admission
@@ -282,11 +287,12 @@ def _admit_proposal(
         context.mark_debug("target_distance_m", _target_distance_m(context))
         for name, value in _target_view_diagnostics(context).items():
             context.mark_debug(name, value)
+    outcomes: list[AdmissionCriterionOutcome] = []
     for rule in _admission_rules(config):
-        rule(context)
+        outcomes.extend(rule(context))
         if config.collect_rule_masks:
             context.record_mask(rule.__class__.__name__, context.mask_valid)
-    return context
+    return context, tuple(outcomes)
 
 
 def _admission_rules(config: _AdmissionKernelConfig) -> tuple[Rule, ...]:
@@ -305,6 +311,7 @@ def _admission_rules(config: _AdmissionKernelConfig) -> tuple[Rule, ...]:
 def _assemble_candidate_set(
     request: CandidateRequest,
     contexts: list[CandidateContext],
+    admission_outcomes: list[tuple[AdmissionCriterionOutcome, ...]],
     metadata: list[tuple[str, str, str, str, int, int, int | None]],
     target: torch.Tensor | None,
     total_rows: int,
@@ -379,6 +386,10 @@ def _assemble_candidate_set(
     measurements = _typed_measurements(
         {name: value for name, value in measurement_tensors.items() if name not in jitter_names}
     )
+    target_frame_identity = f"{TargetRelativeFrame.SEMANTIC_VERSION}:{request.request_binding_hash}"
+    target_frame_is_available = tuple(
+        target is not None and family_id == CenterFamily.TARGET_ORBIT.value for family_id in center_family
+    )
     if has_paired_gaze:
         center_id = torch.cat(center_ids)
         position_pair_id = torch.cat(pair_ids)
@@ -416,8 +427,13 @@ def _assemble_candidate_set(
             if target is None
             else target.reshape(1, 3).expand(valid.numel(), 3).clone()
         ),
-        target_frame_identity=tuple("" for _ in range(valid.numel())),
-        target_frame_availability=tuple(EvidenceAvailability.UNAVAILABLE for _ in range(valid.numel())),
+        target_frame_identity=tuple(
+            target_frame_identity if available else "" for available in target_frame_is_available
+        ),
+        target_frame_availability=tuple(
+            EvidenceAvailability.AVAILABLE if available else EvidenceAvailability.UNAVAILABLE
+            for available in target_frame_is_available
+        ),
         measurements=measurements,
     )
     legacy_groups = (
@@ -449,14 +465,16 @@ def _assemble_candidate_set(
         if is_mixture
         else ()
     )
+    admission = _compose_admission_evidence(valid, tuple(admission_outcomes))
     return CandidateSet._from_fixed_valid(  # noqa: SLF001 - shipped interpreter owns the fixed-attempt proof.
         table,
-        AdmissionEvidence(valid, _criterion_evidence(masks)),
+        admission,
         request.program.completion.mode,
         request.program.candidate_program_hash,
         request.request_binding_hash,
         request.random_key.revision,
         legacy_groups,
+        tuple(masks),
     )
 
 
@@ -526,21 +544,6 @@ def _concat_measurements(contexts: list[CandidateContext], *, is_mixture: bool) 
                 )
         output[name] = torch.cat(chunks)
     return output
-
-
-def _criterion_evidence(masks: dict[str, torch.Tensor]) -> tuple[CriterionEvidence, ...]:
-    unavailable = torch.zeros_like(next(iter(masks.values()))) if masks else None
-    return tuple(
-        CriterionEvidence(
-            criterion_id=name,
-            legacy_cumulative_valid=cumulative_valid,
-            local=None,
-            local_availability=(unavailable if unavailable is not None else torch.zeros_like(cumulative_valid)),
-            reason_revision=CriterionReasonRevision.UNAVAILABLE_V1,
-            source_role_revision=CriterionSourceRoleRevision.UNAVAILABLE_V1,
-        )
-        for name, cumulative_valid in masks.items()
-    )
 
 
 def _typed_measurements(values: dict[str, torch.Tensor]) -> CandidateMeasurements:

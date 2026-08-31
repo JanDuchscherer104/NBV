@@ -1022,12 +1022,23 @@ def candidate_geometry_evidence_rows(rows: Iterable[Mapping[str, Any]]) -> list[
         if tx is None or ty is None or x is None or y is None:
             forward = lateral = None
         else:
-            norm = float(np.hypot(tx, ty))
-            if norm <= _GEOMETRY_EPSILON:
+            from aria_nbv.geometry import TargetRelativeFrame, TargetRelativeFrameDegeneracyError
+
+            origin = torch.zeros(3, dtype=torch.float64)
+            target = torch.tensor((tx, ty, 0.0), dtype=torch.float64)
+            point = torch.tensor((x, y, 0.0), dtype=torch.float64)
+            try:
+                target_frame = TargetRelativeFrame.from_origin_target(
+                    origin,
+                    target,
+                    frame_identity="inspection-audit-row",
+                )
+            except TargetRelativeFrameDegeneracyError:
                 forward = lateral = None
             else:
-                forward = float((x * tx + y * ty) / (norm * norm))
-                lateral = float((-x * ty + y * tx) / (norm * norm))
+                normalized = target_frame.world_to_frame_points(point)
+                forward = float(normalized[0].item())
+                lateral = float(normalized[1].item())
         row.update(
             target_normalized_forward=forward,
             target_normalized_lateral=lateral,
@@ -7873,7 +7884,18 @@ def _proposal_basis(
 def target_aligned_z_up_basis(target_delta: np.ndarray) -> np.ndarray | None:
     """Return the canonical world Z-up basis whose first axis faces the target."""
 
-    return _z_up_basis(target_delta)
+    from aria_nbv.geometry import TargetRelativeFrame, TargetRelativeFrameDegeneracyError
+
+    delta = torch.as_tensor(np.asarray(target_delta, dtype=np.float64).reshape(3), dtype=torch.float64)
+    try:
+        frame = TargetRelativeFrame.from_origin_target(
+            torch.zeros_like(delta),
+            delta,
+            frame_identity="inspection-target-aligned-z-up",
+        )
+    except TargetRelativeFrameDegeneracyError:
+        return None
+    return frame.basis_world_from_frame.numpy()
 
 
 def _z_up_basis(forward_world: np.ndarray) -> np.ndarray | None:

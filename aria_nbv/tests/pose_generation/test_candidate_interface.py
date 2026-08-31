@@ -471,6 +471,10 @@ def test_atomic_target_orbit_preserves_bilateral_fixed_standoff_parity(
     )
 
     _assert_legacy_projection_equal(projected, legacy, profile=f"target_orbit_{align_to_gravity}")
+    assert set(candidate_set.attempts.target_frame_availability) == {"available"}
+    assert all(
+        identity.startswith("target-relative-z-up-v1:") for identity in candidate_set.attempts.target_frame_identity
+    )
     target_world = target.center_world_tensor()
     world_up = world_up_tensor(dtype=projected.shell_poses.t.dtype)
     target_horizontal = target_world - (target_world @ world_up) * world_up
@@ -639,6 +643,81 @@ def test_one_component_mixture_preserves_mixture_mask_and_extra_asymmetry() -> N
         assert criterion.reason_revision.value == "unavailable_v1"
         assert criterion.source_role_revision.value == "unavailable_v1"
     assert set(candidate_set.attempts.target_frame_availability) == {"unavailable"}
+
+
+def test_program_admission_is_typed_n_aligned_and_legacy_projection_exact() -> None:
+    config = CandidateViewGeneratorConfig(
+        num_samples=8,
+        oversample_factor=1.0,
+        min_radius=0.2,
+        max_radius=0.8,
+        ensure_free_space=True,
+        enforce_motion_realism=True,
+        max_step_distance_m=0.6,
+        max_height_delta_m=0.3,
+        max_backward_step_m=0.2,
+        max_yaw_delta_deg=30.0,
+        min_distance_to_mesh=0.05,
+        ensure_collision_free=True,
+        step_clearance=0.02,
+        collision_backend="pytorch3d",
+        collect_rule_masks=True,
+        collect_debug_stats=True,
+        device="cpu",
+        seed=31,
+    )
+    scene = _scene()
+    query = PreparedMeshQuery(
+        scene.mesh_verts,
+        scene.mesh_faces,
+        device=scene.device,
+        dtype=scene.dtype,
+        mesh=scene.gt_mesh,
+    )
+    scene = replace(scene, prepared_mesh_query=query)
+    request = CandidateRequest.bind(
+        program=compile_candidate_program(config),
+        conditioning=CandidateConditioning(_pose()),
+        scene=scene,
+        actor_target=None,
+        random_key=CandidateSamplingKey(CandidateSubstreamRevision.SHIPPED_V1, "direct_base", 31),
+    )
+
+    candidate_set = ProgramCandidateGenerator().generate(request)
+    projected = candidate_set_to_legacy_result(candidate_set)
+    legacy = config.setup_target().generate(
+        reference_pose=_pose(),
+        gt_mesh=scene.gt_mesh,
+        mesh_verts=scene.mesh_verts,
+        mesh_faces=scene.mesh_faces,
+        camera_calib_template=scene.camera_calibration,
+        occupancy_extent=scene.occupancy_extent_world,
+        seed=31,
+    )
+
+    _assert_legacy_projection_equal(projected, legacy, profile="typed_admission")
+    criteria = candidate_set.admission.criteria
+    assert tuple(criterion.criterion_id for criterion in criteria) == (
+        "support_envelope",
+        "motion_step_distance",
+        "motion_height_delta",
+        "motion_backward_step",
+        "motion_yaw_delta",
+        "endpoint_clearance",
+        "path_clearance",
+    )
+    n = candidate_set.completion.attempted_count
+    for criterion in criteria:
+        assert criterion.local is not None
+        assert criterion.legacy_cumulative_valid.shape == (n,)
+        assert criterion.local_availability.shape == (n,)
+        assert criterion.local.reason_code.shape == (n,)
+        assert criterion.local.margin.shape == (n,)
+        assert criterion.reason_revision.value == "candidate_admission_v1"
+        assert criterion.source_role_revision.value == "candidate_admission_v1"
+        available_codes = set(criterion.local.reason_code[criterion.local.evaluated].tolist())
+        assert int(CriterionReasonCode.UNAVAILABLE) not in available_codes
+    assert torch.equal(criteria[-1].legacy_cumulative_valid, candidate_set.admission.mask_valid)
 
 
 def test_legacy_projection_rejects_action_subset_of_valid_rows() -> None:
@@ -1013,7 +1092,20 @@ def test_cuda_warm_generation_does_not_call_host_value_materializers(
 
     device = torch.device("cuda")
     config = _query_free(CandidateMixtureViewGeneratorConfig.upper_bound_free_shell(count=4))
-    config = config.model_copy(update={"base": config.base.model_copy(update={"device": device})})
+    config = config.model_copy(
+        update={
+            "base": config.base.model_copy(
+                update={
+                    "device": device,
+                    "enforce_motion_realism": True,
+                    "max_step_distance_m": 4.0,
+                    "max_height_delta_m": 2.0,
+                    "max_backward_step_m": 2.0,
+                    "max_yaw_delta_deg": 180.0,
+                }
+            )
+        }
+    )
     request = CandidateRequest.bind(
         program=compile_candidate_program(config),
         conditioning=CandidateConditioning(_pose(device)),
@@ -1032,6 +1124,12 @@ def test_cuda_warm_generation_does_not_call_host_value_materializers(
     result = ProgramCandidateGenerator().generate(request)
 
     assert result.completion.attempted_count == 4
+    assert {criterion.criterion_id for criterion in result.admission.criteria} >= {
+        "motion_step_distance",
+        "motion_height_delta",
+        "motion_backward_step",
+        "motion_yaw_delta",
+    }
 
 
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required for a valid alternate execution device")

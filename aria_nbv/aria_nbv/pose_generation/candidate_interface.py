@@ -783,6 +783,7 @@ class CandidateSet:
     _legacy_projection_groups: tuple[_LegacyProjectionGroup, ...] = field(
         default=(), init=False, repr=False, compare=False
     )
+    _legacy_rule_order: tuple[str, ...] = field(default=(), init=False, repr=False, compare=False)
 
     def __post_init__(self) -> None:
         n = int(self.attempts.centers_world.shape[0])
@@ -811,6 +812,7 @@ class CandidateSet:
         request_binding_hash: str,
         candidate_substream_revision: CandidateSubstreamRevision,
         legacy_projection_groups: tuple[_LegacyProjectionGroup, ...] = (),
+        legacy_rule_order: tuple[str, ...] = (),
     ) -> CandidateSet:
         """Construct shipped ``A = V`` output and retain a no-copy validity proof."""
 
@@ -848,6 +850,7 @@ class CandidateSet:
             "_legacy_projection_groups",
             legacy_projection_groups,
         )
+        object.__setattr__(result, "_legacy_rule_order", legacy_rule_order)
         return result
 
     def validate_semantics(self) -> None:
@@ -962,7 +965,7 @@ def candidate_set_to_legacy_result(candidate_set: CandidateSet) -> CandidateSamp
         views=CameraTW(camera_data),
         reference_pose=table.reference_pose_world,
         mask_valid=candidate_set.admission.mask_valid,
-        masks=dict(candidate_set.admission.rule_masks),
+        masks=_legacy_rule_masks(candidate_set),
         shell_poses=table.world_poses,
         shell_offsets_ref=table.shell_offsets_ref,
         sampling_pose=table.sampling_pose_world,
@@ -975,6 +978,37 @@ def candidate_set_to_legacy_result(candidate_set: CandidateSet) -> CandidateSamp
         gaze_variant_id=table.gaze_variant_id if is_mixture else None,
         extras=extras,
     )
+
+
+def _legacy_rule_masks(candidate_set: CandidateSet) -> dict[str, torch.Tensor]:
+    """Recombine canonical criteria into the shipped aggregate rule masks."""
+
+    order = candidate_set._legacy_rule_order  # noqa: SLF001 - outward compatibility adapter owns projection.
+    if not order:
+        return {}
+    criteria = {
+        criterion.criterion_id: criterion.legacy_cumulative_valid for criterion in candidate_set.admission.criteria
+    }
+    motion_ids = (
+        "motion_step_distance",
+        "motion_height_delta",
+        "motion_backward_step",
+        "motion_yaw_delta",
+    )
+    canonical_ids = {
+        "FreeSpaceRule": ("support_envelope",),
+        "MotionRealismRule": motion_ids,
+        "MinDistanceToMeshRule": ("endpoint_clearance",),
+        "PathCollisionRule": ("path_clearance",),
+    }
+    current = torch.ones_like(candidate_set.admission.mask_valid)
+    output: dict[str, torch.Tensor] = {}
+    for rule_name in order:
+        for criterion_id in canonical_ids.get(rule_name, ()):
+            if criterion_id in criteria:
+                current = criteria[criterion_id]
+        output[rule_name] = current
+    return output
 
 
 def _request_hash(

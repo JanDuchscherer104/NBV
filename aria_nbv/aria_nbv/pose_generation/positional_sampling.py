@@ -34,7 +34,7 @@ from typing import TYPE_CHECKING, Protocol
 import torch
 from power_spherical import HypersphericalUniform, PowerSpherical  # type: ignore[import-untyped]
 
-from ..utils.frames import world_up_tensor
+from ..geometry import TargetRelativeFrame, TargetRelativeFrameDegeneracyError
 from .geometry import DEVICE_FWD
 from .types import CandidatePositionMode, SamplingStrategy
 
@@ -188,15 +188,18 @@ class PositionSampler:
             raise ValueError("target_orbit requires at least two attempted proposals.")
 
         root_world = reference_pose.t.reshape(3)
-        target_delta_world = self._target_point_world() - root_world
-        world_up = world_up_tensor(device=self.cfg.device, dtype=torch.float32)
-        target_horizontal = target_delta_world - (target_delta_world @ world_up) * world_up
-        standoff = torch.linalg.norm(target_horizontal)
-        if standoff < 1e-6:
-            raise ValueError("target_orbit requires a nonzero horizontal target bearing.")
-
-        bearing = target_horizontal / standoff
-        lateral = torch.cross(world_up, bearing, dim=0)
+        target_world = self._target_point_world()
+        try:
+            target_frame = TargetRelativeFrame.from_origin_target(
+                root_world,
+                target_world,
+                frame_identity="candidate-target-orbit",
+            )
+        except TargetRelativeFrameDegeneracyError as error:
+            raise ValueError("target_orbit requires a nonzero horizontal target bearing.") from error
+        standoff = target_frame.horizontal_standoff_m
+        bearing = target_frame.forward_world
+        lateral = target_frame.lateral_world
         angles_deg = torch.tensor(self.cfg.target_orbit_angles_deg, device=self.cfg.device, dtype=torch.float32)
         negative = angles_deg[angles_deg < 0.0]
         positive = angles_deg[angles_deg > 0.0]
@@ -210,6 +213,7 @@ class PositionSampler:
             -standoff * torch.cos(angles_rad)[:, None] * bearing[None, :]
             + standoff * torch.sin(angles_rad)[:, None] * lateral[None, :]
         )
+        target_horizontal = target_frame.horizontal_target_delta_world
         offsets_world = target_horizontal[None, :] + target_to_candidate
         centers_world = root_world[None, :] + offsets_world
         offsets_ref = reference_pose.inverse().rotate(offsets_world)

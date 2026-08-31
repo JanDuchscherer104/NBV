@@ -17,10 +17,12 @@ from math import radians
 from typing import TYPE_CHECKING, Protocol
 
 import torch
-import trimesh  # type: ignore[import-untyped]
+import trimesh
 
 from ..utils import Console
 from ..utils.frames import world_up_tensor
+from .admission import AdmissionCriterionOutcome, _compose_admission_criterion_outcome
+from .candidate_interface import CriterionReasonCode, CriterionSourceRole
 from .geometry import bounded_ray_intersects_any, point_mesh_distance
 from .types import CandidateContext, CollisionBackend, _CandidateRuleConfig
 
@@ -31,7 +33,7 @@ if TYPE_CHECKING:
 class Rule(Protocol):
     """Protocol for one full-shell, mask-preserving candidate validity rule."""
 
-    def __call__(self, ctx: CandidateContext) -> None: ...
+    def __call__(self, ctx: CandidateContext) -> tuple[AdmissionCriterionOutcome, ...]: ...
 
 
 class RuleBase:
@@ -67,14 +69,14 @@ class MinDistanceToMeshRule(RuleBase):
     def __init__(self, config: _CandidateRuleConfig):
         super().__init__(config)
 
-    def __call__(self, ctx: CandidateContext) -> None:
+    def __call__(self, ctx: CandidateContext) -> tuple[AdmissionCriterionOutcome, ...]:
         """Mark candidates closer than threshold to the mesh as invalid.
 
         Updates `ctx.mask_valid` in place and records `min_distance_to_mesh` in `ctx.debug`
         when `collect_debug_stats` is enabled.
         """
         if ctx.centers_world is None or ctx.mask_valid is None:
-            return
+            return ()
         if ctx.gt_mesh is None:
             if ctx.cfg.collect_debug_stats:
                 false = torch.zeros_like(ctx.mask_valid)
@@ -82,11 +84,11 @@ class MinDistanceToMeshRule(RuleBase):
                 ctx.mark_debug("path_collision_evaluated_mask", false)
                 ctx.mark_debug("path_collision_detected", false)
                 ctx.mark_debug("path_collision_mask", false)
-            return
+            return ()
 
         need_distance = self.config.min_distance_to_mesh > 0 or ctx.cfg.collect_debug_stats
         if not need_distance:
-            return
+            return ()
 
         positions = ctx.centers_world
         backend = self.config.collision_backend
@@ -102,8 +104,10 @@ class MinDistanceToMeshRule(RuleBase):
                 if ctx.mesh_query is not None:
                     dist_t = ctx.mesh_query.signed_distance(positions)
                 else:
-                    query = trimesh.proximity.ProximityQuery(ctx.gt_mesh)
-                    dist_np = query.signed_distance(positions.detach().cpu().numpy())
+                    query = trimesh.proximity.ProximityQuery(ctx.gt_mesh)  # type: ignore[no-untyped-call]
+                    dist_np = query.signed_distance(  # type: ignore[no-untyped-call]
+                        positions.detach().cpu().numpy()
+                    )
                     dist_t = torch.from_numpy(dist_np).to(positions.device, positions.dtype).abs()
             except ModuleNotFoundError:
                 verts = torch.as_tensor(ctx.gt_mesh.vertices, device=positions.device, dtype=torch.float32)
@@ -113,9 +117,23 @@ class MinDistanceToMeshRule(RuleBase):
         if ctx.cfg.collect_debug_stats:
             ctx.mark_debug("min_distance_to_mesh", dist_t)
 
-        if self.config.min_distance_to_mesh > 0:
-            keep = dist_t > self.config.min_distance_to_mesh
-            ctx.mask_valid = ctx.mask_valid & keep
+        if self.config.min_distance_to_mesh <= 0:
+            return ()
+        previous = ctx.mask_valid
+        margin = dist_t - float(self.config.min_distance_to_mesh)
+        rejected = margin <= 0.0
+        outcome = _compose_admission_criterion_outcome(
+            criterion_id="endpoint_clearance",
+            previous_valid=previous,
+            applicable=torch.ones_like(previous),
+            evaluated=torch.ones_like(previous),
+            rejected=rejected,
+            margin=margin,
+            failure_reason=CriterionReasonCode.ENDPOINT_CLEARANCE_TOO_SMALL,
+            source_role=CriterionSourceRole.ORACLE_ADMISSION,
+        )
+        ctx.mask_valid = outcome.cumulative_valid
+        return (outcome,)
 
 
 class PathCollisionRule(RuleBase):
@@ -154,10 +172,10 @@ class PathCollisionRule(RuleBase):
             except ModuleNotFoundError:
                 self._pyembree_available = False
 
-    def __call__(self, ctx: CandidateContext) -> None:
+    def __call__(self, ctx: CandidateContext) -> tuple[AdmissionCriterionOutcome, ...]:
         """Reject candidates whose straight-line path from reference to center intersects the mesh."""
         if ctx.gt_mesh is None or ctx.centers_world is None or ctx.mask_valid is None:
-            return
+            return ()
 
         if ctx.cfg.collect_debug_stats:
             count = ctx.centers_world.shape[0]
@@ -170,7 +188,7 @@ class PathCollisionRule(RuleBase):
             ctx.mark_debug("path_collision_detected", false)
 
         if self.config.step_clearance <= 0:
-            return
+            return ()
 
         origin = ctx.reference_pose.t.view(1, 3)
         targets = ctx.centers_world
@@ -183,7 +201,19 @@ class PathCollisionRule(RuleBase):
         eligible = ctx.mask_valid.clone()
         eligible_indices = torch.nonzero(eligible, as_tuple=False).reshape(-1)
         if eligible_indices.numel() == 0:
-            return
+            return (
+                _compose_admission_criterion_outcome(
+                    criterion_id="path_clearance",
+                    previous_valid=ctx.mask_valid,
+                    applicable=torch.ones_like(ctx.mask_valid),
+                    evaluated=torch.zeros_like(ctx.mask_valid),
+                    rejected=torch.zeros_like(ctx.mask_valid),
+                    margin=torch.full_like(dists, float("nan")),
+                    failure_reason=CriterionReasonCode.PATH_CLEARANCE_TOO_SMALL,
+                    source_role=CriterionSourceRole.ORACLE_ADMISSION,
+                    local_availability=torch.zeros_like(ctx.mask_valid),
+                ),
+            )
         if backend == CollisionBackend.P3D and ctx.mesh_verts is not None and ctx.mesh_faces is not None:
             steps = max(2, int(self.config.ray_subsample))
             t_vals = torch.linspace(0.0, 1.0, steps, device=targets.device, dtype=targets.dtype)
@@ -200,20 +230,32 @@ class PathCollisionRule(RuleBase):
             ).view(eligible_indices.shape[0], steps)
             min_clearance = dists_pts.min(dim=1).values
             collide = (dists_pts < self.config.step_clearance).any(dim=1)
+            evaluated = torch.zeros_like(eligible)
+            evaluated[eligible_indices] = True
+            detected = torch.zeros_like(eligible)
+            detected[eligible_indices] = collide
+            clearance = torch.full_like(dists, float("nan"))
+            clearance[eligible_indices] = min_clearance
             if ctx.cfg.collect_debug_stats:
-                evaluated = torch.zeros_like(eligible)
-                evaluated[eligible_indices] = True
-                detected = torch.zeros_like(eligible)
-                detected[eligible_indices] = collide
-                clearance = torch.full_like(dists, float("nan"))
-                clearance[eligible_indices] = min_clearance
                 ctx.mark_debug("path_collision_evaluated_mask", evaluated)
                 ctx.mark_debug("path_collision_evaluated", evaluated)
                 ctx.mark_debug("path_collision_detected", detected)
                 ctx.mark_debug("path_collision_mask", detected)
                 ctx.mark_debug("path_min_clearance_m", clearance)
-            ctx.invalidate(torch.zeros_like(ctx.mask_valid).scatter(0, eligible_indices, collide))
-            return
+            rejection = torch.zeros_like(ctx.mask_valid).scatter(0, eligible_indices, collide)
+            outcome = _compose_admission_criterion_outcome(
+                criterion_id="path_clearance",
+                previous_valid=ctx.mask_valid,
+                applicable=torch.ones_like(ctx.mask_valid),
+                evaluated=evaluated,
+                rejected=rejection,
+                margin=clearance - float(self.config.step_clearance),
+                failure_reason=CriterionReasonCode.PATH_CLEARANCE_TOO_SMALL,
+                source_role=CriterionSourceRole.ORACLE_ADMISSION,
+                local_availability=evaluated,
+            )
+            ctx.mask_valid = outcome.cumulative_valid
+            return (outcome,)
 
         origins_np = origin.expand_as(targets[eligible_indices]).detach().cpu().numpy()
         dirs_np = dirs_norm[eligible_indices].detach().cpu().numpy()
@@ -229,7 +271,7 @@ class PathCollisionRule(RuleBase):
         else:
             ray_engine = ctx.gt_mesh.ray
             if use_pyembree:
-                from trimesh.ray.ray_pyembree import RayMeshIntersector  # type: ignore
+                from trimesh.ray.ray_pyembree import RayMeshIntersector
 
                 ray_engine = RayMeshIntersector(ctx.gt_mesh)
             intersects = bounded_ray_intersects_any(
@@ -242,30 +284,42 @@ class PathCollisionRule(RuleBase):
             self.warn_once("pyembree not available; falling back to trimesh ray engine.")
 
         collide = torch.from_numpy(intersects).to(ctx.mask_valid.device)
+        evaluated = torch.zeros_like(eligible)
+        evaluated[eligible_indices] = True
+        detected = torch.zeros_like(eligible)
+        detected[eligible_indices] = collide
         if ctx.cfg.collect_debug_stats:
-            evaluated = torch.zeros_like(eligible)
-            evaluated[eligible_indices] = True
-            detected = torch.zeros_like(eligible)
-            detected[eligible_indices] = collide
             ctx.mark_debug("path_collision_evaluated_mask", evaluated)
             ctx.mark_debug("path_collision_evaluated", evaluated)
             ctx.mark_debug("path_collision_detected", detected)
             ctx.mark_debug("path_collision_mask", detected)
         rejection = torch.zeros_like(ctx.mask_valid)
         rejection[eligible_indices] = collide
-        ctx.invalidate(rejection)
+        outcome = _compose_admission_criterion_outcome(
+            criterion_id="path_clearance",
+            previous_valid=ctx.mask_valid,
+            applicable=torch.ones_like(ctx.mask_valid),
+            evaluated=evaluated,
+            rejected=rejection,
+            margin=torch.full_like(dists, float("nan")),
+            failure_reason=CriterionReasonCode.PATH_CLEARANCE_TOO_SMALL,
+            source_role=CriterionSourceRole.ORACLE_ADMISSION,
+            local_availability=torch.zeros_like(ctx.mask_valid),
+        )
+        ctx.mask_valid = outcome.cumulative_valid
+        return (outcome,)
 
 
 class MotionRealismRule(RuleBase):
     """Reject candidates that violate local egocentric motion bounds."""
 
-    def __call__(self, ctx: CandidateContext) -> None:
+    def __call__(self, ctx: CandidateContext) -> tuple[AdmissionCriterionOutcome, ...]:
         """Apply step, height, backward-motion, and yaw-change constraints."""
 
         if ctx.centers_world is None or ctx.mask_valid is None or ctx.shell_poses is None:
-            return
+            return ()
 
-        reject = torch.zeros(ctx.centers_world.shape[0], device=ctx.centers_world.device, dtype=torch.bool)
+        outcomes: list[AdmissionCriterionOutcome] = []
         offsets_ref = ctx.shell_offsets_ref
         if offsets_ref is None:
             offsets_ref = ctx.reference_pose.inverse().transform(ctx.centers_world)
@@ -274,30 +328,94 @@ class MotionRealismRule(RuleBase):
         if ctx.cfg.collect_debug_stats:
             ctx.mark_debug("motion_step_length_m", step_length)
         if self.config.max_step_distance_m is not None:
-            reject |= step_length > float(self.config.max_step_distance_m)
+            outcomes.append(
+                _motion_outcome(
+                    criterion_id="motion_step_distance",
+                    previous_valid=ctx.mask_valid,
+                    measured=step_length,
+                    limit=float(self.config.max_step_distance_m),
+                    reason=CriterionReasonCode.MAX_STEP_DISTANCE_EXCEEDED,
+                )
+            )
+            ctx.mask_valid = outcomes[-1].cumulative_valid
 
         world_up = world_up_tensor(device=ctx.centers_world.device, dtype=ctx.centers_world.dtype)
         height_delta = ((ctx.centers_world - ctx.reference_pose.t.reshape(1, 3)) * world_up).sum(dim=1).abs()
         if ctx.cfg.collect_debug_stats:
             ctx.mark_debug("motion_height_delta_m", height_delta)
         if self.config.max_height_delta_m is not None:
-            reject |= height_delta > float(self.config.max_height_delta_m)
+            outcomes.append(
+                _motion_outcome(
+                    criterion_id="motion_height_delta",
+                    previous_valid=ctx.mask_valid,
+                    measured=height_delta,
+                    limit=float(self.config.max_height_delta_m),
+                    reason=CriterionReasonCode.MAX_HEIGHT_DELTA_EXCEEDED,
+                )
+            )
+            ctx.mask_valid = outcomes[-1].cumulative_valid
 
         backward_step = (-offsets_ref[:, 2]).clamp_min(0.0)
         if ctx.cfg.collect_debug_stats:
             ctx.mark_debug("motion_backward_step_m", backward_step)
         if self.config.max_backward_step_m is not None:
-            reject |= backward_step > float(self.config.max_backward_step_m)
+            outcomes.append(
+                _motion_outcome(
+                    criterion_id="motion_backward_step",
+                    previous_valid=ctx.mask_valid,
+                    measured=backward_step,
+                    limit=float(self.config.max_backward_step_m),
+                    reason=CriterionReasonCode.MAX_BACKWARD_STEP_EXCEEDED,
+                )
+            )
+            ctx.mask_valid = outcomes[-1].cumulative_valid
 
         yaw_delta = _forward_yaw_delta(ctx.sampling_pose, ctx.shell_poses)
         if ctx.cfg.collect_debug_stats:
             ctx.mark_debug("motion_yaw_delta_rad", yaw_delta)
         if self.config.max_yaw_delta_deg is not None:
-            reject |= yaw_delta > radians(float(self.config.max_yaw_delta_deg))
+            outcomes.append(
+                _motion_outcome(
+                    criterion_id="motion_yaw_delta",
+                    previous_valid=ctx.mask_valid,
+                    measured=yaw_delta,
+                    limit=radians(float(self.config.max_yaw_delta_deg)),
+                    reason=CriterionReasonCode.MAX_YAW_DELTA_EXCEEDED,
+                )
+            )
+            ctx.mask_valid = outcomes[-1].cumulative_valid
 
         if ctx.cfg.collect_debug_stats:
+            reject = (
+                torch.zeros_like(ctx.mask_valid)
+                if not outcomes
+                else ~torch.stack(tuple(outcome.local.passed for outcome in outcomes)).all(dim=0)
+            )
             ctx.mark_debug("motion_realism_reject_mask", reject)
-        ctx.invalidate(reject)
+        return tuple(outcomes)
+
+
+def _motion_outcome(
+    *,
+    criterion_id: str,
+    previous_valid: torch.Tensor,
+    measured: torch.Tensor,
+    limit: float,
+    reason: CriterionReasonCode,
+) -> AdmissionCriterionOutcome:
+    """Build one single-unit motion criterion."""
+
+    margin = float(limit) - measured
+    return _compose_admission_criterion_outcome(
+        criterion_id=criterion_id,
+        previous_valid=previous_valid,
+        applicable=torch.ones_like(previous_valid),
+        evaluated=torch.ones_like(previous_valid),
+        rejected=margin < 0.0,
+        margin=margin,
+        failure_reason=reason,
+        source_role=CriterionSourceRole.ACTOR_VISIBLE,
+    )
 
 
 def _forward_yaw_delta(reference_pose: "PoseTW", shell_poses: "PoseTW") -> torch.Tensor:
@@ -325,10 +443,10 @@ class FreeSpaceRule(RuleBase):
     def __init__(self, config: _CandidateRuleConfig):
         super().__init__(config)
 
-    def __call__(self, ctx: CandidateContext) -> None:
+    def __call__(self, ctx: CandidateContext) -> tuple[AdmissionCriterionOutcome, ...]:
         """Keep only candidates inside the configured occupancy extent (AABB)."""
         if ctx.occupancy_extent is None or ctx.centers_world is None or ctx.mask_valid is None:
-            return
+            return ()
 
         extent = ctx.occupancy_extent.to(ctx.centers_world.device)
         xmin, xmax, ymin, ymax, zmin, zmax = extent
@@ -341,27 +459,39 @@ class FreeSpaceRule(RuleBase):
             & (p[:, 2] >= zmin)
             & (p[:, 2] <= zmax)
         )
-        if ctx.cfg.collect_debug_stats:
-            lower = torch.stack((xmin - p[:, 0], ymin - p[:, 1], zmin - p[:, 2]), dim=1).clamp_min(0.0)
-            upper = torch.stack((p[:, 0] - xmax, p[:, 1] - ymax, p[:, 2] - zmax), dim=1).clamp_min(0.0)
-            outside_distance = torch.linalg.norm(lower + upper, dim=1)
-            inside_margin = (
-                torch.stack(
-                    (
-                        p[:, 0] - xmin,
-                        xmax - p[:, 0],
-                        p[:, 1] - ymin,
-                        ymax - p[:, 1],
-                        p[:, 2] - zmin,
-                        zmax - p[:, 2],
-                    ),
-                    dim=1,
-                )
-                .min(dim=1)
-                .values
+        lower = torch.stack((xmin - p[:, 0], ymin - p[:, 1], zmin - p[:, 2]), dim=1).clamp_min(0.0)
+        upper = torch.stack((p[:, 0] - xmax, p[:, 1] - ymax, p[:, 2] - zmax), dim=1).clamp_min(0.0)
+        outside_distance = torch.linalg.norm(lower + upper, dim=1)
+        inside_margin = (
+            torch.stack(
+                (
+                    p[:, 0] - xmin,
+                    xmax - p[:, 0],
+                    p[:, 1] - ymin,
+                    ymax - p[:, 1],
+                    p[:, 2] - zmin,
+                    zmax - p[:, 2],
+                ),
+                dim=1,
             )
-            ctx.mark_debug("free_space_margin_m", torch.where(in_box, inside_margin, -outside_distance))
-        ctx.mask_valid = ctx.mask_valid & in_box
+            .min(dim=1)
+            .values
+        )
+        margin = torch.where(in_box, inside_margin, -outside_distance)
+        if ctx.cfg.collect_debug_stats:
+            ctx.mark_debug("free_space_margin_m", margin)
+        outcome = _compose_admission_criterion_outcome(
+            criterion_id="support_envelope",
+            previous_valid=ctx.mask_valid,
+            applicable=torch.ones_like(ctx.mask_valid),
+            evaluated=torch.ones_like(ctx.mask_valid),
+            rejected=~in_box,
+            margin=margin,
+            failure_reason=CriterionReasonCode.OUTSIDE_SUPPORT_ENVELOPE,
+            source_role=CriterionSourceRole.ORACLE_ADMISSION,
+        )
+        ctx.mask_valid = outcome.cumulative_valid
+        return (outcome,)
 
 
 __all__ = ["Rule", "RuleBase", "MinDistanceToMeshRule", "MotionRealismRule", "PathCollisionRule", "FreeSpaceRule"]

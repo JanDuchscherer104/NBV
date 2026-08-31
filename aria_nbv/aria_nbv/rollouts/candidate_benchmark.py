@@ -1130,24 +1130,24 @@ def benchmark_from_sampling_result(
     reason_bitset = reason_bitset.detach().to(device="cpu").reshape(-1)
     primary_reason = primary_reason.detach().to(device="cpu").reshape(-1)
     reason_names = {int(code): name for name, code in INVALID_REASON_CODES.items()}
-    offsets_ref = result.shell_offsets_ref.detach().to(device="cpu", dtype=torch.float32).reshape(-1, 3)
-    target_world = torch.as_tensor(tuple(target_center_world), dtype=torch.float32).reshape(1, 3)
-    target_ref = result.reference_pose.inverse().transform(target_world.to(result.reference_pose.t.device))
-    target_ref = target_ref.detach().to(device="cpu", dtype=torch.float32).reshape(3)
-    normalization = max(float(torch.linalg.norm(target_ref).item()), 1.0e-6)
+    target_world = torch.as_tensor(tuple(target_center_world), dtype=torch.float32).reshape(3)
     shell_rotations = result.shell_poses.R.detach().to(device="cpu", dtype=torch.float32).reshape(-1, 3, 3)
-    reference_rotation = result.reference_pose.R.detach().to(device="cpu", dtype=torch.float32).reshape(3, 3)
+    shell_centers = result.shell_poses.t.detach().to(device="cpu", dtype=torch.float32).reshape(-1, 3)
+    reference_center = result.reference_pose.t.detach().to(device="cpu", dtype=torch.float32).reshape(3)
     forward_world = shell_rotations[:, :, 2]
-    from .inspection import target_aligned_z_up_basis
+    from aria_nbv.geometry import TargetRelativeFrame, TargetRelativeFrameDegeneracyError
 
-    target_delta_world = reference_rotation @ target_ref
-    basis = target_aligned_z_up_basis(target_delta_world.numpy())
-    if basis is None:
-        raise ValueError("Phase-A candidate evidence requires a non-degenerate horizontal target direction.")
-    reference_to_target = reference_rotation.T @ torch.as_tensor(basis, dtype=torch.float32)
-    coordinates_tensor = offsets_ref @ reference_to_target / normalization
-    target_relative_tensor = (offsets_ref - target_ref.reshape(1, 3)) @ reference_to_target / normalization
-    forward_target = forward_world @ torch.as_tensor(basis, dtype=torch.float32)
+    try:
+        target_frame = TargetRelativeFrame.from_origin_target(
+            reference_center,
+            target_world,
+            frame_identity=f"candidate-benchmark:{scene_key}:{state_key}",
+        )
+    except TargetRelativeFrameDegeneracyError as error:
+        raise ValueError("Phase-A candidate evidence requires a non-degenerate horizontal target direction.") from error
+    coordinates_tensor = target_frame.world_to_frame_points(shell_centers)
+    target_relative_tensor = target_frame.target_relative_points(shell_centers)
+    forward_target = target_frame.world_to_frame_vectors(forward_world)
     forward_target = forward_target / torch.linalg.norm(forward_target, dim=1, keepdim=True).clamp_min(1.0e-8)
 
     family_indices: dict[str, list[int]] = {}
@@ -1216,7 +1216,10 @@ def benchmark_from_sampling_result(
         state_key=state_key,
         scene_key=scene_key,
         families=tuple(families),
-        geometry={"candidate_count": float(shell_count), "root_target_distance_m": normalization},
+        geometry={
+            "candidate_count": float(shell_count),
+            "root_target_distance_m": float(target_frame.normalization_distance_m.item()),
+        },
         provenance=dict(provenance or {}),
         candidate_ids=tuple(range(shell_count)),
         coordinates=coordinates,
@@ -1257,12 +1260,20 @@ def reframe_candidate_benchmark_target_aligned(
     )
     if not np.allclose(target_vectors, target_vectors[0], atol=1.0e-5):
         raise ValueError("geometry correction requires one consistent target vector per state")
-    from .inspection import target_aligned_z_up_basis
+    import torch
 
-    basis = target_aligned_z_up_basis(rotation @ target_vectors[0])
-    if basis is None:
-        raise ValueError("geometry correction requires a non-degenerate horizontal target direction")
-    transform = rotation.T @ basis
+    from aria_nbv.geometry import TargetRelativeFrame, TargetRelativeFrameDegeneracyError
+
+    target_world = torch.as_tensor(rotation @ target_vectors[0], dtype=torch.float64)
+    try:
+        target_frame = TargetRelativeFrame.from_origin_target(
+            torch.zeros(3, dtype=torch.float64),
+            target_world,
+            frame_identity="candidate-benchmark-geometry-correction",
+        )
+    except TargetRelativeFrameDegeneracyError as error:
+        raise ValueError("geometry correction requires a non-degenerate horizontal target direction") from error
+    transform = rotation.T @ target_frame.basis_world_from_frame.numpy()
 
     def rotate(values: tuple[float, float, float]) -> tuple[float, float, float]:
         return _coordinate3((np.asarray(values, dtype=np.float64) @ transform).tolist())

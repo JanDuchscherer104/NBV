@@ -49,6 +49,7 @@ from aria_nbv.data_handling.vin_store.inventory import (
 from aria_nbv.data_handling.vin_store.source import VinOfflineSourceConfig
 from aria_nbv.data_handling.vin_store.store import OFFLINE_DATASET_VERSION
 from aria_nbv.data_handling.vin_store.writer import flush_prepared_samples_to_shard, prepare_vin_offline_sample
+from aria_nbv.geometry import TargetRelativeFrame, TargetRelativeFrameDegeneracyError, TargetRelativeFrameError
 from aria_nbv.lightning.lit_datamodule import VinDatasetSourceConfig
 from aria_nbv.oracle.pipelines.online_vin import VinOracleOnlineDataset, VinOracleOnlineDatasetConfig
 from aria_nbv.pose_generation import (
@@ -92,6 +93,9 @@ LEAF_CONTRACT_CLASSES = (
     ProcessedMesh,
     PreparedCandidateScene,
     ProgramCandidateGenerator,
+    TargetRelativeFrame,
+    TargetRelativeFrameDegeneracyError,
+    TargetRelativeFrameError,
     VinOfflineBackboneDiagnostic,
     VinOfflineBlockDiagnostic,
     VinOfflineCoverageSceneDiagnostic,
