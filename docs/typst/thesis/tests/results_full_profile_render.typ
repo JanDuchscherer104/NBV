@@ -1,6 +1,6 @@
 // Layout-only fixture: synthetic values exercise every confirmatory result row.
 // It is not a thesis evidence bundle and must never be cited as scientific data.
-#import "../experiment_data.typ": endpoint-evidence-contract, headroom-evidence-contract, recovery-evidence-contract, population-evidence-contract, measurement-evidence-contract, candidate-support-evidence-contract, q1-evidence-contract, q2-evidence-contract, report-value-matches-kind
+#import "../experiment_data.typ": endpoint-evidence-contract, headroom-evidence-contract, recovery-evidence-contract, population-evidence-contract, measurement-evidence-contract, candidate-support-evidence-contract, q1-evidence-contract, q2-evidence-contract, report-stores-facts-share-values, report-value-matches-kind
 #import "../sections/06-results.typ": all-result-summary-families, result-summary-rows-for, result-summary-table
 
 #set page(paper: "a4", margin: 25mm)
@@ -75,6 +75,18 @@
     facts: (rows: facts),
   ),
 )
+#let two-store-report = (
+  tables: (
+    stores: (rows: report.tables.stores.rows + ((store_id: "synthetic-layout-only-b", name: "synthetic-layout-only-b"),)),
+    facts: (rows: facts + facts.map(fact => fact + (store_id: "synthetic-layout-only-b",))),
+  ),
+)
+#let reversed-two-store-report = (
+  tables: (
+    stores: (rows: two-store-report.tables.stores.rows.rev()),
+    facts: two-store-report.tables.facts,
+  ),
+)
 
 = Full-profile results layout fixture
 
@@ -92,7 +104,25 @@ synthetic layout tokens only.
   let families = all-result-summary-families.filter(family => family.band == band.id)
   let metric-count = families.fold(0, (total, family) => total + family.metrics.len())
   assert(metric-count == band.expected, message: "result-summary family size drift: " + band.id)
-  let rows = result-summary-rows-for(report, families)
+  let scope = if band.id == "q2" { "global" } else { "profile" }
+  let rows = result-summary-rows-for(report, families, scope: scope)
+  if band.id == "q2" {
+    let global-rows = result-summary-rows-for(two-store-report, families, scope: "global")
+    let reversed-global-rows = result-summary-rows-for(reversed-two-store-report, families, scope: "global")
+    assert(global-rows.len() == rows.len(), message: "global Q2 rows must render once, not once per profile")
+    assert(global-rows == reversed-global-rows, message: "shared global Q2 rows must not depend on store order")
+    let q2-display-keys = families.map(family => family.metrics.map(metric => metric.key)).flatten()
+    assert(report-stores-facts-share-values(two-store-report, q2-display-keys))
+    let divergent-report = (
+      tables: (
+        stores: two-store-report.tables.stores,
+        facts: (rows: two-store-report.tables.facts.rows.map(fact => if fact.store_id == "synthetic-layout-only-b" and fact.key == "q2.exact.mae" {
+          fact + (value: 0.875,)
+        } else { fact })),
+      ),
+    )
+    assert(not report-stores-facts-share-values(divergent-report, q2-display-keys))
+  }
   figure(
     result-summary-table(rows),
     caption: [Layout-only render of #band.caption.],

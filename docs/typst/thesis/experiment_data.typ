@@ -483,7 +483,7 @@
       )
       matches.len() == 1 and matches.first().value != none and (
         not denominators or (
-          matches.first().n != none and matches.first().n > 0
+          type(matches.first().at("n", default: none)) == int and matches.first().n > 0
         )
       )
     })
@@ -612,6 +612,23 @@
       regex("^[0-9a-f]{64}$"),
     ) != none,
   ) and rows.map(row => row.value).dedup().len() == 1
+}
+
+// A globally rendered result may select one storage row only after every
+// profile repeats the same validated receipt-derived value for every key.
+#let report-stores-facts-share-values(report, keys) = {
+  let stores = report.tables.stores.rows
+  stores.len() > 0 and keys.all(key => {
+    let rows = stores.map(store => {
+      let matches = report.tables.facts.rows.filter(
+        row => row.store_id == store.store_id and row.key == key,
+      )
+      if matches.len() == 1 { matches.first() } else { none }
+    })
+    rows.all(row => row != none and row.value != none) and rows.map(
+      row => row.value,
+    ).dedup().len() == 1
+  })
 }
 
 #let evidence-gate-state(

@@ -1,6 +1,6 @@
 = Results <sec:thesis-results>
 
-#import "../experiment_data.typ": thesis-report-settings, load-thesis-report, endpoint-evidence-facts, oracle-endpoint-evidence-facts, headroom-evidence-facts, recovery-evidence-facts, report-store-fact, report-store-endpoint-evidence-valid, report-store-oracle-endpoint-evidence-valid, report-store-headroom-evidence-valid, report-store-recovery-evidence-valid, report-store-headroom-identity-valid, report-store-recovery-identity-valid, report-store-population-evidence-valid, report-store-measurement-evidence-valid, report-store-candidate-support-evidence-valid, report-store-q1-evidence-valid, report-store-q2-evidence-valid, report-store-facts-share-value, report-store-facts-share-source, report-stores-facts-share-sha256, report-stores-have-facts, report-stores-decision-passed, evidence-gate-state, conditional-ratio-gate-state, short-store-label, format-report-value
+#import "../experiment_data.typ": thesis-report-settings, load-thesis-report, endpoint-evidence-facts, oracle-endpoint-evidence-facts, headroom-evidence-facts, recovery-evidence-facts, q2-evidence-facts, report-store-fact, report-store-endpoint-evidence-valid, report-store-oracle-endpoint-evidence-valid, report-store-headroom-evidence-valid, report-store-recovery-evidence-valid, report-store-headroom-identity-valid, report-store-recovery-identity-valid, report-store-population-evidence-valid, report-store-measurement-evidence-valid, report-store-candidate-support-evidence-valid, report-store-q1-evidence-valid, report-store-q2-evidence-valid, report-store-facts-share-value, report-store-facts-share-source, report-stores-facts-share-sha256, report-stores-facts-share-values, report-stores-have-facts, report-stores-decision-passed, evidence-gate-state, conditional-ratio-gate-state, short-store-label, format-report-value
 #import "../draft_markers.typ": validation_todo
 #import "../../shared/tables.typ": publication-table, index-cell
 
@@ -108,7 +108,7 @@
 #let q2-evidence-available = confirmatory-evidence and thesis_data.tables.stores.rows.all(store => report-store-q2-evidence-valid(
   thesis_data,
   store.store_id,
-))
+)) and report-stores-facts-share-values(thesis_data, q2-evidence-facts)
 #let q1-q2-lineage-consistent = q1-evidence-available and q2-evidence-available and report-stores-facts-share-sha256(
   thesis_data,
   (
@@ -290,12 +290,18 @@ payload to reproduce every claimed row.
   [#unit]
 }
 
-#let result-summary-rows-for(report, families) = {
+#let result-summary-rows-for(report, families, scope: "profile") = {
+  assert(scope in ("profile", "global"), message: "invalid result-summary scope")
   let rows = ()
   let profile-span = families.fold(0, (total, family) => total + family.metrics.len())
-  for store in report.tables.stores.rows {
+  let stores = if scope == "global" {
+    report.tables.stores.rows.slice(0, 1)
+  } else {
+    report.tables.stores.rows
+  }
+  for store in stores {
     let store-id = store.store_id
-    let label = short-store-label(report, store-id)
+    let label = if scope == "global" { [Global] } else { short-store-label(report, store-id) }
     let first-profile-row = true
     for family in families {
       let first-family-row = true
@@ -338,7 +344,7 @@ payload to reproduce every claimed row.
   columns: (0.72fr, 0.95fr, 1.05fr, 0.62fr, 0.62fr, 0.62fr, 0.55fr, 0.5fr),
   align: (left, left, left, right, right, right, left, right),
   text-size: 7.2pt,
-  header: ([*Profile*], [*Gate*], [*Measure*], [*Estimate*], [*CI low*], [*CI high*], [*Unit*], [*$n$*]),
+  header: ([*Scope*], [*Gate*], [*Measure*], [*Estimate*], [*CI low*], [*CI high*], [*Unit*], [*$n$*]),
   rows: rows,
 )
 
@@ -353,6 +359,7 @@ payload to reproduce every claimed row.
 #let q2-summary-rows = result-summary-rows-for(
   thesis_data,
   result-summary-families.filter(family => family.band == "q2"),
+  scope: "global",
 )
 #let resource-summary-rows = result-summary-rows-for(
   thesis_data,
@@ -376,8 +383,8 @@ payload to reproduce every claimed row.
 #if q2-summary-rows.len() > 0 [
   #figure(
     result-summary-table(q2-summary-rows),
-    caption: [Available confirmatory exact-$Q_2$ agreement values and frozen thresholds by profile.],
-  )
+    caption: [One global exact-$Q_2$ receipt over the complete certified population. Coverage is census-relative; error and tolerance summaries are conditional on selected admitted support.],
+  ) <tab:thesis-confirmatory-q2-values>
 ]
 
 #if resource-summary-rows.len() > 0 [
@@ -468,7 +475,10 @@ payload to reproduce every claimed row.
 #if q2-state.evidence_available [
   Learned-versus-exact $Q_2$ error, selected-chain coverage, support-stratum and
   per-unit minima, rowwise tolerance excess, independent-unit count, and the
-  frozen `all_units_v1` decision are available. Aggregate MAE remains diagnostic;
+  frozen `all_units_v1` decision are available from one global receipt in
+  @tab:thesis-confirmatory-q2-values. Coverage is measured against the complete
+  certified census; error and tolerance summaries condition on selected admitted
+  support. Aggregate MAE remains diagnostic;
   it cannot compensate for a failed row, stratum, or unit. The recursive claim
   is #if q2-state.claim_admissible [admissible on the passed
   actor-$Q_1$ path.] else [blocked by its shared foundations, actor-$Q_1$, or

@@ -1,4 +1,4 @@
-#import "../experiment_data.typ": evidence-gate-state, report-store-count-binds-facts, report-stores-decision-passed, report-stores-facts-share-sha256, report-stores-have-facts, report-stores-have-boolean-fact
+#import "../experiment_data.typ": evidence-gate-state, report-store-count-binds-facts, report-stores-decision-passed, report-stores-facts-share-sha256, report-stores-facts-share-values, report-stores-have-facts, report-stores-have-boolean-fact
 
 #let report = (
   tables: (
@@ -21,6 +21,72 @@
   not report-stores-decision-passed(report, "gate.passed"),
   message: "present false must not pass the gate",
 )
+
+#let malformed-denominator-report = (
+  tables: (
+    stores: (rows: ((store_id: "store-a"),)),
+    facts: (rows: (
+      (store_id: "store-a", key: "metric.string-n", value: 0.5, n: "2"),
+      (store_id: "store-a", key: "metric.float-n", value: 0.5, n: 2.0),
+      (store_id: "store-a", key: "metric.zero-n", value: 0.5, n: 0),
+      (store_id: "store-a", key: "metric.negative-n", value: 0.5, n: -1),
+      (store_id: "store-a", key: "metric.missing-n", value: 0.5),
+    )),
+  ),
+)
+#assert(not report-stores-have-facts(
+  malformed-denominator-report,
+  ("metric.string-n",),
+  denominators: true,
+))
+#assert(not report-stores-have-facts(
+  malformed-denominator-report,
+  ("metric.float-n",),
+  denominators: true,
+))
+#assert(not report-stores-have-facts(
+  malformed-denominator-report,
+  ("metric.zero-n",),
+  denominators: true,
+))
+#assert(not report-stores-have-facts(
+  malformed-denominator-report,
+  ("metric.negative-n",),
+  denominators: true,
+))
+#assert(not report-stores-have-facts(
+  malformed-denominator-report,
+  ("metric.missing-n",),
+  denominators: true,
+))
+#assert(not report-stores-facts-share-values(report, ("gate.passed",)))
+#let shared-global-report = (
+  tables: (
+    stores: report.tables.stores,
+    facts: (rows: (
+      (store_id: "store-a", key: "global.receipt", value: "receipt-a"),
+      (store_id: "store-b", key: "global.receipt", value: "receipt-a"),
+      (store_id: "store-a", key: "global.metric", value: 0.25),
+      (store_id: "store-b", key: "global.metric", value: 0.25),
+    )),
+  ),
+)
+#assert(report-stores-facts-share-values(
+  shared-global-report,
+  ("global.receipt", "global.metric"),
+))
+#let divergent-global-report = (
+  tables: (
+    stores: shared-global-report.tables.stores,
+    facts: (rows: shared-global-report.tables.facts.rows.map(row => if row.store_id == "store-b" and row.key == "global.receipt" {
+      row + (value: "receipt-b",)
+    } else { row })),
+  ),
+)
+#assert(not report-stores-facts-share-values(
+  divergent-global-report,
+  ("global.receipt", "global.metric"),
+))
 
 #let malformed-report = (
   tables: (
