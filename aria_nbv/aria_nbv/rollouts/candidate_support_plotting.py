@@ -454,7 +454,9 @@ def candidate_family_preflight_figures(result: CandidateFamilyPreflight) -> tupl
 
     rows = [
         {
+            "scene": scene,
             "state": state,
+            "identity": f"{scene} · {state}",
             "family": cell.family,
             "applicable": cell.applicable,
             "attempted": cell.attempted,
@@ -471,34 +473,38 @@ def candidate_family_preflight_figures(result: CandidateFamilyPreflight) -> tupl
             if cell.attempted == 0
             else f"{cell.selected / cell.attempted:.0%}",
         }
-        for state, cell in result.cells
+        for scene, state, cell in result.cells
     ]
     frame = pd.DataFrame(rows)
-    states = sorted(frame["state"].unique()) if not frame.empty else []
+    identities = sorted({(str(row["scene"]), str(row["state"])) for row in rows})
+    identity_labels = {identity: f"{identity[0]} · {identity[1]}" for identity in identities}
     families = sorted(frame["family"].unique()) if not frame.empty else []
     heatmap = go.Figure()
     if rows:
-        indexed = frame.set_index(["state", "family"])
-        z = [[indexed.loc[(state, family), "survival"] for family in families] for state in states]
-        text = [[indexed.loc[(state, family), "label"] for family in families] for state in states]
+        indexed = frame.set_index(["scene", "state", "family"])
+        z = [[indexed.loc[(*identity, family), "survival"] for family in families] for identity in identities]
+        text = [[indexed.loc[(*identity, family), "label"] for family in families] for identity in identities]
         custom = [
             [
                 [
-                    indexed.loc[(state, family), "applicable"],
-                    indexed.loc[(state, family), "attempted"],
-                    indexed.loc[(state, family), "valid"],
-                    indexed.loc[(state, family), "selected"],
-                    indexed.loc[(state, family), "denominator"],
-                    indexed.loc[(state, family), "support_failure"],
+                    identity[0],
+                    identity[1],
+                    family,
+                    indexed.loc[(*identity, family), "applicable"],
+                    indexed.loc[(*identity, family), "attempted"],
+                    indexed.loc[(*identity, family), "valid"],
+                    indexed.loc[(*identity, family), "selected"],
+                    indexed.loc[(*identity, family), "denominator"],
+                    indexed.loc[(*identity, family), "support_failure"],
                 ]
                 for family in families
             ]
-            for state in states
+            for identity in identities
         ]
         heatmap.add_trace(
             go.Heatmap(
                 x=families,
-                y=states,
+                y=[identity_labels[identity] for identity in identities],
                 z=z,
                 text=text,
                 texttemplate="%{text}",
@@ -507,16 +513,16 @@ def candidate_family_preflight_figures(result: CandidateFamilyPreflight) -> tupl
                 zmax=1,
                 colorbar={"title": "selected / attempted"},
                 hovertemplate=(
-                    "state=%{y}<br>family=%{x}<br>applicable=%{customdata[0]}"
-                    "<br>attempted=%{customdata[1]}<br>valid=%{customdata[2]}"
-                    "<br>selected=%{customdata[3]}<br>denominator=%{customdata[4]}"
-                    "<br>support failure=%{customdata[5]}<extra></extra>"
+                    "scene=%{customdata[0]}<br>state=%{customdata[1]}<br>family=%{customdata[2]}"
+                    "<br>applicable=%{customdata[3]}<br>attempted=%{customdata[4]}"
+                    "<br>valid=%{customdata[5]}<br>selected=%{customdata[6]}"
+                    "<br>denominator=%{customdata[7]}<br>support failure=%{customdata[8]}<extra></extra>"
                 ),
             )
         )
-        for state_index, state in enumerate(states):
+        for state_index, identity in enumerate(identities):
             for family_index, family in enumerate(families):
-                if indexed.loc[(state, family), "applicable"] is not False:
+                if indexed.loc[(*identity, family), "applicable"] is not False:
                     continue
                 for offset in (-0.4, -0.2, 0.0, 0.2, 0.4):
                     heatmap.add_shape(
@@ -533,8 +539,13 @@ def candidate_family_preflight_figures(result: CandidateFamilyPreflight) -> tupl
     heatmap.update_layout(title="State × family applicability and selected survival")
 
     funnel_rows = [
-        {"family": cell.family, "stage": stage, "count": count, "state": state}
-        for state, cell in result.cells
+        {
+            "family": cell.family,
+            "stage": stage,
+            "count": count,
+            "state": f"{scene} · {state}",
+        }
+        for scene, state, cell in result.cells
         if cell.applicable is True
         for stage, count in (("attempted", cell.attempted), ("valid", cell.valid), ("selected", cell.selected))
     ]
@@ -544,7 +555,7 @@ def candidate_family_preflight_figures(result: CandidateFamilyPreflight) -> tupl
         y="count",
         color="stage",
         facet_row="state" if funnel_rows else None,
-        facet_row_spacing=(min(0.03, 0.8 / (len(states) - 1)) if funnel_rows and len(states) > 1 else None),
+        facet_row_spacing=(min(0.03, 0.8 / (len(identities) - 1)) if funnel_rows and len(identities) > 1 else None),
         barmode="group",
         title="Applicable family attempted → valid → selected funnels",
     )

@@ -81,7 +81,15 @@ def plot_control_key(plot_name: str, *identity: Any) -> str:
     return f"stored-rollout-plot:{plot_name}:{hashlib.sha256(payload.encode('utf-8')).hexdigest()[:16]}"
 
 
-def render_plot(fig: go.Figure, explanation: ScientificExplanation, *, log_y_key: str | None = None) -> None:
+def render_plot(
+    fig: go.Figure,
+    explanation: ScientificExplanation,
+    *,
+    log_y_key: str | None = None,
+    selection_key: str | None = None,
+) -> Any:
+    """Render one explained plot and optionally return point-selection state."""
+
     badge_color = _ROLE_COLORS[explanation.evidence_role]
     columns = st.columns([4, 1, 1]) if log_y_key is not None else st.columns([5, 1])
     col_title, col_info = columns[:2]
@@ -95,7 +103,13 @@ def render_plot(fig: go.Figure, explanation: ScientificExplanation, *, log_y_key
     if log_y_key is not None:
         with columns[2]:
             rendered, _ = _plot_with_y_axis_control(fig, key=log_y_key)
-    st.plotly_chart(rendered, width="stretch")
+    return st.plotly_chart(
+        rendered,
+        width="stretch",
+        key=selection_key,
+        on_select="rerun" if selection_key is not None else "ignore",
+        selection_mode="points",
+    )
 
 
 def render_explanation_popover(

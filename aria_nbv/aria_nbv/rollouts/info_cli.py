@@ -278,10 +278,7 @@ def _preflight_payload(
             warnings.append(message)
 
     reward = _reward_signal_payload(reader)
-    family_preflight = candidate_family_preflight_from_reader(
-        reader,
-        require_known_applicability=profile == "production",
-    )
+    family_preflight = candidate_family_preflight_from_reader(reader)
     family_payload = family_preflight.to_payload()
     family_blockers = [f"candidate_family:{item['code']}" for item in family_payload["blockers"]]
     if profile == "production":

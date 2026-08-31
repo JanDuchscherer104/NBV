@@ -2,13 +2,18 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Any
 
 import pandas as pd
 import plotly.express as px
 import streamlit as st
 
-from ....rollouts.candidate_benchmark import CandidateFamilySelection, select_candidate_family_shell
+from ....rollouts.candidate_benchmark import (
+    CandidateFamilySelection,
+    candidate_family_selection_from_plotly_event,
+    select_candidate_family_shell,
+)
 from ....rollouts.candidate_support_plotting import candidate_benchmark_figures as _candidate_benchmark_figures
 from ....rollouts.candidate_support_plotting import candidate_family_preflight_figures, candidate_support_figures
 from ...scientific_labels import TheoryReferences
@@ -111,6 +116,7 @@ def _render_candidate_benchmark_card(session_handle: Any) -> None:
                     [
                         {
                             "code": blocker.code.value,
+                            "scene": blocker.scene_key,
                             "state": blocker.state_key,
                             "family": blocker.family,
                             "detail": blocker.detail,
@@ -121,37 +127,65 @@ def _render_candidate_benchmark_card(session_handle: Any) -> None:
                 hide_index=True,
                 width="stretch",
             )
-        for figure in candidate_family_preflight_figures(gate):
-            _render_plot(
-                figure,
-                ScientificExplanation(
-                    question="Does every applicable proposal family survive the frozen Phase-A support gate?",
-                    answer="The heatmap distinguishes applicable, inapplicable, and unknown cells; the funnels retain attempted, actor-valid, and selected denominators.",
-                    sections=(
-                        ExplanationSection(
-                            "Gate semantics",
-                            "Root support, family collapse, target-family support, and oracle-label flat gain are separate typed outcomes.",
-                        ),
-                    ),
-                    evidence_role="derived training data",
-                    source_fields=("candidate_family_preflight",),
-                ),
-            )
         selectable = tuple(
-            CandidateFamilySelection(state_key, cell.family)
-            for state_key, cell in gate.cells
+            CandidateFamilySelection(scene_key, state_key, cell.family)
+            for scene_key, state_key, cell in gate.cells
             if any(
-                record.state_key == state_key and any(family.family == cell.family for family in record.families)
+                record.scene_key == scene_key
+                and record.state_key == state_key
+                and any(family.family == cell.family for family in record.families)
                 for record in retained.records
             )
         )
+        heatmap, funnel = candidate_family_preflight_figures(gate)
+        heatmap_event = _render_plot(
+            heatmap,
+            ScientificExplanation(
+                question="Does every applicable proposal family survive the frozen Phase-A support gate?",
+                answer="The heatmap distinguishes applicable, inapplicable, and unknown cells; click a cell to inspect its persisted shell.",
+                sections=(
+                    ExplanationSection(
+                        "Gate semantics",
+                        "Root support, family collapse, target-family support, and oracle-label flat gain are separate typed outcomes.",
+                    ),
+                ),
+                evidence_role="derived training data",
+                source_fields=("candidate_family_preflight",),
+            ),
+            selection_key=f"candidate-family-heatmap:{store_identity}",
+        )
+        _render_plot(
+            funnel,
+            ScientificExplanation(
+                question="Does every applicable proposal family survive the frozen Phase-A support gate?",
+                answer="The funnels retain attempted, actor-valid, and selected denominators.",
+                sections=(
+                    ExplanationSection(
+                        "Gate semantics",
+                        "Root support, family collapse, target-family support, and oracle-label flat gain are separate typed outcomes.",
+                    ),
+                ),
+                evidence_role="derived training data",
+                source_fields=("candidate_family_preflight",),
+            ),
+        )
+        clicked = (
+            candidate_family_selection_from_plotly_event(heatmap_event) if isinstance(heatmap_event, Mapping) else None
+        )
         if selectable:
-            selection_by_label = {f"{value.state_key} · {value.family}": value for value in selectable}
+            selection_by_label = {
+                f"{value.scene_key} · {value.state_key} · {value.family}": value for value in selectable
+            }
+            selectbox_key = f"candidate-family-shell:{store_identity}"
+            if clicked in selectable:
+                st.session_state[selectbox_key] = next(
+                    label for label, value in selection_by_label.items() if value == clicked
+                )
             selected_label = st.selectbox(
-                "Inspect one state × family shell",
+                "Inspect one scene × state × family shell",
                 tuple(selection_by_label),
-                key=f"candidate-family-shell:{store_identity}",
-                help="Drives the existing target-aligned 2-D and 3-D candidate-shell views.",
+                key=selectbox_key,
+                help="Cell clicks drive the existing target-aligned shell; this control is the keyboard-accessible fallback.",
             )
             selection = selection_by_label[selected_label]
             shell = select_candidate_family_shell(retained.records, selection)
@@ -160,7 +194,7 @@ def _render_candidate_benchmark_card(session_handle: Any) -> None:
                     figure,
                     ScientificExplanation(
                         question="Where is the selected factual-state family supported?",
-                        answer="The existing target-aligned shell is filtered by the selected state and persisted family identity.",
+                        answer="The existing target-aligned shell is filtered by the selected scene, state, and persisted family identity.",
                         sections=(
                             ExplanationSection(
                                 "Selection semantics",

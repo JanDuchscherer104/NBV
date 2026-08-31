@@ -13,6 +13,8 @@ from efm3d.aria.pose import PoseTW
 
 from aria_nbv.pose_generation.types import CandidateSamplingResult
 from aria_nbv.rollouts.candidate_benchmark import (
+    PROVENANCE_CORRECTION_REVISION,
+    WRITER_CONFIG_IDENTITY_REVISION,
     CandidateBenchmark,
     CandidateFamilyCounts,
     CandidateFamilyPhaseAEvidence,
@@ -24,8 +26,10 @@ from aria_nbv.rollouts.candidate_benchmark import (
     CandidateSupportFailure,
     benchmark_from_sampling_result,
     candidate_family_preflight_from_reader,
+    candidate_family_selection_from_plotly_event,
     read_candidate_family_phase_a,
     reduce_candidate_family_preflight,
+    scientific_writer_config_sha256,
     select_candidate_family_shell,
     write_candidate_family_phase_a,
 )
@@ -37,6 +41,7 @@ FAMILIES = ("forward_local", "target_bearing_local", "lateral_target_bypass")
 def _record(
     *,
     state: str,
+    scene: str | None = None,
     valid: tuple[int, int, int] = (5, 5, 5),
     selected: tuple[int, int, int] = (1, 1, 1),
     applicable: tuple[bool | None, bool | None, bool | None] = (True, True, True),
@@ -71,7 +76,7 @@ def _record(
     )
     return CandidateBenchmark(
         state_key=state,
-        scene_key=f"scene-{state}",
+        scene_key=scene or f"scene-{state}",
         families=families,
         candidate_ids=tuple(point.candidate_id for point in points),
         coordinates=tuple(point.xyz for point in points),
@@ -129,7 +134,7 @@ def test_inapplicable_recorded_failure_remains_visible_but_nonblocking() -> None
     result = reduce_candidate_family_preflight((record,), _config())
 
     assert not any(blocker.family == "lateral_target_bypass" for blocker in result.blockers)
-    assert result.cells[2][1].support_failure == "target unavailable"
+    assert result.cells[2][2].support_failure == "target unavailable"
 
 
 def test_empty_population_fails_with_typed_coverage_blocker() -> None:
@@ -175,6 +180,7 @@ def test_preflight_figures_encode_applicability_and_all_three_stages() -> None:
     assert set(heatmap.data[0].text[0]) == {"20%", "N/A", "?"}
     assert len(heatmap.layout.shapes) == 5
     assert {trace.name for trace in funnel.data} == {"attempted", "valid", "selected"}
+    assert heatmap.data[0].customdata[0][0][:3] == ["scene-plot", "plot", "forward_local"]
 
 
 def test_preflight_funnel_supports_full_hundred_state_phase_a_population() -> None:
@@ -239,9 +245,27 @@ def test_sampling_result_reducer_preserves_full_shell_reasons_and_margins() -> N
 def test_margins_are_immutable_while_preflight_payload_is_pickleable() -> None:
     result = reduce_candidate_family_preflight((_record(state="immutable"),), _config())
     with pytest.raises(TypeError):
-        result.cells[0][1].margins["free_space_margin_m"] = 2.0  # type: ignore[index]
+        result.cells[0][2].margins["free_space_margin_m"] = 2.0  # type: ignore[index]
 
     assert pickle.loads(pickle.dumps(result.to_payload())) == result.to_payload()
+
+
+@pytest.mark.parametrize(
+    "margins",
+    [
+        {"nested": {"value": 1.0}},
+        {"list": [1.0]},
+        {"nan": float("nan")},
+        {"positive_inf": float("inf")},
+        {"negative_inf": float("-inf")},
+        {"bool": True},
+        {1: 1.0},
+        {"": 1.0},
+    ],
+)
+def test_family_margins_reject_nonfinite_or_nonscalar_payloads(margins: object) -> None:
+    with pytest.raises(ValueError, match="margin"):
+        CandidateFamilyCounts("forward", True, 1, 1, 1, 1, margins=margins)  # type: ignore[arg-type]
 
 
 def test_family_selection_filters_the_existing_shell_without_recomputing() -> None:
@@ -249,12 +273,64 @@ def test_family_selection_filters_the_existing_shell_without_recomputing() -> No
 
     selected = select_candidate_family_shell(
         (record,),
-        CandidateFamilySelection("select", "target_bearing_local"),
+        CandidateFamilySelection("scene-select", "select", "target_bearing_local"),
     )
 
     assert len(selected) == 1
     assert [family.family for family in selected[0].families] == ["target_bearing_local"]
     assert {point.family for point in selected[0].points} == {"target_bearing_local"}
+
+
+def test_plotly_cell_adapter_requires_exact_scene_state_family_customdata() -> None:
+    selection = candidate_family_selection_from_plotly_event(
+        {"selection": {"points": [{"customdata": ["scene", "state", "family", True, 5]}]}}
+    )
+
+    assert selection == CandidateFamilySelection("scene", "state", "family")
+    assert candidate_family_selection_from_plotly_event({"selection": {"points": [{"customdata": ["state"]}]}}) is None
+
+
+def test_scientific_writer_identity_ignores_acquisition_and_output_paths() -> None:
+    def payload(root: str) -> dict[str, object]:
+        return {
+            "source_manifest_path": f"{root}/manifest.json",
+            "source": {
+                "paths": {"root": root},
+                "store": {"paths": {"root": root}, "store_dir": f"{root}/source", "split": "train"},
+            },
+            "store": {"paths": {"root": root}, "store_dir": f"{root}/output", "discount_gamma": 1.0},
+            "candidate_mixture": {"total_count": 60},
+        }
+
+    first = scientific_writer_config_sha256(payload("/checkout-a"), source_store_manifest_hash="a" * 16)
+    second = scientific_writer_config_sha256(payload("/checkout-b"), source_store_manifest_hash="a" * 16)
+
+    assert first == second
+    assert first != scientific_writer_config_sha256(payload("/checkout-a"), source_store_manifest_hash="b" * 16)
+
+
+def test_duplicate_state_keys_across_scenes_remain_distinct_end_to_end() -> None:
+    records = (
+        _record(state="shared", scene="scene-a", gains=(0.0, 0.0)),
+        _record(state="shared", scene="scene-b", gains=(0.0, 1.0)),
+    )
+
+    result = reduce_candidate_family_preflight(records, _config())
+    heatmap, _ = candidate_family_preflight_figures(result)
+    selected = select_candidate_family_shell(
+        records,
+        CandidateFamilySelection("scene-b", "shared", "target_bearing_local"),
+    )
+
+    assert {(scene, state) for scene, state, _ in result.cells} == {
+        ("scene-a", "shared"),
+        ("scene-b", "shared"),
+    }
+    assert {(blocker.scene_key, blocker.state_key) for blocker in result.blockers if blocker.state_key} >= {
+        ("scene-a", "shared"),
+    }
+    assert len(heatmap.data[0].y) == 2
+    assert len(selected) == 1 and selected[0].scene_key == "scene-b"
 
 
 def test_phase_a_reader_validates_compact_content_source_policy_and_revision(tmp_path: Path) -> None:
@@ -280,6 +356,8 @@ def test_phase_a_reader_validates_compact_content_source_policy_and_revision(tmp
         split_manifest_hash="split-v1",
         source_store_dir="source-store",
         writer_config_sha256="1" * 64,
+        writer_config_identity_revision=WRITER_CONFIG_IDENTITY_REVISION,
+        provenance_correction_revision=PROVENANCE_CORRECTION_REVISION,
         implementation_revision="a" * 40,
         generation_revision=revision,
         runtime_identity={
@@ -332,6 +410,8 @@ def test_phase_a_reader_preserves_authenticated_persisted_record_order(tmp_path:
         split_manifest_hash="split-v1",
         source_store_dir="source-store",
         writer_config_sha256="1" * 64,
+        writer_config_identity_revision=WRITER_CONFIG_IDENTITY_REVISION,
+        provenance_correction_revision=PROVENANCE_CORRECTION_REVISION,
         implementation_revision="a" * 40,
         generation_revision={
             "contract_revision": "candidate-family-phase-a-v2",
@@ -389,13 +469,13 @@ def test_reader_uses_persisted_query_width_and_fails_closed_without_policy(
         def manifest(self) -> dict[str, object]:
             return {"manifest": {"generation": {"candidate_family_preflight": self.policy}}}
 
-    persisted = candidate_family_preflight_from_reader(
-        Reader(_config(60).to_payload()),
-        require_known_applicability=True,
-    )
-    missing = candidate_family_preflight_from_reader(Reader(None), require_known_applicability=True)
+    policy = replace(_config(60), flat_gain_tolerance=0.125)
+    persisted = candidate_family_preflight_from_reader(Reader(policy.to_payload()))
+    missing = candidate_family_preflight_from_reader(Reader(None))
 
     assert persisted.query_width == 60
     assert persisted.resolved_min_valid == 15
+    assert persisted.config.to_payload() == policy.to_payload()
+    assert persisted.flat_gain.tolerance == 0.125
     assert CandidateSupportFailure.LOW_ROOT_SUPPORT in {blocker.code for blocker in persisted.blockers}
     assert CandidateSupportFailure.MISSING_PRODUCTION_PROVENANCE in {blocker.code for blocker in missing.blockers}

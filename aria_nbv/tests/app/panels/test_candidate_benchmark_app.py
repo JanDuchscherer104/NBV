@@ -160,9 +160,9 @@ def test_candidate_benchmark_card_requires_build_and_reuses_retained_result_on_u
     assert len(app.get("plotly_chart")) == 10
 
     shell_selection = next(
-        selectbox for selectbox in app.selectbox if selectbox.label == "Inspect one state × family shell"
+        selectbox for selectbox in app.selectbox if selectbox.label == "Inspect one scene × state × family shell"
     )
-    shell_selection.select("state-1 · target")
+    shell_selection.select("scene-a · state-1 · target")
     app = app.run()
     assert not app.exception
     assert app.session_state["benchmark_records_calls"] == []
@@ -190,6 +190,30 @@ def test_candidate_benchmark_card_rejects_retained_result_after_identity_replace
     assert not app.get("download_button")
 
 
+def test_candidate_family_heatmap_click_drives_exact_scene_state_family_shell(tmp_path: Path) -> None:
+    app = _app(tmp_path).run()
+    next(button for button in app.button if button.label == "Build candidate benchmark").click()
+    app = app.run()
+
+    app.session_state["candidate-family-heatmap:fixture-store"] = {
+        "selection": {
+            "points": [
+                {
+                    "customdata": ["scene-a", "state-1", "target"],
+                }
+            ]
+        }
+    }
+    app = app.run()
+
+    assert not app.exception
+    assert app.session_state["candidate-family-shell:fixture-store"] == "scene-a · state-1 · target"
+    shell_spec = json.loads(app.get("plotly_chart")[2].proto.spec)
+    shell_trace_names = {trace["name"] for trace in shell_spec["data"]}
+    assert "target, selected" in shell_trace_names
+    assert "forward, selected" not in shell_trace_names
+
+
 def test_real_streamlit_cache_keeps_only_primitive_family_payload(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -208,8 +232,8 @@ def test_real_streamlit_cache_keeps_only_primitive_family_payload(
         lambda store_path, *, store_identity: (object(), object(), object()),
     )
 
-    def _reduce(_reader: Any, *, require_known_applicability: bool) -> Any:
-        calls.append(str(require_known_applicability))
+    def _reduce(_reader: Any) -> Any:
+        calls.append("canonical")
         return result
 
     monkeypatch.setattr(session_module, "candidate_family_preflight_from_reader", _reduce)
@@ -220,7 +244,7 @@ def test_real_streamlit_cache_keeps_only_primitive_family_payload(
     finally:
         session_module._cached_candidate_family_preflight_cached.clear()
 
-    assert calls == ["True"]
+    assert calls == ["canonical"]
     assert first == second
     assert isinstance(first, dict)
     pickle.dumps(first)

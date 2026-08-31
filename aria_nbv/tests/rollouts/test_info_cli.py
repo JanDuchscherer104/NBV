@@ -144,6 +144,13 @@ def test_rollouts_info_preflight_json_reports_go_no_go_sections(
     assert "storage" in preflight
     assert isinstance(preflight["go"], bool)
 
+    production_result = runner.invoke(
+        rollouts_info_app,
+        ["--store", str(result.store_dir), "--preflight", "--profile", "production", "--json"],
+    )
+    production_payload = json.loads(production_result.output)["preflight"]
+    assert production_payload["candidate_family"] == preflight["candidate_family"]
+
 
 def test_rollouts_info_preflight_production_fails_on_stale_schema(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]

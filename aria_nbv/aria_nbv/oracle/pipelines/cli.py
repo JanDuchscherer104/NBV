@@ -29,8 +29,10 @@ from ...utils.fingerprints import stable_config_hash, stable_msgspec_hash
 from ...utils.typer_cli import run_typer_app
 from ..target_selection import ORACLE_TARGET_TASK_SOURCE
 from .campaign import (
+    BroadGenerationAdmissionError,
     CampaignEvent,
     CampaignPlan,
+    CampaignWorkerPurpose,
     CampaignWorkerResult,
     CudaRolloutCampaign,
     CudaRolloutCampaignConfig,
@@ -405,6 +407,10 @@ def campaign_worker(
     plan_hash: Annotated[str, typer.Option("--plan-hash")],
     work_unit_hash: Annotated[str, typer.Option("--work-unit-hash")],
     plan_path: Annotated[Path, typer.Option("--plan-path")],
+    purpose: Annotated[
+        CampaignWorkerPurpose,
+        typer.Option("--purpose", help="Worker intent; broad campaigns permit only the canonical smoke unit."),
+    ] = CampaignWorkerPurpose.CAMPAIGN,
     writer_config_path: Annotated[Path | None, typer.Option("--writer-config-path")] = None,
 ) -> None:
     """Validate internal worker identity arguments and dispatch one unit."""
@@ -417,6 +423,10 @@ def campaign_worker(
     unit = next((item for item in plan.work_units if item.work_unit_hash == work_unit_hash), None)
     if unit is None:
         raise typer.BadParameter("work-unit hash is not present in plan")
+    try:
+        campaign.require_worker_admission(plan, unit, purpose=purpose)
+    except BroadGenerationAdmissionError as exc:
+        raise typer.BadParameter(str(exc)) from exc
     writer_path = writer_config_path or campaign.config.writer_config_path
     if writer_path is None:
         raise typer.BadParameter(

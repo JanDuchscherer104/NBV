@@ -28,6 +28,8 @@ from typing import Any, ClassVar, Protocol, cast
 from pydantic import BaseModel, Field, ValidationInfo, field_validator, model_validator
 
 from ...rollouts.candidate_benchmark import (
+    PROVENANCE_CORRECTION_REVISION,
+    WRITER_CONFIG_IDENTITY_REVISION,
     CandidateBenchmark,
     CandidateFamilyCounts,
     CandidateFamilyPhaseAEvidence,
@@ -36,9 +38,8 @@ from ...rollouts.candidate_benchmark import (
     benchmark_from_sampling_result,
     candidate_family_preflight_config_from_writer,
     candidate_family_preflight_from_reader,
-    canonical_json_bytes,
     reduce_candidate_family_preflight,
-    sha256_bytes,
+    scientific_writer_config_sha256,
 )
 from ...utils import TargetConfig
 from ...utils.config_paths import resolve_cache_artifact_dir
@@ -210,6 +211,13 @@ class CampaignMode(StrEnum):
 
     BROAD = "broad"
     PILOT = "pilot"
+
+
+class CampaignWorkerPurpose(StrEnum):
+    """Explicit public worker intent used by the broad-mode admission gate."""
+
+    CAMPAIGN = "campaign"
+    SMOKE = "smoke"
 
 
 class BroadGenerationAdmissionError(RuntimeError):
@@ -1038,10 +1046,7 @@ class CudaRolloutCampaign:
     def candidate_family_preflight(self, reader: Any) -> CandidateFamilyPreflight:
         """Evaluate campaign candidate support through the rollout-domain gate."""
 
-        return candidate_family_preflight_from_reader(
-            reader,
-            require_known_applicability=True,
-        )
+        return candidate_family_preflight_from_reader(reader)
 
     def candidate_family_phase_a(
         self,
@@ -1076,7 +1081,10 @@ class CudaRolloutCampaign:
 
         generation_revision = current_generation_revision(contract_revision="candidate-family-phase-a-v2")
         runtime_identity = current_phase_a_runtime_identity()
-        writer_config_sha256 = sha256_bytes(canonical_json_bytes(writer_config.model_dump_jsonable()))
+        writer_config_sha256 = scientific_writer_config_sha256(
+            writer_config.model_dump_jsonable(),
+            source_store_manifest_hash=str(source_manifest.source_manifest_hash),
+        )
         phase_source = writer_config.source
         if hasattr(phase_source, "model_copy"):
             phase_source = phase_source.model_copy(
@@ -1197,6 +1205,8 @@ class CudaRolloutCampaign:
             split_manifest_hash=str(source_manifest.split_manifest_hash),
             source_store_dir=str(source_manifest.source_store_dir),
             writer_config_sha256=writer_config_sha256,
+            writer_config_identity_revision=WRITER_CONFIG_IDENTITY_REVISION,
+            provenance_correction_revision=PROVENANCE_CORRECTION_REVISION,
             implementation_revision=generation_revision.clean_commit,
             generation_revision=generation_revision.to_jsonable(),
             runtime_identity=runtime_identity,
@@ -1231,6 +1241,20 @@ class CudaRolloutCampaign:
         """Reject broad execution before claims, status, events, or outputs."""
 
         if self.config.mode is CampaignMode.BROAD:
+            raise BroadGenerationAdmissionError()
+
+    def require_worker_admission(
+        self,
+        plan: CampaignPlan,
+        unit: CampaignWorkUnit,
+        *,
+        purpose: CampaignWorkerPurpose,
+    ) -> None:
+        """Permit only the exact canonical smoke unit before WP18 in broad mode."""
+
+        if self.config.mode is not CampaignMode.BROAD:
+            return
+        if purpose is not CampaignWorkerPurpose.SMOKE or unit != self._smoke_unit(plan):
             raise BroadGenerationAdmissionError()
 
     def plan(
@@ -1797,7 +1821,12 @@ class CudaRolloutCampaign:
         unit = self._smoke_unit(plan)
         if config_path is None or plan_path is None:
             raise ValueError("production smoke requires canonical config_path and plan_path")
-        argv = self.worker_argv(plan_path, unit, config_path=config_path)
+        argv = self.worker_argv(
+            plan_path,
+            unit,
+            config_path=config_path,
+            purpose=CampaignWorkerPurpose.SMOKE,
+        )
         argv = tuple(plan.plan_hash if value == "PLAN_HASH" else value for value in argv)
         code, stdout, stderr = self.process_runner.run(
             argv, timeout=self.config.work_unit_timeout_seconds, stdout=subprocess.PIPE, stderr=subprocess.PIPE
@@ -2204,6 +2233,7 @@ class CudaRolloutCampaign:
         *,
         config_path: Path | None = None,
         writer_config_path: Path | None = None,
+        purpose: CampaignWorkerPurpose = CampaignWorkerPurpose.CAMPAIGN,
     ) -> tuple[str, ...]:
         """Build the only subprocess argv used for an opaque work unit."""
         argv = (
@@ -2220,6 +2250,8 @@ class CudaRolloutCampaign:
             "PLAN_HASH",
             "--work-unit-hash",
             unit.work_unit_hash,
+            "--purpose",
+            purpose.value,
         )
         writer_path = writer_config_path or self.config.writer_config_path
         return argv + (("--writer-config-path", str(writer_path)) if writer_path else ())

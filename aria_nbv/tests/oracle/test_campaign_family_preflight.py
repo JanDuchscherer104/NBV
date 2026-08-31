@@ -8,6 +8,7 @@ import pytest
 
 from aria_nbv.oracle.pipelines.campaign import (
     BroadGenerationAdmissionError,
+    CampaignWorkerPurpose,
     CudaRolloutCampaign,
     CudaRolloutCampaignConfig,
     GenerationRevision,
@@ -19,9 +20,8 @@ from aria_nbv.rollouts.candidate_benchmark import (
     CandidateFamilyPreflight,
     CandidateFamilyPreflightConfig,
     CandidateSupportFailure,
-    canonical_json_bytes,
     reduce_candidate_family_preflight,
-    sha256_bytes,
+    scientific_writer_config_sha256,
 )
 
 
@@ -60,6 +60,20 @@ def test_broad_run_blocks_before_plan_or_campaign_state(monkeypatch: pytest.Monk
 
     with pytest.raises(BroadGenerationAdmissionError, match="pending_wp18"):
         campaign.run(None)  # type: ignore[arg-type]
+
+
+def test_broad_worker_admits_only_explicit_exact_smoke_unit(monkeypatch: pytest.MonkeyPatch) -> None:
+    campaign = CudaRolloutCampaign(CudaRolloutCampaignConfig())
+    smoke = SimpleNamespace(work_unit_hash="smoke")
+    other = SimpleNamespace(work_unit_hash="other")
+    plan = SimpleNamespace(work_units=(smoke, other))
+    monkeypatch.setattr(campaign, "_smoke_unit", lambda _plan: smoke)
+
+    campaign.require_worker_admission(plan, smoke, purpose=CampaignWorkerPurpose.SMOKE)  # type: ignore[arg-type]
+    with pytest.raises(BroadGenerationAdmissionError):
+        campaign.require_worker_admission(plan, smoke, purpose=CampaignWorkerPurpose.CAMPAIGN)  # type: ignore[arg-type]
+    with pytest.raises(BroadGenerationAdmissionError):
+        campaign.require_worker_admission(plan, other, purpose=CampaignWorkerPurpose.SMOKE)  # type: ignore[arg-type]
 
 
 def test_phase_a_adapter_stops_before_oracle_scoring(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -161,8 +175,9 @@ def test_phase_a_adapter_stops_before_oracle_scoring(monkeypatch: pytest.MonkeyP
 
     assert evidence.source_row_count == evidence.scene_count == evidence.target_state_count == 1
     assert evidence.source_store_manifest_hash == "a" * 16
-    assert evidence.writer_config_sha256 == sha256_bytes(
-        canonical_json_bytes({"candidate_mixture": "fixture", "phase": "before-source-setup"})
+    assert evidence.writer_config_sha256 == scientific_writer_config_sha256(
+        {"candidate_mixture": "fixture", "phase": "before-source-setup"},
+        source_store_manifest_hash="a" * 16,
     )
     assert not evidence.preflight.go
     assert evidence.preflight.coverage.expected == 100

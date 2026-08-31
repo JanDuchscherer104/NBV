@@ -19,7 +19,12 @@ from typer.testing import CliRunner
 
 from aria_nbv.configs import PathConfig
 from aria_nbv.oracle.pipelines import cli as rollout_cli
-from aria_nbv.oracle.pipelines.campaign import CampaignOutcome, CudaRolloutCampaignConfig
+from aria_nbv.oracle.pipelines.campaign import (
+    BroadGenerationAdmissionError,
+    CampaignOutcome,
+    CampaignWorkerPurpose,
+    CudaRolloutCampaignConfig,
+)
 from aria_nbv.oracle.pipelines.offline_vin import VinOfflineWriterConfig
 from aria_nbv.utils import BaseConfig
 from aria_nbv.utils.fingerprints import stable_config_hash, stable_msgspec_hash
@@ -443,8 +448,8 @@ def test_campaign_broad_execution_blocks_before_plan_or_output_access(
     assert not (tmp_path / "must-not-exist").exists()
 
 
-def test_campaign_worker_binds_selected_unit_profile_hash(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+def test_campaign_worker_cli_binds_smoke_purpose_and_selected_unit_profile_hash(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     @dataclass(frozen=True)
     class _Entry:
@@ -484,6 +489,9 @@ def test_campaign_worker_binds_selected_unit_profile_hash(
         def load_plan(self, _path: Any) -> Any:
             return plan
 
+        def require_worker_admission(self, _plan: Any, _unit: Any, *, purpose: Any) -> None:
+            seen["purpose"] = purpose.value
+
         def shard_entry_for_unit(self, _plan: Any, _unit: Any) -> Any:
             return _Entry()
 
@@ -514,18 +522,83 @@ def test_campaign_worker_binds_selected_unit_profile_hash(
         ),
     )
 
-    rollout_cli.campaign_worker(
-        config_path=tmp_path / "campaign.toml",
-        plan_hash="plan",
-        work_unit_hash="unit",
-        plan_path=tmp_path / "plan.json",
+    result = runner.invoke(
+        rollout_cli.campaign_app,
+        [
+            "worker",
+            "--config-path",
+            str(tmp_path / "campaign.toml"),
+            "--plan-hash",
+            "plan",
+            "--work-unit-hash",
+            "unit",
+            "--plan-path",
+            str(tmp_path / "plan.json"),
+            "--purpose",
+            "smoke",
+        ],
     )
 
-    assert seen == {"profile_hash": selected_profile_hash, "shard_profile_hash": selected_profile_hash}
-    payload = json.loads(capsys.readouterr().out)
+    assert result.exit_code == 0
+    assert seen == {
+        "purpose": "smoke",
+        "profile_hash": selected_profile_hash,
+        "shard_profile_hash": selected_profile_hash,
+    }
+    payload = json.loads(result.output)
     assert payload["outcome"] == "skipped"
     assert payload["validated"] is True
     assert payload["leaf_evidence"]["success_path"] == "success"
+
+
+def test_campaign_worker_broad_non_smoke_blocks_before_writer_or_output(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    unit = SimpleNamespace(work_unit_hash="unit")
+    plan = SimpleNamespace(plan_hash="plan", work_units=(unit,))
+
+    class _Campaign:
+        config = SimpleNamespace(output_root=tmp_path / "must-not-exist", writer_config_path=tmp_path / "writer.toml")
+
+        def load_plan(self, _path: Any) -> Any:
+            return plan
+
+        def require_worker_admission(self, _plan: Any, _unit: Any, *, purpose: Any) -> None:
+            assert purpose is CampaignWorkerPurpose.CAMPAIGN
+            raise BroadGenerationAdmissionError()
+
+    monkeypatch.setattr(rollout_cli, "_campaign", lambda _path: _Campaign())
+    monkeypatch.setattr(
+        "aria_nbv.oracle.pipelines.cli.RolloutDatasetWriterConfig.from_toml",
+        lambda _path: pytest.fail("writer loaded before broad worker admission"),
+    )
+
+    result = runner.invoke(
+        rollout_cli.campaign_app,
+        [
+            "worker",
+            "--config-path",
+            "campaign.toml",
+            "--plan-path",
+            "plan.json",
+            "--plan-hash",
+            "plan",
+            "--work-unit-hash",
+            "unit",
+        ],
+    )
+
+    assert result.exit_code == 2
+    assert "broad_generation_blocked_pending_wp18" in result.output
+    assert not (tmp_path / "must-not-exist").exists()
+
+
+def test_campaign_worker_help_exposes_explicit_purpose() -> None:
+    result = runner.invoke(rollout_cli.campaign_app, ["worker", "--help"])
+
+    assert result.exit_code == 0
+    assert "--purpose" in result.output
+    assert "canonical smoke unit" in result.output
 
 
 def test_campaign_plan_reads_rows_from_manifest_envelope(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

@@ -176,7 +176,7 @@ def _cached_candidate_family_preflight_cached(
     """Cache a primitive family-gate payload by immutable store identity."""
 
     reader, _, _ = _cached_store_bundle_cached(store_path, store_identity=store_identity)
-    return candidate_family_preflight_from_reader(reader, require_known_applicability=True).to_payload()
+    return candidate_family_preflight_from_reader(reader).to_payload()
 
 
 def _store_projection_identity(store_path: str) -> str:
