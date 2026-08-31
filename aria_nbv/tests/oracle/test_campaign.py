@@ -297,7 +297,9 @@ def _campaign(tmp_path):
     values = base.model_dump()
     values.update(expected_scene_count=2, profiles=base.profiles)
     config = CudaRolloutCampaignConfig.model_construct(**values)
-    return CudaRolloutCampaign(config)
+    campaign = CudaRolloutCampaign(config)
+    campaign.require_execution_admission = lambda: None
+    return campaign
 
 
 def _append_pre_run_prefix(campaign, plan):
@@ -2694,6 +2696,7 @@ def test_direct_run_forwards_plan_and_writer_to_source_preflight(tmp_path, monke
     campaign = _campaign(tmp_path)
     config = campaign.config.model_copy(update={"writer_config_path": tmp_path / "writer.toml"})
     campaign = CudaRolloutCampaign(config)
+    campaign.require_execution_admission = lambda: None
     plan = campaign.plan([_row("s0", "k", "t"), _row("s1", "k1", "t1")], source_manifest_hash="source")
     captured = {}
 
