@@ -16,8 +16,10 @@ Examples:
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import shutil
+import subprocess
 from collections.abc import Callable
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
@@ -77,17 +79,17 @@ CANDIDATES = (
         identifier="scene-evidence",
         title="Scene-level geometric evidence",
         filename="scene-evidence.png",
-        purpose="Show the actual GT mesh, a recorded trajectory, and semi-dense points in one representative local scene.",
-        source_evidence="ASE scene 81286, loaded through AseEfmDatasetConfig and SnippetPlotBuilder.",
-        typst_caption="A representative local ASE snippet: GT mesh (grey), recorded rig trajectory (black), and MPS-style semi-dense points (height-coloured). This panel visualizes the evidence layers used by the offline protocol; the mesh remains privileged evaluation evidence.",
+        purpose="Show the actual GT mesh, a recorded trajectory, and semi-dense points in one fixed illustrative local scene.",
+        source_evidence="Fixed ASE scene 81286 and its first shard snippet, loaded through AseEfmDatasetConfig and SnippetPlotBuilder.",
+        typst_caption="A fixed illustrative local ASE snippet (scene 81286): GT mesh (grey), recorded rig trajectory (black), and MPS-style semi-dense points (height-coloured). This panel does not claim scene representativeness; it visualizes the evidence layers used by the offline protocol, with the mesh retained as privileged evaluation evidence.",
     ),
     Candidate(
         identifier="mesh-atlas",
         title="GT-mesh subset atlas",
         filename="mesh-atlas.png",
         purpose="Show that the 100-scene local GT subset contains varied indoor geometry without implying corpus-wide representativeness.",
-        source_evidence="Eight deterministic quantile representatives from 100 local EFM3D GT meshes, selected by face count and source-asset size.",
-        typst_caption="Eight deterministic representatives from the local 100-scene GT-mesh subset, selected across face-count and GT-mesh asset-size quantiles. Views are top-down geometry thumbnails, not rendered RGB observations.",
+        source_evidence="Six deterministic inner face-count quantiles from the 100 local EFM3D GT meshes.",
+        typst_caption="Six deterministic inner face-count-quantile examples from the local 100-scene GT-mesh subset. Panels are top-down, log-scaled vertex-density projections of GT meshes, not rendered RGB observations and not evidence of corpus-wide representativeness.",
     ),
     Candidate(
         identifier="subset-statistics",
@@ -95,7 +97,7 @@ CANDIDATES = (
         filename="subset-statistics.png",
         purpose="Quantify the scope and geometric spread of the exact local mesh-evaluation subset.",
         source_evidence="All 100 local PLY meshes under .data/ase_meshes and ATEK shard inventory under .data/ase_efm.",
-        typst_caption="Geometry and availability statistics for the exact local 100-scene GT-mesh subset. Mesh complexity and bounding-box footprint are measured from the PLY assets; shard counts are a local ATEK inventory rather than a property of the full ASE release.",
+        typst_caption="Geometry-header and storage statistics for the exact local 100-scene GT-mesh subset. Face and vertex counts are read from PLY headers; GT-mesh asset size is serialized-file size in MB, not physical scene extent. Shard counts are a local ATEK inventory rather than a property of the full ASE release.",
     ),
 )
 
@@ -163,9 +165,9 @@ def load_mesh_stats() -> list[MeshStats]:
 
 
 def _quantile_scenes(stats: list[MeshStats], count: int = 6) -> list[MeshStats]:
-    """Select deterministic diverse mesh representatives over two measurable axes."""
+    """Select six deterministic inner quantiles of the local face-count distribution."""
 
-    ordered = sorted(stats, key=lambda item: (item.faces, item.source_bytes, item.scene_id))
+    ordered = sorted(stats, key=lambda item: (item.faces, item.scene_id))
     # Use inner quantiles: the extreme maximum is a 13M-face outlier whose
     # display proxy obscures the comparative purpose of a small-multiple atlas.
     positions = np.linspace(5, len(ordered) - 6, count, dtype=int)
@@ -220,7 +222,7 @@ def render_scene_evidence(output_path: Path) -> None:
 
 
 def render_mesh_atlas(output_path: Path, stats: list[MeshStats], assets_dir: Path) -> list[str]:
-    """Compose Plotly-rendered mesh thumbnails into an annotated scientific atlas."""
+    """Compose top-down GT-mesh vertex-density projections into a scientific atlas."""
 
     selected = _quantile_scenes(stats)
     thumbnails: list[Path] = []
@@ -249,7 +251,7 @@ def render_mesh_atlas(output_path: Path, stats: list[MeshStats], assets_dir: Pat
         )
         axis.axis("off")
     figure.suptitle(
-        "Local 100-scene GT-mesh subset: deterministic geometry atlas",
+        "Local 100-scene GT-mesh subset: face-count-quantile atlas",
         x=0.01,
         ha="left",
         color=PALETTE["navy"],
@@ -334,6 +336,25 @@ def _load_selection(selection_path: Path) -> list[str]:
     return list(json.loads(selection_path.read_text())["selected"])
 
 
+def _sha256_file(path: Path) -> str:
+    """Return a content digest for a generated asset or generator source file."""
+
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def _git_head() -> str | None:
+    """Return the local commit identity when the gallery is generated inside Git."""
+
+    completed = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=REPO_ROOT,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    return completed.stdout.strip() if completed.returncode == 0 else None
+
+
 def _write_selection(selection_path: Path, identifiers: list[str]) -> None:
     allowed = {candidate.identifier for candidate in CANDIDATES}
     unknown = sorted(set(identifiers) - allowed)
@@ -372,7 +393,8 @@ the active dataset section remains an explicit editorial decision.
 - Generated: {manifest["generated_at"]}
 - Local mesh source: `.data/ase_meshes` ({manifest["statistics"]["scene_count"]} PLY meshes)
 - Local ATEK source: `.data/ase_efm` ({manifest["statistics"]["shard_count"]} shard files)
-- Representative-scene selection: deterministic quantiles of mesh face count and GT-mesh asset size.
+- Scene evidence: fixed illustrative scene 81286; no representativeness claim.
+- Atlas selection: six deterministic inner face-count quantiles; each panel is a log-scaled vertex-density projection.
 """
     (output_dir / "README.md").write_text(readme)
 
@@ -442,11 +464,35 @@ def main() -> None:
             if "subset-statistics" not in results
             else results["subset-statistics"]
         )
+        atlas_scene_ids = results.get("mesh-atlas", [item.scene_id for item in _quantile_scenes(stats)])
+        source_inventory = {
+            "mesh_statistics_sha256": hashlib.sha256(
+                json.dumps([asdict(item) for item in stats], sort_keys=True).encode()
+            ).hexdigest(),
+            "atek_scene_ids": sorted(path.name for path in ATEK_DIR.iterdir() if path.is_dir()),
+        }
+        outputs = {
+            candidate.identifier: {
+                "filename": candidate.filename,
+                "sha256": _sha256_file(output_dir / candidate.filename),
+            }
+            for candidate in CANDIDATES
+            if (output_dir / candidate.filename).exists()
+        }
         manifest = {
+            "schema_version": 1,
             "generated_at": datetime.now(UTC).isoformat(),
+            "generator": {
+                "path": str(Path(__file__).resolve().relative_to(REPO_ROOT)),
+                "sha256": _sha256_file(Path(__file__)),
+                "git_head": _git_head(),
+            },
+            "source_inventory": source_inventory,
             "statistics": summary,
             "mesh_statistics": [asdict(item) for item in stats],
             "candidates": [asdict(candidate) for candidate in CANDIDATES],
+            "atlas_scene_ids": atlas_scene_ids,
+            "outputs": outputs,
             "selected": _load_selection(selection_path),
         }
         (output_dir / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")

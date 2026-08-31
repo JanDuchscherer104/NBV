@@ -5,7 +5,7 @@ not an implicit edit to the active thesis section.
 
 | ID | Candidate | Asset | Decision question |
 | --- | --- | --- | --- |
-| `scene-evidence` | Scene-level geometric evidence | `scene-evidence.png` | Show the actual GT mesh, a recorded trajectory, and semi-dense points in one representative local scene. |
+| `scene-evidence` | Scene-level geometric evidence | `scene-evidence.png` | Show the actual GT mesh, a recorded trajectory, and semi-dense points in one fixed illustrative local scene. |
 | `mesh-atlas` | GT-mesh subset atlas | `mesh-atlas.png` | Show that the 100-scene local GT subset contains varied indoor geometry without implying corpus-wide representativeness. |
 | `subset-statistics` | 100-scene GT subset statistics | `subset-statistics.png` | Quantify the scope and geometric spread of the exact local mesh-evaluation subset. |
 
@@ -23,7 +23,8 @@ the active dataset section remains an explicit editorial decision.
 
 ## Reproducibility
 
-- Generated: 2026-08-31T20:54:25.868904+00:00
+- Generated: 2026-08-31T20:59:23.624811+00:00
 - Local mesh source: `.data/ase_meshes` (100 PLY meshes)
 - Local ATEK source: `.data/ase_efm` (576 shard files)
-- Representative-scene selection: deterministic quantiles of mesh face count and GT-mesh asset size.
+- Scene evidence: fixed illustrative scene 81286; no representativeness claim.
+- Atlas selection: six deterministic inner face-count quantiles; each panel is a log-scaled vertex-density projection.
