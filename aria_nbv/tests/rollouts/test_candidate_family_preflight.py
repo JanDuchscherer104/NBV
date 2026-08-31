@@ -317,6 +317,63 @@ def test_phase_a_reader_validates_compact_content_source_policy_and_revision(tmp
         read_candidate_family_phase_a(path, expected=expected)
 
 
+def test_phase_a_reader_preserves_authenticated_persisted_record_order(tmp_path: Path) -> None:
+    records = (
+        _record(state="z-last", valid=(5, 5, 5)),
+        _record(state="a-first", valid=(5, 5, 5)),
+    )
+    config = replace(_config(), expected_population_size=2)
+    coverage = CandidatePopulationCoverage(2, 2, 2, 2, 2)
+    preflight = reduce_candidate_family_preflight(records, config, coverage=coverage)
+    evidence = CandidateFamilyPhaseAEvidence(
+        source_manifest_sha256="e" * 64,
+        source_store_manifest_hash="f" * 16,
+        source_cache_version="source-cache-v1",
+        split_manifest_hash="split-v1",
+        source_store_dir="source-store",
+        writer_config_sha256="1" * 64,
+        implementation_revision="a" * 40,
+        generation_revision={
+            "contract_revision": "candidate-family-phase-a-v2",
+            "clean_commit": "a" * 40,
+            "head_tree": "b" * 40,
+            "uv_lock_sha256": "c" * 64,
+            "content_bundle_hash": "d" * 64,
+            "revision_hash": "0123456789abcdef",
+        },
+        runtime_identity={
+            "python": "3.11.15",
+            "torch": "2.7.1",
+            "cuda": "12.8",
+            "pytorch3d": "0.7.8",
+            "gpu_name": "fixture",
+            "gpu_capability": "8.9",
+        },
+        source_row_count=2,
+        scene_count=2,
+        target_state_count=2,
+        excluded_source_rows={},
+        records=records,
+        preflight=preflight,
+    )
+    expected = CandidateFamilyPhaseAExpectation(
+        source_manifest_sha256="e" * 64,
+        source_store_manifest_hash="f" * 16,
+        source_cache_version="source-cache-v1",
+        split_manifest_hash="split-v1",
+        source_store_dir="source-store",
+        writer_config_sha256="1" * 64,
+        generation_revision_hash="0123456789abcdef",
+    )
+
+    restored = read_candidate_family_phase_a(
+        write_candidate_family_phase_a(tmp_path / "phase-a.json", evidence),
+        expected=expected,
+    )
+
+    assert tuple(record.state_key for record in restored.records) == ("z-last", "a-first")
+
+
 def test_reader_uses_persisted_query_width_and_fails_closed_without_policy(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

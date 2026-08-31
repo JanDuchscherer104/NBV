@@ -677,6 +677,11 @@ def read_candidate_family_phase_a(
     preflight_payload = payload.get("preflight")
     if not isinstance(preflight_payload, Mapping):
         raise ValueError("candidate-family Phase-A preflight payload is missing")
+    records = reduce_candidate_records(records_payload)
+    records_by_key = {(record.scene_key, record.state_key): record for record in records}
+    persisted_keys = tuple((str(record["scene_key"]), str(record["state_key"])) for record in records_payload)
+    if len(records_by_key) != len(persisted_keys) or any(key not in records_by_key for key in persisted_keys):
+        raise ValueError("candidate-family Phase-A record identities do not round-trip")
     evidence = CandidateFamilyPhaseAEvidence(
         source_manifest_sha256=str(payload["source_manifest_sha256"]),
         source_store_manifest_hash=str(payload["source_store_manifest_hash"]),
@@ -691,7 +696,7 @@ def read_candidate_family_phase_a(
         scene_count=int(payload["scene_count"]),
         target_state_count=int(payload["target_state_count"]),
         excluded_source_rows=cast(Mapping[str, str], payload.get("excluded_source_rows", {})),
-        records=reduce_candidate_records(records_payload),
+        records=tuple(records_by_key[key] for key in persisted_keys),
         preflight=candidate_family_preflight_from_payload(preflight_payload),
     )
     recomputed = reduce_candidate_family_preflight(
