@@ -862,17 +862,37 @@
   )
 }
 
+#let report-sidecar-projection-row-valid(row) = {
+  let key = row.at("key", default: none)
+  let value-type = row.at("value_type", default: none)
+  let is-missing = row.at("is_missing", default: none)
+  type(key) == str and type(is-missing) == bool and if value-type == "null" {
+    is-missing == true
+  } else if value-type == "bool" {
+    is-missing == false and type(row.at("value_bool", default: none)) == bool
+  } else if value-type == "int" {
+    is-missing == false and type(row.at("value_int", default: none)) == int
+  } else if value-type == "float" {
+    is-missing == false and type(row.at("value_float", default: none)) == float
+  } else if value-type == "str" {
+    is-missing == false and type(row.at("value_text", default: none)) == str
+  } else {
+    false
+  }
+}
+
 #let report-sidecar-projection-sha256(rows) = {
+  if not rows.all(report-sidecar-projection-row-valid) { return none }
   let token(value) = str(bytes(value).len()) + ":" + value
-  let canonical-value(row) = if row.value_type == "null" {
+  let canonical-value(row) = if row.at("value_type", default: none) == "null" {
     ""
-  } else if row.value_type == "bool" {
+  } else if row.at("value_type", default: none) == "bool" {
     if row.at("value_bool", default: false) { "true" } else { "false" }
-  } else if row.value_type == "int" {
+  } else if row.at("value_type", default: none) == "int" {
     str(row.at("value_int", default: none))
-  } else if row.value_type == "float" {
+  } else if row.at("value_type", default: none) == "float" {
     str(row.at("value_float", default: none))
-  } else if row.value_type == "str" {
+  } else if row.at("value_type", default: none) == "str" {
     row.at("value_text", default: "")
   } else {
     "__invalid_projection_value_type__"
@@ -889,12 +909,15 @@
   let duplicates = ()
   let projected-rows = ()
   for row in report.tables.sidecar_values.rows {
-    if row.sidecar_id == sidecar-id {
+    if row.at("sidecar_id", default: none) == sidecar-id {
       projected-rows.push(row)
-      if row.key in rows {
-        duplicates.push(row.key)
+      let key = row.at("key", default: none)
+      if type(key) != str {
+        duplicates.push("__projection_row_shape__")
+      } else if key in rows {
+        duplicates.push(key)
       } else {
-        rows.insert(row.key, row)
+        rows.insert(key, row)
       }
     }
   }
@@ -902,12 +925,13 @@
   let projection-binding = if sidecars.len() == 1 {
     sidecars.first().at("projection_sha256", default: none)
   } else { none }
+  let projection-rows-valid = projected-rows.all(report-sidecar-projection-row-valid)
   // Function-valued bindings exist only in in-memory contract fixtures and
   // cannot pass load-thesis-report's JSON SHA-256 gate.
   let projection-valid = if type(projection-binding) == function {
     projection-binding()
   } else {
-    sidecars.len() == 1 and type(projection-binding) == str and projection-binding.match(
+    projection-rows-valid and sidecars.len() == 1 and type(projection-binding) == str and projection-binding.match(
       regex("^[0-9a-f]{64}$"),
     ) != none and report-sidecar-projection-sha256(projected-rows) == projection-binding
   }

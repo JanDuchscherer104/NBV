@@ -1805,6 +1805,19 @@
   projection-missingness-tampered-support-report,
   "store-a",
 ))
+#for malformed-missingness in ("true", none) {
+  let malformed-report = (
+    tables: projection-bound-support-report.tables + (
+      sidecar_values: (rows: projection-bound-support-report.tables.sidecar_values.rows.map(row => if row.key == "expected_attempts" and row.sidecar_id != support-benchmark-sidecar {
+        row + (is_missing: malformed-missingness,)
+      } else { row }),),
+    ),
+  )
+  assert(not report-store-candidate-support-evidence-valid(
+    malformed-report,
+    "store-a",
+  ))
+}
 #let coordinated-projection-rows = projection-bound-support-report.tables.sidecar_values.rows.map(row => if row.key == "expected_attempts" and row.sidecar_id != support-benchmark-sidecar {
   typed-sidecar-row(row.sidecar_id, row.key, row.value_int + 1)
 } else { row })
