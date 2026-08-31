@@ -58,8 +58,10 @@ _PYTORCH3D_VCS_COMMIT = "b6a77ad7aaf41ed90fca80ce6a2bac3c462a7881"
 _IDENTITY_FIELDS = {
     "actor_state_contract",
     "actor_state_contract_hash",
+    "actor_state_contract_payload_sha256",
     "learning_contract",
     "learning_contract_hash",
+    "learning_contract_payload_sha256",
     "geometry_contract_hash",
     "datasets",
     "dataset_provenance",
@@ -666,10 +668,10 @@ class QhExperiment:
                 "module_config": manifest["module_config"],
                 "learning_contract_hash": identity["learning_contract_hash"],
                 "learning_contract": identity["learning_contract"],
-                "learning_contract_payload_sha256": _json_payload_hash(identity["learning_contract"]),
+                "learning_contract_payload_sha256": identity["learning_contract_payload_sha256"],
                 "actor_state_contract_hash": identity["actor_state_contract_hash"],
                 "actor_state_contract": identity["actor_state_contract"],
-                "actor_state_contract_payload_sha256": _json_payload_hash(identity["actor_state_contract"]),
+                "actor_state_contract_payload_sha256": identity["actor_state_contract_payload_sha256"],
                 "geometry_contract_hash": identity["geometry_contract_hash"],
                 "action_mask_semantics": identity["action_mask_semantics"],
                 "representation_semantics": identity["representation_semantics"],
@@ -772,6 +774,9 @@ class QhExperiment:
         }
         for name, digest in sorted((artifact_hashes or {}).items()):
             artifacts[name] = {"path": name, "sha256": digest}
+        identity = dict(identity)
+        identity["actor_state_contract_payload_sha256"] = _json_payload_hash(identity["actor_state_contract"])
+        identity["learning_contract_payload_sha256"] = _json_payload_hash(identity["learning_contract"])
         manifest: dict[str, Any] = {
             "schema_version": QH_INFERENCE_BUNDLE_SCHEMA_VERSION,
             "scorer_type": "TargetFiniteHorizonScorer",
@@ -1003,6 +1008,10 @@ class QhExperiment:
             raise ValueError("Q_H bundle actor-state contract hash does not match its payload.")
         if identity.get("learning_contract_hash") != learning_hash:
             raise ValueError("Q_H bundle learning contract hash does not match its payload.")
+        if identity.get("actor_state_contract_payload_sha256") != _json_payload_hash(actor_payload):
+            raise ValueError("Q_H bundle actor-state contract payload digest does not match its payload.")
+        if identity.get("learning_contract_payload_sha256") != _json_payload_hash(learning_payload):
+            raise ValueError("Q_H bundle learning contract payload digest does not match its payload.")
         if module.actor_state_contract_hash != actor_hash or module.learning_contract_hash != learning_hash:
             raise ValueError("Q_H bundle module config is not bound to the manifest contracts.")
         if learning_contract.max_horizon > scorer.max_horizon:

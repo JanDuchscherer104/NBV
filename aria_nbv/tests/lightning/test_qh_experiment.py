@@ -202,6 +202,27 @@ def test_qh_bundle_round_trip_preserves_values_and_ranking(tmp_path) -> None:
         identity=identity,
         artifact_hashes=_stub_artifacts(bundle_dir),
     )
+    assert manifest["schema_version"] == "qh-inference-bundle-v2"
+    assert (
+        manifest["identity"]["actor_state_contract_payload_sha256"]
+        == hashlib.sha256(
+            json.dumps(
+                manifest["identity"]["actor_state_contract"],
+                sort_keys=True,
+                separators=(",", ":"),
+            ).encode("utf-8")
+        ).hexdigest()
+    )
+    assert (
+        manifest["identity"]["learning_contract_payload_sha256"]
+        == hashlib.sha256(
+            json.dumps(
+                manifest["identity"]["learning_contract"],
+                sort_keys=True,
+                separators=(",", ":"),
+            ).encode("utf-8")
+        ).hexdigest()
+    )
     del scorer
     ref = QhInferenceBundleRef(
         bundle_path=bundle_dir,
@@ -488,6 +509,9 @@ def test_qh_bundle_rejects_consistent_cfplus_tamper_without_privileged_marker(tm
     actor_contract = QhActorStateContract(**actor_payload)
     actor_hash = stable_msgspec_hash(actor_contract)
     manifest["identity"]["actor_state_contract_hash"] = actor_hash
+    manifest["identity"]["actor_state_contract_payload_sha256"] = hashlib.sha256(
+        json.dumps(actor_payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()
     manifest["identity"]["geometry_contract_hash"] = geometry_hash
     manifest["module_config"]["actor_state_contract_hash"] = actor_hash
     manifest["manifest_sha256"] = _manifest_hash(manifest)
@@ -515,6 +539,9 @@ def test_qh_bundle_rejects_rehashed_cf0_target_protocol_drift(tmp_path) -> None:
     )
     learning_hash = stable_msgspec_hash(learning_contract)
     manifest["identity"]["learning_contract_hash"] = learning_hash
+    manifest["identity"]["learning_contract_payload_sha256"] = hashlib.sha256(
+        json.dumps(learning_payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()
     manifest["module_config"]["learning_contract_hash"] = learning_hash
     manifest["manifest_sha256"] = _manifest_hash(manifest)
     manifest_path.write_text(json.dumps(manifest, sort_keys=True, indent=2) + "\n", encoding="utf-8")
@@ -556,6 +583,8 @@ def test_qh_bundle_strict_load_rejects_missing_state_key(tmp_path) -> None:
         ("dependency_drift", "dependency identity"),
         ("implementation_drift", "implementation identity"),
         ("missing_seed", "identity fields"),
+        ("actor_payload_digest_drift", "actor-state contract payload digest"),
+        ("learning_payload_digest_drift", "learning contract payload digest"),
         ("action_mask_drift", "action-mask semantics"),
         ("representation_drift", "representation semantics"),
     ],
@@ -570,6 +599,10 @@ def test_qh_bundle_rejects_recorded_identity_mutation(tmp_path, mutation: str, m
         manifest["dependencies"]["torch"] = "other"
     elif mutation == "implementation_drift":
         manifest["implementation"]["package_tree_sha256"] = "0" * 64
+    elif mutation == "actor_payload_digest_drift":
+        manifest["identity"]["actor_state_contract_payload_sha256"] = "0" * 64
+    elif mutation == "learning_payload_digest_drift":
+        manifest["identity"]["learning_contract_payload_sha256"] = "0" * 64
     elif mutation == "action_mask_drift":
         manifest["identity"]["action_mask_semantics"] = "actor_observed_action_mask_v1"
     elif mutation == "representation_drift":

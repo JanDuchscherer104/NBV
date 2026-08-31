@@ -509,6 +509,32 @@ is admitted for both stores. The complete Typst/report/PDF verification suite
 passed again; the thesis remains 129 A4 pages and its post-repair PDF SHA-256 is
 `b86bb58413ec235544f25a77ef14f512ffcd6af9042af8066f73472ef64a4c23`.
 
+The next hosted rereview found two remaining trust-boundary gaps. Exact-Q2 now
+resolves its claimed content-addressed inference-bundle manifest and compares
+the complete flattened scorer, module, learning-contract, and actor-contract
+payloads, their short identities, and the ordered test-store roster against the
+receipt. A coordinated mutation of a valid-looking contract hash, payload
+digest, and target protocol therefore cannot preserve admission. Separately,
+Q1 benchmark candidate-mask types are validated before mask-dependent roster
+serialization, so malformed string or null masks return unavailable evidence
+instead of aborting Typst evaluation. Both focused regressions and the complete
+Typst/report/PDF suite pass. The thesis remains 129 A4 pages; its latest PDF
+SHA-256 is
+`49981a2192f76a969f537c27b7504249612a274abfbd4a16d5318696d32c3d4d`.
+
+Independent rereview then separated semantic payload equality from checksum
+identity and caught a double-digit roster edge case. Inference bundle V2 now
+owns canonical SHA-256 identities for the complete learning and actor contract
+payloads and validates them at publication and load. Exact-Q2 must match those
+bundle-owned full digests in addition to the complete flattened payloads and
+short identities; isolated valid-length digest substitutions reject. Bundle
+test-store rosters are reconstructed by contiguous numeric index lookup rather
+than lexicographic key sorting. An eleven-store valid roster passes, while a
+sparse `[0], [2], ...` roster rejects. Fresh verification passed 63 focused
+Python tests, Ruff, the report-data contract, all Typst/PDF gates, and
+`git diff --check`. The thesis remains 129 A4 pages with PDF SHA-256
+`86a7a8b9b7116311d927bc4f54c7e60e0c55e9f069b8c07706b272b274d2534c`.
+
 ## Canonical Owner Impact
 
 Current thesis truth now lives in the touched Typst figure, report-data,

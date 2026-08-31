@@ -229,14 +229,39 @@
   population-digest: q1-population-digest,
   provenance-digest: "8383838383838383838383838383838383838383838383838383838383838383",
   store-manifests: (store-manifest,),
-) = (
-  typed-sidecar-row(qh-bundle-sidecar, "identity.q1_population_benchmark_sha256", population-digest),
-  typed-sidecar-row(qh-bundle-sidecar, "identity.q1_test_provenance_sha256", provenance-digest),
-) + store-manifests.enumerate().map(((index, manifest)) => typed-sidecar-row(
-  qh-bundle-sidecar,
-  "identity.ordered_test_store_manifests[" + str(index) + "]",
-  manifest,
-))
+) = {
+  let envelope = (
+    typed-sidecar-row(qh-bundle-sidecar, "scorer_config_hash", "8484848484848484848484848484848484848484848484848484848484848484"),
+    typed-sidecar-row(qh-bundle-sidecar, "scorer_config.experiment_profile", "qh_cf0_v1"),
+    typed-sidecar-row(qh-bundle-sidecar, "module_config.experiment_profile", "qh_cf0_v1"),
+    typed-sidecar-row(qh-bundle-sidecar, "module_config.root_evl_profile", "evl_v1"),
+    typed-sidecar-row(qh-bundle-sidecar, "module_config.selected_observation_protocol", "none"),
+    missing-sidecar-row(qh-bundle-sidecar, "module_config.geometry_contract_hash"),
+    typed-sidecar-row(qh-bundle-sidecar, "identity.learning_contract_hash", "8585858585858585"),
+    typed-sidecar-row(qh-bundle-sidecar, "identity.learning_contract_payload_sha256", "8585858585858585858585858585858585858585858585858585858585858585"),
+    typed-sidecar-row(qh-bundle-sidecar, "identity.learning_contract.objective_profile", "qh_dense_valid_fitted_q_v1"),
+    typed-sidecar-row(qh-bundle-sidecar, "identity.learning_contract.data_contract.target_protocol", "v1_observed"),
+    typed-sidecar-row(qh-bundle-sidecar, "identity.actor_state_contract_hash", "8686868686868686"),
+    typed-sidecar-row(qh-bundle-sidecar, "identity.actor_state_contract_payload_sha256", "8686868686868686868686868686868686868686868686868686868686868686"),
+    typed-sidecar-row(qh-bundle-sidecar, "identity.actor_state_contract.experiment_profile", "qh_cf0_v1"),
+    typed-sidecar-row(qh-bundle-sidecar, "identity.actor_state_contract.root_evl_profile", "evl_v1"),
+    typed-sidecar-row(qh-bundle-sidecar, "identity.actor_state_contract.selected_observation_protocol", "none"),
+    missing-sidecar-row(qh-bundle-sidecar, "identity.actor_state_contract.geometry_contract_hash"),
+    typed-sidecar-row(qh-bundle-sidecar, "identity.q1_population_benchmark_sha256", population-digest),
+    typed-sidecar-row(qh-bundle-sidecar, "identity.q1_test_provenance_sha256", provenance-digest),
+  )
+  let q1-manifests = store-manifests.enumerate().map(((index, manifest)) => typed-sidecar-row(
+    qh-bundle-sidecar,
+    "identity.ordered_test_store_manifests[" + str(index) + "]",
+    manifest,
+  ))
+  let bundle-manifests = store-manifests.enumerate().map(((index, manifest)) => typed-sidecar-row(
+    qh-bundle-sidecar,
+    "identity.ordered_store_manifests.test[" + str(index) + "]",
+    manifest,
+  ))
+  envelope + q1-manifests + bundle-manifests
+}
 #let q1-fixture-roster(store-manifests, overlap-scenes: false) = {
   let targets = store-manifests.enumerate().map(((store-index, _)) => range(5).map(scene-index => (
     store: store-index,
@@ -1452,6 +1477,7 @@
   ordered-test-manifests: (store-manifest,),
   store-indices: none,
   receipt-values: none,
+  bundle-values: none,
   sidecar-rows: sidecars,
 ) = {
   let receipt-bundle-manifest = if receipt-bundle-manifest == none {
@@ -1506,6 +1532,11 @@
     facts,
     sidecar-rows: sidecar-rows,
     sidecar-value-rows: analysis-sidecar-value-rows(sidecar-a, "qh-gates", facts) + receipt,
+    q1-bundle-values: if bundle-values == none {
+      q1-bundle-manifest-sidecar-value-rows(
+        store-manifests: ordered-test-manifests,
+      )
+    } else { bundle-values },
   )
 }
 
@@ -2020,6 +2051,14 @@
     q1-population-benchmark-sidecar-value-rows(),
     "test_provenance_sha256",
     digest-b,
+  ),
+), "store-a"))
+#assert(not report-store-q1-evidence-valid(report(
+  q1-rows(),
+  q1-population-values: mutate-sidecar-value(
+    q1-population-benchmark-sidecar-value-rows(),
+    "expected_candidates[0]." + q1-actor-mask-key,
+    "true",
   ),
 ), "store-a"))
 #let q1-state-zero-leaf-prefixes = q1-audit-values.filter(row => (
@@ -2650,6 +2689,18 @@
     receipt-values: mutate-sidecar-value(q2-contract-values, mutation.key, mutation.value),
   ), "store-a"))
 }
+#for payload-key in (
+  "bound_contract.learning_contract_payload_sha256",
+  "bound_contract.actor_state_contract_payload_sha256",
+) {
+  assert(not report-store-q2-evidence-valid(q2-report(
+    receipt-values: mutate-sidecar-value(
+      q2-contract-values,
+      payload-key,
+      "9797979797979797979797979797979797979797979797979797979797979797",
+    ),
+  ), "store-a"))
+}
 #assert(not report-store-q2-evidence-valid(q2-report(
   receipt-values: mutate-sidecar-value(
     q2-contract-values,
@@ -2691,6 +2742,26 @@
 }
 #assert(not report-store-q2-evidence-valid(q2-report(
   receipt-values: coordinated-q2-cfplus-values,
+), "store-a"))
+#let coordinated-q2-contract-forgery = {
+  let values = mutate-sidecar-value(
+    q2-contract-values,
+    "bound_contract.learning_contract_hash",
+    "9797979797979797",
+  )
+  values = mutate-sidecar-value(
+    values,
+    "bound_contract.learning_contract_payload_sha256",
+    "9898989898989898989898989898989898989898989898989898989898989898",
+  )
+  mutate-sidecar-value(
+    values,
+    "bound_contract.learning_contract.data_contract.target_protocol",
+    "v1_gt",
+  )
+}
+#assert(not report-store-q2-evidence-valid(q2-report(
+  receipt-values: coordinated-q2-contract-forgery,
 ), "store-a"))
 #assert(not report-store-q2-evidence-valid(q2-report(bundle-manifest: "invalid"), "store-a"))
 #assert(not report-store-q2-evidence-valid(q2-report(receipt-bundle-manifest: digest-b), "store-a"))
@@ -3026,7 +3097,10 @@
 #let two-store-receipt-values = q2-certification-sidecar-value-rows(
   ordered-test-manifests: (second-store-manifest, store-manifest),
 )
-#let two-store-base = q2-report(receipt-values: two-store-receipt-values)
+#let two-store-base = q2-report(
+  ordered-test-manifests: (second-store-manifest, store-manifest),
+  receipt-values: two-store-receipt-values,
+)
 #let two-store-other-only-report = (
   tables: two-store-base.tables + (
     stores: (rows: (
@@ -3056,6 +3130,7 @@
 }
 #let two-store-census-only-base = q2-report(
   population-count: 6,
+  ordered-test-manifests: (second-store-manifest, store-manifest),
   receipt-values: two-store-census-only-values,
 )
 #let two-store-census-only-report = (
@@ -3073,6 +3148,42 @@
   ),
 )
 #assert(report-store-q2-evidence-valid(two-store-current-report, "store-a"))
+#let eleven-store-manifests = (
+  store-manifest,
+  "0000000000000000000000000000000000000000000000000000000000000000",
+  "1111111111111111111111111111111111111111111111111111111111111111",
+  "2222222222222222222222222222222222222222222222222222222222222222",
+  "3333333333333333333333333333333333333333333333333333333333333333",
+  "4444444444444444444444444444444444444444444444444444444444444444",
+  "6666666666666666666666666666666666666666666666666666666666666666",
+  "7777777777777777777777777777777777777777777777777777777777777777",
+  "8888888888888888888888888888888888888888888888888888888888888888",
+  "9999999999999999999999999999999999999999999999999999999999999999",
+  "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+)
+#let eleven-store-base = q2-report(ordered-test-manifests: eleven-store-manifests)
+#let eleven-store-report = (
+  tables: eleven-store-base.tables + (
+    stores: (rows: eleven-store-manifests.enumerate().map(((index, manifest)) => (
+      store_id: if index == 0 { "store-a" } else { "store-" + str(index) },
+      manifest_sha256: manifest,
+    )),),
+  ),
+)
+#assert(report-store-q2-evidence-valid(eleven-store-report, "store-a"))
+#let sparse-eleven-store-bundle = q1-bundle-manifest-sidecar-value-rows(
+  store-manifests: eleven-store-manifests,
+).filter(row => row.key != "identity.ordered_store_manifests.test[1]")
+#let sparse-eleven-store-base = q2-report(
+  ordered-test-manifests: eleven-store-manifests,
+  bundle-values: sparse-eleven-store-bundle,
+)
+#let sparse-eleven-store-report = (
+  tables: sparse-eleven-store-base.tables + (
+    stores: eleven-store-report.tables.stores,
+  ),
+)
+#assert(not report-store-q2-evidence-valid(sparse-eleven-store-report, "store-a"))
 #let two-store-current-zero-support-base = q2-report(
   row-counts: (0, 1, 1, 1, 1),
   ordered-test-manifests: (second-store-manifest, store-manifest),

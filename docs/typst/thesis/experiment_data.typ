@@ -1909,14 +1909,18 @@
     state.actor-action-support,
     state.remaining-budget,
   ).map(str).join("|")).sorted()
-  let expected-candidate-identities = expected-candidates.map(candidate => (
-    candidate.store,
-    candidate.rollout,
-    candidate.step-row,
-    candidate.row,
-    candidate.index,
-    if candidate.action-mask { "true" } else { "false" },
-  ).map(str).join("|")).sorted()
+  let expected-candidate-identities = if expected-candidates.all(
+    candidate => type(candidate.action-mask) == bool,
+  ) {
+    expected-candidates.map(candidate => (
+      candidate.store,
+      candidate.rollout,
+      candidate.step-row,
+      candidate.row,
+      candidate.index,
+      if candidate.action-mask { "true" } else { "false" },
+    ).map(str).join("|")).sorted()
+  } else { () }
   let expected-roster-payload = "targets\n" + expected-target-identities.join(
     "\n",
   ) + "\nstates\n" + expected-state-identities.join(
@@ -2656,6 +2660,36 @@
     if receipt-sidecar == none { "" } else { receipt-sidecar.sidecar_id },
   )
   let value(key) = report-sidecar-indexed-value-or-none(receipt-index, key)
+  let bundle-digest = value("bundle_manifest_sha256")
+  let bundle-sidecar = if report-sha256-value-valid(bundle-digest) {
+    report-confirmatory-sidecar-by-digest(
+      report,
+      bundle-digest,
+      required-name: q1-bundle-manifest-name,
+    )
+  } else { none }
+  let bundle-index = report-sidecar-value-index(
+    report,
+    if bundle-sidecar == none { "" } else { bundle-sidecar.sidecar_id },
+  )
+  let bundle-value(key) = report-sidecar-indexed-value-or-none(bundle-index, key)
+  let payload-matches(receipt-prefix, bundle-prefix) = {
+    let receipt-payload = receipt-index.rows.values().filter(
+      row => row.key.starts-with(receipt-prefix),
+    ).map(row => (
+      key: row.key.slice(receipt-prefix.len()),
+      missing: row.is_missing,
+      value: report-sidecar-row-value-or-none(row),
+    )).sorted(key: row => row.key)
+    let bundle-payload = bundle-index.rows.values().filter(
+      row => row.key.starts-with(bundle-prefix),
+    ).map(row => (
+      key: row.key.slice(bundle-prefix.len()),
+      missing: row.is_missing,
+      value: report-sidecar-row-value-or-none(row),
+    )).sorted(key: row => row.key)
+    receipt-payload.len() > 0 and receipt-payload == bundle-payload
+  }
   let store-manifest = report-store-manifest-sha256(report, store-id)
   let manifest-rows = receipt-index.rows.values().filter(
     row => row.key.match(regex("^bound_contract\\.ordered_test_store_manifests\\[[0-9]+\\]$")) != none,
@@ -2669,6 +2703,12 @@
   let expected-ordered-manifest-digest = if manifest-values.all(
     report-sha256-value-valid,
   ) { sha256-hex(ordered-manifest-json) } else { "" }
+  let bundle-manifest-rows = bundle-index.rows.values().filter(
+    row => row.key.match(regex("^identity\\.ordered_store_manifests\\.test\\[[0-9]+\\]$")) != none,
+  )
+  let bundle-manifests = range(bundle-manifest-rows.len()).map(index => bundle-value(
+    "identity.ordered_store_manifests.test[" + str(index) + "]",
+  ))
   let report-manifests = report.tables.stores.rows.map(
     row => row.at("manifest_sha256", default: none),
   )
@@ -2701,7 +2741,32 @@
   let geometry-valid = experiment-profile == "qh_cf0_v1" and selected-observation-protocol == "none" and actor-selected-observation-protocol == "none" and geometry-rows.all(
     row => row != none and row.is_missing == true,
   )
-  let lineage-valid = receipt-sidecar != none and store-manifest != none and (
+  let bundle-contract-valid = bundle-sidecar != none and bundle-value(
+    "scorer_config_hash",
+  ) == value("bound_contract.scorer_config_hash") and bundle-value(
+    "identity.learning_contract_hash",
+  ) == value("bound_contract.learning_contract_hash") and bundle-value(
+    "identity.learning_contract_payload_sha256",
+  ) == value("bound_contract.learning_contract_payload_sha256") and bundle-value(
+    "identity.actor_state_contract_hash",
+  ) == value("bound_contract.actor_state_contract_hash") and bundle-value(
+    "identity.actor_state_contract_payload_sha256",
+  ) == value("bound_contract.actor_state_contract_payload_sha256") and payload-matches(
+    "bound_contract.scorer_config.",
+    "scorer_config.",
+  ) and payload-matches(
+    "bound_contract.module_config.",
+    "module_config.",
+  ) and payload-matches(
+    "bound_contract.learning_contract.",
+    "identity.learning_contract.",
+  ) and payload-matches(
+    "bound_contract.actor_state_contract.",
+    "identity.actor_state_contract.",
+  ) and bundle-manifests.len() > 0 and bundle-manifests.all(
+    report-sha256-value-valid,
+  ) and bundle-manifests == manifest-values
+  let lineage-valid = receipt-sidecar != none and store-manifest != none and bundle-contract-valid and (
     "bundle_manifest_sha256",
     "test_population_sha256",
     "test_provenance_sha256",
