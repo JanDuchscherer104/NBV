@@ -21,6 +21,7 @@ decide whether the point contributes to scene-level or target-level scoring.
 
 from __future__ import annotations
 
+from functools import lru_cache
 from typing import TYPE_CHECKING
 
 import torch
@@ -81,9 +82,7 @@ def backproject_depths_p3d_batch(
         raise ValueError(f"stride must be >=1, got {stride}")
 
     bsz, height, width = depths.shape
-    yy = torch.arange(0, height, stride, device=depths.device)
-    xx = torch.arange(0, width, stride, device=depths.device)
-    gy, gx = torch.meshgrid(yy, xx, indexing="ij")
+    gy, gx = _pixel_grid(height, width, stride, depths.device)
     num_pixels = gy.numel()
 
     depth_sub = depths[:, gy, gx].reshape(bsz, num_pixels)
@@ -120,3 +119,17 @@ def backproject_depths_p3d_batch(
 
 
 __all__ = ["backproject_depths_camera_tw_batch", "backproject_depths_p3d_batch"]
+
+
+@lru_cache(maxsize=32)
+def _pixel_grid(
+    height: int,
+    width: int,
+    stride: int,
+    device: torch.device,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """Return an immutable cached pixel grid for one output shape and device."""
+
+    yy = torch.arange(0, height, stride, device=device)
+    xx = torch.arange(0, width, stride, device=device)
+    return torch.meshgrid(yy, xx, indexing="ij")

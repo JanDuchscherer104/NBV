@@ -57,3 +57,70 @@ def test_proxy_walls_expand_bounds():
     assert np.allclose(vmin, [-2.0, -3.0, -4.0], atol=1e-4)
     assert np.allclose(vmax, [2.0, 3.0, 4.0], atol=1e-4)
     assert merged.faces.shape[0] > mesh.faces.shape[0]
+
+
+def test_camera_ray_grid_is_reused_for_same_calibration() -> None:
+    """Repeated views reuse the camera-space pixel grid while transforming poses."""
+
+    renderer = Efm3dDepthRendererConfig(device="cpu", add_proxy_walls=False).setup_target()
+    rotation = np.eye(3, dtype=np.float32)
+    translation = np.zeros(3, dtype=np.float32)
+    first_origins, first_dirs = renderer._ray_grid(
+        width=8,
+        height=6,
+        fx=10.0,
+        fy=11.0,
+        cx=3.5,
+        cy=2.5,
+        r_wc=rotation,
+        t_wc=translation,
+    )
+    second_origins, second_dirs = renderer._ray_grid(
+        width=8,
+        height=6,
+        fx=10.0,
+        fy=11.0,
+        cx=3.5,
+        cy=2.5,
+        r_wc=rotation,
+        t_wc=translation,
+    )
+
+    assert len(renderer._camera_ray_grid_cache) == 1
+    assert np.array_equal(first_origins, second_origins)
+    assert np.array_equal(first_dirs, second_dirs)
+
+
+def test_ray_engine_cache_invalidates_after_mesh_mutation() -> None:
+    mesh = trimesh.Trimesh(
+        vertices=np.array([[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]]),
+        faces=np.array([[0, 1, 2]]),
+        process=False,
+    )
+    renderer = Efm3dDepthRendererConfig(device="cpu", backend="trimesh", add_proxy_walls=False).setup_target()
+
+    renderer._ray_engine(mesh)
+    first_key = next(iter(renderer._ray_engine_cache))
+    mesh.vertices[0, 0] = 2.0
+    renderer._ray_engine(mesh)
+    second_key = next(iter(renderer._ray_engine_cache))
+
+    assert second_key != first_key
+
+
+def test_ray_engine_cache_tracks_backend_assignment() -> None:
+    mesh = trimesh.Trimesh(
+        vertices=np.array([[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]]),
+        faces=np.array([[0, 1, 2]]),
+        process=False,
+    )
+    renderer = Efm3dDepthRendererConfig(device="cpu", backend="trimesh", add_proxy_walls=False).setup_target()
+
+    renderer._ray_engine(mesh)
+    first_key = next(iter(renderer._ray_engine_cache))
+    renderer.config.backend = "auto"
+    renderer._ray_engine(mesh)
+    second_key = next(iter(renderer._ray_engine_cache))
+
+    assert first_key != second_key
+    assert second_key[-1] == "auto"

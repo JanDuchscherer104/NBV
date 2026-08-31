@@ -125,3 +125,43 @@ def test_depth_renderer_bounds_mesh_replication_batch(monkeypatch: pytest.Monkey
     assert torch.equal(pix_to_face, reference_pix_to_face)
     assert torch.equal(cameras.R, reference_cameras.R)
     assert torch.equal(cameras.T, reference_cameras.T)
+
+
+def test_renderer_reuses_mesh_and_raster_settings_for_same_inputs() -> None:
+    """Invariant PyTorch3D state is prepared once without changing rendering inputs."""
+
+    verts = torch.tensor([[-1.0, -1.0, 2.0], [1.0, -1.0, 2.0], [0.0, 1.0, 2.0]])
+    faces = torch.tensor([[0, 1, 2]], dtype=torch.int64)
+    renderer = Pytorch3DDepthRenderer(Pytorch3DDepthRendererConfig(device="cpu", verbosity=0))
+
+    first_mesh = renderer._prepared_mesh(verts, faces)
+    second_mesh = renderer._prepared_mesh(verts, faces)
+    first_settings = renderer._raster_settings(height=32, width=40)
+    second_settings = renderer._raster_settings(height=32, width=40)
+
+    assert first_mesh is second_mesh
+    assert first_settings is second_settings
+
+
+def test_renderer_rebuilds_mesh_after_source_mutation() -> None:
+    verts = torch.tensor([[-1.0, -1.0, 2.0], [1.0, -1.0, 2.0], [0.0, 1.0, 2.0]])
+    faces = torch.tensor([[0, 1, 2]], dtype=torch.int64)
+    renderer = Pytorch3DDepthRenderer(Pytorch3DDepthRendererConfig(device="cpu", verbosity=0))
+
+    first_mesh = renderer._prepared_mesh(verts, faces)
+    verts.add_(1.0)
+    second_mesh = renderer._prepared_mesh(verts, faces)
+
+    assert second_mesh is not first_mesh
+
+
+def test_renderer_inference_tensors_bypass_mesh_cache() -> None:
+    renderer = Pytorch3DDepthRenderer(Pytorch3DDepthRendererConfig(device="cpu", verbosity=0))
+    with torch.inference_mode():
+        verts = torch.tensor([[-1.0, -1.0, 2.0], [1.0, -1.0, 2.0], [0.0, 1.0, 2.0]])
+        faces = torch.tensor([[0, 1, 2]], dtype=torch.int64)
+        first_mesh = renderer._prepared_mesh(verts, faces)
+        second_mesh = renderer._prepared_mesh(verts, faces)
+
+    assert first_mesh is not second_mesh
+    assert renderer._mesh_cache == {}

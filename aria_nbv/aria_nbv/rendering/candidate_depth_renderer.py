@@ -282,8 +282,8 @@ class CandidateDepthRenderer:
             indices into the full sampled candidate shell.
         """
         device = self.renderer.device
-        cam_views = candidates.views.to(device)
-        num_candidates = cam_views.tensor().shape[0]
+        source_views = candidates.views
+        num_candidates = source_views.tensor().shape[0]
         if num_candidates == 0:
             raise ValueError("No candidates provided for rendering.")
 
@@ -292,9 +292,13 @@ class CandidateDepthRenderer:
                 num_candidates,
                 max(1, int(self.config.max_candidates_final)),
             )
-            candidate_idx = torch.arange(num_render, device=device, dtype=torch.long)
+            candidate_idx = torch.arange(num_render, device=source_views.tensor().device, dtype=torch.long)
         else:
-            candidate_idx = torch.as_tensor(compact_indices, device=device, dtype=torch.long).reshape(-1)
+            candidate_idx = torch.as_tensor(
+                compact_indices,
+                device=source_views.tensor().device,
+                dtype=torch.long,
+            ).reshape(-1)
             if candidate_idx.numel() == 0:
                 raise ValueError("At least one compact candidate index is required for rendering.")
             if torch.any(candidate_idx < 0) or torch.any(candidate_idx >= num_candidates):
@@ -302,8 +306,9 @@ class CandidateDepthRenderer:
                     f"Compact candidate indices must be in [0,{num_candidates}), got {candidate_idx.detach().cpu().tolist()}."
                 )
 
-        selected_views = cam_views[candidate_idx]
-        poses_world_cam = candidates.poses_world_cam(device=device)[candidate_idx]
+        selected_views = source_views[candidate_idx].to(device)
+        reference_pose = candidates.reference_pose.to(device=device)
+        poses_world_cam = reference_pose @ selected_views.T_camera_rig.inverse()
         candidate_shell_idx = candidates.candidate_shell_indices(device=device)
 
         return poses_world_cam, selected_views, candidate_shell_idx[candidate_idx]
