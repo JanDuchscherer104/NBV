@@ -54,13 +54,19 @@ development-only reports, and `presentation-table` for slides. Keep columns,
 rows, alignment, captions, and labels at the call site; the shared owner emits
 the semantic header and restrained Booktabs rules:
 
+Write the body as one tuple per rendered row. The nesting and line breaks in
+`rows` must expose the same $N times M$ grid that the reader sees; do not encode
+an $N$-row table as one flat sequence of $N M$ cells. The shared constructors
+flatten these row tuples for Typst after preserving the source-level grid.
+
 ```typst
 #figure(
   publication-table(
     columns: (1fr, 1fr, 1fr),
     header: ([*Claim*], [*Evidence*], [*Decision*]),
     rows: (
-      [Target utility], [Endpoint target gain], [Primary metric],
+      ([Target utility], [Endpoint target gain], [Primary metric]),
+      ([Action support], [Per-state valid candidates], [Report before reward]),
     ),
   ),
   caption: [Claim-to-evidence mapping.],

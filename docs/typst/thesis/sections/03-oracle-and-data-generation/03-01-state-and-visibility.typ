@@ -2,15 +2,17 @@
 #import "../../../shared/symbols.typ": symb
 #import "../../../shared/equations.typ": eqs
 
-== Information Boundary
+== State as an Information Contract
 
-The learned component predicts finite-horizon values for a hard-masked candidate
-table, but its inputs come from only one layer of a larger information lattice.
-The experiment distinguishes logged observations, evidence caused by selected
-actions, and privileged counterfactual quantities. ASE contributes both
-sensor-like streams and ground truth; EFM3D transforms only the logged subset
-into local 3D evidence @ProjectAria-ASE-2025 @EFM3D-straub2024. Co-location in
-one adapted sample or replay row never makes those layers equally observable.
+An NBV state contains exactly the information on which an action value may
+depend. ARIA-NBV therefore
+distinguishes three nested roles: logged evidence from the observed snippet,
+causal evidence produced by actions that were actually selected, and privileged
+quantities used only to construct or evaluate counterfactuals. ASE provides both
+sensor-like streams and ground truth, whereas EFM3D transforms only logged image
+evidence into a local 3D representation @ProjectAria-ASE-2025
+@EFM3D-straub2024. Provenance and acquisition time determine information role
+independently of file location and tensor shape.
 
 // evidence:
 // - @ProjectAria-ASE-2025 -> docs/contents/ase_dataset.qmd:216-225,257-260 (sensor-like streams and privileged GT products)
@@ -21,130 +23,167 @@ one adapted sample or replay row never makes those layers equally observable.
     "../../figures/actor_oracle_boundary.pdf",
     width: 100%,
   )),
-  caption: [Actor and oracle boundary. Legal #symb.rl.qh inputs are calibrated logged image evidence, poses, semi-dense geometry with uncertainty and observation support, frozen @egocentric-voxel-lifting:short features or predictions, an explicitly sourced target instruction, selected-view history, remaining budget, candidates, and masks. Reason codes remain audit evidence rather than scorer inputs. @ground-truth:short depth, segmentation, boxes, meshes, target crops, counterfactual renders, labels, and endpoint evaluation remain privileged.],
+  caption: [Information roles in the offline experiment. The actor side contains calibrated logged observations, derived EFM3D evidence, an explicitly sourced target instruction, the selected-view prefix, remaining budget, candidates, and the hard action mask. The oracle side adds @ground-truth:short geometry, counterfactual renders, labels, and endpoint evaluation. Every stored field keeps its declared information role.],
 ) <fig:qh-actor-oracle-contract>
 
-The visibility boundary is protocol-relative and temporal. A dense render for an unselected candidate at the current decision step is oracle evidence. A render from an already selected action may enter a later state only under an explicitly named source protocol: privileged mesh-rendered depth, a declared sensor simulation, or an actor-visible observation. The same array shape can therefore denote different information, and source role must remain explicit.
+The boundary is also temporal. A render from an unselected candidate is a
+counterfactual oracle query. After that candidate is selected, an observation
+from its pose may enter the next state, but only under a declared acquisition
+model: a real observation, an admitted sensor simulation, or a privileged mesh
+render. Actor visibility requires both factual selection and an admitted source
+role.
 
-=== Logged Observations
+=== Logged Information State
 
-Following the conditional action-value definition in
-@sec:thesis-sequential-decision-foundations, the target is treated as external
-task context, so the value is conceptually $Q(s_t,e,a)$ rather than a
-target-independent state value. The logged historic state contains the recorded
-trajectory evidence,
+The logged historic state #symb.rl.s_hist groups the evidence available before
+any counterfactual acquisition:
 
 $
   #eqs.rl.s_hist
 $
 
-Calibrated image streams, trajectory, camera models, and gravity establish the
-spatial, metric, and temporal frame in which evidence is compared. EFM3D lifts
-posed image features into a finite gravity-aligned voxel volume rather than a
-complete world model @EFM3D-straub2024. An out-of-extent target or candidate
-therefore has missing representation support, not a measured zero and not
-automatically an invalid pose.
+Calibrated images and trajectory poses establish where and when evidence was
+acquired. Semi-dense points provide sparse surface observations, and the EFM3D
+field #symb.vin.field_v supplies a learned local representation. EFM3D lifts
+posed image features into a finite gravity-aligned local volume
+@EFM3D-straub2024. Absence from that volume denotes missing representation
+support. Empty-space evidence requires measured rays, and pose feasibility
+requires the geometric and motion checks defined later in this chapter.
 
 // evidence:
 // - @EFM3D-straub2024 -> docs/literature/tex-src/arXiv-EFM3D/method.tex:15-33, docs/literature/tex-src/arXiv-EFM3D/supplemental_text.tex:113-124 (calibrated lifting and finite local voxel extent)
 
-Semi-dense points add sparse surface evidence with uncertainty, timestamps, and
-observation lineage. EFM3D uses their observing camera centers to distinguish
-surface support from sampled free-space rays @ProjectAria-ASE-2025
-@EFM3D-straub2024. That distinction is causal: a missing point is not evidence
-that a voxel is free, and free-space evidence is justified only when its camera
-lineage is retained.
+Semi-dense points #symb.obs.points_semi retain uncertainty, timestamps, and
+observing-camera lineage. EFM3D uses that lineage to distinguish surface samples
+from free-space samples along measured rays @ProjectAria-ASE-2025
+@EFM3D-straub2024. A point set supplies surface samples; camera rays additionally
+supply free-space evidence. Missing surface samples carry no free-space meaning
+without that lineage.
 
 // evidence:
 // - @ProjectAria-ASE-2025 -> docs/contents/ase_dataset.qmd:216-225 (MPS-style semi-dense points and uncertainty)
 // - @EFM3D-straub2024 -> docs/literature/tex-src/arXiv-EFM3D/method.tex:15-33 (surface and free-space voxel evidence)
 
-The target and remaining budget are decision context rather than sensing
-modalities. The current oracle task derives its target from a selected
-@ground-truth:short box; an actor-visible target must instead come from a
-declared observation-derived association path. The information role is fixed by
-provenance, not by tensor shape.
+The target $e_t$ and remaining budget $b_t$ are task variables. They make the
+value conditional, conceptually $Q(s_t,e_t,a_t)$, and distinguish two otherwise
+identical observations posed with different requested objects or acquisition
+budgets. In the present oracle task, $e_t$ is derived from a selected
+@ground-truth:short box. A deployable task derives the target instruction from an
+observation-side proposal and association path.
 
-=== Selected Causal Evidence
+=== Causal Successor State
 
-The conceptual counterfactual actor state retains the immutable logged substrate and adds only information causally available after selected actions,
+After an action is selected, the state may grow only with evidence generated by
+that factual choice. The conceptual counterfactual actor state is
 
 $
   #eqs.rl.s_cf0
 $
 
-For the canonical model, this compact tuple is read together with the explicit ordered selected-view history:
+and is read together with the ordered selected-view history:
 
 #eqs.scene.actor_state_read
 
-In #symb.rl.s_cf0, the root field remains fixed while the accumulated point set
-may grow only through selected observations. Candidate rows contain poses and
-proposal provenance, not observations from those poses. The action mask defines
-admission, the ordered history retains the factual approach sequence, and
-invalid-reason codes remain audit evidence rather than model input.
+Here the root field is immutable, while the accumulated evidence may grow
+only through selected observations. Candidate rows #symb.rl.candidate_qti encode
+possible poses and proposal provenance. Observations from those poses become
+available only after selection. The hard mask #symb.rl.action_mask defines the
+action set. Invalid-reason codes explain exclusions as diagnostic fields outside
+the value-model input.
+This separation prevents the proposal table from leaking the consequences it is
+supposed to predict.
 
-The current baseline materializes only root evidence and selected-pose history
-(the implementation anchor is `qh_cf0_v1`), a deliberately weaker
-`S0-pose` state:
+The implemented `S0-pose` baseline materializes the weaker state
 
 $
   #eqs.rl.s_pose
 $
 
-It carries root evidence, the admitted target descriptor, current candidates and
-hard mask, factual selected-pose prefix, and remaining budget. A richer state
-would update causal geometry after each selected action:
+It carries root evidence, target context, the current candidate table and mask,
+the selected-pose prefix, and the remaining budget. This state represents the
+actor's motion history. A geometry-enriched successor additionally retains what
+the selected observations revealed:
 
 $
   #eqs.rl.s_cf_geom
 $
 
-The implemented richer control stops earlier: it persists selected mesh-rendered
-depth with calibration under the privileged `qh_cfplus_gt_depth_v1` source
-protocol. The carrier is causal with respect to the selected action but remains
-privileged and is not yet fused into surface, free-space, uncertainty, or a
-refreshed EFM3D field. It therefore cannot be interpreted as the full
-geometry-updated actor state.
+The implemented richer control is the intermediate carrier
 
-The transition from $t$ to $t+1$ may use only the observation produced by the selected row $a_t$. It may fuse its surface and ray evidence and update support, uncertainty, direction, and recency. It may not attach image features, detections, or EVL descriptors unless the protocol also provides the calibrated camera streams from which EFM3D derives them. Counterfactual geometry must therefore retain a source role and explicit absence masks for unavailable image-derived channels.
+$
+  #eqs.rl.s_cf_gt_carrier
+$
 
-The counterfactual state is thus an *information state* for decision making, not automatically a complete Markov state of the physical scene. It becomes task-sufficient only if its retained root context, causal dynamic evidence, explicit history, target context, action support, and budget preserve every distinction needed to predict future target-specific return. `qh_cf0_v1` is the deliberately weaker `S0-pose` baseline; `qh_cfplus_gt_depth_v1` is a privileged depth carrier, not yet a realization of the geometry-updated state.
+It retains calibrated depth only for selected actions. This makes the carrier
+causal with respect to the selected path, while its mesh-rendered source keeps
+the control privileged. Fusion into surface, free-space, uncertainty, and EFM3D
+evidence defines the fuller geometry state. The implemented carrier isolates the
+value of selected depth before that fusion.
 
-=== Privileged Counterfactual Evidence
+More generally, the transition from $t$ to $t+1$ may consume only the observation
+produced by $a_t$. RGB and EFM3D updates require the corresponding calibrated
+image stream; depth updates the declared geometry channels.
+#symb.rl.s_cf0 is an *information state* for value prediction. Its sufficiency
+for the physical process is an empirical question: it is adequate only if it
+preserves the distinctions needed to predict future target-specific return.
 
-The oracle state adds complete or counterfactual quantities outside the actor input graph:
+=== Oracle Augmentation
+
+The oracle augments the causal state with quantities needed to answer
+counterfactual questions:
 
 $
   #eqs.rl.s_oracle
 $
 
-$
-  #eqs.rl.nbv_process_tuple
-$
+ASE provides per-frame metric @ground-truth:short depth aligned with RGB,
+per-pixel instance identifiers, class mappings, and the scene trajectory. The
+EFM3D release adds ASE OBB metadata and validation meshes for object-detection
+and surface-reconstruction supervision @ProjectAria-ASE-2025
+@EFM3D-straub2024. EFM3D uses depth to supervise occupancy at sampled free,
+surface, and behind-surface points, while visible OBBs supervise centerness,
+class, and box geometry @EFM3D-straub2024. These uses establish label
+provenance; the information source determines actor observability.
 
-ASE provides per-frame metric @ground-truth:short depth aligned with RGB, per-pixel instance identifiers, class mappings, and the scene trajectory; the EFM3D release adds ASE OBB metadata and validation meshes for object-detection and surface-reconstruction supervision @ProjectAria-ASE-2025 @EFM3D-straub2024. EFM3D uses the depth channel to supervise occupancy at sampled free, surface, and behind-surface points, while visible OBBs supervise centerness, class, and box geometry @EFM3D-straub2024. These uses establish label provenance, not actor observability.
+For ARIA-NBV, the scene mesh #symb.ase.mesh supports candidate rendering, and
+the target crop #symb.ase.mesh_target fixes the surface on which error is
+measured. All-candidate depth #symb.oracle.depth_q and backprojected points
+#symb.oracle.points_q instantiate the hypothetical observation associated with
+each candidate. The resulting #symb.oracle.rri labels the consequence of an
+action and becomes available only to the oracle.
 
-For ARIA-NBV, #symb.ase.mesh is the privileged reference surface used for candidate rendering and reconstruction evaluation, while #symb.ase.mesh_target fixes the selected entity's evaluation support. All-candidate depth #symb.oracle.depth_q and backprojected point sets #symb.oracle.points_q answer counterfactual queries for unselected rows. #symb.oracle.rri then compares target reconstruction error before and after adding that candidate evidence. Depth, points, crops, and RRI are legal for label generation, oracle search, diagnostics, and named upper bounds; none is a contemporaneous input to the student value model.
+A @ground-truth:short OBB defines oracle identity, pose, extent, crop, and target
+bearing. Actor detection and association require an observation-derived
+proposal. In a deployable protocol, that proposal defines the target hypothesis,
+while ASE identity and geometry serve as matching and evaluation references.
 
-A @ground-truth:short OBB may define the current oracle identity, pose, extent, crop, and target-bearing instruction. It does not show that the actor detected or associated that object. A deployable protocol must obtain the target hypothesis from EVL predictions or another observation-derived path, retaining ASE identity, segmentation, OBBs, and meshes only for matching and evaluation.
+The three states form a controlled augmentation chain:
+#symb.rl.s_hist fixes logged evidence, #symb.rl.s_cf0 adds only factual selected
+history, and #symb.rl.s_oracle adds counterfactual supervision. This ordering is
+the conceptual data contract inherited by candidate generation and replay.
 
-The information lattice therefore separates *what was logged*, *what a selected
-history causally adds*, and *what only the oracle can know*. Its layers are
-connected by controlled projections, not by freely copying arrays between
-stores. Persisting an oracle tensor beside actor evidence for efficient replay
-never changes its information role.
+=== Visibility, Feasibility, and Utility
 
-=== End-to-End Actor Visibility
+Three predicates apply to a candidate and answer different questions. *Visibility*
+asks whether a view supplies evidence about a spatial element. *Feasibility*
+asks whether the pose belongs to the admissible action set. *Utility* asks how
+the target reconstruction changes after an admissible action. A candidate can
+be physically feasible yet outside the local EFM3D volume, or it can frame the
+target yet yield little reconstruction gain. These cases coexist because the
+predicates refer to different structures.
 
-Visibility answers whether a modality contains evidence for a spatial element from a particular view; feasibility answers whether an action is admissible; utility answers how beneficial an admissible action is for the target. These concepts must not be collapsed. A target can be weakly visible from a geometrically valid candidate, a candidate can lie outside EVL support while remaining physically reachable, and an oracle render can fail even though the candidate pose itself is feasible.
+Accordingly, #symb.rl.action_mask owns infeasibility, and reward is defined only
+on the feasible action set. A feasible row may have negative gain. Oracle
+evaluation can fail for a separate reason---for example, an unusable target crop
+or render---in which case the label mask #symb.rl.q_label_mask is false while the
+geometric reason code is unchanged. Keeping the masks distinct preserves the
+difference between actions outside the feasible set and feasible actions lacking
+an oracle training label.
 
-Invalidity is a constraint rather than a reward value. Geometry-invalid candidates receive a hard action mask and a persisted candidate reason code before policy selection, stochastic normalization, loss construction, and bootstrap maximization. A geometrically feasible candidate may still have low or negative target gain. Failure of the separate oracle evaluation does not create a candidate reason code: depending on the configured recipe, the affected row or table is skipped, or its oracle-label validity and Q-training eligibility are cleared and the oracle failure is reported separately. Oracle-derived feasibility must be distinguished from a deployable validity estimate when a policy moves from privileged target tasks to an actor-visible target protocol.
-
-Actor visibility is consequently an end-to-end property of the decision
-protocol. It includes how the target instruction is obtained, how candidate
-support is proposed, how the hard mask is computed, which selected observation
-updates the next state, and which fields reach the scorer. A scorer can be free
-of privileged tensors while still choosing from support oriented or pruned with
-privileged geometry. Such a protocol is a valid bounded oracle or control
-experiment, but its result cannot silently become a claim about independently
-actor-constructed actions.
+Actor visibility is a property of the complete pipeline. It includes the scorer
+tensor, the source of the target, the construction and masking of candidate
+support, the selected observation used for the successor,
+and the fields passed to the model. A scorer with actor-only tensors can still
+depend indirectly on privileged support construction. Such a protocol supports
+an oracle-assisted experiment. Claims about independently actor-constructed
+actions require an actor-side proposal and feasibility path.

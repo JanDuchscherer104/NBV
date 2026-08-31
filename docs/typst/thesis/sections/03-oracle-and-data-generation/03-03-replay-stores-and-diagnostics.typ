@@ -1,71 +1,123 @@
 #import "../../../shared/macros.typ": *
 #import "../../../shared/symbols.typ": symb
+#import "../../../shared/equations.typ": eqs
 #import "../../../shared/tables.typ": publication-table
 
-== Evidence and Reproducibility
+== Dataset and Storage Semantics
 
-The experiment preserves two evidence roles. An immutable source store owns the
-logged actor substrate and one-step oracle products; a replay store references
-those rows and owns target tasks, retained chains, per-step candidate shells,
-hard masks, reason codes, and selected-action successor evidence. This boundary
-prevents counterfactual experiments from mutating their source and prevents
-dense one-step labels from being mistaken for factual multi-step transitions.
+The replay dataset is organized around decision-state relations. Each state
+binds an information state $s_t$ and target $e$ to a candidate table
+#symb.rl.candidate_table, row-specific feasibility and label masks, oracle
+outcomes where defined, and the selected successor. Its normalized lineage
+connects a source to target tasks, retained chains, decision states, and
+candidate rows.
 
-Lineage follows the scientific units. One source may define several target
-tasks; one task may produce several recipe-specific retained chains; one chain
-contains ordered selected steps; and each step owns a full finite candidate
-shell. The store therefore represents selected or beam-retained evidence rather
-than an exhaustive counterfactual tree. Derived padded training arrays remain
-caches over these factual relations. Invalid rows stay auditable while action,
-training, and bootstrap masks exclude them from their respective decisions.
+One logged source can support several target tasks. Each task can be explored by
+several rollout recipes. A retained chain contains ordered selected steps, and
+each step owns the full finite candidate shell. This layout preserves two forms
+of supervision. Candidate rows record the counterfactual outcomes available at
+one state; the selected row $a_t$ links that state to the factual successor
+$s_(t+1)$. The first supports dense one-step ranking, while the second supports
+finite-horizon returns along a causal trajectory.
 
 #figure(
   align(center, image(
     "../../figures/replay_lineage_relations.pdf",
     width: 100%,
   )),
-  caption: [Normalized lineage of the replay evidence. An immutable source row may define several target tasks; each target may produce several retained policy chains; each chain contains ordered steps; and each step owns one full candidate shell. Selected-action successor and finite-horizon training fields are derived from those factual relations rather than treated as an independent counterfactual transition table.],
+  caption: [Normalized replay lineage. A source defines target tasks; each task
+  produces recipe-specific retained chains; each chain orders factual decision
+  states; and each state owns one complete candidate shell. Model-ready tensors
+  are derived by padding and batching these relations.],
 ) <fig:offline-rollout-store-relation>
 
 #figure(
   publication-table(
-    columns: (0.8fr, 1.35fr),
-    header: ([*Evidence family*], [*Scientific interpretation*]),
+    columns: (0.75fr, 0.85fr, 1.45fr),
+    header: ([*Stored relation*], [*Mathematical role*], [*Scientific meaning*]),
     rows: (
-      [Sources and targets],
-      [Manifest-backed task coverage; not proof of actor-visible target discovery.],
-      [Candidates and invalidity],
-      [Full-shell support with separate hard-action, training, padding, and future deployable-feasibility roles.],
-      [Retained chains and steps],
-      [Recipe-selected evidence; not a persisted exhaustive search tree.],
-      [Selected depth],
-      [Chosen-action successor observation with calibration and source role; actor input only under an explicitly admitted later-state protocol.],
-      [Finite-horizon training view],
-      [Derived training cache whose rewards and masks must agree with factual rows; not a scene-memory representation.],
-      [Candidate-support metrics],
-      [Attempted-row actor-valid fraction, per-state valid support, configured-family zero rate, attempted target-conditioned side balance and circular span, calibrated target-centre projection fraction, finite-support oracle opportunity, and bounded-jitter compliance.],
-      [Metric populations],
-      [State metrics aggregate state then scene then cohort; failed roots and zero-valid configured family/state pairs remain in denominators. Projection is framing, oracle opportunity is headroom, and jitter is QC—not visibility or policy performance.],
+      (
+        [Source--target],
+        [$s_0, e$],
+        [Binds a task to one immutable logged substrate and one declared target source.],
+      ),
+      (
+        [State--candidate],
+        [$s_t, q_(t,i)$],
+        [Preserves the full proposal support, hard feasibility, label availability, and proposal provenance.],
+      ),
+      (
+        [Selected transition],
+        [$(s_t, a_t, r_t^e, s_(t+1))$],
+        [Records the causal edge created by the selected action.],
+      ),
+      (
+        [Retained chain],
+        [$(s_0, a_0, dots, s_H)$],
+        [Identifies the recipe-specific trajectory from which finite-horizon returns may be derived.],
+      ),
+      (
+        [Derived training view],
+        [$(bold(X), bold(m), bold(y))$],
+        [Pads and batches factual relations without changing their information or missingness semantics.],
+      ),
     ),
   ),
-  caption: [Scientific interpretation of replay evidence. Numeric values are rendered from the resolved report bundle in the experiment and reproducibility sections.],
+  caption: [Scientific roles of the normalized replay relations. State, target,
+  action support, supervision, and lineage are bound before model-specific
+  tensorization.],
 ) <tab:current-rollout-store-audit>
 
-Selected-depth persistence stores only the depth raster and calibration for the
-chosen action at each retained step. It can reconstruct the selected-observation
-prefix without duplicating dense all-candidate renders, but persistence does not
-make the source actor-visible. A privileged reader may consume selected
-mesh-rendered depth; an actor-visible reader must consume an admitted sensor-like
-or observed source. Unselected candidate renders remain oracle-only, and selected
-depth is not an independently scored endpoint artifact.
+=== Immutable Sources and Causal Replay
 
-Likewise, rollout rows summarize final cumulative selected-chain metrics; they do not preserve every rejected branch or a policy-neutral endpoint reconstruction. These limitations must be resolved by matched endpoint re-evaluation before confirmatory policy comparison.
+An immutable source store owns the logged actor substrate and one-step oracle
+products. A replay store references those identities and adds target tasks,
+retained chains, per-state candidate shells, selected-action successors, and
+recipe provenance. Changing a rollout recipe creates a new replay dataset over
+the same source facts. Observations and one-step oracle products keep stable
+identities across those experiments, which enables paired comparison.
 
-Missingness is part of the evidence rather than an ordinary zero. Reporting
-therefore retains target-task coverage, candidate validity and failure
-reasons, family survival and selection, selected-history sanity, gain
-distributions, source-role counts, and runtime or storage exclusions. Exact
-schema columns, joins, compression, chunking, hashes, and execution commands
-belong to the reproducibility record and resolved manifests. Development
-bandwidth pilots may size later jobs but cannot support held-out reconstruction
-or policy claims.
+For each selected action, replay stores one calibrated depth raster. The ordered
+rasters reconstruct the selected-observation prefix without duplicating every
+candidate render inside each chain. Source role stays attached to each raster:
+mesh-rendered depth defines the privileged causal control, and sensor-like or
+observed depth defines an actor-side successor. Candidate renders for unselected
+rows stay with the one-step oracle products used to construct labels.
+
+The stored data-generation transition is
+
+$
+  #eqs.rl.replay_transition
+$
+
+It updates reference pose, selected history, budget, and the next candidate
+table under generation context $xi_t$. A visual successor adds a separately
+specified observation operator and state update for RGB, depth, EFM3D features,
+or surface memory. The rollout recipe retains the chains it selects or keeps in
+its beam. Matched oracle endpoint re-evaluation then supplies a common
+fixed-budget outcome for policy comparison.
+
+=== Missingness and Derived Views
+
+Every candidate row carries separate predicates for materialization,
+actor-feasible action #symb.rl.action_mask, finite value label
+#symb.rl.q_label_mask, and factual successor #symb.rl.successor_mask. These
+predicates describe structure, action support, supervision support, and
+trajectory heritage. A training objective may select their intersection; the
+stored fields preserve the reason each row enters or leaves that population.
+
+Model-ready arrays are deterministic projections of the normalized store. They
+pad candidate shells, expand a chain into state queries, and cache features
+while preserving source identity, target identity, state order, masks,
+requested horizon, and label provenance. Several states from one chain may
+share a batch, but each query receives only its own causal prefix.
+
+Reproducibility requires content identity and transformation identity.
+The source manifest fixes scene, snippet, target, geometry, and oracle products;
+the rollout manifest fixes proposal profile, pruning, recipe, seed, and
+retention; the training view fixes tensorization and supported horizons.
+Coverage, failed roots, family survival, undefined metrics, source-role counts,
+and exclusions define the population to which a learned value claim applies.
+Compression, chunking, hashes, and execution commands complete the
+reproducibility record. Development bandwidth pilots contribute cost estimates;
+held-out policy evidence comes from the evaluation protocol in Chapter 5.

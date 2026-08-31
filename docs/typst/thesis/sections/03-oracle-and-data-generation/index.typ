@@ -1,15 +1,23 @@
 #import "../../../shared/macros.typ": *
+#import "../../../shared/symbols.typ": symb
 
 = Oracle and Data Generation <sec:thesis-oracle-data-generation>
 
-Chapter 2 established that view value is relational: it depends on the target,
-causal state, admissible support, horizon, update rule, and continuation policy.
-This chapter turns that relation into a controlled experimental world. It first
-separates logged, selected-causal, and privileged information; then constructs
-target tasks and finite actions; and finally defines the intervention outcome
-and the immutable evidence needed to audit it. By the end, every value query has
-an explicit information boundary, action support, transition meaning, and
-outcome definition for the Method chapter to inherit.
+This chapter defines the experimental objects from which ARIA-NBV constructs
+training and evaluation data. A logged snippet first induces an actor-side
+information state #symb.rl.s_hist. A target task then turns that state into a
+finite candidate table #symb.rl.candidate_table; the hard action mask
+#symb.rl.action_mask selects its feasible subset. Privileged rendering assigns
+target-specific reconstruction outcomes, while a selected action creates the
+only factual successor that may extend the causal history. Replay storage
+preserves these relations. Final padded tensors are model-specific projections.
+
+State determines what may be conditioned on. The target and proposal mechanism
+determine which actions can be compared. The oracle defines their supervision,
+and lineage determines which multi-step returns can be reconstructed from
+factual transitions. These dependencies connect the chapter's information,
+action, measurement, and storage contracts to the learned scorer in the Method
+chapter.
 
 #include "03-01-state-and-visibility.typ"
 

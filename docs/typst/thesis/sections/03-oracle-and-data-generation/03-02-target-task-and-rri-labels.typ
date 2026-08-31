@@ -6,48 +6,70 @@
 
 == Task and Action Construction
 
-#validation_todo(
-  [Validate repeatability, failure handling, construct interpretation, root normalization, and the endpoint estimand before describing RRI as a reliable study objective.],
-  source: [docs/literature/tex-src/arXiv-VIN-NBV; metric-validation artifacts],
-  gate: [frozen metric protocol, repeatability table, and claim-level source locators],
-)
-
-An oracle target task fixes entity identity, evaluation support, and the target
-instruction used to construct target-bearing actions. An actor-visible task
-would instead obtain its descriptor from observations. The present descriptor
-therefore defines a controlled requested object and its geometry; it does not
-establish actor-visible target discovery.
-
-The general descriptor notation remains
+An action has value only relative to a target and to the alternatives available
+in the same state. Data generation therefore begins by constructing a *target
+task* and a finite *candidate shell*. The target task fixes the requested entity
+$e$, its evaluation support #symb.ase.mesh_target, and the instruction used by
+target-bearing proposal families. Its reusable descriptor is
 
 $
   #eqs.entity.target_descriptor
 $
 
-The finite action interface consists of a candidate table $cal(Q)_t$, hard validity mask $bold(m)_t$, and invalid-reason vector $bold(rho)_t$. The admissible set is $cal(A)_t = {i : m_(t,i)=1}$. Invalid rows remain logged for coverage and failure analysis but lie outside policy argmax, sampling, loss targets, and bootstrap maximization. Low RRI is a valid low-utility outcome; it is never an encoding for infeasibility.
+where geometry, class evidence, observation support, source role, and
+target-relative transforms stay explicit. In the present oracle protocol these fields originate from a
+selected @ground-truth:short OBB. The descriptor therefore defines a controlled
+target-conditioned task. Actor-visible target discovery is evaluated through
+the separate proposal-association path below.
 
-For target $e$, the oracle computes the target-cropped point--mesh error defined by the frozen outcome protocol. Candidate selection and #symb.rl.qh supervision use root-normalized target gain; state-relative @relative-reconstruction-improvement:short is retained as a diagnostic. Fixed-budget endpoint gain is the intended policy estimand, but the current replay store records cumulative selected-chain gains rather than an independent post-horizon endpoint reconstruction for every policy. Confirmatory policy comparisons must therefore add matched oracle endpoint re-evaluation or an explicitly persisted endpoint record.
+At decision step $t$, the proposal mechanism produces
+#symb.rl.candidate_table. Each row #symb.rl.candidate_qti represents one possible
+camera pose together with its proposal provenance. The hard mask
+#symb.rl.action_mask then induces the feasible action set
+
+$
+  #eqs.rl.finite_action_set
+$
+
+Candidate generation and feasibility are deliberately separate operations. The
+proposal distribution determines which parts of the local action space are
+represented; the mask determines which proposed rows may be selected. Invalid
+rows are retained for action-space coverage and failure analysis. Selection,
+stochastic normalization, loss targets, and bootstrap maximization use the
+feasible subset. A feasible row with poor target gain is a valid low-utility
+example.
 
 === Target Selection
 
-The implemented sampler does not match actor proposals to @ground-truth:short objects. It enumerates the non-padding @ground-truth:short OBB rows in a snippet, accepts rows with finite positive geometry, and applies seeded uniform sampling without replacement up to the configured per-snippet cap. Thus the stored `matched` status currently means geometry-valid @ground-truth:short task row, not successful proposal-to-identity association. IoU, ambiguity-gap, visibility, and support thresholds are absent from this admission rule.
+The oracle task sampler enumerates non-padding @ground-truth:short OBBs with
+finite positive geometry and samples them uniformly without replacement up to
+the manifest-defined per-snippet cap. This choice makes task selection
+independent of candidate reward: near-solved, difficult, and negative-gain
+targets are eligible. The stored `matched` status records a geometry-valid
+oracle task. Successful actor proposal-to-identity matching is a separate
+observed-target event.
 
 #figure(
   align(center, image(
     "../../figures/target_task_sampler_contract.pdf",
     width: 100%,
   )),
-  caption: [Implemented oracle target-task sampler. Geometry-valid @ground-truth:short OBB rows form the task pool, and seeded uniform sampling without replacement applies the manifest-defined cap. Rollout scoring later decides whether the selected crop is evaluable. No actor proposal, IoU match, visibility gate, or support gate is used.],
+  caption: [Oracle target-task construction. Geometry-valid
+  @ground-truth:short OBB rows form the task population; seeded uniform sampling
+  without replacement applies the manifest-defined cap. Candidate scoring later
+  determines whether the selected target crop is evaluable.],
 ) <fig:oracle-target-task-sampler-contract>
 
-The sampler bounds rollout cost without pre-filtering on headroom. Candidate scoring may subsequently invalidate the task when its mesh crop, current support, or rendered evidence is unusable; otherwise near-solved and negative-gain targets remain scientifically informative. A later actor-visible protocol must introduce proposal identity and observation-quality diagnostics as a separate selection stage rather than retroactively interpreting the present oracle fields as measurements.
+This sampler controls computational cost and keeps the task population
+independent of oracle headroom. Actor-visible target selection uses
+observation-derived proposals and association as a distinct stage. Oracle task
+admission supplies the controlled reference population for that evaluation.
 
 === Observed-Target Admission
 
-The observed-target audit (implementation anchor `V1`) keeps the oracle task
-sampler separate from actor-visible target selection. For each observed or
-predicted target record $hat(e)$, it compares only same-class GT OBB rows using
-oriented 3D IoU:
+The observed-target matcher implements that distinct stage. Given an observed or
+predicted proposal $hat(e)$, it compares only same-class reference OBBs using
+oriented three-dimensional IoU,
 
 $
   #eqs.entity.target_identity_iou
@@ -57,8 +79,8 @@ $
   #eqs.entity.target_identity_threshold
 $
 
-A GT row qualifies only when its IoU is strictly greater than $0.20$. The
-matcher admits the observed target iff exactly one GT row qualifies:
+A reference row qualifies only when its IoU is strictly greater than $0.20$.
+The proposal is admitted exactly when one reference row qualifies:
 
 $
   #eqs.entity.target_identity_qualified_count
@@ -68,38 +90,83 @@ $
   #eqs.entity.target_identity_acceptance
 $
 
-Equality at $0.20$ is rejected, as are zero or multiple qualifying rows. The
-matching rule has no runner-up-gap or composite score. The current rollout
-sampler remains a distinct oracle-task path: geometry-valid GT-row admission is
-not evidence of actor-visible matching.
+Equality at the threshold, no qualifying row, and multiple qualifying rows leave
+the proposal unresolved. The rule is intentionally simple: it turns an observation
+proposal into an unambiguous evaluation identity. Association confidence is a
+separate diagnostic, and the current oracle task sampler operates directly on
+@ground-truth:short rows.
 
 === Candidate View Generation
 
-Candidate generation turns one oracle instruction into a finite action table. Every quantitative choice---source population, target cap, shell size, family weights, motion limits, pruning thresholds, rollout recipes, renderer settings, and retention policy---belongs to the resolved run manifest and report bundle. The equations in this subsection instantiate the frozen `realistic_core_60` intervention profile: $N_q=60$ rows split 24/24/12 across the forward-local, target-bearing-local, and lateral-target-bypass families; $kappa=8$; family-conditioned radius intervals of $[0.25,1.1]$ metres for forward-local and lateral-target-bypass rows and $[0.4,1.1]$ metres for target-bearing-local rows; the displayed family coefficients and motion limits; and the $N_"valid" >= op("max")(12, op("ceil")(0.25 N_q))$ root-support gate. These values are neither universal candidate semantics nor library defaults. A run's resolved manifest remains authoritative, and another profile defines a different intervention that must be reported and analysed separately.
-
-At rollout step $t$, candidate generation constructs a full shell
+Candidate generation is a proposal distribution over a bounded local camera
+motion space. It determines the alternatives over which the NBV scorer ranks
+actions. At step $t$, it constructs the shell
 
 $
   #eqs.action.candidate_shell
 $
 
-with a fixed provenance component $k(i)$ per row. The core mixture contains forward-local, target-bearing, and lateral-bypass motion; the diversity challenger may additionally allocate mass to local refinement and revisit/backtrack components. The resolved manifest, rather than prose, determines which components and counts apply to a run.
+and records a family label $k(i)$ for every row. The frozen
+`realistic_core_60` profile allocates 24 forward-local, 24
+target-bearing-local, and 12 lateral-target-bypass rows. The three families
+encode complementary geometric hypotheses:
+
+#figure(
+  publication-table(
+    columns: (0.9fr, 1.5fr, 1fr),
+    header: ([*Family*], [*Geometric role*], [*Profile support*]),
+    rows: (
+      (
+        [Forward-local],
+        [Preserve egocentric motion continuity while perturbing the current forward direction.],
+        [24 rows; radius $[0.25, 1.1]$ m],
+      ),
+      (
+        [Target-bearing-local],
+        [Move approximately along the current target bearing and orient the camera towards the target.],
+        [24 rows; radius $[0.4, 1.1]$ m],
+      ),
+      (
+        [Lateral-target-bypass],
+        [Introduce side-step parallax while retaining a component towards the target.],
+        [12 rows; radius $[0.25, 1.1]$ m],
+      ),
+    ),
+  ),
+  caption: [Geometric roles of the three families in the frozen
+  `realistic_core_60` intervention. Counts and radii are specific to this
+  profile.],
+) <tab:candidate-family-roles>
+
+Optional refinement, revisit, and target-orbit families activate only in
+challenger profiles. Because a profile changes the
+represented action support, its family counts, radii, angular caps, and pruning
+parameters belong to the resolved run manifest. A comparison fixes that
+manifest across methods.
 
 #figure(
   align(center, image(
     "../../figures/candidate_generation_geometry.pdf",
     width: 100%,
   )),
-  caption: [One pinned finite-candidate decision state from ASE scene 81286, sample `ASE_81286_Atek_000035`, rollout row 73, and step row 121. Panel A uses a 35-degree vertical-FOV perspective view to place logged camera history, root state, target OBB, selected path, and a deterministically thinned set of wire frusta in the real scene. Panel B uses a 7.8-metre-wide orthographic bird's-eye view and retains all 60 candidate centres: 25 rows are admissible, 35 are hard-rejected by the clearance rule, and oracle-greedy selects shell 47. Dense scene geometry is z-buffered; OBBs, paths, centres, and camera glyphs remain vector overlays. Full eye, look-at, up, clipping, and resolution parameters are recorded in the figure JSON. The example fixes action support and validity for inspection; it is not a policy-performance result.],
+  caption: [One stored candidate shell from ASE scene 81286 and sample
+  `ASE_81286_Atek_000035`. The perspective panel relates the shell to the logged
+  camera history, target OBB, and selected prefix. The bird's-eye panel retains
+  all 60 candidate centres: 25 are feasible, 35 fail clearance, and
+  oracle-greedy selects row 47. The example's evidential role is proposal support
+  and hard feasibility.],
 ) <fig:candidate-generation-geometry>
 
-For each row, the raw direction is sampled in the reference rig frame. The frozen `realistic_core_60` profile uses the forward-biased Power Spherical distribution from the current implementation @PowerSpherical-deCao2020:
+Each row begins with a random unit direction in the reference rig frame. The
+frozen profile uses a forward-biased Power Spherical distribution with
+$kappa=8$ @PowerSpherical-deCao2020:
 
 $
   #eqs.action.power_spherical_forward
 $
 
-Sampler construction or sampling failure aborts generation with the resolved strategy, device, and concentration in the error; the implementation does not silently substitute another distribution. This preserves the intervention identity asserted by the manifest. A successful draw is mapped into configured azimuth and elevation caps without rejection. With $psi = op("atan2")(u_x, u_z)$ and $u_y = sin theta$, the cap transform is
+The sampled direction is then mapped into the configured azimuth and elevation
+caps. With $psi = op("atan2")(u_x, u_z)$ and $u_y = sin theta$, the transform is
 
 $
   #eqs.action.angle_cap_transform
@@ -109,186 +176,188 @@ $
   #eqs.action.capped_direction
 $
 
-The sampler draws a capped direction in the reference rig frame and reinterprets it as egocentric forward motion, target-bearing motion, lateral bypass, local refinement, or backtracking according to component provenance. Target-looking families orient their optical axis toward the oracle instruction. In this chapter that point is privileged; calling the generator target-conditioned does not make the point actor-visible.
+The cap controls angular extent without changing the row count. Family-specific
+maps then reinterpret the same bounded random variable relative to rig forward,
+the target bearing, or the lateral direction. This factorization separates
+*diversity within a family* from *the geometric meaning of the family*.
 
-Let $bold(f)=bold(e)_z$ be the rig-forward unit vector, $bold(b)_e$ the supplied
-target bearing in the reference frame,
-$bold(l)_e = (bold(e)_y times bold(b)_e) / norm(bold(e)_y times bold(b)_e)_2$
-the horizontal lateral direction, and $bold(e)_y$ the world-up direction
-expressed in the sampling frame. The three core position families reinterpret
-the capped direction through raw family vectors $bold(g)_i^(k)$ and their
-explicit Euclidean normalization:
+Let $bold(f)=bold(e)_z$ denote rig forward, $bold(b)_e$ the supplied target
+bearing, $bold(l)_e$ its normalized horizontal lateral direction, and
+$bold(e)_y$ world up in the sampling frame. The three core maps are
 
 $
   #eqs.action.family_directions
 $
 
-Finally, the sampler draws a radius and transforms the reference-frame offset into world coordinates:
+A family-conditioned radius turns direction into translation; the reference
+pose then maps that offset into world coordinates:
 
 $
   #eqs.action.candidate_center_world
 $
 
-The forward-local family keeps the reference rig orientation. Target-looking families orient the camera toward the supplied target center $bold(p)_e$:
+Forward-local rows retain the reference orientation. Target-looking rows use the
+supplied target centre $bold(p)_e$ to construct an orthonormal look-at frame:
 
 $
   #eqs.action.target_lookat_frame
 $
 
-These equations describe the sampler, not an optimal proposal distribution. The
-forward-local family preserves egocentric continuity, the target-bearing-local
-family moves along the target ray, and the lateral-target-bypass family
-introduces side-step views; optional challenger families test smaller corrections
-and reversals. Candidate-profile utility must be judged after pruning. A store in
-which target-aware families rarely survive cannot support a target-conditioned
-planning claim.
+The target centre in these equations is privileged under the present oracle
+protocol. A deployable candidate generator must replace it with an
+observation-derived target estimate. These equations specify the sampling prior;
+oracle opportunity and downstream policy evidence evaluate the utility of the
+actions that survive feasibility pruning.
 
-The optional `target_orbit` family is a bilateral partial-orbit endpoint proposal
-prior: it samples paired signed angular offsets around the supplied target while
-preserving the current horizontal target standoff. Feasibility pruning may remove
-either side, so bilateral attempt does not imply bilateral surviving support. This
-family is not part of the production mixture and is not a learned human-motion
-prior; it is an opt-in challenger for testing whether local orbit coverage improves
-candidate support.
+The optional `target_orbit` challenger makes this distinction explicit. It
+proposes paired signed angular offsets at the current horizontal target
+standoff, thereby testing bilateral partial-orbit coverage. Pruning can remove
+one side, so proposal symmetry and feasible symmetry are measured separately.
+The family serves as a geometric ablation and contains no learned human-motion
+model.
 
-Pruning converts the full shell into a compact valid-action table. A row remains valid only if it lies in the snippet occupancy support, stays clear of the @ground-truth:short mesh, avoids straight-line path collision, and satisfies local egocentric motion limits:
+Pruning evaluates each proposal independently of its oracle reward. A row is
+feasible only if it lies in the snippet support, stays clear of the
+@ground-truth:short mesh, admits a collision-free straight path, and satisfies
+the local motion bounds
 
 $
   #eqs.action.motion_pruning_limits
 $
 
-The full shell is retained with position, strategy, mixture, sampling probability, rule masks, diagnostics, and invalid-reason bitsets. Panel B of @fig:candidate-generation-geometry makes the distinction concrete for one stored table: invalid rows remain inspectable but sit outside the admissible set. Invalid candidates cannot enter #symb.rl.qh selection, stochastic normalization, or loss targets. Conversely, a feasible row with weak target support or low expected gain remains a valid low-utility example rather than receiving an invalid-reason code. A manifest-defined root-support threshold may reject an entire rollout task when too few actions remain:
+The full shell retains proposal probability, family, rule masks, diagnostics,
+and invalid-reason bitsets. The hard mask then produces #symb.rl.action_set_t
+while retaining rejected rows for analysis. A separate root-support gate
+rejects a task if pruning leaves too few alternatives:
 
 $
   #eqs.action.valid_support_threshold
 $
 
-This threshold is a data-support guard, not a reward threshold. Preflight reporting must retain rejected-root counts and failure reasons by candidate family.
+This gate protects the statistical support of the decision problem: one or two
+surviving actions provide insufficient variation for a candidate-ranking test.
+Oracle opportunity measures the utility available among the surviving
+candidates. Rejected roots and family-specific failure reasons enter the dataset
+population report.
 
 === Candidate-Support and Geometric-Coverage Diagnostics
 
-Candidate quality is audited before reward interpretation. Let $cal(I)_s$ be all
-attempted, non-padding rows in state $s$, $cal(V)_s subset cal(I)_s$ the rows
-that pass actor-valid geometry and hard-action checks, $cal(L)_s subset cal(V)_s$
-the rows with a finite oracle label. The horizon-specific mask
-$m_(s,i)^(Q,h)$ selects rows in $cal(L)_s$ for Q-training; it does not redefine
-the canonical candidate table $cal(Q)_t$. The first transition is represented by the canonical
-action mask $#symb.rl.action_mask$; finite factual value-target availability is
-represented separately by $#symb.rl.q_label_mask$. These are distinct
-populations: a row can be actor-valid without being renderable, oracle-labelled,
-or retained for training. The candidate actor-valid fraction is therefore
+Learning can rank only the alternatives supplied by candidate generation. The
+proposal profile is therefore part of the experimental design, and its support
+must be characterized before reward or policy results are interpreted. Let
+$cal(I)_s$ contain all attempted non-padding rows, let
+$cal(V)_s subset cal(I)_s$ contain the feasible rows selected by
+#symb.rl.action_mask, and let $cal(L)_s subset cal(V)_s$ contain feasible rows
+with finite oracle labels. These nested populations separate three questions:
+what was proposed, what could be selected, and what could supervise learning.
+
+The actor-valid fraction
 
 $
   #eqs.metrics.candidate_actor_valid_fraction
 $
 
-and hard valid support is
+measures pruning severity, whereas
 
 $
   #eqs.metrics.valid_support
 $
 
-Both quantities are computed per decision state before pooling. The configured
-family zero rate retains every configured family/state pair in its denominator,
-including pairs with zero valid rows:
+counts the number of alternatives that survive pruning. The distinction matters because
+two profiles can retain the same fraction while presenting very different
+numbers of choices. Family collapse is measured separately by
 
 $
   #eqs.metrics.configured_family_zero_rate
 $
 
-Every state statistic $q(s)$ is then averaged within its scene and finally
-macro-averaged across scenes:
+which is one exactly when every configured family has zero feasible rows and
+zero only when every family survives. It detects a failure that a pooled valid
+fraction can hide: a large forward family may dominate the row count even when
+all target-conditioned families disappear.
+
+Because many states can originate from one scene, row-level pooling would let
+large scenes dominate the study. Every state statistic $q(s)$ is therefore
+averaged within scene and then macro-averaged across scenes:
 
 $
   #eqs.metrics.state_scene_macro
 $
 
-Here $cal(S)_(c,q)$ is the metric-specific eligible-state set and $cal(C)_q$
-contains scenes with at least one eligible state. A scene with no defined state
-for $q$ is absent from the descriptive scalar and counted in the accompanying
-undefined-scene table. A paired profile contrast uses the intersection of the
-two profiles' eligible-scene sets and reports every excluded scene. Thus the
-available-case denominator is explicit rather than an implicit row-level
-complete-case analysis.
+The metric-specific set $cal(S)_(c,q)$ makes undefinedness explicit. Failed
+generation roots contribute zero support and complete family collapse, while a
+directional statistic is undefined if no relevant direction was attempted.
+Undefined states and scenes are reported separately, and paired profile
+contrasts use the shared eligible-scene intersection. This preserves the
+difference between absence of support and absence of a defined measurement.
 
-The analysis manifest freezes the missing-state rule before result inspection.
-For support counts and fractions, a failed generation root contributes zero
-support; for the family-zero rate it contributes one. Target-relative balance
-and span are not numerically imputed when no target-conditioned direction is
-defined: the failed state remains in the failure table, and a paired scene is
-ineligible for a geometric profile contrast. Thus no missing state disappears
-through an implicit complete-case denominator.
+Support geometry is compared in the target-relative normalized frame
+$#eqs.spatial.candidate_proposal_support_normalization$. The factual expansion
+pose is the origin, the target lies at unit distance, and world up fixes the
+vertical axis. The normalization removes absolute standoff while preserving
+whether candidates move towards, around, above, or behind the target. This
+coordinate system describes candidate motion; calibrated projection and
+visibility are measured in their respective image and observation domains.
 
-For geometric comparison, candidate centres and target centres use the existing
-proposal-support normalization $ #eqs.spatial.candidate_proposal_support_normalization $:
-the origin is the factual expansion/root pose, the target has unit norm, the
-vertical axis is world-up, and distances are divided by the current root-to-target
-distance $d_(t,e)^"current"$. This is a target-relative support frame, not a
-camera image frame and not a claim that the root or target is visible. Side
-balance is computed from non-neutral attempted target-conditioned rows in the
-`target_bearing_local` and `target_orbit` families, using their target-relative
-azimuth signs. The neutral bin is $|y_(s,i)^"target"| <= epsilon$ with
-$epsilon = 10^(-9)$ in normalized support coordinates; its count is reported
-but does not enter the two-sided balance denominator,
+For attempted target-conditioned rows, side balance
 
 $
   #eqs.metrics.target_side_balance
 $
 
-and orbit coverage uses the circular minimum-covering span rather than a Cartesian
-maximum-minus-minimum range:
+compares positive and negative target-relative sides after excluding the neutral
+band $|y_(s,i)^"target"| <= 10^(-9)$. Circular orbit span
 
 $
   #eqs.metrics.circular_orbit_span
 $
 
-The projection fraction records whether the calibrated target centre lies inside
-the calibrated image domain for evaluated rows in one state,
+measures the smallest angular arc covering the attempted directions. These
+statistics characterize proposal diversity before pruning. Family survival and
+oracle opportunity quantify the later feasibility and utility stages.
+
+For evaluated candidates, the projection fraction
 
 $
   #eqs.metrics.target_center_projection_fraction
 $
 
-and is then reduced through the same state--scene--cohort macro operator. A
-state with no evaluated projection rows is undefined and counted separately;
-it is not assigned a zero fraction or silently removed from a paired profile
-contrast. This remains an evaluation/framing diagnostic, not visibility or actor
-support. The finite-support oracle opportunity is the per-state maximum
-target-root gain,
+records whether the target centre falls inside the calibrated image domain. It
+measures geometric framing. Visibility additionally requires object extent and
+occlusion evidence. The finite-support oracle opportunity
 
 $
   #eqs.metrics.oracle_opportunity
 $
 
-which is defined only when the actor-valid, finite-label set $cal(L)_s$ is
-nonempty. Its undefined-state count is reported, and eligible values are reduced
-through the same state--scene--cohort macro operator. The quantity measures
-available candidate headroom and is not a policy score. View jitter is likewise
-computed per state and macro-reduced. States without jitter rows, or without
-bounded rows for the cap-compliance diagnostic, are counted as undefined. The
-nonzero seminar-profile check remains separate from legacy zero-cap spherical
-support:
+is the best target-root gain present in $cal(L)_s$. It measures whether the
+finite shell contains a useful action, independent of which policy selects it.
+Low opportunity identifies an action-support limitation; high opportunity with
+poor policy return instead leaves room for a ranking limitation.
+
+Finally, jitter compliance checks whether within-family perturbations obey their
+declared angular caps:
 
 $
   #eqs.metrics.jitter_compliance
 $
 
-The production mixture retains the seminar model's nonzero jitter invariant.
-Legacy `uniform_sphere` and `forward_powerspherical` rows with a zero cap are
-annotated as uncapped spherical support and are not represented by a bounded box.
+Uncapped spherical profiles form a different support class and are reported
+separately. Jitter compliance provides generator quality control; visibility
+and policy quality use their own measurements.
 
 #figure(
   publication-table(
     columns: (0.95fr, 1.15fr, 0.65fr, 1.55fr),
     header: ([*Quantity*], [*Population*], [*Unit*], [*Interpretation boundary*]),
     rows: (
-      [Actor-valid fraction], [Attempted rows per state], [fraction], [Hard feasibility; not label or training availability.],
-      [Valid support], [Actor-valid rows per state], [rows], [Report the lower tail and failed roots, not only a pooled mean.],
-      [Configured-family zero rate], [Configured families per state], [fraction], [Retains absent and zero-support families; state values are scene-macro reduced.],
-      [Side balance / circular span], [Non-neutral attempted target-conditioned rows], [fraction / angle], [Neutral rows and undefined states are reported separately; proposal coverage precedes pruning.],
-      [Target-centre projection], [Evaluated candidate views per state], [fraction], [State--scene--cohort macro; zero-evaluated states are reported as undefined. Calibrated framing, not visibility.],
-      [Oracle opportunity], [Finite actor-valid rewards per eligible state], [gain], [Undefined when no finite actor-valid label exists; available one-step headroom, not achieved policy return.],
-      [Jitter compliance], [Bounded-jitter rows per state], [fraction], [State--scene--cohort macro; report undefined, nonzero, and uncapped support separately.],
+      ([Actor-valid fraction], [Attempted rows per state], [fraction], [Hard feasibility before label and training filters.]),
+      ([Valid support], [Actor-valid rows per state], [rows], [Report the distribution, lower tail, and failed roots.]),
+      ([Configured-family zero rate], [Configured families per state], [fraction], [Retains absent and zero-support families; state values are scene-macro reduced.]),
+      ([Side balance / circular span], [Non-neutral attempted target-conditioned rows], [fraction / angle], [Neutral rows and undefined states are reported separately; proposal coverage precedes pruning.]),
+      ([Target-centre projection], [Evaluated candidate views per state], [fraction], [Calibrated framing; zero-evaluated states are reported as undefined.]),
+      ([Oracle opportunity], [Finite actor-valid rewards per eligible state], [gain], [Available one-step headroom; undefined when no finite actor-valid label exists.]),
+      ([Jitter compliance], [Bounded-jitter rows per state], [fraction], [State--scene--cohort macro; report undefined, nonzero, and uncapped support separately.]),
     ),
   ),
   caption: [Candidate-generation diagnostics and their aggregation populations. Every state-level quantity is reduced before scene and cohort aggregation.],
@@ -296,17 +365,23 @@ annotated as uncapped spherical support and are not represented by a bounded box
 
 === Rollout Branch Sampling and Dataset Impact
 
-Rollout recipes select and retain finite chains from the valid action table. The implemented families are uniform valid sampling, one-step oracle greedy selection, bounded oracle lookahead, and temperature-softmax sampling. Their horizon, branch factor, beam width, temperature, and seed are resolved parameters. These recipes generate replay diversity and bounded references; they do not constitute a learned policy.
+Rollout recipes convert feasible candidate shells into factual training chains.
+Uniform sampling explores support without a utility preference; one-step oracle
+greedy selects the largest immediate target gain; bounded oracle lookahead ranks
+finite action sequences; and temperature-softmax samples according to oracle
+score while retaining stochastic diversity. These recipes define the behavior
+distribution from which replay is collected. They serve as data-generation
+policies and reference strategies. Chapter 5 evaluates the learned policy on
+held-out tasks.
 
-Bounded oracle lookahead can select a different first action from one-step
-greedy because it ranks retained finite-horizon chains rather than immediate
-gain alone (@fig:oracle-lookahead-tree). In reinforcement-learning terms, this
-is decision-time planning: computation is focused on the current choice by
-expanding possible consequences before acting
-@ReinforcementLearning-sutton2018[Sec. 8.8, pp. 180–181]. The persisted artifact
-contains these selected or beam-retained chains and their full per-step
-candidate shells; it is not an exhaustive materialization of the
-counterfactual action tree.
+Lookahead can select a different first action from one-step greedy because an
+action changes both the causal state and the next candidate shell
+(@fig:oracle-lookahead-tree). It ranks the return of retained chains, so future
+rewards can outweigh the first reward. This is decision-time planning: computation
+expands possible consequences to improve the current decision
+@ReinforcementLearning-sutton2018[Sec. 8.8, pp. 180–181]. The store preserves
+selected and beam-retained chains with their per-state shells. Search expands
+the other counterfactual branches transiently.
 
 // evidence:
 // - @ReinforcementLearning-sutton2018 -> docs/literature/pdf/RLbook2020.pdf#page=202-203 (Ch. 8, Sec. 8.8, printed pp. 180-181; planning at decision time)
@@ -316,26 +391,44 @@ counterfactual action tree.
     "../../figures/oracle_lookahead_tree.pdf",
     width: 100%,
   )),
-  caption: [Constructed symbolic topology of the bounded oracle-lookahead reference. Nodes are counterfactual states and edge labels are candidate actions with immediate rewards. Only valid first-action rows produce children; the beam retains a bounded prefix set, and invalid rows receive no branch. The inequalities illustrate how the selected first action can differ from one-step greedy without inventing measured reward values.],
+  caption: [Conceptual topology of bounded oracle lookahead. Nodes are
+  counterfactual states; edges are feasible actions labelled by immediate
+  reward. The beam retains only a bounded set of prefixes. The symbolic
+  inequalities show how a lower immediate reward can lead to a larger
+  finite-horizon return.],
 ) <fig:oracle-lookahead-tree>
 
-For stochastic branches, let $s_i$ be the finite oracle score of valid row $i$. The robust logit used for temperature-softmax is
+For stochastic collection, the temperature-softmax recipe converts each finite
+oracle score $s_i$ into the robust logit
 
 $
   #eqs.action.robust_temperature_softmax
 $
 
-The target source defines the supervised task, the candidate mixture defines learnable action support, validity defines admissibility, and the recipe defines which chains enter replay. Reporting must therefore cover target-task coverage, valid fanout and invalid reasons by family, selected-family diversity, gain distributions, and retention cost before attributing policy behavior to non-myopic planning. The paired train-only pilots are bandwidth and candidate-profile probes; they are non-confirmatory and provide no held-out policy-performance evidence.
+Median and interquartile-range normalization reduce sensitivity to the absolute
+score scale, while temperature controls concentration over the feasible rows.
+The resulting replay distribution is determined jointly by target sampling,
+candidate support, pruning, and rollout recipe. Reporting these factors isolates
+the population and behavior distribution on which learned ranking is assessed.
+Train-only pilots provide generation-cost and support-diversity evidence;
+held-out evaluation supplies policy evidence.
 
 == Measurement and Outcomes
 
-Task construction and action admission specify the intervention; measurement
-specifies what consequence is compared. The oracle renders a selected
-candidate from the @ground-truth:short mesh, backprojects its depth, updates the
-privileged evaluation cloud through the frozen fusion rule, crops points and
-mesh to the selected target, and evaluates point--mesh error
-@VIN-NBV-frahm2025. The crop, rendering, fusion, and scoring path are
-oracle-only.
+The candidate shell defines possible interventions; the measurement operator
+assigns their target-specific consequences. For each feasible row, the oracle
+renders depth from #symb.ase.mesh, backprojects #symb.oracle.points_q, fuses the
+candidate evidence with the root evaluation cloud, crops both points and mesh to
+target $e$, and computes reconstruction error @VIN-NBV-frahm2025. Applying the
+same operator before and after the hypothetical acquisition yields
+$#symb.entity.target_error$ and $Delta_(t|i)^e$. The candidate label depends
+jointly on camera pose, current state, target crop, and update rule.
+
+#validation_todo(
+  [Validate repeatability, numerical-failure handling, construct interpretation, root normalization, and matched endpoint re-evaluation before treating target gain as a reliable study outcome.],
+  source: [docs/literature/tex-src/arXiv-VIN-NBV; metric-validation artifacts],
+  gate: [frozen metric protocol, repeatability table, and claim-level source locators],
+)
 
 // evidence:
 // - @VIN-NBV-frahm2025 -> docs/literature/tex-src/arXiv-VIN-NBV/sec/3_methods.tex:36-44,78-92 (candidate rendering and reconstruction-improvement scoring)
@@ -348,33 +441,57 @@ oracle-only.
 // - aria_nbv/aria_nbv/oracle/_scoring.py:94-163 -> candidate depth is backprojected, fused with the root cloud, and scored against the target mesh.
 // - aria_nbv/aria_nbv/rri_metrics/point_mesh.py:31-141 -> the selected error uses squared point-to-face accuracy and equal-face face-to-point completeness.
 
-Let $C_e (#symb.obs.points_t)$ denote the oracle-only crop of accumulated evaluation points to the selected target region. In the thesis protocol, its root points are reconstructed from the observed prefix of ASE @ground-truth:short depth; a candidate contributes renderer-derived depth that is backprojected and fused with the same root cloud. MPS semi-dense points remain actor-visible representation input and a legacy diagnostic source, not the current oracle evaluation cloud.
+Let $C_e$ crop geometry to the selected target region. The evaluation point set
+$P_t^e = C_e (#symb.obs.points_t)$ is reconstructed from the observed prefix of
+ASE @ground-truth:short depth. Candidate $i$ contributes renderer-derived depth,
+which is backprojected and fused with the same root cloud to obtain
+$P_(t|i)^e$. MPS semi-dense points serve as actor-side representation input and
+as a legacy diagnostic source. ASE depth defines the current oracle evaluation
+cloud.
 
-Writing $P=C_e (#symb.obs.points_t)$ and $M=cal(M)_e^"GT"$ for the target-cropped point set and mesh, the selected directional accuracy is the mean squared distance from each reconstructed point to its closest @ground-truth:short triangle,
+For target mesh $M_e=#symb.ase.mesh_target$, the point-to-mesh term is the mean
+squared distance from each reconstructed point to its closest reference
+triangle,
 
 #eqs.rri.acc
 
-It penalizes reconstructed points that lie away from the target surface and therefore exposes extra, noisy, or misregistered geometry. The reverse term is the mean squared distance from each @ground-truth:short face to its closest reconstructed point,
+It measures how closely the reconstructed evidence lies on the target surface
+and is therefore sensitive to extra, noisy, or misregistered points. The reverse
+mesh-to-point term is
 
 #eqs.rri.comp
 
-It penalizes target faces without nearby reconstructed evidence and therefore exposes missing support. Their sum is the bidirectional point--mesh error,
+and measures which target faces lack nearby reconstructed evidence. Their sum is
+the target error
 
 $
   #eqs.entity.target_error
 $
 
-whose directional terms and total have units of square metres. The current and candidate-augmented clouds pass through the same deterministic fusion and point-cap configuration before scoring. This fusion step makes the before/after comparison operationally reproducible; it does not turn the point set into a continuous surface measure.
+with units of square metres. Root and candidate-augmented clouds pass through
+the same deterministic fusion and point-cap operator, so the difference isolates
+the candidate evidence under a fixed update rule. The resulting estimand is
+defined on the capped point set, fixed target mesh, and declared fusion operator.
 
 #figure(
   align(center, image(
     "../../figures/target_rri_point_mesh_geometry.pdf",
     width: 100%,
   )),
-  caption: [Point--mesh metric definition and controlled validity fixture. Panel A isolates the exact point-to-triangle primitive. Panel B distinguishes the point-to-face accuracy and face-to-point completeness reductions using computed closest-point witnesses. Panel C holds the planar support and point set fixed while changing only the triangle table; the measured equal-face completeness term changes from $0.03640$ to $0.02284$ $"m"^2$. These values are generated by the repository's PyTorch3D metric on a synthetic fixture and demonstrate a tessellation-sensitivity mechanism; they are not an ASE performance result.],
+  caption: [Geometry of the operational point--mesh error. Panel A isolates the
+  point-to-triangle primitive; panel B separates point-to-face accuracy from
+  face-to-point completeness. Panel C keeps the surface and point set fixed but
+  changes its tessellation, changing equal-face completeness from $0.03640$ to
+  $0.02284$ $"m"^2$. The synthetic fixture provides evidence for metric
+  sensitivity.],
 ) <fig:target-rri-point-mesh-geometry>
 
-The completeness reduction gives every mesh face equal weight. It is deliberately neither an area-weighted surface integral nor invariant to retessellation: subdividing part of an unchanged surface changes how much that region contributes. The controlled fixture in @fig:target-rri-point-mesh-geometry demonstrates this property. It bounds the interpretation of the operational estimand but does not invalidate comparisons that share one fixed mesh and scoring protocol.
+Because completeness weights faces equally, its value depends on mesh
+tessellation and differs from an area-weighted surface integral. Subdividing one
+region changes its contribution even when the geometric surface is unchanged
+(@fig:target-rri-point-mesh-geometry). Comparisons are internally consistent
+when they share one fixed target mesh and scoring protocol, but the numeric error
+is specific to that mesh representation.
 
 // evidence:
 // - @EFM3D-straub2024 -> docs/literature/tex-src/arXiv-EFM3D/experiments.tex:135 (sampled point-to-mesh accuracy and completeness).
@@ -383,13 +500,13 @@ The completeness reduction gives every mesh face equal weight. It is deliberatel
 
 === Reliability under the Frozen Protocol
 
-Reliability asks whether repeated execution of the same declared intervention
-produces stable errors and candidate rankings. It therefore covers rendering,
-backprojection, crop construction, point fusion and capping, numerical failure
-handling, and any stochastic sampling used by the metric. Deterministic code
-paths and a fixed mesh make the protocol reproducible in principle, but they do
-not establish repeatability across the intended study population. That evidence
-remains a prerequisite for RQ1 rather than an inferred property of the formula.
+For fixed source state, target, candidate, and manifest, repeated oracle
+evaluation should reproduce both $Delta_(t|i)^e$ and the induced candidate
+ordering. This requirement covers the complete measurement operator---rendering,
+backprojection, target cropping, fusion, capping, and numerical failure
+handling---because instability in any component changes the label. Deterministic
+code and a fixed mesh make exact replay possible, but RQ1 still requires
+repeatability measurements over the intended scene and target population.
 
 #figure(
   publication-table(
@@ -397,102 +514,134 @@ remains a prerequisite for RQ1 rather than an inferred property of the formula.
     align: left,
     header: ([*Metric family*], [*Question answered*], [*Dependency and thesis role*]),
     rows: (
-      [Equal-face bidirectional point--mesh error],
-      [Are reconstructed points close to @ground-truth:short faces, and does every @ground-truth:short face have nearby point evidence?],
-      [Depends on point fusion and mesh tessellation; selected operational RRI error.],
-      [Point-sampled Chamfer / accuracy--completeness],
-      [Are two sampled surface point sets mutually close?],
-      [Depends on sampling density, randomness, norm, and squaring convention; important alternative, not the current metric.],
-      [Thresholded precision, recall, and F-score],
-      [What fraction of predicted and reference samples fall within tolerance $tau$, and how do the two fractions balance?],
-      [Interpretable at a physical tolerance but threshold-dependent; useful diagnostic rather than the scalar RRI owner.],
-      [TSDF, occupancy, coverage, or information gain],
-      [How much volumetric surface, free space, or previously unknown space is reconstructed or observed?],
-      [Depends on grid, truncation, and visibility definitions; answers a different question from target surface quality.],
+      (
+        [Equal-face bidirectional point--mesh error],
+        [Are reconstructed points close to @ground-truth:short faces, and does every @ground-truth:short face have nearby point evidence?],
+        [Depends on point fusion and mesh tessellation; selected operational RRI error.],
+      ),
+      (
+        [Point-sampled Chamfer / accuracy--completeness],
+        [Are two sampled surface point sets mutually close?],
+        [Depends on sampling density, randomness, norm, and squaring convention; alternative operationalization.],
+      ),
+      (
+        [Thresholded precision, recall, and F-score],
+        [What fraction of predicted and reference samples fall within tolerance $tau$, and how do the two fractions balance?],
+        [Interpretable at a physical tolerance but threshold-dependent; secondary diagnostic alongside scalar RRI.],
+      ),
+      (
+        [TSDF, occupancy, coverage, or information gain],
+        [How much volumetric surface, free space, or previously unknown space is reconstructed or observed?],
+        [Depends on grid, truncation, and visibility definitions; answers a different question from target surface quality.],
+      ),
     ),
   ),
-  caption: [Reconstruction-metric alternatives and their role in this thesis. No alternative is promoted to a co-primary metric.],
+  caption: [Reconstruction measures answer different geometric questions. The
+  equal-face point--mesh error is the selected outcome; the other families are
+  diagnostics or alternative operationalizations.],
 ) <tab:thesis-reconstruction-metric-comparison>
 
-For comparison, a common squared point-sampled Chamfer convention draws a reference set $Q_e$ from the mesh and averages nearest-neighbour distances in both directions,
+Point-sampled Chamfer distance draws a finite reference set $Q_e$ from
+the mesh and averages nearest-neighbour distances in both directions:
 
 #eqs.rri.point_sampled_chamfer
 
-Its apparent symmetry does not remove sampling-density dependence: changing the number or distribution of samples changes the finite approximation. Some benchmarks also use unsquared distances, so the norm and squaring convention are part of the metric definition rather than an interchangeable naming detail. At tolerance $tau$, precision counts reconstructed samples with a reference neighbour closer than $tau$, recall counts reference samples with a reconstructed neighbour closer than $tau$, and $F_(1,tau)=2 "Prec"_tau "Rec"_tau/("Prec"_tau+"Rec"_tau)$. These scores are physically interpretable but can change with the selected threshold and discard error magnitude on either side of it. Volumetric coverage and information gain are valuable for exploration and mapping, yet they measure discovered space or uncertainty reduction rather than the target reconstruction-quality change defined here.
+Sampling density, randomness, norm, and squaring convention determine its finite
+value despite the symmetric formula. Thresholded precision, recall, and F-score add a
+physically interpretable tolerance $tau$, but discard error magnitude on either
+side of that threshold. Volumetric coverage and information gain measure
+observed space or uncertainty reduction. These are useful complementary
+quantities. Each operationalization maps a different geometric construct.
 
 === Construct Validity
 
-Construct validity asks what the operational error represents. In this thesis it
-measures idealized target-surface evidence under ASE depth, a selected target
-crop, equal-face mesh reduction, and the declared reconstruction update. It is
-not a representation-independent measure of object quality, perceived quality,
-or scene completeness. The rendering and fusion operator are part of the
-estimand: two systems using the same point--mesh formula but different state
-updates do not measure the same intervention effect.
+The operational construct is *target-surface evidence after a declared
+acquisition and update*. ASE depth, the selected target crop, equal-face mesh
+reduction, and the fusion operator jointly define it. Perceived object quality
+and whole-scene completeness require different constructs. Two systems that
+share the final point--mesh formula but apply different state updates estimate
+different intervention effects.
 
-The implementation crops mesh faces when any vertex lies inside the oriented
-target @oriented-bounding-box and evaluates the selected point--mesh scorer.
-Geometry-invalid candidates are removed by the hard action mask and retain
-persisted candidate reason codes. Empty mesh crops, insufficient current
-support, or unusable renders instead invalidate the separate oracle evaluation:
-the recipe either skips the affected row or table, or clears oracle-label
-validity and Q-training eligibility, while reporting the oracle failure
-independently rather than assigning a candidate reason code.
+The implementation includes a mesh face in the target crop when any vertex lies
+inside the target @oriented-bounding-box. A geometry-invalid candidate is
+excluded by #symb.rl.action_mask. An empty crop, insufficient root support, or
+unusable render makes the oracle outcome undefined and clears
+#symb.rl.q_label_mask. This preserves whether failure occurred in the action
+domain or in the measurement operator.
 
-Every compared policy must therefore share the same target mesh and crop,
-ASE-depth source, renderer and backprojection, fusion and point cap, and metric
-configuration. Replacing ASE depth with MPS semi-dense evidence would define a
-different intervention and would require separate analysis of texture,
-gradient, uncertainty, and sampling effects.
+Comparative policy evidence therefore requires the same target mesh and crop,
+ASE-depth source, renderer, backprojection, fusion, point cap, and metric
+configuration. Replacing ASE depth with MPS semi-dense evidence changes both the
+observation process and the error population and therefore defines a separate
+experimental outcome.
 
 === RRI, Training Reward, and Endpoint Gain
 
-The thesis objective is not the absolute point--mesh error alone, but its normalized reduction after a fixed acquisition budget. It distinguishes state-relative RRI, the additive target-root reward, and endpoint gain: all are dimensionless reductions of the same target-cropped error, but their denominators and scientific roles differ.
+The learning and evaluation quantities are derived from the same error sequence
+$Delta_0^e, Delta_1^e, dots, Delta_H^e$, but answer different questions.
+State-relative RRI asks how much one action improves the *current* state;
+target-root reward assigns additive credit along a chain; endpoint gain asks how
+much the target improved after a fixed budget. Their denominators determine
+whether they can be accumulated or compared across states.
 
-The state-relative marginal target RRI remains the VIN-compatible candidate diagnostic:
+The VIN-compatible marginal diagnostic is
 
 $
   #eqs.rl.marginal_target_rri
 $
 
-The implementation also reports its selected-chain running sum:
+Its selected-chain running sum is
 
 $
   #eqs.rl.cumulative_target_rri
 $
 
-Because the marginal RRI denominator changes with state, this cumulative diagnostic does not telescope to endpoint improvement. The immediate training reward instead adapts the same error reduction to a target crop and normalizes by the rollout-root target error @VIN-NBV-frahm2025:
+Because each term is normalized by its own $#symb.entity.target_error$, the sum
+describes accumulated local relative improvements. Fixed-budget policy outcomes
+use the root-to-endpoint definition below.
+
+The training reward normalizes every step by the rollout-root target
+error @VIN-NBV-frahm2025:
 
 $
   #eqs.rl.target_root_gain_reward
 $
 
-With matched sequential states and unit discount, its selected-chain sum is the root-normalized endpoint difference under that same clamped root denominator:
+With unit discount, summing these rewards over a factual chain telescopes:
 
 $
   #eqs.rl.cumulative_target_root_gain
 $
 
-Using the finite-horizon return defined in
-@sec:thesis-sequential-decision-foundations, the discounted sum of those target
-rewards along a selected counterfactual branch is a training target for
-#symb.rl.qh, not a claim that the deployed system has an online
-continuous-control policy:
+The horizon-conditioned return used to supervise #symb.rl.qh is
 
 $
   #eqs.rl.finite_horizon_return
 $
 
-Endpoint gain is the primary fixed-budget comparison metric because it measures the target quality after the same number of acquisitions for each policy:
+This return evaluates a candidate first action under the continuation rule that
+generated the remaining factual chain. Its scope is offline finite-candidate
+control.
+
+The primary policy outcome is endpoint gain
 
 $
   #eqs.entity.endpoint_gain
 $
 
-The log-gain variant is retained only as an internal scale-sensitivity ablation:
+because it compares target error after the same acquisition budget $H$. The
+log-gain variant
 
 $
   #eqs.entity.log_gain
 $
 
-#symb.entity.endpoint_gain is the fixed-budget evaluation metric, #symb.entity.return_h is the learning return, and #symb.entity.log_gain is a sensitivity diagnostic. The endpoint equation uses $Delta_0^e + epsilon$, whereas the additive target-root reward uses $max(Delta_0^e, epsilon)$; the two are therefore not canonically interchangeable, even when geometry, horizon, and acquisition budget match. State-relative one-step @relative-reconstruction-improvement:short remains a VIN-compatible diagnostic. The resolved manifest must freeze the discount, clipping, target cap, crop policy, and all evaluation-geometry parameters for each reported experiment.
+is retained as a scale-sensitivity diagnostic. Thus
+#symb.entity.target_rri_marginal describes local candidate improvement,
+#symb.entity.return_h supplies the learning target, and
+#symb.entity.endpoint_gain supplies the fixed-budget evaluation outcome. The
+endpoint denominator $Delta_0^e + epsilon$ differs from the clamped root
+denominator $max(Delta_0^e, epsilon)$ used by the additive reward. Near zero root
+error, each quantity must be interpreted under its own denominator. The resolved
+manifest must therefore freeze the discount, clipping, crop, point update, and
+all evaluation-geometry parameters for each reported experiment.
