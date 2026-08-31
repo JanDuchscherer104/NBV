@@ -975,12 +975,18 @@ def test_qh_fit_publishes_new_bundle_and_hashed_receipts(tmp_path) -> None:
     assert len(bound_contract["actor_state_contract_hash"]) == 16
     assert len(bound_contract["learning_contract_hash"]) == 16
     assert bound_contract["geometry_contract_hash"] is None
-    assert bound_contract["actor_state_contract_payload_sha256"] == hashlib.sha256(
-        json.dumps(bound_contract["actor_state_contract"], sort_keys=True, separators=(",", ":")).encode("utf-8")
-    ).hexdigest()
-    assert bound_contract["learning_contract_payload_sha256"] == hashlib.sha256(
-        json.dumps(bound_contract["learning_contract"], sort_keys=True, separators=(",", ":")).encode("utf-8")
-    ).hexdigest()
+    assert (
+        bound_contract["actor_state_contract_payload_sha256"]
+        == hashlib.sha256(
+            json.dumps(bound_contract["actor_state_contract"], sort_keys=True, separators=(",", ":")).encode("utf-8")
+        ).hexdigest()
+    )
+    assert (
+        bound_contract["learning_contract_payload_sha256"]
+        == hashlib.sha256(
+            json.dumps(bound_contract["learning_contract"], sort_keys=True, separators=(",", ":")).encode("utf-8")
+        ).hexdigest()
+    )
     assert certification_receipt["exact_q2"]["independent_unit_gate"]["selected_independent_unit_count"] == 1
     assert certification_receipt["exact_q2"]["independent_unit_gate"]["minimum_independent_units_met"] is False
     assert certification_receipt["oracle_headroom"]["available"] is False
