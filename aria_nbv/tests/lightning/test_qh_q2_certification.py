@@ -103,6 +103,15 @@ def test_exact_q2_certifier_is_bounded_deterministic_and_semantically_explicit()
         "longer_horizon_claim": False,
     }
     assert {row["candidate_branch_bin"] for row in first["factual_selected_action_exact_q2_rows"]} == {"2-4"}
+    for row in first["factual_selected_action_exact_q2_rows"]:
+        assert row["immediate_reward"] == pytest.approx(0.5)
+        assert row["discount"] == pytest.approx(0.9)
+        assert row["terminal"] is False
+        assert row["successor_action_count"] == row["successor_backup_count"] == 3
+        assert row["successor_max_reward"] == pytest.approx(2.0)
+        assert row["exact_target"] == pytest.approx(
+            row["immediate_reward"] + row["discount"] * row["successor_max_reward"]
+        )
     assert first["independent_unit_gate"] == {
         "independent_unit_semantics": "ordered-store-manifest-and-scene-v1",
         "aggregation": "all_units_v1",
@@ -273,11 +282,32 @@ def test_exact_q2_certifier_fails_closed_on_incomplete_lineage() -> None:
         )
 
 
+def test_exact_q2_certifier_rejects_derived_metrics_outside_float32() -> None:
+    spec = QhExactQ2CertificationSpec(
+        absolute_tolerance=0.0,
+        relative_tolerance=float(torch.finfo(torch.float32).max),
+        minimum_independent_units=5,
+        minimum_exact_rows_per_independent_unit=1,
+        independent_unit_aggregation="all_units_v1",
+    )
+
+    with pytest.raises(ValueError, match="finite float32 domain"):
+        QhExactQ2Certifier(spec).certify(
+            module=_module(),
+            dataset=_dataset(1),
+            device=torch.device("cpu"),
+            ordered_store_manifest_sha256=_ORDERED_STORE_MANIFEST_SHA256,
+        )
+
+
 @pytest.mark.parametrize(
     "update",
     [
         {"absolute_tolerance": -1.0},
+        {"absolute_tolerance": True},
         {"relative_tolerance": float("nan")},
+        {"relative_tolerance": 1e308},
+        {"relative_tolerance": True},
         {"minimum_independent_units": 4},
         {"minimum_exact_rows_per_independent_unit": 0},
         {"independent_unit_aggregation": "mean_units_v1"},

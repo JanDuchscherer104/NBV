@@ -152,22 +152,23 @@
 #let measurement-rank-tie-policy = "competition_equal_rank_v1"
 #let headroom-decision-rule = "effect_gte_minimum_and_ci_low_gt_zero_v1"
 #let candidate-support-decision-rule = "p05_support_gte_minimum_and_failed_root_rate_lte_maximum_v1"
-#let candidate-support-receipt-name = "candidate-support-attempts-v1"
-#let candidate-support-receipt-schema = "candidate_support_attempt_receipt_v1"
-#let candidate-support-benchmark-name = "candidate-support-benchmark-plan-v1"
-#let candidate-support-benchmark-schema = "candidate_support_benchmark_plan_v1"
+#let candidate-support-receipt-name = "candidate-support-attempts-v2"
+#let candidate-support-receipt-schema = "candidate_support_attempt_receipt_v2"
+#let candidate-support-benchmark-name = "candidate-support-benchmark-plan-v2"
+#let candidate-support-benchmark-schema = "candidate_support_benchmark_plan_v2"
 #let q1-decision-rule = "ranking_gte_minimum_and_ci_low_gt_chance_and_calibration_mae_lte_maximum_v1"
 #let q1-protocol-receipt-name = "q1-actor-protocol-v1"
 #let q1-protocol-receipt-schema = "actor_visible_q1_protocol_receipt_v1"
 #let q1-scene-role = "held_out_scene_v1"
 #let q1-target-source-protocol = "observation_derived_actor_visible_target_v1"
 #let q2-decision-rule = "all_units_support_and_rowwise_abs_plus_relative_tolerance_v1"
-#let q2-certification-receipt-schema = "qh-exact-q2-certification-receipt-v2"
-#let q2-certification-schema = "qh-exact-q2-certification-v2"
+#let q2-certification-receipt-schema = "qh-exact-q2-certification-receipt-v3"
+#let q2-certification-schema = "qh-exact-q2-certification-v3"
 #let q2-selection-semantics = "balanced-hash-within-scene-target-support-strata-v2"
 #let q2-independent-unit-semantics = "ordered-store-manifest-and-scene-v1"
 #let q2-independent-unit-aggregation = "all_units_v1"
 #let float32-epsilon = 0.00000011920928955078125
+#let float32-maximum = 340282346638528859811704183484516925440.0
 #let recovery-decision-rule = "fraction_gte_minimum_and_ci_low_gt_zero_v1"
 #let derived-identity-abs-tolerance = 1e-10
 #let endpoint-evidence-facts = (
@@ -695,6 +696,11 @@
   }
 }
 
+#let report-value-is-finite-float32(value) = report-value-matches-kind(
+  value,
+  "number",
+) and calc.abs(value) <= float32-maximum
+
 #let report-store-facts-match-contract(report, store-id, contracts, expected-n) = {
   contracts.all(contract => {
     let matches = report.tables.facts.rows.filter(
@@ -1173,6 +1179,11 @@
     store-id,
     "study.population.scenes",
   )
+  let target-count = report-store-number-value(
+    report,
+    store-id,
+    "study.population.targets",
+  )
   let reported-p05 = report-store-number-value(
     report,
     store-id,
@@ -1215,10 +1226,12 @@
   let identity-pattern = regex("^[A-Za-z0-9._:-]+$")
   let benchmark-roots = benchmark-prefixes.map(prefix => (
     scene: report-sidecar-indexed-row-or-none(benchmark-index, prefix + ".scene_id"),
+    target: report-sidecar-indexed-row-or-none(benchmark-index, prefix + ".target_id"),
     root: report-sidecar-indexed-row-or-none(benchmark-index, prefix + ".root_id"),
   ))
   let benchmark-roster-valid = benchmark-sidecar != none and expected-attempts != none and benchmark-prefixes.len() == expected-attempts and benchmark-roots.all(root => (
     root.scene != none and root.scene.value_type == "str" and type(root.scene.at("value_text", default: none)) == str and root.scene.value_text.match(identity-pattern) != none,
+    root.target != none and root.target.value_type == "str" and type(root.target.at("value_text", default: none)) == str and root.target.value_text.len() > 0,
     root.root != none and root.root.value_type == "str" and type(root.root.at("value_text", default: none)) == str and root.root.value_text.match(identity-pattern) != none,
   ).all(value => value)) and (
     (key: "schema_version", value: candidate-support-benchmark-schema),
@@ -1237,23 +1250,25 @@
     "candidate-support.attempts",
     "scene_id",
   )
-  let record-pattern = regex("^candidate-support\\.attempts\\[[0-9]+\\]\\.(scene_id|root_id|valid_count|minimum_valid_count|passed)$")
+  let record-pattern = regex("^candidate-support\\.attempts\\[[0-9]+\\]\\.(scene_id|target_id|root_id|valid_count|minimum_valid_count|passed)$")
   let record-rows = report.tables.facts.rows.filter(row => (
     row.store_id == store-id,
     row.key.match(record-pattern) != none,
   ).all(value => value))
   let attempts = prefixes.map(prefix => (
     scene: report-store-indexed-row-or-none(fact-index, store-id, prefix + ".scene_id"),
+    target: report-store-indexed-row-or-none(fact-index, store-id, prefix + ".target_id"),
     root: report-store-indexed-row-or-none(fact-index, store-id, prefix + ".root_id"),
     valid: report-store-indexed-row-or-none(fact-index, store-id, prefix + ".valid_count"),
     minimum: report-store-indexed-row-or-none(fact-index, store-id, prefix + ".minimum_valid_count"),
     passed: report-store-indexed-row-or-none(fact-index, store-id, prefix + ".passed"),
   ))
   let attempt-count = attempts.len()
-  let records-valid = attempt-count > 0 and record-rows.len() == attempt-count * 5 and attempts.all(attempt => (
+  let records-valid = attempt-count > 0 and record-rows.len() == attempt-count * 6 and attempts.all(attempt => (
     attempt.values().all(row => row != none),
     attempt.values().all(row => row != none and row.n == attempt-count),
     attempt.scene != none and type(attempt.scene.value) == str and attempt.scene.value.match(identity-pattern) != none and attempt.scene.unit == "identity" and attempt.scene.aggregation == "attempt_identity",
+    attempt.target != none and type(attempt.target.value) == str and attempt.target.value.len() > 0 and attempt.target.unit == "identity" and attempt.target.aggregation == "attempt_identity",
     attempt.root != none and type(attempt.root.value) == str and attempt.root.value.match(identity-pattern) != none and attempt.root.unit == "identity" and attempt.root.aggregation == "attempt_identity",
     attempt.valid != none and type(attempt.valid.value) == int and attempt.valid.value >= 0 and attempt.valid.unit == "count" and attempt.valid.aggregation == "attempt_count",
     attempt.minimum != none and type(attempt.minimum.value) == int and attempt.minimum.value > 0 and attempt.minimum.unit == "count" and attempt.minimum.aggregation == "attempt_threshold",
@@ -1265,7 +1280,7 @@
     ),
   ).all(value => value))
   let record-keys = record-rows.map(row => row.key)
-  records-valid and benchmark-roster-valid and expected-attempts != none and type(expected-attempts) == int and expected-attempts == attempt-count and scene-count != none and reported-p05 != none and reported-failed-rate != none and store-manifest != none and report-store-fact-values-match(
+  records-valid and benchmark-roster-valid and expected-attempts != none and type(expected-attempts) == int and expected-attempts == attempt-count and type(scene-count) == int and scene-count > 0 and type(target-count) == int and target-count > 0 and reported-p05 != none and reported-failed-rate != none and store-manifest != none and report-store-fact-values-match(
     report,
     store-id,
     (
@@ -1279,17 +1294,20 @@
   ).all(key => report-store-fact-is-sha256(report, store-id, key)) and report-store-analysis-sidecar-binds-facts(
     report,
     store-id,
-    candidate-support-evidence-facts + ("study.population.scenes",) + record-keys,
+    candidate-support-evidence-facts + ("study.population.scenes", "study.population.targets") + record-keys,
     required-name: candidate-support-receipt-name,
   ) and {
     let identities = attempts.map(
-      attempt => attempt.scene.value + "|" + attempt.root.value,
+      attempt => attempt.scene.value + "|" + attempt.target.value + "|" + attempt.root.value,
     )
     let benchmark-identities = benchmark-roots.map(root => (
-      root.scene.value_text + "|" + root.root.value_text
+      root.scene.value_text + "|" + root.target.value_text + "|" + root.root.value_text
     ))
     let thresholds = attempts.map(attempt => attempt.minimum.value).dedup()
     let scene-ids = attempts.map(attempt => attempt.scene.value).dedup()
+    let target-tasks = attempts.map(
+      attempt => attempt.scene.value + "|" + attempt.target.value,
+    ).dedup()
     let scene-groups = (:)
     for attempt in attempts {
       let scene-id = attempt.scene.value
@@ -1309,7 +1327,7 @@
     let p05-index = calc.ceil(0.05 * ordered-means.len()) - 1
     let derived-p05 = ordered-means.at(p05-index)
     let derived-failed-rate = scene-failed-rates.sum() / scene-failed-rates.len()
-    identities.sorted().dedup().len() == identities.len() and benchmark-identities.sorted().dedup().len() == benchmark-identities.len() and identities.sorted() == benchmark-identities.sorted() and thresholds.len() == 1 and scene-ids.len() == scene-count and calc.abs(
+    identities.sorted().dedup().len() == identities.len() and benchmark-identities.sorted().dedup().len() == benchmark-identities.len() and identities.sorted() == benchmark-identities.sorted() and thresholds.len() == 1 and scene-ids.len() == scene-count and target-tasks.len() == target-count and calc.abs(
       reported-p05 - derived-p05,
     ) <= derived-identity-abs-tolerance and calc.abs(
       reported-failed-rate - derived-failed-rate,
@@ -1908,9 +1926,14 @@
     rollout-config: value(prefix + ".rollout_config_hash"),
     policy: value(prefix + ".selection_policy"),
     current-count: value(prefix + ".current_candidate_count"),
+    successor-action-count: value(prefix + ".successor_action_count"),
     successor-count: value(prefix + ".successor_backup_count"),
     branch-bin: value(prefix + ".candidate_branch_bin"),
     selected-index: value(prefix + ".selected_index"),
+    immediate-reward: value(prefix + ".immediate_reward"),
+    discount: value(prefix + ".discount"),
+    terminal: value(prefix + ".terminal"),
+    successor-max-reward: value(prefix + ".successor_max_reward"),
     recursive: value(prefix + ".recursive_target"),
     exact: value(prefix + ".exact_target"),
     absolute-error: value(prefix + ".absolute_error"),
@@ -1920,30 +1943,49 @@
   ))
   let absolute-tolerance = value("exact_q2.spec.absolute_tolerance")
   let relative-tolerance = value("exact_q2.spec.relative_tolerance")
-  let rows-valid = rows.len() > 0 and report-value-matches-kind(
+  let rows-valid = rows.len() > 0 and report-value-is-finite-float32(
     absolute-tolerance,
-    "number",
-  ) and absolute-tolerance >= 0 and report-value-matches-kind(
+  ) and absolute-tolerance >= 0 and report-value-is-finite-float32(
     relative-tolerance,
-    "number",
   ) and relative-tolerance >= 0 and rows.all(row => {
     let chain = if type(row.rank) == int {
       selected-by-rank.at(str(row.rank), default: none)
     } else { none }
-    let derived-absolute-error = if report-value-matches-kind(
+    let targets-valid = report-value-is-finite-float32(
       row.recursive,
-      "number",
-    ) and report-value-matches-kind(row.exact, "number") {
+    ) and report-value-is-finite-float32(row.exact)
+    let derived-absolute-error = if targets-valid {
       calc.abs(row.recursive - row.exact)
     } else { none }
-    let derived-tolerance = if report-value-matches-kind(row.exact, "number") {
+    let derived-tolerance = if targets-valid {
       absolute-tolerance + relative-tolerance * calc.abs(row.exact)
     } else { none }
-    let derived-relative-error = if derived-absolute-error != none and report-value-matches-kind(
-      row.exact,
-      "number",
-    ) {
+    let derived-relative-error = if report-value-is-finite-float32(
+      derived-absolute-error,
+    ) and report-value-is-finite-float32(derived-tolerance) {
       derived-absolute-error / calc.max(calc.abs(row.exact), float32-epsilon)
+    } else { none }
+    let transition-operands-valid = report-value-is-finite-float32(
+      row.immediate-reward,
+    ) and report-value-is-finite-float32(row.discount) and row.discount >= 0 and report-value-is-finite-float32(
+      row.successor-max-reward,
+    )
+    let discounted-successor = if transition-operands-valid {
+      row.discount * row.successor-max-reward
+    } else { none }
+    let derived-exact = if report-value-is-finite-float32(discounted-successor) {
+      row.immediate-reward + discounted-successor
+    } else { none }
+    let exact-identity-tolerance = if report-value-is-finite-float32(
+      derived-exact,
+    ) and targets-valid {
+      8 * float32-epsilon * calc.max(
+        1.0,
+        calc.max(
+          calc.abs(row.immediate-reward),
+          calc.max(calc.abs(discounted-successor), calc.abs(row.exact)),
+        ),
+      )
     } else { none }
     chain != none and (
       row.dataset == chain.dataset,
@@ -1959,13 +2001,17 @@
       row.candidate-config == chain.candidate-config,
       row.rollout-config == chain.rollout-config,
       row.policy == chain.policy,
-      type(row.step) == int and row.step >= 0,
+      type(row.step) == int and row.step >= 0 and row.step + 1 < chain.factual-states,
       row.requested-horizon == 2,
-      type(row.successor-count) == int and row.successor-count >= 1 and row.branch-bin == q2-candidate-branch-bin(row.successor-count),
+      type(row.successor-action-count) == int and row.successor-action-count >= 1,
+      type(row.successor-count) == int and row.successor-count >= 1 and row.successor-count == row.successor-action-count and row.branch-bin == q2-candidate-branch-bin(row.successor-count),
       type(row.current-count) == int and row.current-count >= 1 and type(row.selected-index) == int and row.selected-index >= 0 and row.selected-index < row.current-count,
-      derived-relative-error != none and q2-values-equal(row.relative-error, derived-relative-error),
-      derived-absolute-error != none and report-value-matches-kind(row.absolute-error, "number") and calc.abs(row.absolute-error - derived-absolute-error) <= derived-identity-abs-tolerance,
-      derived-tolerance != none and report-value-matches-kind(row.tolerance, "number") and calc.abs(row.tolerance - derived-tolerance) <= derived-identity-abs-tolerance,
+      transition-operands-valid,
+      type(row.terminal) == bool and row.terminal == false,
+      report-value-is-finite-float32(derived-exact) and report-value-is-finite-float32(exact-identity-tolerance) and calc.abs(row.exact - derived-exact) <= exact-identity-tolerance,
+      report-value-is-finite-float32(derived-relative-error) and report-value-is-finite-float32(row.relative-error) and q2-values-equal(row.relative-error, derived-relative-error),
+      report-value-is-finite-float32(derived-absolute-error) and report-value-is-finite-float32(row.absolute-error) and calc.abs(row.absolute-error - derived-absolute-error) <= derived-identity-abs-tolerance,
+      report-value-is-finite-float32(derived-tolerance) and report-value-is-finite-float32(row.tolerance) and calc.abs(row.tolerance - derived-tolerance) <= derived-identity-abs-tolerance,
       derived-absolute-error != none and derived-tolerance != none and type(row.within) == bool and row.within == (derived-absolute-error <= derived-tolerance),
     ).all(check => check)
   }) and rows.map(

@@ -970,7 +970,7 @@ def test_qh_fit_publishes_new_bundle_and_hashed_receipts(tmp_path) -> None:
     assert certification_receipt["bundle_manifest_sha256"] == result.bundle.manifest_sha256
     assert certification_receipt["exact_q2"]["population_census"]["near_exhaustive"] is True
     assert certification_receipt["exact_q2"]["aggregate"]["factual_selected_action_exact_q2_row_count"] == 1
-    assert certification_receipt["schema_version"] == "qh-exact-q2-certification-receipt-v2"
+    assert certification_receipt["schema_version"] == "qh-exact-q2-certification-receipt-v3"
     assert certification_receipt["exact_q2"]["independent_unit_gate"]["selected_independent_unit_count"] == 1
     assert certification_receipt["exact_q2"]["independent_unit_gate"]["minimum_independent_units_met"] is False
     assert certification_receipt["oracle_headroom"]["available"] is False

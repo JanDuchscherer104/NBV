@@ -418,9 +418,12 @@ payload to reproduce every claimed row.
 == Population and Action Support
 
 #if support-state.evidence_available [
-  An independently frozen benchmark plan fixes the scene/root roster, while an
-  immutable per-attempt receipt binds each planned identity to valid count,
-  threshold, outcome, configuration, and store manifest. The report recomputes
+  An independently frozen benchmark plan fixes the scene/target-task/root
+  roster over the declared admitted-task population, while an immutable
+  per-attempt receipt binds each planned identity to valid count, threshold,
+  outcome, configuration, and store manifest. This establishes support for the
+  declared tasks, not actor-visible target discovery or universal target
+  coverage. The report recomputes
   lower-tail valid support and failed-root rate from those rows, then
   supplies actor-valid fraction, configured-family zero rate, target-side
   balance, and circular orbit span as diagnostics. These state--scene summaries
