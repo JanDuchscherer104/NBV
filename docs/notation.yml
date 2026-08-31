@@ -548,6 +548,12 @@ symbols:
     description: 'Unit selected-camera forward optical axis expressed in target-object coordinates.'
     thesis_list: true
     order: 596
+  spatial.dir_moment:
+    tex: '\boldsymbol{M}^{\mathrm{dir}}'
+    typst: '#symb.spatial.dir_moment'
+    description: 'Second directional moment used to summarize selected target-relative approach directions.'
+    thesis_list: true
+    order: 597
   spatial.target_frame_frustum:
     tex: '\mathcal{F}_{j,t}^{e}'
     typst: '#symb.spatial.target_frame_frustum'

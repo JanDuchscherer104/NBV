@@ -120,6 +120,7 @@
   (key: "spatial.target_obb_scale", tex: "r_e", description: "Geometric-mean target-proxy scale derived from the target OBB semi-axis lengths.", thesis_list: true, order: 592),
   (key: "spatial.target_frame_motion_direction", tex: "\\widehat{\\boldsymbol{\\delta}}_{j,t}^{e}", description: "Unit factual selected-camera displacement expressed in target-object coordinates for rollout j and step t.", thesis_list: true, order: 594),
   (key: "spatial.target_frame_view_direction", tex: "\\widehat{\\boldsymbol{v}}_{j,t}^{e}", description: "Unit selected-camera forward optical axis expressed in target-object coordinates.", thesis_list: true, order: 596),
+  (key: "spatial.dir_moment", tex: "\\boldsymbol{M}^{\\mathrm{dir}}", description: "Second directional moment used to summarize selected target-relative approach directions.", thesis_list: true, order: 597),
   (key: "spatial.target_frame_frustum", tex: "\\mathcal{F}_{j,t}^{e}", description: "Front-facing target-proxy surface directions that project inside the calibrated selected-camera image.", thesis_list: true, order: 598),
   (key: "spatial.target_frame_frustum_fraction", tex: "\\kappa_{j,t}^{e}", description: "Fraction of the target-centred proxy sphere geometrically supported by one selected calibrated frustum.", thesis_list: true, order: 599),
   (key: "spatial.frustum_solid_angle", tex: "\\Omega_{j,t}^{\\mathrm{FOV}}", description: "Intrinsic solid angle of one calibrated selected-camera pinhole field of view.", thesis_list: true, order: 601),

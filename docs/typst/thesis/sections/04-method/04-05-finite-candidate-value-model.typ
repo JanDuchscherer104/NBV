@@ -35,7 +35,7 @@ separate auxiliary prediction; multiplying them by value would mix meanings.
 The training adapter owns hard-valid label and bootstrap admission, while
 online inference owns the final masked selection.
 
-The selected A1 interaction lets each #symb.rl.candidate_qti query shared scene, target,
+The selected A1 interaction lets each #symb.oracle.candidate_qti query shared scene, target,
 history, budget, and horizon tokens. A0 supplies the matched independent-row
 control. Both use the same geometric query and value decoder. Their comparison
 therefore asks whether query-dependent state reading helps under a fixed state
