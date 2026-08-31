@@ -20,7 +20,7 @@ from dataclasses import asdict, dataclass, field, fields
 from enum import StrEnum
 from pathlib import Path
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Any, Literal, cast
+from typing import TYPE_CHECKING, Any, Literal, Protocol, cast
 
 import numpy as np
 import pandas as pd
@@ -198,7 +198,10 @@ def canonical_generation_revision_hash(payload: Mapping[str, Any]) -> str:
     for name in ("uv_lock_sha256", "content_bundle_hash"):
         if not re.fullmatch(r"[0-9a-f]{64}", values[name]):
             raise ValueError(f"Phase-A generation revision {name} must be a SHA-256 identity")
-    return cast(str, stable_msgspec_hash(values))
+    revision_hash = stable_msgspec_hash(values)
+    if not isinstance(revision_hash, str):
+        raise TypeError("stable generation revision hash must be text")
+    return revision_hash
 
 
 def aggregate_store_content_sha256(store_seals: Mapping[str, str]) -> str:
@@ -971,7 +974,6 @@ class CandidateBenchmark:
     lineage: Mapping[str, str] = field(default_factory=dict)
     points: tuple[CandidatePoint, ...] = ()
     oracle_target_root_gains: tuple[float, ...] = ()
-    oracle_target_root_gain_summary: "CandidateOracleGainSummary | None" = None
 
     def __post_init__(self) -> None:
         if not self.state_key or not self.scene_key:
@@ -992,19 +994,12 @@ class CandidateBenchmark:
                 raise ValueError("candidate points must align exactly with candidate ids and coordinates")
         normalized_gains = tuple(_oracle_gain_scalar(value) for value in self.oracle_target_root_gains)
         object.__setattr__(self, "oracle_target_root_gains", normalized_gains)
-        if self.oracle_target_root_gains and self.oracle_target_root_gain_summary is not None:
-            expected = CandidateOracleGainSummary.from_values(self.oracle_target_root_gains)
-            if self.oracle_target_root_gain_summary != expected:
-                raise ValueError("oracle target-root gain summary disagrees with the retained gains")
         for mapping_name in ("geometry", "diversity", "timings_ms", "resources", "provenance", "lineage"):
             value = getattr(self, mapping_name)
             object.__setattr__(self, mapping_name, MappingProxyType(dict(value)))
 
     def to_record(self) -> dict[str, Any]:
         """Flatten facts into one deterministic row for Parquet."""
-
-        if self.oracle_target_root_gain_summary is not None and not self.oracle_target_root_gains:
-            raise ValueError("lightweight oracle-gain summaries cannot be serialized as complete benchmark rows")
 
         return {
             "scene_key": self.scene_key,
@@ -1031,42 +1026,11 @@ class CandidateBenchmark:
         owns the current complete benchmark-bundle schema.
         """
 
-        if self.oracle_target_root_gains or (
-            self.oracle_target_root_gain_summary is not None and self.oracle_target_root_gain_summary.count
-        ):
+        if self.oracle_target_root_gains:
             raise ValueError("Phase-A records cannot contain oracle target-root gains")
         record = self.to_record()
         record.pop("oracle_target_root_gains")
         return record
-
-
-@dataclass(frozen=True, slots=True)
-class CandidateOracleGainSummary:
-    """Constant-size sufficient statistics for state-conditional flat gain."""
-
-    count: int
-    minimum: float | None
-    maximum: float | None
-
-    def __post_init__(self) -> None:
-        if self.count < 0:
-            raise ValueError("oracle gain count must be non-negative")
-        if self.count == 0:
-            if self.minimum is not None or self.maximum is not None:
-                raise ValueError("empty oracle gain summaries cannot define a range")
-            return
-        if self.minimum is None or self.maximum is None:
-            raise ValueError("non-empty oracle gain summaries require both range endpoints")
-        if not math.isfinite(self.minimum) or not math.isfinite(self.maximum) or self.minimum > self.maximum:
-            raise ValueError("oracle gain summary range must be finite and ordered")
-
-    @classmethod
-    def from_values(cls, values: Collection[float]) -> "CandidateOracleGainSummary":
-        """Reduce finite retained labels into their exact sufficient statistics."""
-
-        if not values:
-            return cls(0, None, None)
-        return cls(len(values), min(values), max(values))
 
 
 @dataclass(frozen=True, slots=True)
@@ -1111,7 +1075,6 @@ def select_candidate_family_shell(
                 lineage=record.lineage,
                 points=points,
                 oracle_target_root_gains=record.oracle_target_root_gains,
-                oracle_target_root_gain_summary=record.oracle_target_root_gain_summary,
             )
         )
     return tuple(selected_records)
@@ -1347,6 +1310,56 @@ def reduce_candidate_records(records: list[Mapping[str, Any]]) -> tuple[Candidat
     return tuple(sorted(result, key=lambda item: (item.scene_key, item.state_key)))
 
 
+@dataclass(frozen=True, slots=True)
+class _OracleGainSummary:
+    """Constant-size sufficient statistics for state-conditional flat gain."""
+
+    count: int
+    minimum: float | None
+    maximum: float | None
+
+    def __post_init__(self) -> None:
+        if self.count < 0:
+            raise ValueError("oracle gain count must be non-negative")
+        if self.count == 0:
+            if self.minimum is not None or self.maximum is not None:
+                raise ValueError("empty oracle gain summaries cannot define a range")
+            return
+        if self.minimum is None or self.maximum is None:
+            raise ValueError("non-empty oracle gain summaries require both range endpoints")
+        if not math.isfinite(self.minimum) or not math.isfinite(self.maximum) or self.minimum > self.maximum:
+            raise ValueError("oracle gain summary range must be finite and ordered")
+
+    @classmethod
+    def from_values(cls, values: Collection[float]) -> "_OracleGainSummary":
+        if not values:
+            return cls(0, None, None)
+        return cls(len(values), min(values), max(values))
+
+
+class _CandidatePreflightRecord(Protocol):
+    """Narrow factual interface consumed by the canonical preflight reducer."""
+
+    @property
+    def scene_key(self) -> str: ...
+
+    @property
+    def state_key(self) -> str: ...
+
+    @property
+    def families(self) -> tuple[CandidateFamilyCounts, ...]: ...
+
+
+@dataclass(frozen=True, slots=True)
+class _LightweightCandidatePreflightFacts:
+    """Presentation-free state facts produced by the streaming audit path."""
+
+    scene_key: str
+    state_key: str
+    families: tuple[CandidateFamilyCounts, ...]
+    oracle_gain_summary: _OracleGainSummary
+
+
 @dataclass(slots=True)
 class _ConsistentAuditValue:
     """Track one optional scalar's consensus in constant memory."""
@@ -1440,24 +1453,25 @@ class _StateAuditAccumulator:
     def add(self, row: Mapping[str, Any]) -> None:
         family = str(row["mixture"])
         self.families.setdefault(family, _FamilyAuditAccumulator()).add(row)
-        gain = _finite_value(row.get("target_root_gain")) if bool(row.get("oracle_label")) else None
+        raw_gain = row.get("target_root_gain") if bool(row.get("oracle_label")) else None
+        gain = None if raw_gain is None else _oracle_gain_scalar(raw_gain)
         if gain is not None:
             self.oracle_count += 1
             self.oracle_minimum = gain if self.oracle_minimum is None else min(self.oracle_minimum, gain)
             self.oracle_maximum = gain if self.oracle_maximum is None else max(self.oracle_maximum, gain)
 
-    def gain_summary(self) -> CandidateOracleGainSummary:
-        return CandidateOracleGainSummary(self.oracle_count, self.oracle_minimum, self.oracle_maximum)
+    def gain_summary(self) -> _OracleGainSummary:
+        return _OracleGainSummary(self.oracle_count, self.oracle_minimum, self.oracle_maximum)
 
 
-def _lightweight_benchmarks_from_reader(
+def _preflight_facts_from_reader(
     reader: Any,
     *,
     state_key: str | None,
     candidate_limit: int | None,
     requested_state: tuple[int, int] | None,
     configured_families: tuple[str, ...],
-) -> tuple[CandidateBenchmark, ...]:
+) -> tuple[_LightweightCandidatePreflightFacts, ...]:
     """Stream audit rows into bounded state/family sufficient statistics."""
 
     from .inspection import candidate_audit_rows
@@ -1483,12 +1497,11 @@ def _lightweight_benchmarks_from_reader(
             for family in family_names
         )
         result.append(
-            CandidateBenchmark(
+            _LightweightCandidatePreflightFacts(
                 scene_key=scene,
                 state_key=state,
                 families=families,
-                lineage={"family_identity": "mixture_component", "representation": "lightweight_audit_accumulator"},
-                oracle_target_root_gain_summary=audit.gain_summary(),
+                oracle_gain_summary=audit.gain_summary(),
             )
         )
     return tuple(result)
@@ -1508,8 +1521,9 @@ def benchmarks_from_reader(
     affected state and counts with an explicit lineage reason. For one requested
     state, the complete shell is projected before the display row limit is
     applied, so a limit smaller than the shell cannot fabricate empty support.
-    Complete policy preflight sets ``include_geometry=False`` and streams only
-    lightweight audit facts through this same canonical reducer.
+    Complete policy preflight uses the private streaming facts reader; this
+    public projection remains a uniformly serializable benchmark DTO whether
+    or not display geometry is requested.
     """
 
     from .inspection import candidate_audit_rows, proposal_support_geometry
@@ -1526,14 +1540,6 @@ def benchmarks_from_reader(
             return ()
         requested_state = (int(match.group(1)), int(match.group(2)))
         requested_rollout_ids = (requested_state[0],)
-    if not include_geometry:
-        return _lightweight_benchmarks_from_reader(
-            reader,
-            state_key=state_key,
-            candidate_limit=candidate_limit,
-            requested_state=requested_state,
-            configured_families=configured_families,
-        )
     projection = None
     if include_geometry and hasattr(reader, "root"):
         projection = proposal_support_geometry(
@@ -1571,12 +1577,13 @@ def benchmarks_from_reader(
         lineage: dict[str, str] = {"family_identity": "mixture_component"}
         points: list[CandidatePoint] = []
         state_rows = [row for rows in family_rows.values() for row in rows]
+        state_audit = _StateAuditAccumulator()
+        for row in state_rows:
+            state_audit.add(row)
         oracle_target_root_gains = tuple(
-            value
+            _oracle_gain_scalar(row["target_root_gain"])
             for row in state_rows
-            if bool(row.get("oracle_label"))
-            for value in (_finite_value(row.get("target_root_gain")),)
-            if value is not None
+            if bool(row.get("oracle_label")) and row.get("target_root_gain") is not None
         )
         missing_geometry = projection is not None and any(
             int(row["candidate_row_id"]) not in geometry_points for row in state_rows
@@ -1598,44 +1605,9 @@ def benchmarks_from_reader(
         state_family_names = sorted(set(family_rows) | set(configured_families))
         for family in state_family_names:
             rows = family_rows.get(family, [])
-            applicable = True if family in configured_families else None
-            valid = sum(bool(row.get("actor_action")) for row in rows)
-            selected = sum(int(row.get("compact_valid_index", -1)) >= 0 for row in rows)
-            invalid_rows = [row for row in rows if not bool(row.get("actor_action"))]
-            first_failures: dict[str, int] = {}
-            for invalid_row in invalid_rows:
-                reason = str(invalid_row.get("invalid_reason") or "unknown")
-                first_failures[reason] = first_failures.get(reason, 0) + 1
-            first_failure = (
-                min(first_failures, key=lambda reason: (-first_failures[reason], reason)) if first_failures else None
-            )
-            margins: dict[str, float] = {}
-            for name in (
-                "free_space_margin_m",
-                "mesh_distance_m",
-                "path_min_clearance_m",
-                "target_pixel_margin_px",
-            ):
-                values = _finite_values(rows, name)
-                if values:
-                    margins[name] = min(values)
             families.append(
-                CandidateFamilyCounts(
-                    family=family,
-                    applicable=applicable,
-                    attempted=len(rows),
-                    valid=valid,
-                    selected=selected,
-                    denominator=len(rows),
-                    reason=None if applicable is not None else "unavailable_in_legacy_store",
-                    invalid_reason_bitsets=tuple(
-                        sorted({int(row.get("invalid_reason_bitset") or 0) for row in invalid_rows})
-                    ),
-                    first_failure=first_failure,
-                    margins=margins,
-                    refill_rounds=_consistent_optional_int(rows, "refill_rounds"),
-                    fallback_used=_consistent_optional_bool(rows, "fallback_used"),
-                    support_failure=_consistent_optional_text(rows, "support_failure"),
+                state_audit.families.get(family, _FamilyAuditAccumulator()).finish(
+                    family, configured=family in configured_families
                 )
             )
             for family_row in rows:
@@ -1748,32 +1720,6 @@ def _configured_family_names(reader: Any) -> tuple[str, ...]:
     return tuple(dict.fromkeys(names))
 
 
-def _consistent_optional_int(rows: Iterable[Mapping[str, Any]], name: str) -> int | None:
-    values = {int(row[name]) for row in rows if row.get(name) is not None}
-    return next(iter(values)) if len(values) == 1 else None
-
-
-def _consistent_optional_bool(rows: Iterable[Mapping[str, Any]], name: str) -> bool | None:
-    values = {bool(row[name]) for row in rows if row.get(name) is not None}
-    return next(iter(values)) if len(values) == 1 else None
-
-
-def _consistent_optional_text(rows: Iterable[Mapping[str, Any]], name: str) -> str | None:
-    values = {str(row[name]) for row in rows if row.get(name) is not None}
-    return next(iter(values)) if len(values) == 1 else None
-
-
-def _finite_values(rows: Iterable[Mapping[str, Any]], name: str) -> list[float]:
-    """Return only persisted finite diagnostic scalars for one cell."""
-
-    values = []
-    for row in rows:
-        value = _finite_value(row.get(name))
-        if value is not None:
-            values.append(value)
-    return values
-
-
 def _legacy_coordinate(row: Mapping[str, Any]) -> tuple[float, float, float]:
     """Normalize an audit-only row for backward-compatible bundles."""
 
@@ -1816,21 +1762,23 @@ def _oracle_gain_scalar(value: Any) -> float:
     return result
 
 
-def _oracle_gain_summary(record: CandidateBenchmark) -> CandidateOracleGainSummary:
+def _oracle_gain_summary(record: _CandidatePreflightRecord) -> _OracleGainSummary:
     """Return exact state-level label statistics without requiring retained rows."""
 
-    if record.oracle_target_root_gain_summary is not None:
-        return record.oracle_target_root_gain_summary
+    if isinstance(record, _LightweightCandidatePreflightFacts):
+        return record.oracle_gain_summary
+    if not isinstance(record, CandidateBenchmark):
+        raise TypeError("candidate preflight reducer received unsupported state facts")
     if record.oracle_target_root_gains:
-        return CandidateOracleGainSummary.from_values(record.oracle_target_root_gains)
+        return _OracleGainSummary.from_values(record.oracle_target_root_gains)
     point_values = tuple(
         point.target_root_gain for point in record.points if point.oracle_label and point.target_root_gain is not None
     )
-    return CandidateOracleGainSummary.from_values(point_values)
+    return _OracleGainSummary.from_values(point_values)
 
 
 def reduce_candidate_family_preflight(
-    records: Iterable[CandidateBenchmark],
+    records: Iterable[_CandidatePreflightRecord],
     config: CandidateFamilyPreflightConfig,
     *,
     coverage: CandidatePopulationCoverage | None = None,
@@ -2027,7 +1975,13 @@ def reduce_candidate_family_preflight(
 def candidate_family_preflight_from_reader(reader: Any) -> CandidateFamilyPreflight:
     """Reduce only the complete scientific policy persisted by the store."""
 
-    records = benchmarks_from_reader(reader, candidate_limit=None, include_geometry=False)
+    records = _preflight_facts_from_reader(
+        reader,
+        state_key=None,
+        candidate_limit=None,
+        requested_state=None,
+        configured_families=_configured_family_names(reader),
+    )
     config = _candidate_family_policy_from_reader(reader)
     if config is None:
         fallback = CandidateFamilyPreflightConfig(
@@ -2613,7 +2567,6 @@ __all__ = [
     "CandidateBenchmark",
     "CandidateBenchmarkBundle",
     "CandidateBenchmarkSource",
-    "CandidateOracleGainSummary",
     "CandidateFamilyPhaseAExpectation",
     "CandidateFamilyPhaseAEvidence",
     "CandidateFamilyPreflight",

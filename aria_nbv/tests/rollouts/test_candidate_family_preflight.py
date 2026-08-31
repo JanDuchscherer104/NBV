@@ -7,6 +7,7 @@ import json
 import pickle
 from dataclasses import replace
 from pathlib import Path
+from typing import Any
 
 import pytest
 import torch
@@ -274,9 +275,8 @@ def test_margins_are_immutable_while_preflight_payload_is_pickleable() -> None:
     assert pickle.loads(pickle.dumps(result.to_payload())) == result.to_payload()
 
 
-@pytest.mark.parametrize(
-    "margins",
-    [
+def test_family_margins_reject_nonfinite_or_nonscalar_payloads() -> None:
+    malformed_margins: tuple[Any, ...] = (
         {"nested": {"value": 1.0}},
         {"list": [1.0]},
         {"nan": float("nan")},
@@ -285,11 +285,10 @@ def test_margins_are_immutable_while_preflight_payload_is_pickleable() -> None:
         {"bool": True},
         {1: 1.0},
         {"": 1.0},
-    ],
-)
-def test_family_margins_reject_nonfinite_or_nonscalar_payloads(margins: object) -> None:
-    with pytest.raises(ValueError, match="margin"):
-        CandidateFamilyCounts("forward", True, 1, 1, 1, 1, margins=margins)  # type: ignore[arg-type]
+    )
+    for margins in malformed_margins:
+        with pytest.raises(ValueError, match="margin"):
+            CandidateFamilyCounts("forward", True, 1, 1, 1, 1, margins=margins)
 
 
 def test_family_selection_filters_the_existing_shell_without_recomputing() -> None:
@@ -530,7 +529,7 @@ def test_reader_uses_persisted_query_width_and_fails_closed_without_policy(
     import aria_nbv.rollouts.candidate_benchmark as benchmark_module
 
     record = _record(state="reader", valid=(5, 5, 4))
-    monkeypatch.setattr(benchmark_module, "benchmarks_from_reader", lambda *_args, **_kwargs: (record,))
+    monkeypatch.setattr(benchmark_module, "_preflight_facts_from_reader", lambda *_args, **_kwargs: (record,))
 
     class Reader:
         def __init__(self, policy: object) -> None:
@@ -630,16 +629,27 @@ def test_lightweight_reader_is_constant_row_memory_and_matches_materialized_redu
         peak = 0
 
         def __init__(self, candidate_id: int) -> None:
+            family = "unconfigured_family" if candidate_id == 59 else FAMILIES[candidate_id % len(FAMILIES)]
+            actor_valid = candidate_id % 7 != 0
             super().__init__(
                 scene="scene",
                 rollout_row_id=1,
                 step_row_id=2,
-                mixture=FAMILIES[candidate_id % len(FAMILIES)],
+                mixture=family,
                 candidate_row_id=candidate_id,
-                position=FAMILIES[candidate_id % len(FAMILIES)],
-                actor_action=True,
-                compact_valid_index=candidate_id,
+                position=family,
+                actor_action=actor_valid,
+                compact_valid_index=candidate_id if actor_valid and candidate_id % 5 else -1,
                 selected=False,
+                invalid_reason=None if actor_valid else ("collision" if candidate_id % 2 else "clearance"),
+                invalid_reason_bitset=0 if actor_valid else candidate_id % 4,
+                free_space_margin_m=0.01 * candidate_id,
+                mesh_distance_m=0.02 * candidate_id,
+                path_min_clearance_m=0.03 * candidate_id,
+                target_pixel_margin_px=0.04 * candidate_id,
+                refill_rounds=candidate_id % 2,
+                fallback_used=bool(candidate_id % 2),
+                support_failure="exhausted" if candidate_id == 59 else None,
                 oracle_label=True,
                 target_root_gain=float(candidate_id % 5),
                 root_relative_x_m=0.0,
@@ -659,22 +669,22 @@ def test_lightweight_reader_is_constant_row_memory_and_matches_materialized_redu
             for candidate_id in range(count):
                 callback(TrackedRow(candidate_id))
             return []
-        return [TrackedRow(candidate_id) for candidate_id in range(count)]
+        rows: list[dict[str, object]] = [TrackedRow(candidate_id) for candidate_id in range(count)]
+        return rows
 
     monkeypatch.setattr(inspection, "candidate_audit_rows", audit)
-    lightweight = benchmarks_from_reader(Reader(), candidate_limit=None, include_geometry=False)
+    streamed = candidate_family_preflight_from_reader(Reader())
     gc.collect()
 
     assert TrackedRow.live == 0
     assert TrackedRow.peak < 10
-    assert sum(cell.attempted for cell in lightweight[0].families) == 20_000
-    assert lightweight[0].points == ()
-    assert lightweight[0].oracle_target_root_gains == ()
-    assert lightweight[0].oracle_target_root_gain_summary is not None
+    assert sum(cell.attempted for _, _, cell in streamed.cells) == 19_999
+    assert streamed.flat_gain.denominator == 20_000
+    assert CandidateSupportFailure.UNCONFIGURED_FAMILY in {blocker.code for blocker in streamed.blockers}
 
     # Repeat with an identical bounded population through the materialized path.
     def bounded_audit(_reader: object, **kwargs: object) -> list[dict[str, object]]:
-        rows = [TrackedRow(candidate_id) for candidate_id in range(60)]
+        rows: list[dict[str, object]] = [TrackedRow(candidate_id) for candidate_id in range(60)]
         callback = kwargs.get("row_callback")
         if callable(callback):
             for row in rows:
@@ -683,8 +693,13 @@ def test_lightweight_reader_is_constant_row_memory_and_matches_materialized_redu
         return rows
 
     monkeypatch.setattr(inspection, "candidate_audit_rows", bounded_audit)
-    lightweight_bounded = benchmarks_from_reader(Reader(), candidate_limit=None, include_geometry=False)
-    materialized = benchmarks_from_reader(Reader(), candidate_limit=None, include_geometry=True)
-    assert reduce_candidate_family_preflight(lightweight_bounded, policy).to_payload() == (
-        reduce_candidate_family_preflight(materialized, policy).to_payload()
-    )
+    streamed_bounded = candidate_family_preflight_from_reader(Reader())
+    without_geometry = benchmarks_from_reader(Reader(), candidate_limit=None, include_geometry=False)
+    with_geometry = benchmarks_from_reader(Reader(), candidate_limit=None, include_geometry=True)
+    without_geometry_result = reduce_candidate_family_preflight(without_geometry, policy)
+    with_geometry_result = reduce_candidate_family_preflight(with_geometry, policy)
+
+    assert without_geometry[0].to_record()["oracle_target_root_gains"]
+    assert without_geometry[0].families == with_geometry[0].families
+    assert streamed_bounded.to_payload() == without_geometry_result.to_payload()
+    assert streamed_bounded.to_payload() == with_geometry_result.to_payload()
