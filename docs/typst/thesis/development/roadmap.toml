@@ -1,0 +1,205 @@
+[meta]
+reviewed_at = 2026-08-31
+review_due = 2026-09-14
+review_cadence_days = 14
+current_milestone = "P1"
+complete_by = 2026-11-30
+submission_date = 2027-01-07
+
+[[snapshot]]
+kind = "done"
+title = "Pilot infrastructure"
+body = "Candidate-benchmark smoke evidence, a bounded two-scene orbit MVP, and a pilot rollout report are committed. These prove the pipeline can produce reviewable artifacts, not that population-scale support or policy gains are established."
+evidence = [
+  "docs/contents/evidence/candidate_benchmark_wp01_smoke/manifest.json",
+  "docs/contents/evidence/candidate_target_orbit_mvp/manifest.json",
+  "docs/typst/thesis/data/s2-rollout-pilot/report.json",
+]
+
+[[snapshot]]
+kind = "now"
+title = "Evidence substrate"
+body = "Freeze the multi-scene store, scene-level split, camera/depth and target-RRI fidelity, candidate-support admission, and throughput receipts while the thesis narrative and conceptual figures remain under review."
+evidence = [
+  "aria_nbv/tests/data_handling",
+  "aria_nbv/tests/rendering",
+  "aria_nbv/tests/oracle",
+  "aria_nbv/tests/rollouts",
+  "https://github.com/JanDuchscherer104/ARIA-NBV/issues/185",
+  "https://github.com/JanDuchscherer104/ARIA-NBV/issues/186",
+]
+
+[[snapshot]]
+kind = "blocked"
+title = "Confirmatory claims"
+body = "Lookahead-headroom, learned-value, and population-coverage claims remain blocked until paired multi-scene evidence and an immutable experiment registry exist. The current rollout bundle is explicitly pilot evidence."
+evidence = [
+  "docs/typst/thesis/data/s2-rollout-pilot/report.json",
+  "docs/typst/thesis/sections/05-experimental-design/05-02-learning-objective-and-replay-evidence.typ",
+  "docs/typst/thesis/sections/06-results.typ",
+]
+
+[[snapshot]]
+kind = "next"
+title = "Paired evidence to freeze"
+body = "Run equal-budget baselines, train and evaluate the finite-horizon value model under actor-visible inputs, synthesize results and limitations, and reach the reproducible full-draft freeze recorded below."
+evidence = [
+  "docs/typst/thesis/sections/05-experimental-design/05-03-policy-comparison-and-failure-interpretation.typ",
+  "docs/typst/thesis/sections/04-method/04-05-finite-candidate-value-model.typ",
+  "docs/typst/thesis/sections/07-discussion.typ",
+]
+
+[[milestones]]
+id = "P0"
+title = "Pilot infrastructure"
+start = 2026-07-07
+end = 2026-08-30
+status = "done"
+depends_on = []
+gate = "Committed smoke and MVP artifacts compile and remain explicitly bounded as pilot evidence."
+evidence = [
+  "docs/contents/evidence/candidate_benchmark_wp01_smoke/manifest.json",
+  "docs/contents/evidence/candidate_target_orbit_mvp/manifest.json",
+  "docs/typst/thesis/data/s2-rollout-pilot/report.json",
+]
+
+[[milestones]]
+id = "P1"
+title = "Freeze experiment substrate"
+start = 2026-08-31
+end = 2026-09-30
+status = "in-progress"
+depends_on = ["P0"]
+gate = "Multi-scene immutable store, scene-level split, camera/depth and target-RRI fidelity, candidate-support admission, and throughput receipts."
+evidence = [
+  ".configs/offline_only.toml",
+  "aria_nbv/tests/data_handling",
+  "aria_nbv/tests/rendering",
+  "aria_nbv/tests/oracle",
+  "aria_nbv/tests/pose_generation",
+  "aria_nbv/tests/rollouts",
+]
+
+[[milestones]]
+id = "P2"
+title = "Paired policy baselines"
+start = 2026-10-01
+end = 2026-10-20
+status = "planned"
+depends_on = ["P1"]
+gate = "Equal-budget random-valid, greedy, and bounded-lookahead comparisons report uncertainty, support, and oracle receipts."
+evidence = [
+  "docs/typst/thesis/sections/05-experimental-design/05-01-objectives-and-hypotheses.typ",
+  "docs/typst/thesis/sections/05-experimental-design/05-03-policy-comparison-and-failure-interpretation.typ",
+  "aria_nbv/tests/rollouts/test_reporting.py",
+]
+
+[[milestones]]
+id = "P3"
+title = "Learned value evaluation"
+start = 2026-10-21
+end = 2026-11-10
+status = "planned"
+depends_on = ["P2"]
+gate = "Held-out ranking, calibration, and paired policy value are reported under actor-visible inputs."
+evidence = [
+  "docs/typst/thesis/sections/04-method/04-05-finite-candidate-value-model.typ",
+  "docs/typst/thesis/sections/05-experimental-design/05-02-learning-objective-and-replay-evidence.typ",
+  "aria_nbv/tests/data_handling/test_qh.py",
+  "aria_nbv/tests/lightning",
+]
+
+[[milestones]]
+id = "P4"
+title = "Results and discussion synthesis"
+start = 2026-11-11
+end = 2026-11-22
+status = "planned"
+depends_on = ["P3"]
+gate = "Final tables, failure cases, coverage limits, and claim dispositions resolve to the immutable evidence registry."
+evidence = [
+  "docs/typst/thesis/sections/06-results.typ",
+  "docs/typst/thesis/sections/07-discussion.typ",
+  "aria_nbv/tests/rollouts/test_reporting.py",
+]
+
+[[milestones]]
+id = "P5"
+title = "Reproducibility and full-draft freeze"
+start = 2026-11-23
+end = 2026-11-30
+status = "planned"
+depends_on = ["P4"]
+gate = "Full draft, reproducible configurations, final figures, and release checks pass with no unresolved placeholders."
+evidence = [
+  "Makefile",
+  "docs/README.md",
+  ".github/workflows/ci.yml",
+  "docs/typst/thesis/main.typ",
+]
+
+[[milestones]]
+id = "P6"
+title = "Safety buffer and submission"
+start = 2026-12-01
+end = 2027-01-07
+status = "buffer"
+depends_on = ["P5"]
+gate = "Advisor feedback, formal checks, final upload, and the authenticated submission receipt are closed without reopening the scientific core."
+evidence = [
+  "docs/typst/thesis/metadata.typ",
+  "docs/typst/thesis/main.typ",
+]
+
+[[blockers]]
+id = "B1"
+title = "Multi-scene experiment substrate"
+affects = ["P1"]
+body = "The committed artifacts do not yet establish a fresh multi-scene store, scene-level split, camera/depth fidelity, target-RRI robustness, and representative throughput in one immutable receipt chain."
+evidence = [
+  ".configs/offline_only.toml",
+  "aria_nbv/tests/data_handling",
+  "aria_nbv/tests/rendering",
+  "aria_nbv/tests/oracle",
+]
+
+[[blockers]]
+id = "B2"
+title = "Candidate-support scale admission"
+affects = ["P1", "P2"]
+body = "The positive two-scene orbit MVP is explicitly not scale-up admission; family survival, framing, diversity, and proposal regret still require broader evidence."
+evidence = [
+  "docs/contents/evidence/candidate_target_orbit_mvp/manifest.json",
+  "docs/contents/evidence/candidate_benchmark_wp01_smoke/manifest.json",
+]
+
+[[blockers]]
+id = "B3"
+title = "Confirmatory experiment registry"
+affects = ["P2", "P3", "P4"]
+body = "The available report bundle is a one-scene pilot. Final comparisons need immutable run/config identities, coverage accounting, uncertainty, and claim-to-artifact resolution."
+evidence = [
+  "docs/typst/thesis/data/s2-rollout-pilot/report.json",
+  "docs/typst/thesis/sections/06-results.typ",
+]
+
+[[promotions]]
+summary = "Promote bounded-lookahead and learned-value results only after paired held-out evidence is immutable."
+source = "P2-P3 experiment registry and rollout reports"
+target_section = "Results and Discussion"
+gate = "positive headroom, actor-visible evaluation, uncertainty, and support coverage"
+disposition = "candidate"
+
+[[promotions]]
+summary = "Resolve candidate-support and substrate limits before claiming population coverage."
+source = "P1 evidence receipts and candidate benchmark manifests"
+target_section = "Experimental Design and Results"
+gate = "multi-scene support, family survival, scene-level split, and representative throughput"
+disposition = "blocked"
+
+[[promotions]]
+summary = "Keep online discrete and continuous target-then-pose extensions outside the core until the offline finite-candidate gates close."
+source = "Discussion and roadmap P1-P3"
+target_section = "Discussion"
+gate = "stable offline learned-value evidence and an explicit post-core scope decision"
+disposition = "deferred"

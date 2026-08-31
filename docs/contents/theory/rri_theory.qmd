@@ -21,6 +21,7 @@ VIN-NBV literature provides the motivating quality-oriented formulation
 [surface metrics](surface_metrics.qmd). Current metric behavior and acceptance
 checks are defined by Python docstrings and tests, not by this page.
 
-See `docs/typst/thesis/development/m1-contract-report.typ` for the current
-contract report and `docs/typst/thesis/sections/01-research-questions.typ` for
-the research-question context.
+See `docs/typst/thesis/development/roadmap.typ` for the current strategic gate
+view and `docs/typst/thesis/sections/01-research-questions.typ` for the
+research-question context. Executable RRI contracts remain in the Python source
+and tests referenced by those owners.

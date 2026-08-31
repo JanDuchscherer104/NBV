@@ -9,7 +9,9 @@ when owners conflict.
 - Current thesis direction, research questions, and development gate views are
   owned by `typst/thesis/main.typ` and its includes, especially
   `typst/thesis/sections/01-research-questions.typ` and
-  `typst/thesis/development/{roadmap,m1-contract-report}.typ`.
+  `typst/thesis/development/roadmap.typ`. The adjacent `roadmap.toml` owns the
+  rendered strategic snapshot, milestone dates, states, blockers, evidence
+  pointers, and review cadence.
   Seminar and archived proposal material is historical evidence, not priority.
 - `typst/shared/glossary.typ` owns durable terms; `typst/shared/symbols.typ` and
   `equations.typ` own reusable Typst bodies and their cross-format registry;
@@ -26,7 +28,7 @@ when owners conflict.
   `docs/typst/thesis/sections/01-research-questions.typ#ssec:rq3`. The
   conditional online bridge is RQ5 at
   `docs/typst/thesis/sections/01-research-questions.typ#ssec:rq5`. Its
-  development gate is the M6 scope decision pending M5 evidence at
+  development gate remains deferred pending the offline P1-P3 evidence chain at
   `docs/typst/thesis/development/roadmap.typ#ssec:promotion-queue`.
 
 ## Procedure And Proof
@@ -39,6 +41,9 @@ when owners conflict.
 - Role-disjoint setup and documentation verification commands route through
   [`docs/README.md`](README.md); executable behavior remains owned by the
   Makefile, CI workflow, and exact source/test owners.
+- Roadmap status changes update `typst/thesis/development/roadmap.toml` and run
+  `make thesis-roadmap-contract`; do not copy internal tracker state into the
+  public thesis projection.
 - For thesis claims, inspect the cited primary source and the local evidence.
   Compile the touched Typst surface; for final-link review use the documented
   `aria-wip-links=false` and pinned `aria-code-ref` inputs in `style.typ`.

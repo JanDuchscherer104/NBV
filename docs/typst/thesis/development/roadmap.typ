@@ -1,103 +1,184 @@
 #import "../draft_markers.typ": development_only, promotion_entry, thesis_status
+#import "../../shared/tables.typ": development-table
 
-// Development-only schedule and gate view. Scientific prose, equations, and
-// implementation contracts remain owned by the active thesis and package
-// sources named below.
+#let roadmap = toml("roadmap.toml")
+#let snapshot-colours = (
+  done: rgb("#217A3C"),
+  now: rgb("#2166A5"),
+  blocked: rgb("#B3261E"),
+  next: rgb("#6B46A5"),
+)
+#let milestone-colours = (
+  done: rgb("#217A3C"),
+  "in-progress": rgb("#2166A5"),
+  planned: rgb("#6B46A5"),
+  buffer: rgb("#5F6368"),
+)
+#let snapshot-labels = (done: [Done], now: [Now], blocked: [Blocked], next: [Next])
+#let milestone-labels = (
+  done: [done],
+  "in-progress": [in progress],
+  planned: [planned],
+  buffer: [safety buffer],
+)
+
+#let snapshot-card(entry) = {
+  let colour = snapshot-colours.at(entry.kind)
+  rect(
+    width: 100%,
+    radius: 3pt,
+    inset: (x: 7pt, y: 6pt),
+    fill: colour.lighten(95%),
+    stroke: .55pt + colour.lighten(45%),
+  )[
+    #text(size: 7.2pt, weight: 700, fill: colour)[#snapshot-labels.at(entry.kind)]
+    #h(.5em)
+    #text(size: 8pt, weight: 700)[#entry.title]
+    #v(2.5pt)
+    #text(size: 7.3pt)[#entry.body]
+  ]
+}
+
+#let gate-card(milestone) = {
+  let colour = milestone-colours.at(milestone.status)
+  rect(
+    width: 100%,
+    radius: 2.5pt,
+    inset: (x: 4pt, y: 4pt),
+    fill: colour.lighten(95%),
+    stroke: .5pt + colour.lighten(45%),
+  )[
+    #align(center)[
+      #text(size: 6.5pt, weight: 700, fill: colour)[#milestone.id]
+      #linebreak()
+      #text(size: 6.5pt)[#milestone.title]
+    ]
+  ]
+}
+
+// Development-only strategic projection. The adjacent TOML file owns the
+// snapshot, schedule, blockers, evidence pointers, and review cadence.
 #development_only(() => [
   #heading(level: 1, numbering: none)[Development roadmap] <ch:roadmap>
-  #metadata("roadmap-outcome") <outcome>
-  This page records schedule, status, evidence pointers, and promotion gates.
-  It is omitted from submission output. The active thesis owns claims; Python,
-  tests, configuration, and immutable artifacts own behavior and measurements.
+  #metadata(roadmap.meta.reviewed_at.display("[year]-[month]-[day]")) <roadmap-review-date>
+  #metadata(roadmap.meta.current_milestone) <roadmap-current-milestone>
+
+  This page is the compact strategic view of thesis development. It is omitted
+  from submission output. Scientific claims remain owned by the active thesis;
+  executable behavior and measurements remain owned by source, tests,
+  configuration, and immutable evidence artifacts.
 
   #thesis_status(
     implementation: "partial",
     evidence: "pending",
-    source: [`docs/typst/thesis/sections/`; `docs/typst/thesis/development/m1-contract-report.typ`; `aria_nbv/`; `aria_nbv/tests/`; active configuration],
-    gate: [M1 correctness and M5 headroom evidence],
-  )[Planning status only; this view promotes no policy-improvement claim.]
+    source: [`docs/typst/thesis/development/roadmap.toml`; active thesis, package, test, configuration, and evidence owners],
+    gate: [Close #roadmap.meta.current_milestone before confirmatory policy claims.],
+  )[
+    Reviewed #roadmap.meta.reviewed_at.display("[day padding:none] [month repr:short] [year]");
+    refresh due #roadmap.meta.review_due.display("[day padding:none] [month repr:short] [year]").
+    Target: reproducible full-draft freeze by
+    #roadmap.meta.complete_by.display("[day padding:none] [month repr:long] [year]"),
+    followed by a safety buffer until submission on
+    #roadmap.meta.submission_date.display("[day padding:none] [month repr:long] [year]").
+  ]
 
-  #heading(level: 2, numbering: none)[Outcome] <ssec:outcome-detail>
-  The development outcome is a reproducible, evidence-backed thesis package.
-  Canonical narrative and equation labels live in `docs/typst/thesis/sections/`;
-  this page tracks readiness and gates only.
+  #metadata("legacy-roadmap-outcome-anchor") <outcome>
+  #heading(level: 2, numbering: none)[TL;DR] <ssec:roadmap-snapshot>
+  #grid(
+    columns: (1fr, 1fr),
+    gutter: 6pt,
+    row-gutter: 6pt,
+    ..roadmap.snapshot.map(snapshot-card),
+  )
+
+  #block(breakable: false)[
+    #heading(level: 2, numbering: none)[Critical path] <ssec:critical-path>
+    The strategic dependency is evidence-first: close the substrate, establish
+    paired baseline headroom, evaluate the learned value model, synthesize the
+    claims, and freeze the full draft. The December-to-January interval is a
+    safety buffer, not planned scientific work.
+
+    #let critical = roadmap.milestones.slice(1, 6)
+    #let gate-cells = ()
+    #for (index, milestone) in critical.enumerate() {
+      gate-cells.push(gate-card(milestone))
+      if index < critical.len() - 1 {
+        gate-cells.push(text(size: 9pt, fill: gray)[→])
+      }
+    }
+    #figure(
+      grid(
+        columns: (1fr, auto, 1fr, auto, 1fr, auto, 1fr, auto, 1fr),
+        gutter: 3pt,
+        align: center + horizon,
+        ..gate-cells,
+      ),
+      caption: [Critical development gates from experiment substrate to the #roadmap.meta.complete_by.display("[day padding:none] [month repr:long] [year]") full-draft freeze.],
+    ) <fig:roadmap-critical-path>
+  ]
 
   #heading(level: 2, numbering: none)[Milestones] <ssec:milestones>
-  - *M0 — scope and foundation (2026-04-29–2026-05-10):* #strong[status: complete]; gate: thesis scope, source policy, and citation owners aligned. Evidence: `docs/typst/thesis/main.typ`, `docs/typst/thesis/sections/01-research-questions.typ`, `docs/references.bib`.
-  - *M1 — data, cache, and oracle correctness (2026-05-11–2026-05-31):* #strong[status: blocked]; gate: fresh store, scene split, frame/depth, candidate alignment, Rerun, and throughput evidence. Evidence: `docs/typst/thesis/development/m1-contract-report.typ#ssec:m1-status`, `aria_nbv/tests/data_handling/`, `aria_nbv/tests/pose_generation/`, `aria_nbv/tests/rollouts/`, `.configs/offline_only.toml`.
-  - *M2 — VIN baseline and scale gate (2026-06-01–2026-06-21):* #strong[status: blocked by M1]; gate: reproducible baseline, diagnostics, and scale receipt. Evidence: `aria_nbv/tests/vin/`, `aria_nbv/tests/lightning/`, `docs/typst/thesis/sections/05-experimental-design/05-01-objectives-and-hypotheses.typ`, `docs/typst/thesis/sections/05-experimental-design/05-03-policy-comparison-and-failure-interpretation.typ`.
-  - *M3 — target-RRI and generation readiness (2026-06-22–2026-07-12):* #strong[status: blocked by M1]; gate: trusted target subset, actor-visible protocol, and deterministic generation checks. Evidence: `docs/typst/thesis/sections/03-oracle-and-data-generation/03-02-target-task-and-rri-labels.typ`, `aria_nbv/tests/oracle/test_target_selection.py`, `aria_nbv/tests/pose_generation/`, `aria_nbv/tests/rollouts/`.
-  - *M4 — target-conditioned one-step scorer (2026-07-13–2026-08-09):* #strong[status: pending M3 evidence]; gate: held-out ranking, calibration, oracle selections, and grouped failures. Evidence: `docs/typst/thesis/sections/04-method/04-02-descriptor-and-encoding-plan.typ`, `aria_nbv/tests/oracle/test_scoring.py`, `aria_nbv/tests/lightning/test_candidate_scorer_contract.py`.
-  - *M5 — lookahead headroom and Q_H (2026-08-10–2026-08-30):* #strong[status: pending prerequisite gates]; gate: equal-budget rollout comparisons, measured headroom, and supported Q_H evidence. Evidence: `docs/typst/thesis/sections/04-method/04-05-finite-candidate-value-model.typ`, `docs/typst/thesis/sections/05-experimental-design/05-02-learning-objective-and-replay-evidence.typ`, `aria_nbv/tests/data_handling/test_qh.py`, `aria_nbv/tests/rollouts/`.
-  - *M6 — scale and bridge decisions (2026-08-31–2026-09-13):* #strong[status: pending M5]; gate: scale decision and explicit bridge scope. Evidence: `docs/typst/thesis/sections/07-discussion.typ`, `aria_nbv/tests/oracle/test_online_vin.py`, `aria_nbv/tests/rollouts/test_reporting.py`.
-  - *M7 — final experiments and writing (2026-09-14–2026-09-27):* #strong[status: pending M5/M6]; gate: immutable run/config links, coverage statement, final tables, and failure cases. Evidence: `docs/typst/thesis/sections/06-results.typ`, `docs/typst/thesis/sections/07-discussion.typ`, `aria_nbv/tests/rollouts/test_reporting.py`.
-  - *M8 — release freeze (2026-09-28–2026-09-30):* #strong[status: pending M7]; gate: reproducible configs, docs, demo path, smoke checks, and completed HM/FK07 pre-submission checks. Evidence: `Makefile`, `docs/README.md`, CI workflows, final evidence bundle, and authenticated PRIMUSS registration records.
+  #figure(
+    development-table(
+      columns: (.45fr, 1.35fr, 1.05fr, .8fr, 2.35fr),
+      header: ([*ID*], [*Phase*], [*Dates*], [*State*], [*Exit gate*]),
+      rows: roadmap.milestones.map(milestone => (
+        [#milestone.id],
+        [#milestone.title],
+        [#milestone.start.display("[day padding:none] [month repr:short]")–#milestone.end.display("[day padding:none] [month repr:short] [year]")],
+        [#text(fill: milestone-colours.at(milestone.status), weight: 700)[#milestone-labels.at(milestone.status)]],
+        [#milestone.gate],
+      )).flatten(),
+      text-size: 7.5pt,
+    ),
+    caption: [Evidence-gated schedule from the completed pilot infrastructure to submission. Dependencies are checked against the adjacent roadmap data.],
+  ) <tab:roadmap-milestones>
 
-  #heading(level: 2, numbering: none)[Ablations] <ssec:ablations>
-  Comparison axes remain in canonical owners; this page records pointers and gates only.
-  - *Target input:* `docs/typst/thesis/sections/03-oracle-and-data-generation/03-02-target-task-and-rri-labels.typ`; gate: V0/V1 protocol tests and actor-visible boundary.
-  - *Candidate mixture:* `docs/typst/thesis/sections/03-oracle-and-data-generation/03-02-target-task-and-rri-labels.typ`, `aria_nbv/aria_nbv/pose_generation/`; gate: validity and provenance diagnostics.
-  - *Objective/planner:* `docs/typst/thesis/sections/05-experimental-design/05-01-objectives-and-hypotheses.typ`, `docs/typst/thesis/sections/05-experimental-design/05-03-policy-comparison-and-failure-interpretation.typ`; gate: equal budget and oracle receipt.
-  - *Invalidity/learning:* `docs/typst/thesis/sections/04-method/04-04-architecture-contract.typ`, `docs/typst/thesis/sections/05-experimental-design/05-02-learning-objective-and-replay-evidence.typ`; gate: masks, reason codes, replay tests.
-  - *State/scale:* `docs/typst/thesis/sections/04-method/04-01-scene-representation-requirements.typ`, `docs/typst/thesis/sections/03-oracle-and-data-generation/03-03-replay-stores-and-diagnostics.typ`; gate: support and coverage accounting.
+  #metadata("legacy-roadmap-risks-anchor") <risks>
+  #metadata("legacy-roadmap-issues-anchor") <issues-and-blockers>
+  #heading(level: 2, numbering: none)[Blockers] <ssec:roadmap-blockers>
+  #for blocker in roadmap.blockers [
+    - *#blocker.id — #blocker.title* (affects #blocker.affects.join(", ")): #blocker.body
+  ]
+  The primary evidence pointers remain beside each record in `roadmap.toml`;
+  the roadmap contract checks their existence, while scientific review decides
+  whether they are sufficient for promotion.
 
-  #heading(level: 2, numbering: none)[Evidence] <ssec:evidence>
-  - M1: `docs/typst/thesis/development/m1-contract-report.typ`, focused data/geometry/rollout tests, `.configs/offline_only.toml`, immutable store/Rerun receipts.
-  - M2–M4: `aria_nbv/tests/vin/`, `aria_nbv/tests/oracle/`, `aria_nbv/tests/lightning/`, and `docs/typst/thesis/sections/05-experimental-design/` plus saved calibration/ranking artifacts.
-  - M5–M7: rollout manifests, reports, configs, result tables, and exact support/coverage gaps in those artifacts.
-  - M8: CI, `make qmd-frontmatter-check`, `make thesis-pdf`, final smoke receipts, authenticated registration records, and the HM/FK07 pre-submission checklist; tracked PDF remains a development artifact and cannot establish submission.
-
-  #heading(level: 2, numbering: none)[Risks] <ssec:risks>
-  Active risk state is pointer-only: frame/depth `aria_nbv/tests/rendering/test_depth_backprojection_conventions.py`, target validity `aria_nbv/tests/oracle/test_target_selection.py`, rollout support `aria_nbv/tests/rollouts/test_zarr_store.py`. Open blockers remain in `docs/typst/thesis/development/m1-contract-report.typ` and `.agents/issues.toml`/`.agents/todos.toml`; no duplicate risk narrative is maintained here.
-
-  #heading(level: 2, numbering: none)[Freeze] <ssec:freeze>
-  Freeze gate: clean reproducible smoke matrix, immutable run/config links, final coverage statement, and no stale paths or placeholders. The exact submission evidence gate remains owned by `docs/typst/thesis/main.typ` and its report bundle; this development projection does not satisfy it.
-
-  HM/FK07 release checks are human-owned and must be completed against the author's authenticated records and the final PDF at the applicable pre- or post-submission stage:
-  - *Applicable rules:* confirm the individually assigned programme and SPO version in PRIMUSS; public reading versions establish only the current baseline.
-  - *Registration:* retain the PRIMUSS confirmation, official start date, individual deadline, assigned examiners, supervisor-specific length and form, and the attachments requested for this thesis.
-  - *Pre-submission readiness:* verify the final upload, mandatory attachments, and exact PDF prepared for PRIMUSS upload before the individual deadline. A repository field, local build, PDF digest, or upload alone is not submission evidence.
-  - *Copies:* provide a paper copy only when an examiner requests one under the current FK07 process.
-  - *Local final-PDF review:* as a repository/author release check, verify the declaration and AI/tool disclosure in the exact PDF prepared for PRIMUSS upload. Confirm any PRIMUSS-marked mandatory declaration, signature, or attachment against the authenticated record and assigned supervisor; this checklist does not impose a universal signature form.
-  - *Post-freeze submission closure:* at the actual submission, invoke `Abschlussarbeit abgeben`, retain the authenticated timestamp, and archive the exact submitted PDF. This later receipt closes the submission evidence gate but does not block the September M8 development freeze.
-
-  Official baseline checked 2026-08-25: #link("https://mediapool.hm.edu/media/dachmarke/dm_transfer/download_13/aspo_2/ASPO_iF_05_AES.pdf")[HM ASPO], #link("https://mediapool.hm.edu/media/dachmarke/dm_transfer/download_13/spo_6/spo_aktuell/07_igm_aktuell_spo.pdf")[Master Informatik SPO], #link("https://cs.hm.edu/studierende/abschlussarbeiten.de.html")[FK07 thesis process], #link("https://mediapool.hm.edu/media/fk07/fk07_lokal/fk07_dokumentenpool/studium_8/abschlussarbeiten_21/Anleitung_Anmeldung_Abschlussarbeit_Stand_29.09.2025.pdf")[PRIMUSS registration guide], and #link("https://mediapool.hm.edu/media/fk07/fk07_lokal/fk07_dokumentenpool/studium_8/abschlussarbeiten_21/Anleitung_Abgabe_Abschlussarbeit_Stand_29.09.2025.pdf")[PRIMUSS submission guide]. Recheck the official versions and authenticated instructions at freeze time.
-
+  #metadata("legacy-roadmap-ablations-anchor") <ablations>
+  #metadata("legacy-roadmap-priorities-anchor") <priorities>
   #heading(level: 2, numbering: none)[Promotion queue] <ssec:promotion-queue>
-  #promotion_entry(
-    [Promote M5 lookahead/Q_H results after paired held-out evidence is immutable.],
-    source: [docs/typst/thesis/sections/05-experimental-design/; aria_nbv/tests/rollouts/test_reporting.py],
-    target-section: [docs/typst/thesis/sections/06-results.typ and docs/typst/thesis/sections/07-discussion.typ],
-    gate: [positive headroom, oracle re-scoring, uncertainty, and coverage],
-    disposition: "candidate",
-  )
-  #promotion_entry(
-    [Resolve the scale fallback before claiming population coverage.],
-    source: [docs/typst/thesis/development/m1-contract-report.typ; aria_nbv/tests/data_handling/; aria_nbv/tests/rollouts/],
-    target-section: [docs/typst/thesis/sections/05-experimental-design/05-03-policy-comparison-and-failure-interpretation.typ],
-    gate: [throughput and scene-level held-out coverage],
-    disposition: "blocked",
-  )
-  #promotion_entry(
-    [Keep online discrete Q_H and continuous target-then-pose work as bridge scope until offline gates close.],
-    source: [docs/typst/thesis/sections/07-discussion.typ; .agents/issues.toml],
-    target-section: [docs/typst/thesis/sections/07-discussion.typ],
-    gate: [stable offline Q_H and explicit scope decision],
-    disposition: "deferred",
-  )
-  #promotion_entry(
-    [Do not promote unsupported continuous, VLM, semantic-global, or real-device claims into the thesis core.],
-    source: [docs/typst/thesis/main.typ; docs/typst/thesis/sections/07-discussion.typ],
-    target-section: [docs/typst/thesis/sections/08-conclusion.typ],
-    gate: [bounded non-claim retained],
-    disposition: "rejected",
-  )
+  #for entry in roadmap.promotions {
+    promotion_entry(
+      entry.summary,
+      source: entry.source,
+      target-section: entry.target_section,
+      gate: entry.gate,
+      disposition: entry.disposition,
+    )
+  }
 
-  #heading(level: 2, numbering: none)[Priorities] <ssec:priorities>
-  Gate order is M1 correctness, M2–M4 target/scorer readiness, M5 headroom, M6 bridge decision, then M7/M8 freeze. Each transition requires the evidence pointer and exit gate above; no scale or bridge work bypasses a blocked prerequisite.
+  #heading(level: 2, numbering: none)[Maintenance contract] <ssec:roadmap-maintenance>
+  `roadmap.toml` is the single owner for the snapshot, dates, states,
+  dependencies, blockers, and evidence pointers rendered above. Update it at
+  least every #roadmap.meta.review_cadence_days days and whenever a gate changes
+  state. `make thesis-roadmap-contract` rejects stale review dates, broken
+  dependencies, missing local evidence pointers, divergence from the thesis
+  submission date, or references to the retired M1 snapshot. Internal trackers
+  and hosted issue state may inform a refresh but are not imported as public
+  thesis truth.
 
-  #heading(level: 2, numbering: none)[Issues and blockers] <ssec:issues-and-blockers>
-  - M1 store, scene split, Rerun, and throughput: `docs/typst/thesis/development/m1-contract-report.typ#m1-blockers`.
-  - M5 support and headroom: `docs/typst/thesis/sections/05-experimental-design/05-02-learning-objective-and-replay-evidence.typ`, `docs/typst/thesis/sections/05-experimental-design/05-03-policy-comparison-and-failure-interpretation.typ`.
-  - Actionable follow-up: `.agents/issues.toml` and `.agents/todos.toml`; these records do not replace canonical owners.
+  The native table, cards, and critical-path strip are deliberately sufficient:
+  they show exact milestones and the consequential dependency chain without a
+  second diagram data model. A date-dense Gantt can be reconsidered only if this
+  compact projection no longer answers the planning question.
+
+  #heading(level: 2, numbering: none)[Freeze and submission] <ssec:freeze>
+  By #roadmap.meta.complete_by.display("[day padding:none] [month repr:long] [year]"),
+  the full draft, experiment registry, configurations, figures, and release
+  checks must be reproducible and free of unresolved placeholders. The interval
+  from #roadmap.milestones.last().start.display("[day padding:none] [month repr:long]")
+  to #roadmap.meta.submission_date.display("[day padding:none] [month repr:long] [year]")
+  is reserved for advisor feedback, formal HM/FK07 checks, final upload, and
+  recovery from unexpected defects. Only the authenticated submission receipt
+  closes the final gate.
 ])

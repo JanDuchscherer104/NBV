@@ -23,16 +23,25 @@ LABEL_SCOPE = {
     Path("docs/typst/thesis/sections/01-introduction.typ"): "submission",
     Path("docs/typst/thesis/sections/01-research-questions.typ"): "submission",
     Path("docs/typst/thesis/development/roadmap.typ"): "development",
-    Path("docs/typst/thesis/development/m1-contract-report.typ"): "development",
 }
 EXPECTED_LABEL_COUNTS = {
     Path("docs/typst/thesis/sections/01-introduction.typ"): 3,
     Path("docs/typst/thesis/sections/01-research-questions.typ"): 10,
     Path("docs/typst/thesis/development/roadmap.typ"): 10,
-    Path("docs/typst/thesis/development/m1-contract-report.typ"): 4,
 }
 LABEL_PREFIXES = ("ch:", "fig:", "tab:", "sec:", "ssec:")
-METADATA_LABELS = {"outcome"}
+METADATA_LABELS = {
+    "ablations",
+    "issues-and-blockers",
+    "m1-blockers",
+    "m1-evidence",
+    "m1-status",
+    "outcome",
+    "priorities",
+    "risks",
+    "roadmap-review-date",
+    "roadmap-current-milestone",
+}
 PREEXISTING_LABELS = {"sec:thesis-research-questions"}
 LABEL_RE = re.compile(r"<([A-Za-z][A-Za-z0-9_:-]*)>")
 
@@ -544,7 +553,7 @@ class HygieneTests(unittest.TestCase):
             ]
             self.assertEqual(len(labels), expected, relative)
             totals[LABEL_SCOPE[relative]] += len(labels)
-        self.assertEqual(totals, {"submission": 13, "development": 14})
+        self.assertEqual(totals, {"submission": 13, "development": 10})
 
     def test_active_table_inventory_is_derived_and_scoped(self) -> None:
         """All authored scientific tables are covered; layout tables are not."""
