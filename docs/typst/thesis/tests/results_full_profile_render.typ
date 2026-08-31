@@ -95,7 +95,8 @@ synthetic layout tokens only.
 
 #let bands = (
   (id: "foundations", expected: 17, caption: [Population, measurement, and candidate-support rows]),
-  (id: "policy", expected: 14, caption: [Endpoint, headroom, actor-$Q_1$, and recovery rows]),
+  (id: "policy", expected: 9, caption: [Endpoint, headroom, and recovery rows]),
+  (id: "q1", expected: 5, caption: [Actor-$Q_1$ ranking, calibration, and threshold rows]),
   (id: "q2", expected: 12, caption: [Exact-$Q_2$ agreement and threshold rows]),
   (id: "resources", expected: 3, caption: [Resource rows]),
 )
@@ -104,24 +105,26 @@ synthetic layout tokens only.
   let families = all-result-summary-families.filter(family => family.band == band.id)
   let metric-count = families.fold(0, (total, family) => total + family.metrics.len())
   assert(metric-count == band.expected, message: "result-summary family size drift: " + band.id)
-  let scope = if band.id == "q2" { "global" } else { "profile" }
+  let global-band = band.id in ("q1", "q2")
+  let scope = if global-band { "global" } else { "profile" }
   let rows = result-summary-rows-for(report, families, scope: scope)
-  if band.id == "q2" {
+  if global-band {
     let global-rows = result-summary-rows-for(two-store-report, families, scope: "global")
     let reversed-global-rows = result-summary-rows-for(reversed-two-store-report, families, scope: "global")
-    assert(global-rows.len() == rows.len(), message: "global Q2 rows must render once, not once per profile")
-    assert(global-rows == reversed-global-rows, message: "shared global Q2 rows must not depend on store order")
-    let q2-display-keys = families.map(family => family.metrics.map(metric => metric.key)).flatten()
-    assert(report-stores-facts-share-values(two-store-report, q2-display-keys))
+    assert(global-rows.len() == rows.len(), message: "global " + band.id + " rows must render once, not once per profile")
+    assert(global-rows == reversed-global-rows, message: "shared global " + band.id + " rows must not depend on store order")
+    let display-keys = families.map(family => family.metrics.map(metric => metric.key)).flatten()
+    assert(report-stores-facts-share-values(two-store-report, display-keys))
+    let divergent-key = if band.id == "q1" { "q1.calibration.mae" } else { "q2.exact.mae" }
     let divergent-report = (
       tables: (
         stores: two-store-report.tables.stores,
-        facts: (rows: two-store-report.tables.facts.rows.map(fact => if fact.store_id == "synthetic-layout-only-b" and fact.key == "q2.exact.mae" {
+        facts: (rows: two-store-report.tables.facts.rows.map(fact => if fact.store_id == "synthetic-layout-only-b" and fact.key == divergent-key {
           fact + (value: 0.875,)
         } else { fact })),
       ),
     )
-    assert(not report-stores-facts-share-values(divergent-report, q2-display-keys))
+    assert(not report-stores-facts-share-values(divergent-report, display-keys))
   }
   figure(
     result-summary-table(rows),

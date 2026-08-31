@@ -232,6 +232,12 @@ reviews until zero P0--P2 findings remained.
   complete zero-valid attempts remain measured non-passes. Results language is
   explicitly limited to the declared admitted-task population and does not
   imply actor-visible target discovery or universal target coverage.
+- The final exact-head presentation review found that the one global actor-
+  $Q_1$ analysis was repeated below every profile label. Actor-$Q_1$ ranking,
+  calibration, thresholds, and decision now render once in a dedicated global
+  table; profile-scoped endpoint, headroom, and recovery estimates remain
+  separate. The layout fixture proves single rendering, store-order invariance,
+  and rejection of divergent cross-store Q1 display facts.
 
 ## Commits
 
@@ -431,6 +437,16 @@ with zero valid P0--P2 findings. The non-PDF tracked diff before this debrief wa
 `135f81d5473ff5099c9aa1fbf27d15bda2c34ddc6bd948d894b0fdfaa326e653`.
 The thesis remains 129 A4 pages; its pre-debrief PDF SHA-256 is
 `0ed88722f33e07b53fda245bc97cc787f510c91b297796ae71468e2007920477`.
+
+The global-Q1 presentation repair passed `make thesis-report-data-contract`,
+`make typst-authoring-contract`, `make thesis-results-full-profile-render`,
+`make thesis-pdf-ci`, `make thesis-marker-contract`, `make thesis-pdf`, and
+`git diff --check`. Both A4 layout-fixture pages were visually inspected; the
+Q1 table appears once under `Global` without clipping. Two independent exact-
+candidate reviewers approved source diff
+`6c9f30cab3a27d5617b7e0c30cc8854ce391392c7a0d82b05d7dc18338d0909c`
+with zero P0--P2 findings. The thesis remains 129 A4 pages with PDF SHA-256
+`33342e974dcc63b73ca52cd3555c2441cc74f7bf9f83ef2aaa265e1ae4dfb2b0`.
 
 ## Canonical Owner Impact
 

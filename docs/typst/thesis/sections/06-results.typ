@@ -223,7 +223,7 @@ payload to reproduce every claimed row.
   (label: [Declared minimum effect], key: "headroom_gate.minimum_effect", denominator-key: "policy.paired_scene_endpoint.n_scenes", digits: 3),
   (label: [Meaningful-headroom gate], key: "headroom_gate.passed", denominator-key: "policy.paired_scene_endpoint.n_scenes"),
 ))
-#let q1-summary-family = (band: "policy", label: [Actor Q1], metrics: (
+#let q1-summary-family = (band: "q1", label: [Actor Q1], metrics: (
   (label: [Pairwise ranking], key: "q1.ranking.pairwise_accuracy", low-key: "q1.ranking.pairwise_accuracy.ci_low", high-key: "q1.ranking.pairwise_accuracy.ci_high", denominator-key: "q1.population.n_scenes", digits: 3),
   (label: [Ranking minimum], key: "q1.ranking.pairwise_accuracy.minimum", denominator-key: "q1.population.n_scenes", digits: 3),
   (label: [Calibration MAE], key: "q1.calibration.mae", denominator-key: "q1.population.n_scenes", digits: 4),
@@ -355,6 +355,11 @@ payload to reproduce every claimed row.
   thesis_data,
   result-summary-families.filter(family => family.band == "policy"),
 )
+#let q1-summary-rows = result-summary-rows-for(
+  thesis_data,
+  result-summary-families.filter(family => family.band == "q1"),
+  scope: "global",
+)
 #let q2-summary-rows = result-summary-rows-for(
   thesis_data,
   result-summary-families.filter(family => family.band == "q2"),
@@ -375,8 +380,15 @@ payload to reproduce every claimed row.
 #if policy-summary-rows.len() > 0 [
   #figure(
     result-summary-table(policy-summary-rows),
-    caption: [Available confirmatory endpoint, headroom, actor-$Q_1$, and recovery values by profile.],
+    caption: [Available confirmatory endpoint, headroom, and recovery values by profile.],
   ) <tab:thesis-confirmatory-policy-values>
+]
+
+#if q1-summary-rows.len() > 0 [
+  #figure(
+    result-summary-table(q1-summary-rows),
+    caption: [One global actor-$Q_1$ ranking and calibration analysis over the complete frozen held-out population.],
+  ) <tab:thesis-confirmatory-q1-values>
 ]
 
 #if q2-summary-rows.len() > 0 [
@@ -470,7 +482,8 @@ payload to reproduce every claimed row.
   those bound artifacts.
   Actor-visible ranking with its interval,
   calibration, declared thresholds, scene denominators, and their rule-checked
-  decision are also available.
+  decision are also available from one global analysis in
+  @tab:thesis-confirmatory-q1-values.
   The actor-$Q_1$ claim is
   #if q1-state.claim_admissible [admissible under the passed target, state,
   measurement, and support protocols.] else [blocked by a shared foundation or
