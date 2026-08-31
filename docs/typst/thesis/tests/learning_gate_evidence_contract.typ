@@ -645,8 +645,14 @@
   minimum-independent-units: 5,
   minimum-unit-rows: 1,
   ordered-test-manifests: (store-manifest,),
+  store-indices: none,
 ) = {
   let selected-count = row-counts.len()
+  let selected-store-indices = if store-indices == none {
+    row-counts.map(_ => 0)
+  } else { store-indices }
+  assert(selected-store-indices.len() == selected-count)
+  assert(selected-store-indices.all(index => type(index) == int and index >= 0 and index < ordered-test-manifests.len()))
   let coverage = selected-count / population-count
   let absolute-error = calc.abs(error)
   let relative-error = absolute-error / calc.max(calc.abs(exact-target), 0.00000011920928955078125)
@@ -701,10 +707,11 @@
   ))
   let selected = row-counts.enumerate().map(((scene-index, row-count)) => {
     let prefix = "exact_q2.selected_chain_support[" + str(scene-index) + "]"
+    let store-index = selected-store-indices.at(scene-index)
     (
       typed-sidecar-row(q2-receipt-sidecar, prefix + ".selection_rank", scene-index),
       typed-sidecar-row(q2-receipt-sidecar, prefix + ".dataset_index", scene-index),
-      typed-sidecar-row(q2-receipt-sidecar, prefix + ".identity.store_index", 0),
+      typed-sidecar-row(q2-receipt-sidecar, prefix + ".identity.store_index", store-index),
       typed-sidecar-row(q2-receipt-sidecar, prefix + ".identity.rollout_row_id", scene-index),
       typed-sidecar-row(q2-receipt-sidecar, prefix + ".identity.source_sample_index", scene-index),
       typed-sidecar-row(q2-receipt-sidecar, prefix + ".identity.scene_id", "scene-" + str(scene-index)),
@@ -728,10 +735,11 @@
   ).map(step-index => {
     let row-index = row-counts.slice(0, scene-index).sum(default: 0) + step-index
     let prefix = "exact_q2.factual_selected_action_exact_q2_rows[" + str(row-index) + "]"
+    let store-index = selected-store-indices.at(scene-index)
     (
       typed-sidecar-row(q2-receipt-sidecar, prefix + ".dataset_index", scene-index),
       typed-sidecar-row(q2-receipt-sidecar, prefix + ".selection_rank", scene-index),
-      typed-sidecar-row(q2-receipt-sidecar, prefix + ".store_index", 0),
+      typed-sidecar-row(q2-receipt-sidecar, prefix + ".store_index", store-index),
       typed-sidecar-row(q2-receipt-sidecar, prefix + ".rollout_row_id", scene-index),
       typed-sidecar-row(q2-receipt-sidecar, prefix + ".source_sample_index", scene-index),
       typed-sidecar-row(q2-receipt-sidecar, prefix + ".scene_id", "scene-" + str(scene-index)),
@@ -773,9 +781,10 @@
   let census = row-counts.enumerate().map(((scene-index, row-count)) => {
     let prefix = "exact_q2.population_census.strata[" + str(scene-index) + "]"
     let stratum-population = 1 + if scene-index == 0 { population-count - selected-count } else { 0 }
+    let store-index = selected-store-indices.at(scene-index)
     (
       typed-sidecar-row(q2-receipt-sidecar, prefix + ".stratum.scene_id", "scene-" + str(scene-index)),
-      typed-sidecar-row(q2-receipt-sidecar, prefix + ".stratum.store_index", 0),
+      typed-sidecar-row(q2-receipt-sidecar, prefix + ".stratum.store_index", store-index),
       typed-sidecar-row(q2-receipt-sidecar, prefix + ".stratum.target_row_id", scene-index),
       typed-sidecar-row(q2-receipt-sidecar, prefix + ".stratum.configured_horizon", 2),
       typed-sidecar-row(q2-receipt-sidecar, prefix + ".stratum.candidate_branch_bin", "2-4"),
@@ -789,9 +798,10 @@
   }).flatten()
   let support-aggregates = row-counts.enumerate().map(((scene-index, row-count)) => {
     let prefix = "exact_q2.support_stratum_aggregates[" + str(scene-index) + "]"
+    let store-index = selected-store-indices.at(scene-index)
     (
       typed-sidecar-row(q2-receipt-sidecar, prefix + ".stratum.scene_id", "scene-" + str(scene-index)),
-      typed-sidecar-row(q2-receipt-sidecar, prefix + ".stratum.store_index", 0),
+      typed-sidecar-row(q2-receipt-sidecar, prefix + ".stratum.store_index", store-index),
       typed-sidecar-row(q2-receipt-sidecar, prefix + ".stratum.target_row_id", scene-index),
       typed-sidecar-row(q2-receipt-sidecar, prefix + ".stratum.configured_horizon", 2),
       typed-sidecar-row(q2-receipt-sidecar, prefix + ".stratum.candidate_branch_bin", "2-4"),
@@ -822,9 +832,10 @@
     if row-count == 0 { () } else {
       let aggregate-index = row-counts.slice(0, scene-index).filter(count => count > 0).len()
       let prefix = "exact_q2.stratum_aggregates[" + str(aggregate-index) + "]"
+      let store-index = selected-store-indices.at(scene-index)
       (
       typed-sidecar-row(q2-receipt-sidecar, prefix + ".stratum.scene_id", "scene-" + str(scene-index)),
-      typed-sidecar-row(q2-receipt-sidecar, prefix + ".stratum.store_index", 0),
+      typed-sidecar-row(q2-receipt-sidecar, prefix + ".stratum.store_index", store-index),
       typed-sidecar-row(q2-receipt-sidecar, prefix + ".stratum.target_row_id", scene-index),
       typed-sidecar-row(q2-receipt-sidecar, prefix + ".stratum.candidate_branch_bin", "2-4"),
       typed-sidecar-row(q2-receipt-sidecar, prefix + ".stratum.candidate_config_hash", candidate-config),
@@ -900,6 +911,7 @@
   minimum-independent-units: 5,
   minimum-unit-rows: 1,
   ordered-test-manifests: (store-manifest,),
+  store-indices: none,
   receipt-values: none,
   sidecar-rows: sidecars,
 ) = {
@@ -944,6 +956,7 @@
       minimum-independent-units: minimum-independent-units,
       minimum-unit-rows: minimum-unit-rows,
       ordered-test-manifests: ordered-test-manifests,
+      store-indices: store-indices,
     )
   } else { receipt-values }
   report(
@@ -1430,7 +1443,7 @@
   ordered-test-manifests: (second-store-manifest, store-manifest),
 )
 #let two-store-base = q2-report(receipt-values: two-store-receipt-values)
-#let two-store-report = (
+#let two-store-other-only-report = (
   tables: two-store-base.tables + (
     stores: (rows: (
       (store_id: "store-a", manifest_sha256: store-manifest),
@@ -1438,7 +1451,54 @@
     ),),
   ),
 )
-#assert(report-store-q2-evidence-valid(two-store-report, "store-a"))
+#assert(not report-store-q2-evidence-valid(two-store-other-only-report, "store-a"))
+#let two-store-census-only-values = {
+  let values = q2-certification-sidecar-value-rows(
+    population-count: 6,
+    ordered-test-manifests: (second-store-manifest, store-manifest),
+  )
+  values = mutate-sidecar-value(values, "exact_q2.population_census.strata[0].population_chain_count", 1)
+  values = mutate-sidecar-value(values, "exact_q2.population_census.strata[0].selected_chain_fraction", 1.0)
+  values += clone-sidecar-prefix(
+    values,
+    "exact_q2.population_census.strata[0]",
+    "exact_q2.population_census.strata[5]",
+  )
+  values = mutate-sidecar-value(values, "exact_q2.population_census.strata[5].stratum.store_index", 1)
+  values = mutate-sidecar-value(values, "exact_q2.population_census.strata[5].selected_chain_count", 0)
+  values = mutate-sidecar-value(values, "exact_q2.population_census.strata[5].selected_chain_fraction", 0.0)
+  values
+}
+#let two-store-census-only-base = q2-report(
+  population-count: 6,
+  receipt-values: two-store-census-only-values,
+)
+#let two-store-census-only-report = (
+  tables: two-store-census-only-base.tables + (
+    stores: two-store-other-only-report.tables.stores,
+  ),
+)
+#assert(report-store-q2-evidence-valid(two-store-census-only-report, "store-a"))
+#let two-store-current-report = (
+  tables: two-store-base.tables + (
+    stores: (rows: (
+      (store_id: "store-a", manifest_sha256: second-store-manifest),
+      (store_id: "store-b", manifest_sha256: store-manifest),
+    ),),
+  ),
+)
+#assert(report-store-q2-evidence-valid(two-store-current-report, "store-a"))
+#let two-store-current-zero-support-base = q2-report(
+  row-counts: (0, 2, 2, 2, 2),
+  ordered-test-manifests: (second-store-manifest, store-manifest),
+  store-indices: (1, 0, 0, 0, 0),
+)
+#let two-store-current-zero-support-report = (
+  tables: two-store-current-zero-support-base.tables + (
+    stores: two-store-other-only-report.tables.stores,
+  ),
+)
+#assert(report-store-q2-evidence-valid(two-store-current-zero-support-report, "store-a"))
 #let swapped-two-store-values = mutate-sidecar-value(
   mutate-sidecar-value(
     two-store-receipt-values,
@@ -1451,7 +1511,7 @@
 #let swapped-two-store-base = q2-report(receipt-values: swapped-two-store-values)
 #let swapped-two-store-report = (
   tables: swapped-two-store-base.tables + (
-    stores: two-store-report.tables.stores,
+    stores: two-store-current-report.tables.stores,
   ),
 )
 #assert(not report-store-q2-evidence-valid(swapped-two-store-report, "store-a"))

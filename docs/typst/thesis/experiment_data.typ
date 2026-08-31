@@ -1860,6 +1860,9 @@
     chain => str(chain.store) + "|" + str(chain.rollout),
   ).dedup().len() == selected.len()
   if not selected-valid { return false }
+  let current-store-index = manifest-values.position(
+    manifest => manifest == store-manifest,
+  )
   let selected-by-rank = (:)
   for chain in selected {
     if type(chain.rank) == int { selected-by-rank.insert(str(chain.rank), chain) }
@@ -2139,6 +2142,10 @@
     stratum => stratum.selected,
   ).sum(default: 0) == selected.len()
   if not census-valid { return false }
+  let current-store-in-population = current-store-index != none and census-strata.any(
+    stratum => stratum.store == current-store-index,
+  )
+  if not current-store-in-population { return false }
   let census-scenes = census-strata.map(stratum => stratum.scene).dedup()
   let census-targets = census-strata.map(
     stratum => str(stratum.scene) + "|" + str(stratum.target),
