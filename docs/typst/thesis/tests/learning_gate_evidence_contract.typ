@@ -1036,6 +1036,14 @@
   row + (value: false,)
 } else { row })
 #assert(not report-store-candidate-support-evidence-valid(report(contradictory-support-outcome), "store-a"))
+#let malformed-support-valid-count = support-baseline-rows.map(row => if row.key == "candidate-support.attempts[1].valid_count" {
+  row + (value: "3",)
+} else { row })
+#assert(not report-store-candidate-support-evidence-valid(report(malformed-support-valid-count), "store-a"))
+#let malformed-support-minimum-count = support-baseline-rows.map(row => if row.key == "candidate-support.attempts[1].minimum_valid_count" {
+  row + (value: "3",)
+} else { row })
+#assert(not report-store-candidate-support-evidence-valid(report(malformed-support-minimum-count), "store-a"))
 #assert(not report-store-candidate-support-evidence-valid(report(
   support-baseline-rows.filter(row => not row.key.starts-with("candidate-support.attempts[0].")),
 ), "store-a"))

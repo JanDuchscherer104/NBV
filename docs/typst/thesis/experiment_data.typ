@@ -1241,7 +1241,11 @@
     attempt.valid != none and type(attempt.valid.value) == int and attempt.valid.value >= 0 and attempt.valid.unit == "count" and attempt.valid.aggregation == "attempt_count",
     attempt.minimum != none and type(attempt.minimum.value) == int and attempt.minimum.value > 0 and attempt.minimum.unit == "count" and attempt.minimum.aggregation == "attempt_threshold",
     attempt.passed != none and type(attempt.passed.value) == bool and attempt.passed.unit == "bool" and attempt.passed.aggregation == "attempt_outcome",
-    attempt.valid != none and attempt.minimum != none and attempt.passed != none and attempt.passed.value == (attempt.valid.value >= attempt.minimum.value),
+    attempt.valid != none and type(attempt.valid.value) == int and attempt.minimum != none and type(
+      attempt.minimum.value,
+    ) == int and attempt.passed != none and type(attempt.passed.value) == bool and attempt.passed.value == (
+      attempt.valid.value >= attempt.minimum.value
+    ),
   ).all(value => value))
   let record-keys = record-rows.map(row => row.key)
   records-valid and benchmark-roster-valid and expected-attempts != none and type(expected-attempts) == int and expected-attempts == attempt-count and scene-count != none and reported-p05 != none and reported-failed-rate != none and store-manifest != none and report-store-fact-values-match(
