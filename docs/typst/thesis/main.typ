@@ -83,5 +83,4 @@
 // Development planning and gate reports own their own lazy development-only
 // boundaries, so they can also be compiled as standalone development sources.
 #include "development/roadmap.typ"
-#include "development/m1-contract-report.typ"
 #include "development/s2-rollout-pilot.typ"
