@@ -957,16 +957,22 @@ def test_qh_fit_publishes_new_bundle_and_hashed_receipts(tmp_path) -> None:
     training_receipt = json.loads(result.training_receipt_path.read_text(encoding="utf-8"))
     bundle_manifest = json.loads((result.bundle.bundle_path / "manifest.json").read_text(encoding="utf-8"))
     for stage in ("train", "validation", "test"):
-        assert bundle_manifest["identity"]["dataset_payload_sha256s"][stage] == hashlib.sha256(
-            json.dumps(bundle_manifest["identity"]["datasets"][stage], sort_keys=True, separators=(",", ":")).encode(
-                "utf-8"
-            )
-        ).hexdigest()
-        assert bundle_manifest["identity"]["dataset_provenance_payload_sha256s"][stage] == hashlib.sha256(
-            json.dumps(
-                bundle_manifest["identity"]["dataset_provenance"][stage], sort_keys=True, separators=(",", ":")
-            ).encode("utf-8")
-        ).hexdigest()
+        assert (
+            bundle_manifest["identity"]["dataset_payload_sha256s"][stage]
+            == hashlib.sha256(
+                json.dumps(
+                    bundle_manifest["identity"]["datasets"][stage], sort_keys=True, separators=(",", ":")
+                ).encode("utf-8")
+            ).hexdigest()
+        )
+        assert (
+            bundle_manifest["identity"]["dataset_provenance_payload_sha256s"][stage]
+            == hashlib.sha256(
+                json.dumps(
+                    bundle_manifest["identity"]["dataset_provenance"][stage], sort_keys=True, separators=(",", ":")
+                ).encode("utf-8")
+            ).hexdigest()
+        )
     assert training_receipt["warm_start_parent_manifest_sha256"] is None
     assert "test_loss" not in training_receipt
     assert training_receipt["target_descriptor_identity"] == {
