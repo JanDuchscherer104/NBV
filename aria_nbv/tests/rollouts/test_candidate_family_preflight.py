@@ -5,9 +5,10 @@ from __future__ import annotations
 import gc
 import json
 import pickle
+from collections.abc import Iterable
 from dataclasses import replace
 from pathlib import Path
-from typing import Any
+from typing import Any, get_type_hints
 
 import pytest
 import torch
@@ -120,6 +121,23 @@ def test_root_threshold_resolves_and_persists_exact_boundary() -> None:
     assert CandidateSupportFailure.LOW_ROOT_SUPPORT not in {blocker.code for blocker in admitted.blockers}
     assert _config(40).resolved_min_valid == 12
     assert admitted.to_payload()["resolved_min_valid"] == 15
+
+
+def test_public_reducer_accepts_only_canonical_benchmark_records() -> None:
+    hints = get_type_hints(reduce_candidate_family_preflight)
+    assert hints["records"] == Iterable[CandidateBenchmark]
+
+    canonical = _record(state="canonical")
+    assert reduce_candidate_family_preflight((canonical,), _config()).cells
+
+    class StructuralRecord:
+        scene_key = canonical.scene_key
+        state_key = canonical.state_key
+        families = canonical.families
+
+    structural_records: Any = (StructuralRecord(),)
+    with pytest.raises(TypeError, match="CandidateBenchmark"):
+        reduce_candidate_family_preflight(structural_records, _config())
 
 
 def test_family_floor_is_distinct_and_forward_cannot_fill_target_deficit() -> None:

@@ -20,7 +20,7 @@ from dataclasses import asdict, dataclass, field, fields
 from enum import StrEnum
 from pathlib import Path
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Any, Literal, Protocol, cast
+from typing import TYPE_CHECKING, Any, Literal, cast
 
 import numpy as np
 import pandas as pd
@@ -1337,19 +1337,6 @@ class _OracleGainSummary:
         return cls(len(values), min(values), max(values))
 
 
-class _CandidatePreflightRecord(Protocol):
-    """Narrow factual interface consumed by the canonical preflight reducer."""
-
-    @property
-    def scene_key(self) -> str: ...
-
-    @property
-    def state_key(self) -> str: ...
-
-    @property
-    def families(self) -> tuple[CandidateFamilyCounts, ...]: ...
-
-
 @dataclass(frozen=True, slots=True)
 class _LightweightCandidatePreflightFacts:
     """Presentation-free state facts produced by the streaming audit path."""
@@ -1762,7 +1749,9 @@ def _oracle_gain_scalar(value: Any) -> float:
     return result
 
 
-def _oracle_gain_summary(record: _CandidatePreflightRecord) -> _OracleGainSummary:
+def _oracle_gain_summary(
+    record: CandidateBenchmark | _LightweightCandidatePreflightFacts,
+) -> _OracleGainSummary:
     """Return exact state-level label statistics without requiring retained rows."""
 
     if isinstance(record, _LightweightCandidatePreflightFacts):
@@ -1777,8 +1766,8 @@ def _oracle_gain_summary(record: _CandidatePreflightRecord) -> _OracleGainSummar
     return _OracleGainSummary.from_values(point_values)
 
 
-def reduce_candidate_family_preflight(
-    records: Iterable[_CandidatePreflightRecord],
+def _reduce_candidate_family_preflight(
+    records: Iterable[CandidateBenchmark | _LightweightCandidatePreflightFacts],
     config: CandidateFamilyPreflightConfig,
     *,
     coverage: CandidatePopulationCoverage | None = None,
@@ -1972,6 +1961,20 @@ def reduce_candidate_family_preflight(
     )
 
 
+def reduce_candidate_family_preflight(
+    records: Iterable[CandidateBenchmark],
+    config: CandidateFamilyPreflightConfig,
+    *,
+    coverage: CandidatePopulationCoverage | None = None,
+) -> CandidateFamilyPreflight:
+    """Evaluate the canonical gate for complete, serializable benchmarks."""
+
+    candidate_records = tuple(records)
+    if any(not isinstance(record, CandidateBenchmark) for record in candidate_records):
+        raise TypeError("public candidate preflight requires CandidateBenchmark records")
+    return _reduce_candidate_family_preflight(candidate_records, config, coverage=coverage)
+
+
 def candidate_family_preflight_from_reader(reader: Any) -> CandidateFamilyPreflight:
     """Reduce only the complete scientific policy persisted by the store."""
 
@@ -1988,7 +1991,7 @@ def candidate_family_preflight_from_reader(reader: Any) -> CandidateFamilyPrefli
             query_width=1,
             configured_families=("unknown",),
         )
-        result = reduce_candidate_family_preflight(records, fallback)
+        result = _reduce_candidate_family_preflight(records, fallback)
         blocker = CandidatePreflightBlocker(
             CandidateSupportFailure.MISSING_PRODUCTION_PROVENANCE,
             "rollout manifest lacks the complete candidate_family_preflight policy",
@@ -2018,7 +2021,7 @@ def candidate_family_preflight_from_reader(reader: Any) -> CandidateFamilyPrefli
             coverage=result.coverage,
             audit_strata=result.audit_strata,
         )
-    return reduce_candidate_family_preflight(records, config)
+    return _reduce_candidate_family_preflight(records, config)
 
 
 def _candidate_family_policy_from_reader(reader: Any) -> CandidateFamilyPreflightConfig | None:
