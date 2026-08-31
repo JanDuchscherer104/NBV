@@ -83,11 +83,13 @@ is not evidence of wide learned capability.
 
 The decoder maps each candidate representation directly to the continuous,
 root-normalized finite-horizon return. This regression target preserves metric
-order and additive return units; Huber loss supplies robust residual weighting
-by limiting the leverage of extreme targets. Losses are first
-averaged within realized state and then within horizon so large candidate
-tables and abundant one-step labels do not silently dominate recursive rows.
-Reported calibration and support remain stratified by horizon.
+order and additive return units. The implemented Huber penalty is quadratic for
+small residuals and linear beyond its fixed threshold. Losses are first
+averaged within realized state and then within horizon. Consequently, a state
+with more valid candidates does not receive more weight merely because it
+contributes more rows, and abundant one-step states do not silently dominate a
+sparser recursive horizon. Reported calibration and support remain stratified
+by horizon.
 
 At $h=1$, evaluation can use dense candidate labels to report continuous error,
 within-state pairwise ranking, and greedy regret. Factual $h>1$ transitions do
@@ -100,6 +102,9 @@ a metric from the selected transition alone.
 
 Batch fitted Q iteration turns the fixed replay collection into successive
 supervised problems @FittedQIteration-ernst2005. The immediate reward is
+
+// Evidence map:
+// - @FittedQIteration-ernst2005 -> https://www.jmlr.org/papers/volume6/ernst05a/ernst05a.pdf:504-508 (successive supervised Q-function approximations and greedy recursive targets)
 
 #eqs.rl.target_root_gain_reward
 
@@ -117,6 +122,13 @@ the hard action set,
 and Double Q separates row selection from delayed evaluation
 @DoubleDQN-vanHasselt2015. This estimator may limit max bias, but it cannot
 repair unsupported actions, aliased state, or missing selected observations.
+
+The recursion estimates greedy continuation over the generated, hard-valid
+finite support under the named state and target-source protocols. It is not the
+Monte Carlo return of the behavior policy that produced the retained chain,
+unless that behavior policy selects the same continuation; nor is it an optimum
+over ungenerated continuous camera poses. This distinction fixes the meaning
+of a successful fit before any policy comparison is attempted.
 
 === Why exact horizon two is decisive
 
@@ -146,3 +158,13 @@ longer horizon when minimum support or coverage fails.
 
 Exact $Q_2$ is necessary but not sufficient: policy claims additionally require
 positive equal-budget oracle headroom and held-out endpoint recovery.
+
+The resulting evidence boundary is explicit. The current implementation
+supports the `S0-pose` scorer, direct objective, hard-masked recursion, and
+exact-$Q_2$ evaluation path. The scientific target additionally requires an
+evaluated actor-visible `v1_observed` corpus, a causal observation-updated
+state, a frozen held-out exact-$Q_2$ receipt, positive oracle headroom, and
+endpoint recovery. The `v1_observed` admission and writer--reader path is implemented, but
+that intermediate has not passed these evidence gates. Until they pass, this
+chapter establishes an executable method and its falsification tests, not a
+successful non-myopic actor.

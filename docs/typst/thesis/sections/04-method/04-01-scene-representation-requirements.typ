@@ -4,60 +4,80 @@
 #import "../../draft_markers.typ": thesis_status
 #import "../../../shared/tables.typ": publication-table
 
-== Selected Actor State <sec:thesis-scene-representation>
+== Current and Target Actor State <sec:thesis-scene-representation>
 
 #thesis_status(
-  implementation: "implemented",
+  implementation: "partial",
   evidence: "pending",
-  citation: [@EFM3D-straub2024],
-  source: "aria_nbv/aria_nbv/data_handling/qh_data/views.py; aria_nbv/aria_nbv/rollouts/qh_reader.py; aria_nbv/aria_nbv/vin/models/target_finite_horizon.py; aria_nbv/tests/lightning/test_qh_module.py",
-  gate: [name the actor-state and target-source protocols in every run; establish held-out task sufficiency],
-)[The selected method uses the `S0-pose` actor state: immutable root evidence, an admitted target descriptor, the current finite candidate table and hard mask, factual selected-pose history, and remaining budget. The interface is implemented and tested; task sufficiency and policy value remain unestablished.]
+  citation: [@EFM3D-straub2024 @POMDPRobotics-lauri2023],
+  source: "aria_nbv/aria_nbv/targets/protocol.py; aria_nbv/aria_nbv/targets/selection.py; aria_nbv/aria_nbv/oracle/pipelines/campaign.py; aria_nbv/aria_nbv/oracle/pipelines/rollout_dataset.py; aria_nbv/aria_nbv/data_handling/qh_data/views.py; aria_nbv/aria_nbv/vin/modules/qh_scene_encoders.py; aria_nbv/aria_nbv/rollouts/qh_reader.py; aria_nbv/aria_nbv/vin/models/target_finite_horizon.py",
+  gate: [freeze and evaluate an actor-visible target corpus; implement the causal state-update contract; pass source-dropout, no-future-observation, leakage, and held-out task-sufficiency tests],
+)[The `S0-pose` baseline and the independent `v1_observed` descriptor path are implemented and tested. The current selected experiment still uses privileged `v0_gt_input`; no frozen `v1_observed` evaluation or causal observation-updated actor state yet supports the scientific target.]
 
 The actor state is the information available before selecting action $a_t$, not
 every quantity co-located in a replay row. Oracle target gains, mesh crops,
 ground-truth associations, current all-candidate renders, and labels are
-excluded from the scorer graph. The non-deployable `v0_gt_input` target
-protocol supplies privileged target geometry for a controlled oracle task;
-`v1_observed` requires a descriptor constructed from observations and binds its
-source and construction provenance. These protocols define different claims
-even when their tensors share a shape.
+excluded from the scorer graph. Two independent protocol axes matter. The
+target-source axis distinguishes non-deployable `v0_gt_input` geometry from a
+`v1_observed` descriptor constructed from actor-visible observations with bound
+source and construction provenance. The dynamic-state axis distinguishes the
+pose-only `S0-pose` carrier from a state updated with selected observations.
+Sharing tensor shapes across either axis does not make their scientific claims
+interchangeable.
 
-The selected state read is
+Both the current and target states retain the same decision interface,
 
 $
   #eqs.scene.actor_state_read
 $
 
-Its immutable root component contains semidense evidence and lossy global
-moments of locally supported EFM3D features. Its dynamic component is only the
-strictly causal selected-pose prefix. Candidate regeneration updates the
-reference pose, prefix, remaining budget, and action table; it does not imply a
-new RGB observation, a refreshed EFM3D field, or fused selected depth.
+but differ in what the state makes available to that read. The current root
+component contains semidense evidence and lossy global moments of locally
+supported EFM3D features. Its dynamic component is only the strictly causal
+selected-pose prefix. Candidate regeneration updates the reference pose,
+prefix, remaining budget, and action table; it does not imply a new RGB
+observation, a refreshed EFM3D field, or fused selected depth.
 
 #figure(
   publication-table(
     text-size: 8.2pt,
-    columns: (0.82fr, 1.24fr, 1.48fr),
-    header: ([*State component*], [*Selected evidence*], [*Interpretation boundary*]),
+    columns: (0.72fr, 1.18fr, 1.58fr),
+    header: ([*Component*], [*Current realization*], [*Scientific target*]),
     rows: (
-      [Root scene], [semidense and supported EFM3D summary], [Immutable logged context; missing local support is not measured free space.],
-      [Target], [protocol-admitted identity and geometry], [Privileged oracle instruction or actor-visible descriptor, never an unlabelled mixture.],
-      [Dynamic history], [selected poses $bold(H)_t$], [Causal action history, but no selected appearance, depth fusion, or free/unknown memory.],
-      [Decision context], [candidate rows, hard mask, $b_t$, and $h$], [Finite support and value query; invalidity remains external to conditional value.],
+      [Root scene], [immutable semidense points and global moments of locally supported EFM3D features], [immutable actor-visible evidence with explicit finite support and missingness; absent evidence must not mean observed free space],
+      [Target], [selected experiment: privileged `v0_gt_input`; an independent `v1_observed` admission and I/O path is implemented but not frozen or evaluated], [`v1_observed`: actor-visible identity and geometry with support, source, construction provenance, and explicit matching failures],
+      [Dynamic state], [selected poses $bold(H)_t$ only], [a strictly causal update from the selected observation that preserves observed surface, observed free, unknown, support, uncertainty, source, and recency],
+      [Decision context], [candidate rows, hard mask, $b_t$, and $h$], [the same finite support plus target- and candidate-relative access to the actor-visible state needed for target-specific return],
     ),
   ),
-  caption: [Selected `S0-pose` state protocol. The table states what the method consumes and, equally importantly, what it cannot represent.],
+  caption: [Current baseline and scientific target. The right column is a promotion contract: it states information that must be represented and tested, not an architecture already implemented or a result already obtained.],
 ) <tab:thesis-counterfactual-state-protocols>
+
+The scientific target is intentionally a semantic contract rather than a
+premature choice among points, voxels, rays, or another carrier. A proposed
+carrier is admissible only if its deterministic fusion rule exposes source and
+availability, uses the selected actor-visible observation and no future or
+unselected render, and preserves the distinctions in
+@tab:thesis-counterfactual-state-protocols. Source-dropout,
+no-future-observation, and leakage tests establish the information boundary; held-out
+task-sufficiency evidence must then show that the retained distinctions are
+useful for the target-specific value task.
 
 === Sufficiency and the local-evidence limit
 
-A decision state is task-sufficient only if it preserves every distinction that
-can change target-specific future return. `S0-pose` cannot satisfy that
+A decision state is task-sufficient for this study only if it preserves the
+distinctions needed to predict target-specific future return. Under partial
+observability, this is an empirical representation requirement rather than a
+claim that the study solves a general belief-state POMDP
+@POMDPRobotics-lauri2023. `S0-pose` cannot satisfy that
 condition by construction when two histories share poses but reveal different
 surfaces, occlusions, or free-space evidence. It is therefore a deliberately
 compact baseline and an interface test, not a claim that pose history is a
 complete reconstruction state.
+
+// Evidence map:
+// - @POMDPRobotics-lauri2023 -> docs/literature/tex-src/arXiv-POMDP-Robotics-Survey/root.tex:589-606 (history, belief state, and sufficient statistic under partial observability)
+// - @EFM3D-straub2024 -> docs/literature/tex-src/arXiv-EFM3D/method.tex:15-42 (calibrated feature lifting and finite local voxel support)
 
 EFM3D reinforces this limit. Its gravity-aligned voxel field has an explicit
 pose and finite extent @EFM3D-straub2024. A target or candidate outside that
