@@ -35,6 +35,7 @@ Compared the PR #190 candidate against its parent and implementation owners, res
 
 ## Commits
 - [efad7e09ef91ea6264f00cf1ee9dae7054453783](https://github.com/JanDuchscherer104/ARIA-NBV/commit/efad7e09ef91ea6264f00cf1ee9dae7054453783) — restore Method design space, canonical shared glossary/notation, ranked scientific-core markers, and generator regressions.
+- [1a823a17667e26071fd54d2781014db121e8bd43](https://github.com/JanDuchscherer104/ARIA-NBV/commit/1a823a17667e26071fd54d2781014db121e8bd43) — replace stale candidate aliases and register the directional moment in the canonical notation owner after the strict projection gate exposed both omissions.
 
 ## Verification
 - `make glossary` — passed; 58 terms, 117 symbols, and 122 equations; a second run was byte-idempotent across all generated projections.
@@ -43,6 +44,7 @@ Compared the PR #190 candidate against its parent and implementation owners, res
 - `make typst-authoring-contract` — 21 passed.
 - `make thesis-literature-provenance` — 31 passed.
 - `make thesis-pdf-ci` and `make thesis-pdf` — passed; the tracked thesis is 140 A4 pages.
+- `make graphify-projection-live-check` — passed across 626 Markdown files after canonical notation repair.
 - Render inspection of the state-realization, interaction-ladder, decoder-design, and scientific-core marker pages found no clipping or overlap.
 - Independent closure review of candidate digest `d77719352f0665ac21fa473ddbae28ddb4a47253647b2a65e5a8d4904b1721ac` — clear, zero findings.
 - `git diff --check` — passed.
