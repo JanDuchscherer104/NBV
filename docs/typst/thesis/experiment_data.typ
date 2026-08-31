@@ -104,9 +104,32 @@
   hash.map(hex-32).join()
 }
 
-#let canonical-sidecar-id(logical-name, payload-sha256) = sha256-hex(
-  logical-name + "\u{0}" + payload-sha256,
+#let canonical-sidecar-id(logical-name, payload-sha256, projection-sha256: none) = sha256-hex(
+  logical-name + "\u{0}" + payload-sha256 + if projection-sha256 == none {
+    ""
+  } else {
+    "\u{0}" + projection-sha256
+  },
 )
+
+#let report-sidecar-identity-valid(sidecar, logical-name) = {
+  let file-digest = sidecar.at("sha256", default: none)
+  let projection-digest = sidecar.at("projection_sha256", default: none)
+  let file-valid = type(file-digest) == str and file-digest.match(
+    regex("^[0-9a-f]{64}$"),
+  ) != none
+  if type(projection-digest) == function {
+    file-valid and sidecar.sidecar_id == canonical-sidecar-id(logical-name, file-digest)
+  } else {
+    file-valid and type(projection-digest) == str and projection-digest.match(
+      regex("^[0-9a-f]{64}$"),
+    ) != none and sidecar.sidecar_id == canonical-sidecar-id(
+      logical-name,
+      file-digest,
+      projection-sha256: projection-digest,
+    )
+  }
+}
 
 #let required-report-columns = (
   stores: ("store_id", "name", "manifest_sha256", "validation_ok"),
@@ -593,9 +616,9 @@
                 let digest-valid = type(sidecar.sha256) == str and sidecar.sha256.match(
                   regex("^[0-9a-f]{64}$"),
                 ) != none
-                let identity-valid = name-valid and digest-valid and sidecar.sidecar_id == canonical-sidecar-id(
+                let identity-valid = name-valid and digest-valid and report-sidecar-identity-valid(
+                  sidecar,
                   sidecar.name,
-                  sidecar.sha256,
                 )
                 let format-valid = sidecar.format in ("json", "jsonl")
                 let status-valid = sidecar.status == "confirmatory"
@@ -856,7 +879,7 @@
   }
   let pieces = rows.sorted(key: row => row.key).map(row => token(
     row.key,
-  ) + token(row.value_type) + token(canonical-value(row)))
+  ) + token(row.value_type) + token(if row.is_missing { "true" } else { "false" }) + token(canonical-value(row)))
   let payload = if pieces.len() == 0 { "" } else { pieces.join("\n") }
   sha256-hex(payload)
 }
@@ -1008,9 +1031,9 @@
         let sidecar-digest-valid = type(sidecar.sha256) == str and sidecar.sha256.match(
           regex("^[0-9a-f]{64}$"),
         ) != none
-        let sidecar-identity-valid = type(logical-name) == str and sidecar-digest-valid and sidecar.sidecar_id == canonical-sidecar-id(
+        let sidecar-identity-valid = type(logical-name) == str and sidecar-digest-valid and report-sidecar-identity-valid(
+          sidecar,
           logical-name,
-          sidecar.sha256,
         )
         let sidecar-valid = (
           type(sidecar.path) == str and sidecar.path.len() > 0,
@@ -1093,9 +1116,9 @@
     let digest-valid = type(sidecar.sha256) == str and report-sha256-value-valid(
       sidecar.sha256,
     )
-    let identity-valid = name-valid and digest-valid and sidecar.sidecar_id == canonical-sidecar-id(
+    let identity-valid = name-valid and digest-valid and report-sidecar-identity-valid(
+      sidecar,
       sidecar.name,
-      sidecar.sha256,
     )
     sidecar.sha256 == digest and name-valid and (
       required-name == none or sidecar.name == required-name
@@ -1122,9 +1145,9 @@
     let file-digest-valid = type(sidecar.sha256) == str and report-sha256-value-valid(
       sidecar.sha256,
     )
-    let identity-valid = name-valid and file-digest-valid and sidecar.sidecar_id == canonical-sidecar-id(
+    let identity-valid = name-valid and file-digest-valid and report-sidecar-identity-valid(
+      sidecar,
       sidecar.name,
-      sidecar.sha256,
     )
     let index = report-sidecar-value-index(report, sidecar.sidecar_id)
     let embedded-digest = report-sidecar-indexed-value-or-none(index, embedded-key)
@@ -2798,6 +2821,8 @@
   let report-manifests = report.tables.stores.rows.map(
     row => row.at("manifest_sha256", default: none),
   )
+  let bundle-test-population-digest = bundle-value("identity.dataset_payload_sha256s.test")
+  let bundle-test-provenance-digest = bundle-value("identity.dataset_provenance_payload_sha256s.test")
   let scorer-experiment-profile = value("bound_contract.scorer_config.experiment_profile")
   let experiment-profile = value("bound_contract.module_config.experiment_profile")
   let actor-experiment-profile = value("bound_contract.actor_state_contract.experiment_profile")
@@ -2859,7 +2884,13 @@
     "bound_contract.scorer_config_hash",
     "bound_contract.learning_contract_payload_sha256",
     "bound_contract.actor_state_contract_payload_sha256",
-  ).all(key => report-sha256-value-valid(value(key))) and (
+  ).all(key => report-sha256-value-valid(value(key))) and report-sha256-value-valid(
+    bundle-test-population-digest,
+  ) and report-sha256-value-valid(bundle-test-provenance-digest) and value(
+    "test_population_sha256",
+  ) == bundle-test-population-digest and value(
+    "test_provenance_sha256",
+  ) == bundle-test-provenance-digest and (
     "bound_contract.learning_contract_hash",
     "bound_contract.actor_state_contract_hash",
   ).all(key => report-identity16-value-valid(value(key))) and scorer-experiment-profile == experiment-profile and actor-experiment-profile == experiment-profile and module-root-evl-profile == "evl_v1" and actor-root-evl-profile == "evl_v1" and learning-target-protocol == "v1_observed" and geometry-valid and manifest-values.len() > 0 and manifest-values.all(

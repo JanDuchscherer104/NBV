@@ -126,7 +126,7 @@
   missing-sidecar-row("s", "d"),
   typed-sidecar-row("s", "e", -0.0),
   typed-sidecar-row("s", "f", 100000000000000000000.0),
-)), "cb45fd04f191df8362246dd94143be6b2e5ae0ee505c68f87224fedb393b7870")
+)), "1750c9bcf4b196a453faad414e2d901a7b7f4d3c71936c435fb0503316c5b529")
 #let q2-aggregate-sidecar-value-rows(
   prefix,
   row-count,
@@ -1556,6 +1556,8 @@
     sidecar-value-rows: analysis-sidecar-value-rows(sidecar-a, "qh-gates", facts) + receipt,
     q1-bundle-values: if bundle-values == none {
       q1-bundle-manifest-sidecar-value-rows(
+        population-digest: "8282828282828282828282828282828282828282828282828282828282828282",
+        provenance-digest: "8383838383838383838383838383838383838383838383838383838383838383",
         store-manifests: ordered-test-manifests,
       )
     } else { bundle-values },
@@ -1757,10 +1759,24 @@
 #let projection-bound-support-report = (
   tables: valid-support-report.tables + (
     sidecars: (rows: valid-support-report.tables.sidecars.rows.map(sidecar => if sidecar.sidecar_id == support-benchmark-sidecar {
-      sidecar + (projection_sha256: report-sidecar-projection-sha256(
+      let projection = report-sidecar-projection-sha256(
         valid-support-report.tables.sidecar_values.rows.filter(row => row.sidecar_id == support-benchmark-sidecar),
-      ),)
+      )
+      sidecar + (
+        sidecar_id: canonical-sidecar-id(sidecar.name, sidecar.sha256, projection-sha256: projection),
+        projection_sha256: projection,
+      )
     } else { sidecar }),),
+    sidecar_values: (rows: valid-support-report.tables.sidecar_values.rows.map(row => if row.sidecar_id == support-benchmark-sidecar {
+      let projection = report-sidecar-projection-sha256(
+        valid-support-report.tables.sidecar_values.rows.filter(candidate => candidate.sidecar_id == support-benchmark-sidecar),
+      )
+      row + (sidecar_id: canonical-sidecar-id(
+        candidate-support-benchmark-name,
+        support-benchmark,
+        projection-sha256: projection,
+      ),)
+    } else { row }),),
   ),
 )
 #assert(report-store-candidate-support-evidence-valid(
@@ -1769,13 +1785,41 @@
 ))
 #let projection-tampered-support-report = (
   tables: projection-bound-support-report.tables + (
-    sidecar_values: (rows: projection-bound-support-report.tables.sidecar_values.rows.map(row => if row.sidecar_id == support-benchmark-sidecar and row.key == "expected_attempts" {
+    sidecar_values: (rows: projection-bound-support-report.tables.sidecar_values.rows.map(row => if row.key == "expected_attempts" and row.sidecar_id != support-benchmark-sidecar {
       typed-sidecar-row(row.sidecar_id, row.key, row.value_int + 1)
     } else { row }),),
   ),
 )
 #assert(not report-store-candidate-support-evidence-valid(
   projection-tampered-support-report,
+  "store-a",
+))
+#let projection-missingness-tampered-support-report = (
+  tables: projection-bound-support-report.tables + (
+    sidecar_values: (rows: projection-bound-support-report.tables.sidecar_values.rows.map(row => if row.key == "expected_attempts" and row.sidecar_id != support-benchmark-sidecar {
+      row + (is_missing: true,)
+    } else { row }),),
+  ),
+)
+#assert(not report-store-candidate-support-evidence-valid(
+  projection-missingness-tampered-support-report,
+  "store-a",
+))
+#let coordinated-projection-rows = projection-bound-support-report.tables.sidecar_values.rows.map(row => if row.key == "expected_attempts" and row.sidecar_id != support-benchmark-sidecar {
+  typed-sidecar-row(row.sidecar_id, row.key, row.value_int + 1)
+} else { row })
+#let coordinated-projection-tampered-support-report = (
+  tables: projection-bound-support-report.tables + (
+    sidecars: (rows: projection-bound-support-report.tables.sidecars.rows.map(sidecar => if sidecar.name == candidate-support-benchmark-name {
+      sidecar + (projection_sha256: report-sidecar-projection-sha256(
+        coordinated-projection-rows.filter(row => row.sidecar_id == sidecar.sidecar_id),
+      ),)
+    } else { sidecar }),),
+    sidecar_values: (rows: coordinated-projection-rows),
+  ),
+)
+#assert(not report-store-candidate-support-evidence-valid(
+  coordinated-projection-tampered-support-report,
   "store-a",
 ))
 
@@ -2858,6 +2902,20 @@
 ), "store-a"))
 #assert(not report-store-q2-evidence-valid(q2-report(bundle-manifest: "invalid"), "store-a"))
 #assert(not report-store-q2-evidence-valid(q2-report(receipt-bundle-manifest: digest-b), "store-a"))
+#assert(not report-store-q2-evidence-valid(q2-report(
+  receipt-values: mutate-sidecar-value(
+    q2-certification-sidecar-value-rows(),
+    "test_population_sha256",
+    digest-a,
+  ),
+), "store-a"))
+#assert(not report-store-q2-evidence-valid(q2-report(
+  receipt-values: mutate-sidecar-value(
+    q2-certification-sidecar-value-rows(),
+    "test_provenance_sha256",
+    digest-a,
+  ),
+), "store-a"))
 #assert(not report-store-q2-evidence-valid(q2-report(row-counts: (2, 1, 1, 1, 1)), "store-a"))
 #assert(report-store-q2-evidence-valid(q2-report(population-count: 10), "store-a"))
 #assert(report-store-q2-evidence-valid(q2-report(error: 0.2), "store-a"))

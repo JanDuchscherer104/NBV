@@ -1949,7 +1949,11 @@ def _append_sidecar_rows(
         raise ValueError(f"Unsupported report sidecar format for {sidecar_path}; expected .json or .jsonl.")
     digest = hashlib.sha256(data).hexdigest()
     logical_name = _sidecar_logical_name(payload, fallback=sidecar_path.name)
-    sidecar_id = hashlib.sha256(f"{logical_name}\0{digest}".encode()).hexdigest()
+    projected_rows = _typed_leaf_rows("sidecar_id", "", payload)
+    projection_digest = _sidecar_projection_sha256(projected_rows)
+    sidecar_id = hashlib.sha256(f"{logical_name}\0{digest}\0{projection_digest}".encode()).hexdigest()
+    for row in projected_rows:
+        row["sidecar_id"] = sidecar_id
     if any(row["sidecar_id"] == sidecar_id for row in rows["sidecars"]):
         return
     promoted = _analysis_fact_rows(
@@ -1967,14 +1971,13 @@ def _append_sidecar_rows(
                 f"{existing_fact_sources[identity]!r}."
             )
         existing_fact_sources[identity] = str(fact["source"])
-    projected_rows = _typed_leaf_rows("sidecar_id", sidecar_id, payload)
     rows["sidecars"].append(
         {
             "sidecar_id": sidecar_id,
             "path": logical_name,
             "name": logical_name,
             "sha256": digest,
-            "projection_sha256": _sidecar_projection_sha256(projected_rows),
+            "projection_sha256": projection_digest,
             "format": format_name,
             "status": evidence_status,
         }
@@ -2114,7 +2117,10 @@ def _sidecar_projection_sha256(rows: list[dict[str, Any]]) -> str:
         raise ValueError(f"Unsupported sidecar projection value_type {value_type!r}.")
 
     payload = "\n".join(
-        token(str(row["key"])) + token(str(row["value_type"])) + token(canonical_value(row))
+        token(str(row["key"]))
+        + token(str(row["value_type"]))
+        + token("true" if bool(row["is_missing"]) else "false")
+        + token(canonical_value(row))
         for row in sorted(rows, key=lambda row: str(row["key"]))
     )
     return hashlib.sha256(payload.encode()).hexdigest()

@@ -59,6 +59,18 @@ from aria_nbv.rollouts.zarr_store import RolloutZarrStoreReader, write_rollout_z
 from tests.rollout_fixtures import build_rollout_records
 
 
+def test_sidecar_projection_digest_matches_typst_contract_vector() -> None:
+    rows = reporting._typed_leaf_rows(  # noqa: SLF001 - cross-language contract vector
+        "sidecar_id",
+        "s",
+        {"a": 1.0, "b": True, "c": "x", "d": None, "e": -0.0, "f": 100000000000000000000.0},
+    )
+
+    assert reporting._sidecar_projection_sha256(rows) == (  # noqa: SLF001
+        "1750c9bcf4b196a453faad414e2d901a7b7f4d3c71936c435fb0503316c5b529"
+    )
+
+
 def test_persisted_contract_payload_separates_one_compatibility_field() -> None:
     def frames(value: str, *, work_unit: str = "a") -> dict[str, pd.DataFrame]:
         return {
@@ -1431,7 +1443,10 @@ def test_analysis_fact_sidecar_promotes_typed_facts_with_stable_provenance(tmp_p
     assert frames["sidecars"].iloc[0]["name"] == "paired-policy-analysis"
     assert frames["sidecars"].iloc[0]["path"] == "paired-policy-analysis"
     expected_sidecar_id = hashlib.sha256(
-        f"paired-policy-analysis\0{frames['sidecars'].iloc[0]['sha256']}".encode()
+        (
+            f"paired-policy-analysis\0{frames['sidecars'].iloc[0]['sha256']}"
+            f"\0{frames['sidecars'].iloc[0]['projection_sha256']}"
+        ).encode()
     ).hexdigest()
     assert frames["sidecars"].iloc[0]["sidecar_id"] == expected_sidecar_id
     assert set(frames["sidecar_values"]["sidecar_id"]) == {frames["sidecars"].iloc[0]["sidecar_id"]}
