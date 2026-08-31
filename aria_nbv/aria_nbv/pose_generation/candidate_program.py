@@ -51,7 +51,19 @@ class CompletionMode(StrEnum):
 
 @dataclass(frozen=True, slots=True)
 class SampledCenterConfig:
-    """Literal sampled-center configuration for non-orbit families."""
+    """Literal sampled-center configuration for non-orbit families.
+
+    Attributes:
+        family: Closed positional family discriminant.
+        sampling_strategy: Random support distribution used for center draws.
+        align_to_gravity: Whether sampled offsets use the world-Z-up frame.
+        min_radius_m: Inclusive minimum radial offset in metres.
+        max_radius_m: Inclusive maximum radial offset in metres.
+        min_elevation_deg: Minimum elevation angle in degrees.
+        max_elevation_deg: Maximum elevation angle in degrees.
+        delta_azimuth_deg: Forward-support azimuth half-width in degrees.
+        concentration: Positive directional-distribution concentration.
+    """
 
     family: Literal[
         CenterFamily.UPPER_BOUND_FREE_SHELL,
@@ -73,7 +85,20 @@ class SampledCenterConfig:
 
 @dataclass(frozen=True, slots=True)
 class TargetOrbitCenterConfig:
-    """Literal bilateral target-orbit center configuration."""
+    """Literal bilateral target-orbit center configuration.
+
+    Attributes:
+        family: Fixed ``TARGET_ORBIT`` positional discriminant.
+        sampling_strategy: Radial/elevation support distribution.
+        align_to_gravity: Whether orbit offsets use world-Z-up.
+        min_radius_m: Inclusive minimum center radius in metres.
+        max_radius_m: Inclusive maximum center radius in metres.
+        min_elevation_deg: Minimum elevation angle in degrees.
+        max_elevation_deg: Maximum elevation angle in degrees.
+        delta_azimuth_deg: Legacy support angle retained for exact parity.
+        concentration: Positive directional-distribution concentration.
+        target_orbit_angles_deg: Ordered nonzero bilateral orbit angles in degrees.
+    """
 
     family: Literal[CenterFamily.TARGET_ORBIT]
     sampling_strategy: SamplingStrategy
@@ -92,7 +117,18 @@ CenterConfig: TypeAlias = SampledCenterConfig | TargetOrbitCenterConfig
 
 @dataclass(frozen=True, slots=True)
 class DirectionalGazeConfig:
-    """Literal non-target gaze and residual configuration."""
+    """Literal non-target gaze and residual configuration.
+
+    Attributes:
+        family: Closed forward or radial gaze discriminant.
+        sampling_strategy: Optional spherical residual distribution.
+        concentration: Positive residual-distribution concentration.
+        max_azimuth_deg: Bounded residual yaw half-width in degrees; zero is
+            uncapped for legacy spherical strategies.
+        max_elevation_deg: Bounded residual pitch half-width in degrees; zero
+            is uncapped for legacy spherical strategies.
+        roll_jitter_deg: Symmetric roll residual limit in degrees.
+    """
 
     family: Literal[GazeFamily.FORWARD_RIG, GazeFamily.RADIAL_AWAY, GazeFamily.RADIAL_TOWARDS]
     sampling_strategy: SamplingStrategy | None
@@ -104,7 +140,16 @@ class DirectionalGazeConfig:
 
 @dataclass(frozen=True, slots=True)
 class TargetGlanceGazeConfig:
-    """Literal target-glance gaze and residual configuration."""
+    """Literal target-glance gaze and residual configuration.
+
+    Attributes:
+        family: Fixed ``TARGET_GLANCE`` discriminant.
+        sampling_strategy: Optional spherical target-relative residual.
+        concentration: Positive residual-distribution concentration.
+        max_azimuth_deg: Bounded target-relative yaw half-width in degrees.
+        max_elevation_deg: Bounded target-relative pitch half-width in degrees.
+        roll_jitter_deg: Symmetric roll residual limit in degrees.
+    """
 
     family: Literal[GazeFamily.TARGET_GLANCE]
     sampling_strategy: SamplingStrategy | None
@@ -116,7 +161,11 @@ class TargetGlanceGazeConfig:
 
 @dataclass(frozen=True, slots=True)
 class TargetExactGazeConfig:
-    """Exact target look-at gaze with no residual or clamp parameters."""
+    """Exact target look-at gaze with no residual or clamp parameters.
+
+    Attributes:
+        family: Fixed ``TARGET_EXACT`` discriminant.
+    """
 
     family: Literal[GazeFamily.TARGET_EXACT]
 
@@ -126,7 +175,14 @@ GazeConfig: TypeAlias = DirectionalGazeConfig | TargetExactGazeConfig | TargetGl
 
 @dataclass(frozen=True, slots=True)
 class GazeVariantConfig:
-    """One gaze hypothesis evaluated for a group's exact center table."""
+    """One gaze hypothesis evaluated for a group's exact center table.
+
+    Attributes:
+        semantic_variant_id: Stable nonempty identity within the group.
+        gaze: Closed literal gaze configuration.
+        legacy_paired_view_mode_value: Optional shipped paired-mode codec used
+            only by the one-way compatibility projection.
+    """
 
     semantic_variant_id: str
     gaze: GazeConfig
@@ -135,7 +191,16 @@ class GazeVariantConfig:
 
 @dataclass(frozen=True, slots=True)
 class CandidateGroup:
-    """One ordered center family and its ordered gaze variants."""
+    """One ordered center family and its ordered gaze variants.
+
+    Attributes:
+        semantic_group_id: Stable nonempty group identity.
+        center_count: Number of center rows sampled exactly once.
+        center: Closed literal positional configuration.
+        gaze_variants: Ordered gaze variants sharing the center table.
+        legacy_seed_component_name: Frozen shipped component seed identity.
+        legacy_direct_component_index: Frozen direct-base seed offset.
+    """
 
     semantic_group_id: str
     center_count: int
@@ -147,7 +212,23 @@ class CandidateGroup:
 
 @dataclass(frozen=True, slots=True)
 class AdmissionConfig:
-    """Literal shipped hard-admission policy."""
+    """Literal shipped hard-admission policy.
+
+    Attributes:
+        min_distance_to_mesh_m: Minimum endpoint clearance in metres.
+        ensure_collision_free: Enable endpoint mesh-clearance admission.
+        ensure_free_space: Enable path-segment clearance admission.
+        collision_backend: Geometry backend used by clearance criteria.
+        ray_subsample: Positive path-ray sampling stride.
+        step_clearance_m: Required path clearance in metres.
+        enforce_motion_realism: Enable actor-motion bounds.
+        max_step_distance_m: Optional maximum translation in metres.
+        max_height_delta_m: Optional maximum vertical delta in metres.
+        max_backward_step_m: Optional maximum backward delta in metres.
+        max_yaw_delta_deg: Optional maximum yaw delta in degrees.
+        collect_rule_masks: Retain shipped cumulative masks for compatibility.
+        collect_debug_stats: Retain optional diagnostic measurements.
+    """
 
     min_distance_to_mesh_m: float
     ensure_collision_free: bool
@@ -166,7 +247,12 @@ class AdmissionConfig:
 
 @dataclass(frozen=True, slots=True)
 class CompletionConfig:
-    """Literal score-independent completion policy."""
+    """Literal score-independent completion policy.
+
+    Attributes:
+        mode: Closed completion algorithm.
+        attempt_rounds: Number of bounded proposal rounds; shipped V1 is one.
+    """
 
     mode: CompletionMode
     attempt_rounds: int
@@ -174,7 +260,14 @@ class CompletionConfig:
 
 @dataclass(frozen=True, slots=True)
 class CandidateProgramLimits:
-    """Resource limits enforced before candidate allocation."""
+    """Resource limits enforced before candidate allocation.
+
+    Attributes:
+        max_groups: Maximum ordered center groups.
+        max_gaze_variants_per_group: Maximum gaze variants per center table.
+        max_attempt_rounds: Maximum score-independent proposal rounds.
+        max_attempted_rows: Maximum full attempted-shell row count ``N``.
+    """
 
     max_groups: int = 32
     max_gaze_variants_per_group: int = 8
@@ -184,7 +277,18 @@ class CandidateProgramLimits:
 
 @dataclass(frozen=True, slots=True)
 class CandidateProgram:
-    """Final immutable program interpreted by candidate generation."""
+    """Final immutable program interpreted by candidate generation.
+
+    Attributes:
+        schema_version: Closed literal-schema version.
+        algorithm_revision: Sampling and admission algorithm revision.
+        row_order_revision: Attempted-row ordering revision.
+        groups: Ordered immutable center/gaze programs.
+        admission: Literal hard-admission policy.
+        completion: Literal score-independent completion policy.
+        limits: Allocation bounds validated before generation.
+        candidate_program_hash: Canonical SHA-256 binding of all literal facts.
+    """
 
     schema_version: str
     algorithm_revision: str

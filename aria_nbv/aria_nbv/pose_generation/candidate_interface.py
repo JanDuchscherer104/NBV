@@ -121,7 +121,17 @@ class _LegacyProjectionGroup:
 
 @dataclass(frozen=True, slots=True)
 class ActorTargetContext:
-    """Actor-safe target instruction with composition-owned identity."""
+    """Actor-safe target instruction with composition-owned identity.
+
+    Attributes:
+        descriptor: Immutable actor-visible target geometry and semantics.
+        protocol_version: Nonempty target-instruction protocol revision.
+        descriptor_hash: Canonical SHA-256 binding of ``descriptor``.
+        source_binding_hash: Composition-owned source/lineage binding.
+
+    The composition root constructs this once; generation only consumes and
+    receipt-validates it and performs no target reacquisition.
+    """
 
     descriptor: TargetDescriptor
     protocol_version: str
@@ -143,7 +153,16 @@ class ActorTargetContext:
 
 @dataclass(frozen=True, slots=True)
 class CandidateConditioning:
-    """Facts required to generate one spatial action from the current pose."""
+    """Facts required to generate one spatial action from the current pose.
+
+    Attributes:
+        reference_pose_world: ``PoseTW`` world-from-rig transform with logical
+            shape ``(12,)`` and floating dtype on the request device.
+        action_duration_s: Optional positive action duration in seconds.
+
+    Construction binds pose value and mutation receipts once. Warm generation
+    validates metadata receipts without transferring pose values to the host.
+    """
 
     reference_pose_world: PoseTW
     """World <- reference rig pose with logical shape ``(12,)``."""
@@ -180,7 +199,27 @@ class CandidateConditioning:
 
 @dataclass(frozen=True, slots=True)
 class PreparedCandidateScene:
-    """Composition-bound scene facts and geometry-owner query state."""
+    """Composition-bound scene facts and geometry-owner query state.
+
+    Attributes:
+        scene_identity: Composition-owned factual scene identity.
+        source_binding_hash: Canonical source/lineage binding.
+        mesh_identity: Stable mesh-content identity supplied by composition.
+        gt_mesh: CPU trimesh source used by legacy-compatible backends.
+        mesh_verts: World-frame mesh vertices ``Tensor["V 3", float]`` in metres.
+        mesh_faces: Triangle indices ``Tensor["F 3", int64]``.
+        prepared_mesh_query: Optional sole-owner prepared query matching the raw
+            mesh tensors; generation reuses it and never reacquires it.
+        occupancy_extent_world: World XYZ bounds ``Tensor["6", float]`` in metres.
+        camera_calibration: Full calibrated ``CameraTW`` template.
+        camera_calibration_hash: Canonical calibration value binding.
+        geometry_source_role: Actor/Oracle role of the geometry evidence.
+        device: Device shared by all tensor-valued scene facts.
+        dtype: Floating dtype shared by vertices, extent, and calibration.
+
+    The composition root owns construction and prepared-query lifecycle. Warm
+    generation performs metadata/receipt validation only.
+    """
 
     scene_identity: str
     source_binding_hash: str
@@ -287,7 +326,20 @@ class PreparedCandidateScene:
 
 @dataclass(frozen=True, slots=True)
 class CandidateRequest:
-    """Complete input to one score-independent generation operation."""
+    """Complete input to one score-independent generation operation.
+
+    Attributes:
+        program: Verified immutable candidate program.
+        conditioning: Bound reference pose and optional action duration.
+        scene: Prepared scene and sole geometry-query lifecycle owner.
+        actor_target: Optional actor-visible target binding.
+        random_key: Explicit sampling source, revision, and root seed.
+        binding_encoding_revision: Canonical request encoding revision.
+        request_binding_hash: SHA-256 binding of all semantic request facts.
+
+    Use :meth:`bind` at composition. The generator calls metadata-only receipt
+    validation and neither reconstructs configuration nor reacquires inputs.
+    """
 
     program: CandidateProgram
     conditioning: CandidateConditioning
@@ -376,7 +428,16 @@ class CandidateRequest:
 
 @dataclass(frozen=True, slots=True)
 class CandidateMeasurements:
-    """Closed tensor-only proposal measurements aligned over ``N`` rows."""
+    """Closed tensor-only proposal measurements aligned over ``N`` rows.
+
+    Every present field is a device-aligned ``Tensor["N ..."]`` owned by the
+    generator/admission boundary. Boolean ``*_mask`` fields encode factual
+    applicability, evaluation, rejection, or visibility. Distance/clearance/
+    step fields ending in ``_m`` use metres; angular fields ending in ``_rad``
+    or ``_deg`` use radians or degrees; ``target_pixel_margin_px`` uses pixels.
+    ``view_dirs_delta`` retains the shipped pose residual representation.
+    Consumers treat absent tensors as unavailable and never reacquire geometry.
+    """
 
     view_dirs_delta: torch.Tensor | None = None
     path_collision_applicable_mask: torch.Tensor | None = None
@@ -408,7 +469,41 @@ class CandidateMeasurements:
 
 @dataclass(frozen=True, slots=True)
 class CandidateTable:
-    """Canonical full attempted shell aligned over ``N`` rows."""
+    """Canonical full attempted shell aligned over ``N`` rows.
+
+    Attributes:
+        world_poses: Attempted world-from-camera ``PoseTW`` table, logical
+            ``Tensor["N 12", float]``.
+        centers_world: Attempted camera centres ``Tensor["N 3", float]`` in world metres.
+        gaze_directions_world: Unit gaze directions ``Tensor["N 3", float]`` in world axes.
+        reference_pose_world: World-from-rig conditioning pose.
+        sampling_pose_world: Optional world sampling-frame ``PoseTW``.
+        camera_calibration: Full-N calibrated ``CameraTW`` table.
+        shell_offsets_ref: Optional reference-frame offsets ``Tensor["N 3", float]`` in metres.
+        semantic_group_id: N-row center-group identities.
+        center_family_id: N-row positional-family identities.
+        gaze_family_id: N-row gaze-family identities.
+        candidate_family_id: N-row combined family identities.
+        center_id: Shared-center lineage ``Tensor["N", int64]``.
+        position_pair_id: Paired-position lineage ``Tensor["N", int64]``.
+        gaze_variant_id: Ordered gaze variant ``Tensor["N", int64]``.
+        attempt_round_id: Completion-round lineage ``Tensor["N", int64]``.
+        draw_id: Within-center draw lineage ``Tensor["N", int64]``.
+        proposal_key: N-row semantic sampling-path keys.
+        proposal_probability: Proposal probabilities ``Tensor["N", float]``.
+        view_residual_yaw_deg: Realized yaw residual ``Tensor["N", float]`` in degrees.
+        view_residual_pitch_deg: Realized pitch residual ``Tensor["N", float]`` in degrees.
+        view_jitter_is_bounded: Bounded-box support flag ``Tensor["N", bool]``.
+        view_jitter_azimuth_limit_deg: Configured yaw envelope ``Tensor["N", float]`` in degrees.
+        view_jitter_elevation_limit_deg: Configured pitch envelope ``Tensor["N", float]`` in degrees.
+        target_anchor_world: Target anchors ``Tensor["N 3", float]`` in world metres.
+        target_frame_identity: N-row target-frame binding identities.
+        target_frame_availability: N-row typed target-frame availability.
+        measurements: Closed optional N-aligned measurement table.
+
+    Generation owns this immutable attempted-shell table. Selection, storage,
+    metrics, and plotting consume it without resampling or geometry acquisition.
+    """
 
     world_poses: PoseTW
     centers_world: torch.Tensor
@@ -529,7 +624,17 @@ class CandidateTable:
 
 @dataclass(frozen=True, slots=True)
 class CriterionLocalEvidence:
-    """Criterion-local facts populated together by the geometry admission owner."""
+    """Criterion-local facts populated together by the geometry admission owner.
+
+    Attributes:
+        applicable: Criterion applicability ``Tensor["N", bool]``.
+        evaluated: Backend evaluation ``Tensor["N", bool]``; subset of applicable.
+        passed: Local pass ``Tensor["N", bool]``; subset of evaluated.
+        reason_code: Revisioned reason ``Tensor["N", int64]``.
+        margin: Signed ``Tensor["N", float]`` in the criterion's single unit;
+            positive is admissible and negative violates the boundary.
+        source_role: Revisioned evidence-role ``Tensor["N", int64]``.
+    """
 
     applicable: torch.Tensor
     evaluated: torch.Tensor
@@ -559,7 +664,16 @@ class CriterionLocalEvidence:
 
 @dataclass(frozen=True, slots=True)
 class CriterionEvidence:
-    """Shipped cumulative validity plus optional criterion-local evidence."""
+    """Shipped cumulative validity plus optional criterion-local evidence.
+
+    Attributes:
+        criterion_id: Stable nonempty criterion identity.
+        legacy_cumulative_valid: Shipped cumulative ``Tensor["N", bool]``.
+        local: Typed local facts, or unavailable until their canonical owner runs.
+        local_availability: Complete-row availability ``Tensor["N", bool]``.
+        reason_revision: Closed reason-code semantic revision.
+        source_role_revision: Closed source-role semantic revision.
+    """
 
     criterion_id: str
     legacy_cumulative_valid: torch.Tensor
@@ -589,7 +703,15 @@ class CriterionEvidence:
 
 @dataclass(frozen=True, slots=True)
 class AdmissionEvidence:
-    """Hard-admission evidence aligned over the attempted shell."""
+    """Hard-admission evidence aligned over the attempted shell.
+
+    Attributes:
+        mask_valid: Final hard-valid action mask ``Tensor["N", bool]``.
+        criteria: Ordered immutable cumulative and criterion-local evidence.
+
+    Admission owns this table. Selection consumes ``mask_valid``; compatibility
+    adapters may project cumulative masks but cannot reinterpret them.
+    """
 
     mask_valid: torch.Tensor
     criteria: tuple[CriterionEvidence, ...]
@@ -616,7 +738,13 @@ class AdmissionEvidence:
 
 @dataclass(frozen=True, slots=True)
 class CandidateCompletion:
-    """Factual score-independent completion evidence."""
+    """Factual score-independent completion evidence.
+
+    Attributes:
+        mode: Closed completion algorithm.
+        attempted_count: Full attempted row count ``N``.
+        valid_count: Hard-valid row count ``V``.
+    """
 
     mode: CompletionMode
     attempted_count: int
@@ -625,7 +753,22 @@ class CandidateCompletion:
 
 @dataclass(frozen=True, slots=True)
 class CandidateSet:
-    """Attempted shell, admission evidence, and scoreable action indices."""
+    """Attempted shell, admission evidence, and scoreable action indices.
+
+    Attributes:
+        attempts: Canonical immutable N-row attempted table.
+        admission: N-aligned hard-admission evidence.
+        action_indices: Ordered scoreable rows ``Tensor["A", int64]`` on the
+            attempted-table device; fixed-attempt compatibility requires ``A=V``.
+        completion: Score-independent attempted/valid counts.
+        candidate_program_hash: Bound literal-program identity.
+        request_binding_hash: Bound request identity.
+        candidate_substream_revision: Random-substream semantic revision.
+        action_order_revision: Ordered-action projection revision.
+
+    The generator constructs this once with a mutation receipt for the valid
+    projection. Consumers select, store, inspect, or adapt it without mutation.
+    """
 
     attempts: CandidateTable
     admission: AdmissionEvidence
