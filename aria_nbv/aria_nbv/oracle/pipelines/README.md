@@ -17,6 +17,11 @@ Run from `aria_nbv/`:
 | `nbv-status-rollout-shards` | Validate and summarize shard completion. |
 | `nbv-rollout-campaign` | Run a bounded resumable rollout campaign. |
 
+Campaign `smoke` is a canonical single-work-unit guard for the deterministic
+first planned unit. It is not evidence that a multi-scene or replicated smoke
+population completed; population-level admission remains a separate WP18
+responsibility.
+
 Always validate configuration before generation:
 
 ```sh

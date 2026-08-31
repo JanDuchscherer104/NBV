@@ -110,11 +110,15 @@ generation.
     artifact is bound to clean execution revision
     `2baf7cf6b276b81c50d01d45b152016d7cf68033`, generation revision
     `a2ae86b7463930c9`, and artifact SHA-256
-    `6c7fa8cb249687b80867261db1d1c7d1906e6b01f54d3cca3db4bfcbfa7bc670`.
+    `60b271db515a5e665fcb7bbeeecb87e6acb4bac2ff8e28b26b7308911328759c`.
     The stored shells and execution identity are unchanged; provenance
     correction revision `phase-a-path-independent-config-reseal-v1` replaces
     checkout-dependent configuration paths with the separately verified source
-    store identity.
+    store identity. Evidence assembly revision
+    `phase-a-evidence-assembly-v1` records an authenticated metadata-only
+    reseal from predecessor artifact
+    `6c7fa8cb249687b80867261db1d1c7d1906e6b01f54d3cca3db4bfcbfa7bc670`;
+    the candidate-record payload itself is unchanged.
   ],
 ) <fig:candidate-family-phase-a-support>
 

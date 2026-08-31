@@ -33,6 +33,7 @@ from aria_nbv.rollouts.candidate_benchmark import (
     canonical_json_bytes,
     read_candidate_family_phase_a,
     reduce_candidate_family_preflight,
+    reduce_candidate_records,
     scientific_writer_config_sha256,
     select_candidate_family_shell,
     sha256_bytes,
@@ -206,9 +207,14 @@ def test_preflight_funnel_supports_full_hundred_state_phase_a_population() -> No
     )
 
     heatmap, funnel = candidate_family_preflight_figures(result)
+    _, bounded_funnel = candidate_family_preflight_figures(
+        result,
+        funnel_identities={("scene-state-000", "state-000")},
+    )
 
     assert len(heatmap.data[0].y) == 100
     assert len(funnel.data) == 300
+    assert len(bounded_funnel.data) == 3
 
 
 def test_sampling_result_reducer_preserves_full_shell_reasons_and_margins() -> None:
@@ -345,6 +351,13 @@ def test_duplicate_state_keys_across_scenes_remain_distinct_end_to_end() -> None
     }
     assert len(heatmap.data[0].y) == 2
     assert len(selected) == 1 and selected[0].scene_key == "scene-b"
+
+
+def test_historical_single_root_identity_rejects_repeated_scene_state_until_future_provenance() -> None:
+    record = _record(state="shared", scene="scene-a").to_record()
+
+    with pytest.raises(ValueError, match="duplicate benchmark state key"):
+        reduce_candidate_records([record, record])
 
 
 def test_phase_a_reader_validates_compact_content_source_policy_and_revision(tmp_path: Path) -> None:

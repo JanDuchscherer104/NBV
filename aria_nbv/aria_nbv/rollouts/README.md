@@ -52,9 +52,9 @@ content-hashed evidence JSON; it does not reinterpret candidate support.
 
 The frozen 100-scene control is
 [`candidate_family_phase_a_wp02.json`](../../../docs/contents/evidence/candidate_family_phase_a_wp02.json)
-(artifact SHA-256 `6c7fa8cb249687b80867261db1d1c7d1906e6b01f54d3cca3db4bfcbfa7bc670`;
+(artifact SHA-256 `60b271db515a5e665fcb7bbeeecb87e6acb4bac2ff8e28b26b7308911328759c`;
 compact file SHA-256
-`8953fec21eec44680b34777dbcab1f97f78eeb2fafda1b3d76a7b908b58a4881`).
+`f7bbc420ddc3723f5939dce4f5b293b6b4234216263bfa052fde4b597bb032ec`).
 It covers all 100 reviewed source rows, scenes, and target states with no
 exclusions. Of 6,000 attempted rows, 3,146 entered the compact valid shell, but
 the gate is a no-go: 44 state/family cells collapsed, 24 states missed the
@@ -73,7 +73,17 @@ remediation and a later passing rerun remain separate follow-up work; this
 artifact does not admit broad generation. The stored shells and execution
 revision are unchanged from the one real run; revision
 `phase-a-path-independent-config-reseal-v1` records only the authenticated
-path-independent provenance correction.
+path-independent provenance correction. Evidence assembly revision
+`phase-a-evidence-assembly-v1` records a metadata-only authenticated reseal
+from predecessor artifact
+`6c7fa8cb249687b80867261db1d1c7d1906e6b01f54d3cca3db4bfcbfa7bc670`;
+the 100 candidate records retain SHA-256
+`637f9747d3125a8e746866d18843f2ca6aa84e50bcc2c75b5532a49b15690f6f`.
+
+The current record key is the composite `(scene_key, state_key)`. This is
+sufficient for the historical one-root Phase-A artifact. WP03/WP06 must extend
+provenance with proposal/root/replica identity before repeated physical states
+are admitted; state labels alone must not merge those future repetitions.
 
 ## Generate and Inspect
 
