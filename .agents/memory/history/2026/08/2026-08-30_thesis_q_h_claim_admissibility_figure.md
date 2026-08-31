@@ -26,7 +26,7 @@ touched_owner_paths:
   - scripts/tests/test_typst_report_data_contract.py
 codex_thread: codex://threads/01a04fd9-0c7c-7813-a9c5-dc49f2f867a6
 repo_object_format: sha1
-repo_head: 4cea0ec3ea021aa04b7eadf8f78c318c4c1dbf6f
+repo_head: 87c907b39b72227c71c594f71b2f41e9bf8daeba
 repo_branch: "codex/thesis-figure-qh-evidence-gates"
 worktree_kind: linked
 ---
@@ -188,6 +188,13 @@ reviews until zero P0--P2 findings remained.
   endpoint means and interval bounds now require values at most one. The bound
   is inclusive for finite-precision summaries, while no artificial lower bound
   is imposed because target error can worsen without a universal ratio floor.
+- A multi-store audit then showed that a global exact-$Q_2$ receipt could be
+  reused for a store absent from its certified population. Per-store admission
+  now maps the store manifest to the receipt's ordered roster and requires that
+  index in the fully validated population census. Selection and exact-row
+  support remain measured outcomes: a census-present but globally unselected
+  store and a selected zero-row stratum remain valid evidence, while a roster-
+  only store outside the census is unavailable.
 
 ## Commits
 
@@ -207,6 +214,7 @@ reviews until zero P0--P2 findings remained.
 - https://github.com/JanDuchscherer104/ARIA-NBV/commit/8dcd0cb539997bd41788a0190ec0c2ae7a009691
 - https://github.com/JanDuchscherer104/ARIA-NBV/commit/6ba2e3fbb122b0ae51f10fd48fdec2289aab3a1f
 - https://github.com/JanDuchscherer104/ARIA-NBV/commit/4cea0ec3ea021aa04b7eadf8f78c318c4c1dbf6f
+- https://github.com/JanDuchscherer104/ARIA-NBV/commit/87c907b39b72227c71c594f71b2f41e9bf8daeba
 
 ## Verification
 
@@ -304,6 +312,15 @@ Independent contract and scientific reviewers approved exact two-source-file
 diff `60cff93e91b7414f953eac7fb1a17ea40afc2f6d8449eac2154a82d82c23b974`
 with zero P0--P2 findings. All nine point and interval fields reject values
 above one; exactly one and scientifically valid negative gains remain accepted.
+The per-store population-binding repair passed
+`make thesis-report-data-contract`, `make thesis-results-full-profile-render`,
+`make thesis-pdf-ci`, `make typst-authoring-contract`, `make thesis-pdf`, and
+`git diff --check`. The thesis remains 129 A4 pages and its PDF SHA-256 is
+`d2307ce9d7ceeaeb0262ea054c2a9b4c4513dcfa119d0fadcb456ae0dff00abe`.
+Independent contract and scientific reviewers approved exact two-source-file
+diff `d3ea8cdfcb01556d79a9e1b9dc97455b65851e865f8be3de5a72178314f4b381`
+with zero P0--P2 findings. Multi-store fixtures distinguish roster-only,
+census-present unselected, selected zero-support, and selected passing stores.
 
 ## Canonical Owner Impact
 
