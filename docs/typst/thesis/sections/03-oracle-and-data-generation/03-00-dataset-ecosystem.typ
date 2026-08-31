@@ -23,6 +23,9 @@ aligned with the Aria observation surface used here. It contains 100,000
 procedurally generated indoor scenes with one outward-facing simulated RGB
 stream, ground-truth trajectories, MPS-style semi-dense maps, depth, instance
 annotations, and structured scene descriptions @ProjectAria-ASE-2025.
+The release totals more than 58 million RGB images, 67 trajectory-days, 7,800
+trajectory-kilometres, and about 23 TB; those figures establish useful scale,
+not a claim that all data are in the local experimental snapshot.
 EFM3D augments the ASE substrate with 3D oriented bounding-box metadata and
 releases ground-truth meshes for its simulated validation set
 @EFM3D-straub2024. These assets make repeatable target-task construction and
@@ -36,6 +39,53 @@ stores them beside logged streams.
 // - @ProjectAria-ASE-2025 -> https://facebookresearch.github.io/projectaria_tools/docs/open_datasets/aria_synthetic_environments_dataset/ase_data_format (field roles and GT-trajectory distinction, checked 2026-08-31)
 // - @EFM3D-straub2024 -> docs/literature/tex-src/arXiv-EFM3D/dataset.tex:15-18 (ASE OBB metadata)
 // - @EFM3D-straub2024 -> docs/literature/tex-src/arXiv-EFM3D/dataset.tex:30-30 (simulated-validation ground-truth meshes)
+
+#figure(
+  image(
+    "../../figures/ase_aria_atek_roles.svg",
+    width: 100%,
+  ),
+  caption: [Roles of Project Aria, ASE, EFM3D, and ATEK in the offline experiment. The upper layer assigns each product its observation, data-substrate, representation, or interface contribution; the lower band separates actor-visible evidence from privileged supervision and evaluation assets. This conceptual contract figure is grounded in the cited source interfaces. @projectaria-engel2023 @ProjectAria-ASE-2025 @EFM3D-straub2024 @ATEK-about-2025],
+) <fig:thesis-aria-atek-roles>
+
+=== Dataset Scale and Ground-Truth Mesh Scope
+
+Ground-truth meshes are available for 100 ASE validation scenes in the EFM3D
+release. This is $100 / 100,000 = 0.1$ percent of the full ASE scene count: a
+precious but deliberately bounded mesh-evaluation subset. The logarithmic
+comparison in @fig:thesis-ase-mesh-scope makes the three-order-of-magnitude
+gap explicit, preventing the 100-scene result from being read as a property of
+the entire 100,000-scene release.
+
+// evidence:
+// - @ProjectAria-ASE-2025 -> https://facebookresearch.github.io/projectaria_tools/docs/open_datasets/aria_synthetic_environments_dataset (100,000 scenes and aggregate scale, checked 2026-08-31)
+// - @EFM3D-straub2024 -> docs/literature/tex-src/arXiv-EFM3D/dataset.tex:30-30 (100 simulated-validation ground-truth meshes)
+
+#figure(
+  image(
+    "../../figures/ase_gt_mesh_subset_scale.svg",
+    width: 100%,
+  ),
+  caption: [Scale of the released ASE corpus and the EFM3D ground-truth-mesh evaluation subset. A logarithmic scene-count axis locates 100 mesh validation scenes against 100,000 ASE scenes; the subset is 0.1% of the corpus (a 1,000:1 ratio). This schematic quantitative comparison is derived from the cited release counts. @ProjectAria-ASE-2025 @EFM3D-straub2024],
+) <fig:thesis-ase-mesh-scope>
+
+The local ATEK--EFM snapshot used to inspect the mesh subset contains 100
+scenes and 4,608 snippet windows. A scan dated 2025-12-31 found 8--152 windows
+per scene (median 40; mean 46.1; tenth and ninetieth percentiles 8 and 88.8).
+The percentile summary in @fig:thesis-ase-local-snippets is an operational
+statistic of that local snapshot, rather than an estimate of the
+complete ASE release or of a future ATEK export.
+
+// evidence:
+// - docs/contents/ase_dataset.qmd:42-52 (local snapshot method, date, and per-scene statistics)
+
+#figure(
+  image(
+    "../../figures/ase_local_snapshot_summary.svg",
+    width: 100%,
+  ),
+  caption: [Fresh summary of per-scene availability in the locally scanned ATEK--EFM snapshot (scan date: 2025-12-31). The range, percentile interval, median, and mean characterize 4,608 windows across 100 scenes. This data-derived figure scopes local experimental availability, not the global ASE distribution.],
+) <fig:thesis-ase-local-snippets>
 
 ATEK supplies a standardized data and evaluation interface rather than another
 source of scientific truth. It preprocesses Aria recordings into

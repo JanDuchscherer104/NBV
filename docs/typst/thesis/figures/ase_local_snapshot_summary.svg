@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1180" height="450" viewBox="0 0 1180 450" role="img" aria-labelledby="title desc">
+  <title id="title">Summary of local ATEK EFM snippet availability</title>
+  <desc id="desc">Three statistic tiles state that the local ATEK EFM snapshot contains 100 scenes, 4,608 snippets, and a mean of 46.1 snippets per scene. A horizontal percentile summary has a full range from 8 to 152 snippets per scene, tenth percentile 8, median 40, mean 46.1, and ninetieth percentile 88.8.</desc>
+  <rect width="1180" height="450" fill="#ffffff"/>
+  <g font-family="Arial, Helvetica, sans-serif">
+    <text x="70" y="52" fill="#172033" font-size="25" font-weight="700">Local ATEK--EFM snapshot: availability summary</text>
+    <text x="70" y="80" fill="#4b5563" font-size="16">Inventory scan dated 2025-12-31; values describe the local snapshot, not the full ASE release.</text>
+    <g>
+      <rect x="70" y="112" width="285" height="105" rx="12" fill="#eaf2fb"/>
+      <rect x="377" y="112" width="285" height="105" rx="12" fill="#f2edfb"/>
+      <rect x="684" y="112" width="285" height="105" rx="12" fill="#e6f6f2"/>
+      <text x="94" y="151" fill="#315c8d" font-size="15" font-weight="700">MESH-SUBSET SCENES</text><text x="94" y="194" fill="#172033" font-size="36" font-weight="700">100</text>
+      <text x="401" y="151" fill="#7451a7" font-size="15" font-weight="700">SNIPPET WINDOWS</text><text x="401" y="194" fill="#172033" font-size="36" font-weight="700">4,608</text>
+      <text x="708" y="151" fill="#0f766e" font-size="15" font-weight="700">MEAN PER SCENE</text><text x="708" y="194" fill="#172033" font-size="36" font-weight="700">46.1</text>
+    </g>
+    <text x="70" y="267" fill="#172033" font-size="18" font-weight="700">Per-scene snippet availability</text>
+    <g stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4 5"><line x1="190" y1="295" x2="190" y2="370"/><line x1="405" y1="295" x2="405" y2="370"/><line x1="620" y1="295" x2="620" y2="370"/><line x1="835" y1="295" x2="835" y2="370"/><line x1="1050" y1="295" x2="1050" y2="370"/></g>
+    <line x1="190" y1="340" x2="1050" y2="340" stroke="#334155" stroke-width="2"/>
+    <line x1="233" y1="325" x2="1007" y2="325" stroke="#94a3b8" stroke-width="8" stroke-linecap="round"/>
+    <line x1="233" y1="325" x2="667" y2="325" stroke="#315c8d" stroke-width="13" stroke-linecap="round"/>
+    <line x1="233" y1="307" x2="233" y2="343" stroke="#315c8d" stroke-width="3"/><line x1="667" y1="307" x2="667" y2="343" stroke="#315c8d" stroke-width="3"/><line x1="1007" y1="307" x2="1007" y2="343" stroke="#64748b" stroke-width="3"/>
+    <circle cx="405" cy="325" r="10" fill="#0f766e" stroke="#ffffff" stroke-width="3"/><circle cx="438" cy="325" r="10" fill="#ffffff" stroke="#c2415a" stroke-width="3"/>
+    <g fill="#475569" font-size="14" text-anchor="middle"><text x="190" y="395">0</text><text x="405" y="395">40</text><text x="620" y="395">80</text><text x="835" y="395">120</text><text x="1050" y="395">160</text></g>
+    <text x="620" y="425" fill="#475569" font-size="15" text-anchor="middle">snippets per scene</text>
+    <g fill="#334155" font-size="14"><text x="222" y="302">p10 / min 8</text><text x="382" y="302">median 40</text><text x="444" y="302">mean 46.1</text><text x="642" y="302">p90 88.8</text><text x="976" y="302">max 152</text></g>
+  </g>
+</svg>
