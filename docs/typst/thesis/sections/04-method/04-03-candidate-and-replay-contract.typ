@@ -110,7 +110,7 @@ generation.
     artifact is bound to clean execution revision
     `2baf7cf6b276b81c50d01d45b152016d7cf68033`, generation revision
     `a2ae86b7463930c9`, and artifact SHA-256
-    `26d4ddefb007151d9975024478889fb0b3c30f82949429501d39d2d91a7acc23`.
+    `b04cf38ce1c7797d4cd660a89ccbcefabb2f5f0581fc73c1b7b569e99e48a65c`.
   ],
 ) <fig:candidate-family-phase-a-support>
 

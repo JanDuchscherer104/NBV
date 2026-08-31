@@ -49,17 +49,24 @@ both by this failed gate and by the independent WP18 requirement; issue #54
 must remain open.
 
 The compact canonical JSON has artifact SHA-256
-`26d4ddefb007151d9975024478889fb0b3c30f82949429501d39d2d91a7acc23`
+`b04cf38ce1c7797d4cd660a89ccbcefabb2f5f0581fc73c1b7b569e99e48a65c`
 and file SHA-256
-`f4c9d8399f7f898495a02e43795f402f734ee9aa3975632762c8d606b0a204ab`.
+`aad88d378e16114cb7108dd829c4f77abb21e3daea1cb90ce1c98ec96c5ba25a`.
 It records execution revision
 `2baf7cf6b276b81c50d01d45b152016d7cf68033`, generation revision
 `a2ae86b7463930c9`, source-manifest file SHA-256
 `d6e771d1582394cde9005be3185dc9cfbb875cab5fc004f184922a25dc996f56`,
 native source-store manifest identity `605453ba11869e40`, writer configuration
-SHA-256 `fc47d06e76da64a51948429a60a59efcb685962e9f475f0b80865031b127f91b`,
+SHA-256 `603c5785c2163833fff466a29b5bc6039a1d23a397f4774161368016fce33055`,
 and the Python 3.11.15, PyTorch 2.4.1/CUDA 12.1, PyTorch3D 0.7.9,
 RTX 3080 Ti runtime identity.
+
+The first compact serialization exposed that source-sample decoding mutates
+the process-global path singleton. The writer-config identity is therefore
+captured before source setup and iteration. The evidence above preserves the
+unchanged 100 generated candidate shells while replacing only that provenance
+field and its enclosing content hash with the independently reproducible
+pre-read writer-config identity.
 
 ## Issue #54 acceptance
 
@@ -99,3 +106,4 @@ RRI result, or permission for broad generation.
 - [Fail-closed family admission repair](https://github.com/JanDuchscherer104/ARIA-NBV/commit/cf9e44d468fb9688872f772544b7bd4aeb7d8fdb)
 - [Frozen campaign execution head](https://github.com/JanDuchscherer104/ARIA-NBV/commit/2baf7cf6b276b81c50d01d45b152016d7cf68033)
 - [Canonical reader order repair](https://github.com/JanDuchscherer104/ARIA-NBV/commit/801dbae07f)
+- [Pre-read writer-config identity repair](https://github.com/JanDuchscherer104/ARIA-NBV/commit/59a5d72413cc7d39744be08e05baec4ba6491afa)
