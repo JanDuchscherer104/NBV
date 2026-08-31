@@ -15,6 +15,7 @@ from enum import StrEnum
 from pydantic import Field, model_validator
 from pydantic_settings import SettingsConfigDict
 
+from ...pose_generation.sampling_keys import derive_shipped_component_seed
 from ...utils import BaseConfig
 
 SEED_DERIVATION_RULE = "sha256-json-v2-state-streams"
@@ -65,7 +66,7 @@ def derive_selection_seed(selection_seed: int, state_path: tuple[int, ...] = ())
 def derive_component_seed(node_seed: int, component_identity: str) -> int:
     """Derive a component-local seed without coupling sibling components."""
 
-    return derive_rollout_seed("component", int(node_seed), str(component_identity))
+    return derive_shipped_component_seed(node_seed, component_identity)
 
 
 class CounterfactualSelectionPolicy(StrEnum):

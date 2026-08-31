@@ -553,17 +553,19 @@ class CandidateViewGenerator:
             centers_world, offsets_ref = self._position_sampler.sample(
                 sampling_pose,
             )
-            return self._generate_for_centers(
-                reference_pose=reference_pose,
-                sampling_pose=sampling_pose,
-                centers_world=centers_world,
-                offsets_ref=offsets_ref,
-                gt_mesh=gt_mesh,
-                mesh_verts=mesh_verts,
-                mesh_faces=mesh_faces,
-                camera_calib_template=camera_calib_template,
-                occupancy_extent=occupancy_extent,
-                seed=None,
+            return self._finalise(
+                self._generate_context_for_centers(
+                    reference_pose=reference_pose,
+                    sampling_pose=sampling_pose,
+                    centers_world=centers_world,
+                    offsets_ref=offsets_ref,
+                    gt_mesh=gt_mesh,
+                    mesh_verts=mesh_verts,
+                    mesh_faces=mesh_faces,
+                    camera_calib_template=camera_calib_template,
+                    occupancy_extent=occupancy_extent,
+                    seed=None,
+                )
             )
 
     def generate_from_centers(
@@ -589,7 +591,71 @@ class CandidateViewGenerator:
         device = self.config.device
         prepared_reference = rotate_yaw_cw90(ensure_unbatched_pose(reference_pose.to(device)))
         sampling_pose = _gravity_align_pose(prepared_reference) if self.config.align_to_gravity else prepared_reference
-        return self._generate_for_centers(
+        return self._finalise(
+            self._generate_context_for_centers(
+                reference_pose=prepared_reference,
+                sampling_pose=sampling_pose,
+                centers_world=centers_world.to(device=device),
+                offsets_ref=offsets_ref.to(device=device),
+                gt_mesh=gt_mesh,
+                mesh_verts=mesh_verts,
+                mesh_faces=mesh_faces,
+                camera_calib_template=camera_calib_template,
+                occupancy_extent=occupancy_extent,
+                seed=self.config.seed if seed is None else seed,
+            )
+        )
+
+    def _generate_context(
+        self,
+        *,
+        reference_pose: PoseTW,
+        gt_mesh: trimesh.Trimesh,
+        mesh_verts: torch.Tensor,
+        mesh_faces: torch.Tensor,
+        camera_calib_template: CameraTW,
+        occupancy_extent: torch.Tensor,
+        seed: int | None,
+    ) -> CandidateContext:
+        """Generate the canonical full-shell context before legacy projection."""
+
+        device = self.config.device
+        prepared_reference = rotate_yaw_cw90(ensure_unbatched_pose(reference_pose.to(device)))
+        sampling_pose = _gravity_align_pose(prepared_reference) if self.config.align_to_gravity else prepared_reference
+        with _maybe_seed(self.config.seed if seed is None else seed, device=torch.device(device)):
+            centers_world, offsets_ref = self._position_sampler.sample(sampling_pose)
+            return self._generate_context_for_centers(
+                reference_pose=prepared_reference,
+                sampling_pose=sampling_pose,
+                centers_world=centers_world,
+                offsets_ref=offsets_ref,
+                gt_mesh=gt_mesh,
+                mesh_verts=mesh_verts,
+                mesh_faces=mesh_faces,
+                camera_calib_template=camera_calib_template,
+                occupancy_extent=occupancy_extent,
+                seed=None,
+            )
+
+    def _generate_context_from_centers(
+        self,
+        *,
+        reference_pose: PoseTW,
+        centers_world: torch.Tensor,
+        offsets_ref: torch.Tensor,
+        gt_mesh: trimesh.Trimesh,
+        mesh_verts: torch.Tensor,
+        mesh_faces: torch.Tensor,
+        camera_calib_template: CameraTW,
+        occupancy_extent: torch.Tensor,
+        seed: int | None,
+    ) -> CandidateContext:
+        """Assign gaze and admission to an exact supplied center table."""
+
+        device = self.config.device
+        prepared_reference = rotate_yaw_cw90(ensure_unbatched_pose(reference_pose.to(device)))
+        sampling_pose = _gravity_align_pose(prepared_reference) if self.config.align_to_gravity else prepared_reference
+        return self._generate_context_for_centers(
             reference_pose=prepared_reference,
             sampling_pose=sampling_pose,
             centers_world=centers_world.to(device=device),
@@ -602,7 +668,7 @@ class CandidateViewGenerator:
             seed=self.config.seed if seed is None else seed,
         )
 
-    def _generate_for_centers(
+    def _generate_context_for_centers(
         self,
         *,
         reference_pose: PoseTW,
@@ -615,7 +681,7 @@ class CandidateViewGenerator:
         camera_calib_template: CameraTW,
         occupancy_extent: torch.Tensor,
         seed: int | None,
-    ) -> CandidateSamplingResult:
+    ) -> CandidateContext:
         """Build orientations and apply hard rules for prepared centers."""
 
         device = self.config.device
@@ -731,7 +797,7 @@ class CandidateViewGenerator:
 
         self._apply_rules(ctx)
 
-        return self._finalise(ctx)
+        return ctx
 
     def _build_default_rules(self, cfg: CandidateViewGeneratorConfig) -> list[Rule]:
         rules: list[Rule] = []

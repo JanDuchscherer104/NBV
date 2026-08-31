@@ -44,6 +44,7 @@ from ..data_handling import EfmSnippetView
 from ..geometry import PreparedMeshQuery
 from ..utils import BaseConfig, TargetConfig
 from .candidate_generation import CandidateViewGenerator, CandidateViewGeneratorConfig
+from .sampling_keys import derive_shipped_component_seed
 from .types import (
     CandidateGenerationRuntimeContext,
     CandidatePositionMode,
@@ -538,8 +539,6 @@ class CandidateMixtureViewGenerator:
 
         component_results: list[CandidateSamplingResult] = []
         component_names: list[str] = []
-        from ..rollouts.replay.policy import derive_component_seed
-
         mesh_query = None
         if self.config.base.requires_mesh_query:
             mesh_query = PreparedMeshQuery.acquire(
@@ -600,7 +599,7 @@ class CandidateMixtureViewGenerator:
             component_names.extend([name] * shell_count)
 
         for component_index, component in enumerate(self.config.components):
-            component_seed = None if seed is None else derive_component_seed(seed, component.name)
+            component_seed = None if seed is None else derive_shipped_component_seed(seed, component.name)
             resolved_component_seed = component_seed
             if resolved_component_seed is None and self.config.base.seed is not None:
                 resolved_component_seed = int(self.config.base.seed) + component_index
@@ -641,7 +640,7 @@ class CandidateMixtureViewGenerator:
                 paired_seed = (
                     None
                     if resolved_component_seed is None
-                    else derive_component_seed(resolved_component_seed, paired_name)
+                    else derive_shipped_component_seed(resolved_component_seed, paired_name)
                 )
                 paired_component = component.model_copy(
                     update={"view_mode": component.paired_view_mode, "strategy": component.paired_view_mode}

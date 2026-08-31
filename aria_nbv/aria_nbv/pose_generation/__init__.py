@@ -1,19 +1,32 @@
 """Finite-candidate generation contracts.
 
-The package owns the thesis action space: every NBV decision is a finite table
-of candidate camera poses, validity masks, reason codes, and provenance fields.
-`CandidateSamplingResult.views` is the compact valid table used for rendering
-and scoring; `mask_valid`, `shell_poses`, strategy ids, mixture ids, and sampler
-probabilities stay aligned to the full sampled shell so invalid actions remain
-auditable instead of becoming low-RRI samples.
+The canonical deep operation is
+``CandidateGenerator.generate(CandidateRequest) -> CandidateSet``. The set
+retains one full attempted table, typed admission evidence, ordered hard-valid
+rows, action rows, completion, randomness revision, and semantic provenance.
 
 Target-conditioned candidate generation adds a runtime-only actor-visible
 target context. `TARGET_POINT` candidates must use the selected
 observed/predicted target center, not GT geometry. Counterfactual transitions
 and oracle rollout scorers live in `aria_nbv.rollouts`.
+
+``CandidateViewGenerator``, ``CandidateMixtureViewGenerator``, their configs,
+``CandidateGenerationRuntimeContext``, and ``CandidateSamplingResult`` remain
+compatibility-only authoring/projection surfaces during the staged migration.
 """
 
 from .candidate_generation import CandidateViewGenerator, CandidateViewGeneratorConfig
+from .candidate_interface import (
+    ActorTargetContext,
+    AdmissionEvidence,
+    CandidateConditioning,
+    CandidateGenerator,
+    CandidateRequest,
+    CandidateSet,
+    CandidateTable,
+    PreparedCandidateScene,
+    candidate_set_to_legacy_result,
+)
 from .candidate_mixture import (
     CandidateMixtureComponentConfig,
     CandidateMixtureViewGenerator,
@@ -21,6 +34,9 @@ from .candidate_mixture import (
     candidate_position_id,
     candidate_strategy_id,
 )
+from .candidate_program import CandidateProgram, compile_candidate_program
+from .program_generator import ProgramCandidateGenerator
+from .sampling_keys import CandidateSamplingKey, CandidateSubstreamRevision
 from .types import (
     CandidateGenerationRuntimeContext,
     CandidatePositionMode,
@@ -36,8 +52,20 @@ from .utils import (
 )
 
 __all__ = [
+    "ActorTargetContext",
+    "AdmissionEvidence",
+    "CandidateConditioning",
+    "CandidateGenerator",
+    "CandidateProgram",
+    "CandidateRequest",
+    "CandidateSamplingKey",
+    "CandidateSet",
+    "CandidateSubstreamRevision",
+    "CandidateTable",
     "CandidateViewGenerator",
     "CandidateViewGeneratorConfig",
+    "PreparedCandidateScene",
+    "ProgramCandidateGenerator",
     "CandidateMixtureComponentConfig",
     "CandidateMixtureViewGenerator",
     "CandidateMixtureViewGeneratorConfig",
@@ -45,7 +73,9 @@ __all__ = [
     "CandidatePositionMode",
     "ViewDirectionMode",
     "candidate_position_id",
+    "candidate_set_to_legacy_result",
     "candidate_strategy_id",
+    "compile_candidate_program",
     "CandidateSamplingResult",
     "SamplingStrategy",
     "CollisionBackend",
