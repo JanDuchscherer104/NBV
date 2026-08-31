@@ -1636,8 +1636,8 @@ def benchmarks_from_reader(
         points: list[CandidatePoint] = []
         state_rows = [row for rows in family_rows.values() for row in rows]
         state_audit = _StateAuditAccumulator()
-        for row in state_rows:
-            state_audit.add(row)
+        for state_row in state_rows:
+            state_audit.add(state_row)
         oracle_target_root_gains = tuple(
             _oracle_gain_scalar(row["target_root_gain"])
             for row in state_rows
