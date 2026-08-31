@@ -12,8 +12,8 @@ format: html
 This page is navigation and external background only. The finite-candidate
 rollout, state/action notation, $Q_H$ equations, data schema, and acceptance
 checks are canonical in the [Typst thesis](../../typst/thesis/main.typ),
-`docs/typst/thesis/development/m1-contract-report.typ`, and the Python
-docstrings/tests that implement them.
+its method and experimental-design sections, and the Python docstrings/tests
+that implement them. The development roadmap records readiness and gates only.
 
 The literature rationale for discrete candidate rollouts is collected in
 [RL sources for rollout and Q_H](../literature/rl_planning.qmd). Candidate

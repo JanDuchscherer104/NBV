@@ -1,5 +1,5 @@
 .DEFAULT_GOAL := help
-.PHONY: help ci ci-impact-self-test ownership-consolidation-contract typst-authoring-contract thesis-literature-provenance skill-source-self-test graphify-skill-upstream-self-test graphify-projection-self-test graphify-projection-live-check graphify-usable-check graphify-state-check graphify-maintain graphify-session-readiness-integration scaffold-check agents-db-validate package-smoke qh-ci replay-oracle-golden docs-render-core quarto-docs-ci typst-paper-ci thesis-pdf-ci thesis-marker-contract ruff-full ruff-targeted mypy-contract mypy-full mypy-targeted coverage-targeted agent-status
+.PHONY: help ci ci-impact-self-test ownership-consolidation-contract typst-authoring-contract thesis-literature-provenance skill-source-self-test graphify-skill-upstream-self-test graphify-projection-self-test graphify-projection-live-check graphify-usable-check graphify-state-check graphify-maintain graphify-session-readiness-integration scaffold-check agents-db-validate package-smoke qh-ci replay-oracle-golden docs-render-core quarto-docs-ci typst-paper-ci thesis-pdf-ci thesis-marker-contract thesis-roadmap-contract ruff-full ruff-targeted mypy-contract mypy-full mypy-targeted coverage-targeted agent-status
 .PHONY: api-docs-self-test
 .PHONY: context-qmd-tree qmd-frontmatter-check
 .PHONY: context-index context-get context-contracts context-modules context-classes context-functions
@@ -806,6 +806,9 @@ thesis-report-data-contract: _check_python ## Verify positive and negative Typst
 thesis-marker-contract: _check_python ## Verify Typst development/submission marker fixtures
 	@$(PYTHON_INTERPRETER) scripts/tests/test_thesis_marker_contract.py
 
+thesis-roadmap-contract: _check_python ## Validate roadmap data, freshness, dependencies, evidence pointers, and Typst projection
+	@$(PYTHON_INTERPRETER) scripts/tests/test_thesis_roadmap_contract.py
+
 typst-authoring-contract: _check_python ## Enforce shared-equation, notation, label, and prose hygiene
 	@$(PYTHON_INTERPRETER) scripts/tests/test_typst_authoring_hygiene.py
 	@$(PYTHON_INTERPRETER) scripts/tests/test_typst_authoring_hygiene.py --scan docs/typst/thesis
@@ -814,7 +817,7 @@ typst-authoring-contract: _check_python ## Enforce shared-equation, notation, la
 thesis-literature-provenance: _check_python ## Check Related Work citation identity and source locators
 	@$(PYTHON_INTERPRETER) -m pytest --import-mode=importlib scripts/tests/test_thesis_literature_provenance.py
 
-docs-render-core: graphify-projection-self-test graphify-projection-live-check quarto-docs-ci typst-paper-ci typst-paper-table-contract thesis-pdf-ci scientific-report-v2-smoke typst-table-gallery thesis-report-data-contract typst-authoring-contract thesis-marker-contract thesis-literature-provenance ## Render the core docs surfaces used by root CI
+docs-render-core: graphify-projection-self-test graphify-projection-live-check quarto-docs-ci typst-paper-ci typst-paper-table-contract thesis-roadmap-contract thesis-pdf-ci scientific-report-v2-smoke typst-table-gallery thesis-report-data-contract typst-authoring-contract thesis-marker-contract thesis-literature-provenance ## Render the core docs surfaces used by root CI
 
 qh-ci: ## Run the focused CPU-only Q_H training and distributed contracts
 	@cd $(PKG_DIR) && $(QH_CI_PYTHON) -m ruff format --check $(QH_CI_RUFF_PATHS)

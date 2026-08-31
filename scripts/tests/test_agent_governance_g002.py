@@ -922,7 +922,7 @@ def test_qh_guidance_points_to_typst_owners_without_duplicate_policy() -> None:
         docs_guidance
     )
     assert "conditional online bridge is RQ5" in docs_guidance
-    assert "M6 scope decision pending M5 evidence" in docs_guidance
+    assert "deferred pending the offline P1-P3 evidence chain" in docs_guidance
     assert "V0 GT actor-visible-target runs as main V1 performance" not in docs_guidance
     assert "only after offline `Q_H` evidence is stable" not in docs_guidance
 
