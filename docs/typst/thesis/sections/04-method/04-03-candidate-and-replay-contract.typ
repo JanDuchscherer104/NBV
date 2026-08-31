@@ -82,7 +82,7 @@ recipe seed keyed by the same selected-action history.
 
 This transition is deliberately a replay-control transition, not yet a complete reconstruction-state update. It changes pose, selected-pose history, budget, lineage, and action support. It does not imply that the actor has received a new RGB observation, recomputed EFM3D field, or fused the selected depth into a spatial memory. Any implementation that consumes only these fields must be labelled `S0-pose`.
 
-The persisted factual tables retain source and target identity, lineage hashes, step order, selected rows, masks, reasons, sampler provenance, rewards, selected-depth calibration, and support diagnostics. The derived `q_h/` view right-pads states, stores one-step and target-root-gain labels, and exposes only the factual selected transition needed for a temporal-difference backup. It does not create counterfactual labels for unselected actions or make privileged selected depth actor-visible.
+The persisted factual tables retain source and target identity, lineage hashes, step order, selected rows, masks, reasons, sampler provenance, rewards, selected-depth calibration, and support diagnostics. The derived `q_h/` view right-pads states, stores one-step and target-root-gain labels, and exposes only the factual selected transition needed for the temporal-difference backup defined in @ssec:thesis-horizon-recursive-offline-learning. It does not create counterfactual labels for unselected actions or make privileged selected depth actor-visible.
 
 Training, validation, and test stores must share the same learning semantics:
 reward definition, mask meanings, target and actor-state protocols, horizon

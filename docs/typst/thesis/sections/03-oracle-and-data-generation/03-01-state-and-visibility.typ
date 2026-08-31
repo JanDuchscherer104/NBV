@@ -31,7 +31,11 @@ The visibility boundary is protocol-relative and temporal. A dense render for an
 
 === ASE/EFM Logged Observation State
 
-The target is treated as external task context, so the value is conceptually $Q(s_t,e,a)$ rather than a target-independent state value. The logged historic state contains the recorded trajectory evidence,
+Following the conditional action-value definition in
+@sec:thesis-sequential-decision-foundations, the target is treated as external
+task context, so the value is conceptually $Q(s_t,e,a)$ rather than a
+target-independent state value. The logged historic state contains the recorded
+trajectory evidence,
 
 $
   #eqs.rl.s_hist
