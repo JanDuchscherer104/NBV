@@ -1,4 +1,4 @@
-#import "../experiment_data.typ": canonical-sidecar-id, conditional-ratio-gate-state, evidence-gate-state, endpoint-evidence-facts, oracle-endpoint-evidence-facts, headroom-evidence-facts, recovery-evidence-facts, headroom-decision-rule, paired-interval-method, recovery-decision-rule, recovery-interval-method, recovery-ratio-definition, report-store-endpoint-evidence-valid, report-store-oracle-endpoint-evidence-valid, report-store-headroom-evidence-valid, report-store-recovery-evidence-valid, report-store-headroom-identity-valid, report-store-recovery-identity-valid, report-store-fact, report-store-facts-share-source, report-store-facts-share-value, report-stores-have-facts
+#import "../experiment_data.typ": canonical-sidecar-id, conditional-ratio-gate-state, evidence-gate-state, endpoint-evidence-facts, oracle-endpoint-evidence-facts, headroom-evidence-facts, recovery-evidence-facts, headroom-decision-rule, paired-interval-method, recovery-decision-rule, recovery-interval-method, recovery-ratio-definition, report-sidecar-projection-sha256, report-store-endpoint-evidence-valid, report-store-oracle-endpoint-evidence-valid, report-store-headroom-evidence-valid, report-store-recovery-evidence-valid, report-store-headroom-identity-valid, report-store-recovery-identity-valid, report-store-fact, report-store-facts-share-source, report-store-facts-share-value, report-stores-have-facts
 
 #let digest-a = "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
 #let digest-b = "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
@@ -151,11 +151,14 @@
       analysis-sidecar-value-rows(sidecar-id, matches.first().name, rows)
     } else { () }
   }
+  let bound-sidecars = sidecar-rows.map(sidecar => sidecar + (
+    projection_sha256: () => true,
+  ))
   (
     tables: (
       stores: (rows: ((store_id: "store-a"),)),
       facts: (rows: rows),
-      sidecars: (rows: sidecar-rows),
+      sidecars: (rows: bound-sidecars),
       sidecar_values: (rows: projected-sidecar-values),
     ),
   )

@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import shutil
 from pathlib import Path
 from typing import Any, cast
@@ -173,7 +174,7 @@ def test_requested_shallow_tables_skip_unrelated_deep_projections(
     assert not frames["stores"].empty
     assert not frames["facts"].empty
     assert frames["targets"].empty
-    assert b'"schema_version":"aria-nbv-thesis-report-v1"' in serialize_thesis_report_bundle(frames)
+    assert b'"schema_version":"aria-nbv-thesis-report-v2"' in serialize_thesis_report_bundle(frames)
 
 
 def test_report_export_requests_only_candidate_facets_it_serializes(
@@ -1294,6 +1295,7 @@ def test_report_frames_preserve_parameters_sidecars_missingness_and_provenance(t
     assert sidecar_values.loc["records[0].accepted", "value_bool"]
     expected_hash = hashlib.sha256(sidecar.read_bytes()).hexdigest()
     assert frames["sidecars"].iloc[0]["sha256"] == expected_hash
+    assert re.fullmatch(r"[0-9a-f]{64}", frames["sidecars"].iloc[0]["projection_sha256"])
     assert frames["sidecars"].iloc[0]["path"] == sidecar.name
     assert frames["sidecars"].iloc[0]["status"] == "pilot"
     assert frames["stores"].iloc[0]["manifest_sha256"] == result.manifest_sha256

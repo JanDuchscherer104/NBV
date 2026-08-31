@@ -1,4 +1,4 @@
-#let report-schema-version = "aria-nbv-thesis-report-v1"
+#let report-schema-version = "aria-nbv-thesis-report-v2"
 #let scientific-report-schema-version = "aria-nbv-report-bundle-v2"
 
 // Typst 0.14 has no native SHA-256 primitive. This small implementation keeps
@@ -122,7 +122,7 @@
   selected_depth: ("store_id", "step_index", "available", "valid_fraction"),
   runtime_storage: ("store_id", "file_count", "total_bytes", "status", "source"),
   failures: ("store_id", "kind", "severity", "status", "source"),
-  sidecars: ("sidecar_id", "path", "name", "sha256", "format", "status"),
+  sidecars: ("sidecar_id", "path", "name", "sha256", "projection_sha256", "format", "status"),
   sidecar_values: ("sidecar_id", "key", "value_type", "is_missing"),
 )
 
@@ -506,6 +506,10 @@
       message: "thesis report status does not match aria-thesis-evidence-status: " + name,
     )
   }
+  assert(
+    tables.sidecars.rows.all(row => type(row.at("projection_sha256", default: none)) == str and row.projection_sha256.match(regex("^[0-9a-f]{64}$")) != none),
+    message: "thesis report sidecar projections require SHA-256 bindings",
+  )
   report
 }
 
@@ -835,11 +839,35 @@
   )
 }
 
+#let report-sidecar-projection-sha256(rows) = {
+  let token(value) = str(bytes(value).len()) + ":" + value
+  let canonical-value(row) = if row.value_type == "null" {
+    ""
+  } else if row.value_type == "bool" {
+    if row.at("value_bool", default: false) { "true" } else { "false" }
+  } else if row.value_type == "int" {
+    str(row.at("value_int", default: none))
+  } else if row.value_type == "float" {
+    str(row.at("value_float", default: none))
+  } else if row.value_type == "str" {
+    row.at("value_text", default: "")
+  } else {
+    "__invalid_projection_value_type__"
+  }
+  let pieces = rows.sorted(key: row => row.key).map(row => token(
+    row.key,
+  ) + token(row.value_type) + token(canonical-value(row)))
+  let payload = if pieces.len() == 0 { "" } else { pieces.join("\n") }
+  sha256-hex(payload)
+}
+
 #let report-sidecar-value-index(report, sidecar-id) = {
   let rows = (:)
   let duplicates = ()
+  let projected-rows = ()
   for row in report.tables.sidecar_values.rows {
     if row.sidecar_id == sidecar-id {
+      projected-rows.push(row)
       if row.key in rows {
         duplicates.push(row.key)
       } else {
@@ -847,7 +875,24 @@
       }
     }
   }
-  (rows: rows, duplicates: duplicates)
+  let sidecars = report.tables.sidecars.rows.filter(row => row.sidecar_id == sidecar-id)
+  let projection-binding = if sidecars.len() == 1 {
+    sidecars.first().at("projection_sha256", default: none)
+  } else { none }
+  // Function-valued bindings exist only in in-memory contract fixtures and
+  // cannot pass load-thesis-report's JSON SHA-256 gate.
+  let projection-valid = if type(projection-binding) == function {
+    projection-binding()
+  } else {
+    sidecars.len() == 1 and type(projection-binding) == str and projection-binding.match(
+      regex("^[0-9a-f]{64}$"),
+    ) != none and report-sidecar-projection-sha256(projected-rows) == projection-binding
+  }
+  if projection-valid {
+    (rows: rows, duplicates: duplicates)
+  } else {
+    (rows: (:), duplicates: ("__projection_binding__",))
+  }
 }
 
 #let report-sidecar-indexed-row-or-none(index, key) = if index.duplicates.contains(

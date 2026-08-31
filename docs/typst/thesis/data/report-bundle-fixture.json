@@ -1,5 +1,5 @@
 {
-  "schema_version": "aria-nbv-thesis-report-v1",
+  "schema_version": "aria-nbv-thesis-report-v2",
   "bundle_role": "fixture",
   "fixture_notice": "Synthetic non-scientific fixture for Typst contract tests only.",
   "tables": {
@@ -43,7 +43,7 @@
     "selected_depth": {"columns": ["store_id", "rollout_row_id", "step_row_id", "step_index", "selected_candidate_row_id", "candidate_row_id", "available", "warning", "valid_pixels", "finite_pixels", "pixel_count", "valid_fraction", "finite_fraction", "depth_min_m", "depth_mean_m", "depth_max_m", "image_height", "image_width", "focal_x_px", "focal_y_px", "principal_x_px", "principal_y_px", "selected_position", "selected_strategy", "selected_mixture", "selected_target_root_gain", "selected_target_rri"], "rows": []},
     "runtime_storage": {"columns": ["store_id", "file_count", "total_bytes", "bytes_per_candidate", "file_count_limit", "bytes_per_candidate_limit", "status", "source"], "rows": [{"store_id": "synthetic-nonscientific-fixture", "file_count": 8, "total_bytes": 4096, "bytes_per_candidate": 341.3333333333333, "file_count_limit": null, "bytes_per_candidate_limit": null, "status": "pilot", "source": "synthetic.contract_test"}]},
     "failures": {"columns": ["store_id", "kind", "severity", "rollout_row_id", "step_row_id", "candidate_row_id", "message", "status", "source"], "rows": []},
-    "sidecars": {"columns": ["sidecar_id", "path", "name", "sha256", "format", "status"], "rows": []},
+    "sidecars": {"columns": ["sidecar_id", "path", "name", "sha256", "projection_sha256", "format", "status"], "rows": []},
     "sidecar_values": {"columns": ["sidecar_id", "key", "value_type", "value_bool", "value_int", "value_float", "value_text", "is_missing"], "rows": []}
   }
 }

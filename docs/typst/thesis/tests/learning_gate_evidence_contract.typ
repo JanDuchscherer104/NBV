@@ -1,4 +1,4 @@
-#import "../experiment_data.typ": candidate-support-benchmark-name, candidate-support-benchmark-schema, candidate-support-decision-rule, candidate-support-receipt-name, candidate-support-receipt-schema, canonical-sidecar-id, measurement-benchmark-name, measurement-benchmark-schema, measurement-protocol-receipt-name, measurement-protocol-receipt-schema, measurement-rank-direction, measurement-rank-tie-policy, paired-interval-method, q1-analysis-receipt-name, q1-audit-action-mask-semantics, q1-audit-actor-input-leaves, q1-audit-actor-input-manifest-schema, q1-audit-campaign-descriptor-provenance, q1-audit-campaign-target-source, q1-audit-experiment-profile, q1-audit-gt-match-status, q1-audit-selected-observation-protocol, q1-audit-target-protocol, q1-bundle-manifest-name, q1-decision-rule, q1-pairwise-chance, q1-population-benchmark-name, q1-population-benchmark-schema, q1-protocol-receipt-name, q1-protocol-receipt-schema, q1-ranking-interval-method, q1-scene-role, q1-target-source-protocol, q2-certification-receipt-schema, q2-certification-schema, q2-decision-rule, q2-independent-unit-aggregation, q2-independent-unit-semantics, q2-selection-semantics, repeatability-decision-rule, report-store-population-evidence-valid, report-store-measurement-evidence-valid, report-store-candidate-support-evidence-valid, report-store-q1-evidence-valid, report-stores-q1-evidence-valid, report-store-q2-evidence-valid, sha256-hex
+#import "../experiment_data.typ": candidate-support-benchmark-name, candidate-support-benchmark-schema, candidate-support-decision-rule, candidate-support-receipt-name, candidate-support-receipt-schema, canonical-sidecar-id, measurement-benchmark-name, measurement-benchmark-schema, measurement-protocol-receipt-name, measurement-protocol-receipt-schema, measurement-rank-direction, measurement-rank-tie-policy, paired-interval-method, q1-analysis-receipt-name, q1-audit-action-mask-semantics, q1-audit-actor-input-leaves, q1-audit-actor-input-manifest-schema, q1-audit-campaign-descriptor-provenance, q1-audit-campaign-target-source, q1-audit-experiment-profile, q1-audit-gt-match-status, q1-audit-selected-observation-protocol, q1-audit-target-protocol, q1-bundle-manifest-name, q1-decision-rule, q1-pairwise-chance, q1-population-benchmark-name, q1-population-benchmark-schema, q1-protocol-receipt-name, q1-protocol-receipt-schema, q1-ranking-interval-method, q1-scene-role, q1-target-source-protocol, q2-certification-receipt-schema, q2-certification-schema, q2-decision-rule, q2-independent-unit-aggregation, q2-independent-unit-semantics, q2-selection-semantics, repeatability-decision-rule, report-sidecar-projection-sha256, report-store-population-evidence-valid, report-store-measurement-evidence-valid, report-store-candidate-support-evidence-valid, report-store-q1-evidence-valid, report-stores-q1-evidence-valid, report-store-q2-evidence-valid, sha256-hex
 
 #let digest-a = "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
 #let digest-b = "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
@@ -119,6 +119,14 @@
   value_type: "null",
   is_missing: true,
 )
+#assert.eq(report-sidecar-projection-sha256((
+  typed-sidecar-row("s", "a", 1.0),
+  typed-sidecar-row("s", "b", true),
+  typed-sidecar-row("s", "c", "x"),
+  missing-sidecar-row("s", "d"),
+  typed-sidecar-row("s", "e", -0.0),
+  typed-sidecar-row("s", "f", 100000000000000000000.0),
+)), "cb45fd04f191df8362246dd94143be6b2e5ae0ee505c68f87224fedb393b7870")
 #let q2-aggregate-sidecar-value-rows(
   prefix,
   row-count,
@@ -627,12 +635,16 @@
       store-manifests: store-rows.map(row => row.manifest_sha256),
     )
   } else { q1-bundle-values }
+  let sidecar-values = projected-sidecar-values + q1-audit-values + q1-population-values + projected-q1-bundle + projected-support-plan + projected-measurement-plan
+  let bound-sidecars = sidecar-rows.map(sidecar => sidecar + (
+    projection_sha256: () => true,
+  ))
   (
     tables: (
       stores: (rows: store-rows),
       facts: (rows: rows),
-      sidecars: (rows: sidecar-rows),
-      sidecar_values: (rows: projected-sidecar-values + q1-audit-values + q1-population-values + projected-q1-bundle + projected-support-plan + projected-measurement-plan),
+      sidecars: (rows: bound-sidecars),
+      sidecar_values: (rows: sidecar-values),
     ),
   )
 }
@@ -1740,6 +1752,30 @@
 )
 #assert(not report-store-candidate-support-evidence-valid(
   forged-support-report,
+  "store-a",
+))
+#let projection-bound-support-report = (
+  tables: valid-support-report.tables + (
+    sidecars: (rows: valid-support-report.tables.sidecars.rows.map(sidecar => if sidecar.sidecar_id == support-benchmark-sidecar {
+      sidecar + (projection_sha256: report-sidecar-projection-sha256(
+        valid-support-report.tables.sidecar_values.rows.filter(row => row.sidecar_id == support-benchmark-sidecar),
+      ),)
+    } else { sidecar }),),
+  ),
+)
+#assert(report-store-candidate-support-evidence-valid(
+  projection-bound-support-report,
+  "store-a",
+))
+#let projection-tampered-support-report = (
+  tables: projection-bound-support-report.tables + (
+    sidecar_values: (rows: projection-bound-support-report.tables.sidecar_values.rows.map(row => if row.sidecar_id == support-benchmark-sidecar and row.key == "expected_attempts" {
+      typed-sidecar-row(row.sidecar_id, row.key, row.value_int + 1)
+    } else { row }),),
+  ),
+)
+#assert(not report-store-candidate-support-evidence-valid(
+  projection-tampered-support-report,
   "store-a",
 ))
 
