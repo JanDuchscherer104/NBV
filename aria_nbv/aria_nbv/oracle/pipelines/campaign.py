@@ -1076,6 +1076,7 @@ class CudaRolloutCampaign:
 
         generation_revision = current_generation_revision(contract_revision="candidate-family-phase-a-v2")
         runtime_identity = current_phase_a_runtime_identity()
+        writer_config_sha256 = sha256_bytes(canonical_json_bytes(writer_config.model_dump_jsonable()))
         phase_source = writer_config.source
         if hasattr(phase_source, "model_copy"):
             phase_source = phase_source.model_copy(
@@ -1195,7 +1196,7 @@ class CudaRolloutCampaign:
             source_cache_version=str(source_manifest.source_cache_version),
             split_manifest_hash=str(source_manifest.split_manifest_hash),
             source_store_dir=str(source_manifest.source_store_dir),
-            writer_config_sha256=sha256_bytes(canonical_json_bytes(writer_config.model_dump_jsonable())),
+            writer_config_sha256=writer_config_sha256,
             implementation_revision=generation_revision.clean_commit,
             generation_revision=generation_revision.to_jsonable(),
             runtime_identity=runtime_identity,

@@ -19,7 +19,9 @@ from aria_nbv.rollouts.candidate_benchmark import (
     CandidateFamilyPreflight,
     CandidateFamilyPreflightConfig,
     CandidateSupportFailure,
+    canonical_json_bytes,
     reduce_candidate_family_preflight,
+    sha256_bytes,
 )
 
 
@@ -90,13 +92,19 @@ def test_phase_a_adapter_stops_before_oracle_scoring(monkeypatch: pytest.MonkeyP
     ]
     mixture = SimpleNamespace(components=components, total_count=15, setup_target=lambda: generator)
     source_row = SimpleNamespace(sample_key="sample", scene_id="scene")
+    writer_state = {"phase": "before-source-setup"}
+
+    def setup_source() -> list[_Sample]:
+        writer_state["phase"] = "after-source-setup"
+        return [_Sample()]
+
     writer = SimpleNamespace(
-        source=SimpleNamespace(setup_target=lambda: [_Sample()]),
+        source=SimpleNamespace(setup_target=setup_source),
         sample_keys=None,
         oracle_target_task_sampler=object(),
         candidate_mixture=mixture,
         selected_source_manifest_rows=lambda _manifest: (source_row,),
-        model_dump_jsonable=lambda: {"candidate_mixture": "fixture"},
+        model_dump_jsonable=lambda: {"candidate_mixture": "fixture", **writer_state},
     )
     manifest = SimpleNamespace(
         source_manifest_hash="a" * 16,
@@ -153,6 +161,9 @@ def test_phase_a_adapter_stops_before_oracle_scoring(monkeypatch: pytest.MonkeyP
 
     assert evidence.source_row_count == evidence.scene_count == evidence.target_state_count == 1
     assert evidence.source_store_manifest_hash == "a" * 16
+    assert evidence.writer_config_sha256 == sha256_bytes(
+        canonical_json_bytes({"candidate_mixture": "fixture", "phase": "before-source-setup"})
+    )
     assert not evidence.preflight.go
     assert evidence.preflight.coverage.expected == 100
     assert evidence.preflight.coverage.represented_rows == 1
