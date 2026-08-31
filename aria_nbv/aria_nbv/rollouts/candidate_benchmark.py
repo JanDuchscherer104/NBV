@@ -1336,15 +1336,28 @@ def benchmarks_from_reader(
         grouped.setdefault(key, {}).setdefault(str(row["mixture"]), []).append(row)
 
     if state_key is None:
-        audit_rows = candidate_audit_rows(reader, limit=candidate_limit, row_callback=retain_audit_row)
+        audit_rows = (
+            candidate_audit_rows(reader, limit=candidate_limit)
+            if include_geometry
+            else candidate_audit_rows(reader, limit=candidate_limit, row_callback=retain_audit_row)
+        )
     else:
         assert requested_state is not None
-        audit_rows = candidate_audit_rows(
-            reader,
-            rollout_row_id=requested_state[0],
-            step_row_id=requested_state[1],
-            limit=candidate_limit,
-            row_callback=retain_audit_row,
+        audit_rows = (
+            candidate_audit_rows(
+                reader,
+                rollout_row_id=requested_state[0],
+                step_row_id=requested_state[1],
+                limit=candidate_limit,
+            )
+            if include_geometry
+            else candidate_audit_rows(
+                reader,
+                rollout_row_id=requested_state[0],
+                step_row_id=requested_state[1],
+                limit=candidate_limit,
+                row_callback=retain_audit_row,
+            )
         )
     for row in audit_rows:
         retain_audit_row(row)
