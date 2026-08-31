@@ -29,7 +29,7 @@ Theory:
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import Protocol
 
 import torch
 from efm3d.aria.pose import PoseTW
@@ -40,14 +40,39 @@ from ..utils.frames import view_axes_from_poses, world_up_tensor
 from .geometry import DEVICE_FWD
 from .types import SamplingStrategy, ViewDirectionMode
 
-if TYPE_CHECKING:
-    from .candidate_generation import CandidateViewGeneratorConfig
+
+class _GazeSamplingConfig(Protocol):
+    """Private gaze-kernel facts consumed by :class:`OrientationBuilder`."""
+
+    @property
+    def verbosity(self) -> int: ...
+
+    @property
+    def view_direction_mode(self) -> ViewDirectionMode: ...
+
+    @property
+    def view_target_point_world(self) -> torch.Tensor | None: ...
+
+    @property
+    def view_sampling_strategy(self) -> SamplingStrategy | None: ...
+
+    @property
+    def view_kappa(self) -> float: ...
+
+    @property
+    def view_max_azimuth_deg(self) -> float: ...
+
+    @property
+    def view_max_elevation_deg(self) -> float: ...
+
+    @property
+    def view_roll_jitter_deg(self) -> float: ...
 
 
 class OrientationBuilder:
     """Construct candidate camera orientations from centers and view settings."""
 
-    def __init__(self, cfg: CandidateViewGeneratorConfig):
+    def __init__(self, cfg: _GazeSamplingConfig):
         self.cfg = cfg
         self.console = Console.with_prefix(self.__class__.__name__).set_verbose(cfg.verbosity)
 

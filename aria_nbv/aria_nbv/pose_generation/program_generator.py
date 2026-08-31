@@ -3,12 +3,16 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from dataclasses import dataclass
 from types import MappingProxyType
 from typing import Any, cast
 
 import torch
+from efm3d.aria.camera import CameraTW
 from efm3d.aria.pose import PoseTW
 
+from ._candidate_centers import _needs_target_center, _sample_centers
+from ._candidate_gaze import _assign_gaze, _PoseProposalBatch
 from .candidate_errors import (
     CandidateAlignmentCorruptionError,
     CandidateBackendFailureError,
@@ -17,7 +21,19 @@ from .candidate_errors import (
     CandidateRequestMismatchError,
     InvalidCandidateProgramError,
 )
-from .candidate_generation import CandidateViewGenerator, CandidateViewGeneratorConfig
+from .candidate_generation import (
+    _maybe_seed,
+    _target_bearing_yaw_rad,
+    _target_distance_m,
+    _target_view_diagnostics,
+)
+from .candidate_generation_rules import (
+    FreeSpaceRule,
+    MinDistanceToMeshRule,
+    MotionRealismRule,
+    PathCollisionRule,
+    Rule,
+)
 from .candidate_interface import (
     AdmissionEvidence,
     CandidateMeasurements,
@@ -32,11 +48,9 @@ from .candidate_interface import (
     _LegacyProjectionVariant,
 )
 from .candidate_mixture import candidate_position_id, candidate_strategy_id
-from .candidate_program import CenterFamily, GazeFamily
+from .candidate_program import CandidateGroup, CenterFamily, GazeFamily
 from .sampling_keys import CandidateSubstreamRevision, derive_shipped_component_seed
-from .types import CandidateContext, CandidatePositionMode, ViewDirectionMode
-
-_DEFAULT_TARGET_ORBIT_ANGLES_DEG = (-6.0, 6.0, -10.0, 10.0, -14.0, 14.0, -18.0, 18.0, -22.0, 22.0, -26.0, 26.0)
+from .types import CandidateContext, CollisionBackend
 
 
 def _pose_tensor(pose: PoseTW) -> torch.Tensor:
@@ -44,6 +58,13 @@ def _pose_tensor(pose: PoseTW) -> torch.Tensor:
 
     accessor: Callable[[], Any] = pose.tensor
     return cast(torch.Tensor, accessor())
+
+
+def _camera_to_device(camera: CameraTW, device: torch.device) -> CameraTW:
+    """Cross the untyped EFM device-transfer boundary."""
+
+    transfer: Callable[..., Any] = camera.to
+    return cast(CameraTW, transfer(device))
 
 
 class ProgramCandidateGenerator:
@@ -81,62 +102,25 @@ class ProgramCandidateGenerator:
         )
 
         for group_index, group in enumerate(request.program.groups):
-            primary_seed = _primary_seed(request, group_index)
-            primary_context: CandidateContext | None = None
-            for variant_index, variant in enumerate(group.gaze_variants):
-                config = _runtime_config(request, group_index, variant_index, target)
-                generator = CandidateViewGenerator(config, mesh_query=request.scene.prepared_mesh_query)
-                seed = primary_seed
-                if variant_index > 0 and seed is not None:
-                    paired_name = f"{group.legacy_seed_component_name}__paired_{variant.legacy_paired_view_mode_value}"
-                    seed = derive_shipped_component_seed(seed, paired_name)
-                try:
-                    if primary_context is None:
-                        context = generator._generate_context(  # noqa: SLF001 - transitional shipped interpreter seam.
-                            reference_pose=request.conditioning.reference_pose_world,
-                            gt_mesh=request.scene.gt_mesh,
-                            mesh_verts=request.scene.mesh_verts,
-                            mesh_faces=request.scene.mesh_faces,
-                            camera_calib_template=request.scene.camera_calibration,
-                            occupancy_extent=request.scene.occupancy_extent_world,
-                            seed=seed,
-                        )
-                        primary_context = context
-                    else:
-                        context = generator._generate_context_from_centers(  # noqa: SLF001
-                            reference_pose=request.conditioning.reference_pose_world,
-                            centers_world=primary_context.centers_world,
-                            offsets_ref=primary_context.shell_offsets_ref,
-                            gt_mesh=request.scene.gt_mesh,
-                            mesh_verts=request.scene.mesh_verts,
-                            mesh_faces=request.scene.mesh_faces,
-                            camera_calib_template=request.scene.camera_calibration,
-                            occupancy_extent=request.scene.occupancy_extent_world,
-                            seed=seed,
-                        )
-                except CandidateGenerationError:
-                    raise
-                except (ArithmeticError, ValueError) as error:
-                    raise CandidateNumericalDegeneracyError(
-                        f"Candidate numerical generation failed for {group.semantic_group_id!r}."
-                    ) from error
-                except (ImportError, RuntimeError) as error:
-                    raise CandidateBackendFailureError(
-                        f"Candidate backend failed for {group.semantic_group_id!r}."
-                    ) from error
-                contexts.append(context)
-                family_id = f"{group.semantic_group_id}/{variant.semantic_variant_id}"
-                metadata.append(
-                    (
-                        group.semantic_group_id,
-                        group.center.family.value,
-                        variant.gaze.family.value,
-                        family_id,
-                        group_index,
-                        variant_index if len(group.gaze_variants) > 1 else -1,
-                        seed,
-                    )
+            try:
+                group_contexts, group_metadata = _generate_group(
+                    request,
+                    group,
+                    group_index=group_index,
+                    target=target,
                 )
+            except CandidateGenerationError:
+                raise
+            except (ArithmeticError, ValueError) as error:
+                raise CandidateNumericalDegeneracyError(
+                    f"Candidate numerical generation failed for {group.semantic_group_id!r}."
+                ) from error
+            except (ImportError, RuntimeError) as error:
+                raise CandidateBackendFailureError(
+                    f"Candidate backend failed for {group.semantic_group_id!r}."
+                ) from error
+            contexts.extend(group_contexts)
+            metadata.extend(group_metadata)
 
         return _assemble_candidate_set(request, contexts, metadata, target, total_rows)
 
@@ -153,52 +137,96 @@ def _primary_seed(request: CandidateRequest, group_index: int) -> int | None:
     return root + group.legacy_direct_component_index
 
 
-def _runtime_config(
-    request: CandidateRequest, group_index: int, variant_index: int, target: torch.Tensor | None
-) -> CandidateViewGeneratorConfig:
-    group = request.program.groups[group_index]
-    center = group.center
-    gaze = group.gaze_variants[variant_index].gaze
+def _generate_group(
+    request: CandidateRequest,
+    group: CandidateGroup,
+    *,
+    group_index: int,
+    target: torch.Tensor | None,
+) -> tuple[list[CandidateContext], list[tuple[str, str, str, str, int, int, int | None]]]:
+    """Generate one center batch and expand its ordered gaze variants."""
+
+    primary_seed = _primary_seed(request, group_index)
+    contexts: list[CandidateContext] = []
+    metadata: list[tuple[str, str, str, str, int, int, int | None]] = []
+    is_mixture = any(item.legacy_direct_component_index is not None for item in request.program.groups)
+    with _maybe_seed(primary_seed, device=request.scene.device):
+        centers = _sample_centers(
+            group,
+            request.conditioning.reference_pose_world,
+            target_world=target,
+            device=request.scene.device,
+        )
+        primary = _assign_gaze(centers, group.gaze_variants[0], target_world=target)
+    variants: list[tuple[_PoseProposalBatch, int | None]] = [(primary, primary_seed)]
+    for variant in group.gaze_variants[1:]:
+        seed = primary_seed
+        if seed is not None:
+            paired_name = f"{group.legacy_seed_component_name}__paired_{variant.legacy_paired_view_mode_value}"
+            seed = derive_shipped_component_seed(seed, paired_name)
+        with _maybe_seed(seed, device=request.scene.device):
+            proposal = _assign_gaze(centers, variant, target_world=target)
+        variants.append((proposal, seed))
+    for variant_index, (proposal, seed) in enumerate(variants):
+        variant = group.gaze_variants[variant_index]
+        contexts.append(
+            _admit_proposal(
+                request,
+                group,
+                proposal,
+                target=target,
+                is_mixture=is_mixture,
+            )
+        )
+        metadata.append(
+            (
+                group.semantic_group_id,
+                group.center.family.value,
+                variant.gaze.family.value,
+                f"{group.semantic_group_id}/{variant.semantic_variant_id}",
+                group_index,
+                variant_index if len(group.gaze_variants) > 1 else -1,
+                seed,
+            )
+        )
+    return contexts, metadata
+
+
+@dataclass(frozen=True, slots=True)
+class _AdmissionKernelConfig:
+    """Resolved facts consumed only by the shipped hard-admission rules."""
+
+    collect_debug_stats: bool
+    collect_rule_masks: bool
+    position_target_point_world: torch.Tensor | None
+    min_distance_to_mesh: float
+    ensure_collision_free: bool
+    ensure_free_space: bool
+    collision_backend: CollisionBackend
+    ray_subsample: int
+    step_clearance: float
+    enforce_motion_realism: bool
+    max_step_distance_m: float | None
+    max_height_delta_m: float | None
+    max_backward_step_m: float | None
+    max_yaw_delta_deg: float | None
+
+
+def _admit_proposal(
+    request: CandidateRequest,
+    group: CandidateGroup,
+    proposal: _PoseProposalBatch,
+    *,
+    target: torch.Tensor | None,
+    is_mixture: bool,
+) -> CandidateContext:
+    """Run unchanged shipped admission independently for one gaze variant."""
+
     admission = request.program.admission
-    view_mode = (
-        ViewDirectionMode.TARGET_POINT
-        if gaze.family in {GazeFamily.TARGET_EXACT, GazeFamily.TARGET_GLANCE}
-        else ViewDirectionMode(gaze.family.value)
-    )
-    position_mode = CandidatePositionMode(center.family.value)
-    needs_position_target = center.family in {
-        CenterFamily.TARGET_BEARING_LOCAL,
-        CenterFamily.TARGET_ORBIT,
-        CenterFamily.LATERAL_TARGET_BYPASS,
-    }
-    if (needs_position_target or gaze.family in {GazeFamily.TARGET_EXACT, GazeFamily.TARGET_GLANCE}) and target is None:
-        raise CandidateRequestMismatchError(f"Candidate family {group.semantic_group_id!r} requires actor_target.")
-    # CandidateProgram has already performed the complete closed-schema and
-    # numerical validation. Avoid repeating Pydantic authoring validation for
-    # every group on every rollout node.
-    return CandidateViewGeneratorConfig.model_construct(
-        num_samples=group.center_count,
-        oversample_factor=1.0,
-        align_to_gravity=center.align_to_gravity,
-        min_radius=center.min_radius_m,
-        max_radius=center.max_radius_m,
-        min_elev_deg=center.min_elevation_deg,
-        max_elev_deg=center.max_elevation_deg,
-        delta_azimuth_deg=center.delta_azimuth_deg,
-        sampling_strategy=center.sampling_strategy,
-        kappa=center.concentration,
-        position_mode=position_mode,
-        position_target_point_world=(
-            target
-            if needs_position_target
-            or any(item.legacy_direct_component_index is not None for item in request.program.groups)
-            else None
-        ),
-        target_orbit_angles_deg=getattr(
-            center,
-            "target_orbit_angles_deg",
-            _DEFAULT_TARGET_ORBIT_ANGLES_DEG,
-        ),
+    config = _AdmissionKernelConfig(
+        collect_debug_stats=admission.collect_debug_stats,
+        collect_rule_masks=admission.collect_rule_masks,
+        position_target_point_world=(target if is_mixture or _needs_target_center(group.center.family) else None),
         min_distance_to_mesh=admission.min_distance_to_mesh_m,
         ensure_collision_free=admission.ensure_collision_free,
         ensure_free_space=admission.ensure_free_space,
@@ -210,21 +238,68 @@ def _runtime_config(
         max_height_delta_m=admission.max_height_delta_m,
         max_backward_step_m=admission.max_backward_step_m,
         max_yaw_delta_deg=admission.max_yaw_delta_deg,
-        collect_rule_masks=admission.collect_rule_masks,
-        collect_debug_stats=admission.collect_debug_stats,
-        verbosity=0,
-        device=request.scene.device,
-        view_direction_mode=view_mode,
-        view_sampling_strategy=getattr(gaze, "sampling_strategy", None),
-        view_kappa=getattr(gaze, "concentration", 0.0),
-        view_max_azimuth_deg=getattr(gaze, "max_azimuth_deg", 0.0),
-        view_max_elevation_deg=getattr(gaze, "max_elevation_deg", 0.0),
-        view_roll_jitter_deg=getattr(gaze, "roll_jitter_deg", 0.0),
-        view_target_point_world=(
-            target if gaze.family in {GazeFamily.TARGET_EXACT, GazeFamily.TARGET_GLANCE} else None
-        ),
-        seed=None,
     )
+    centers = proposal.centers
+    offsets_ref = centers.offsets_ref
+    if group.center.family is CenterFamily.TARGET_ORBIT:
+        offsets_ref = centers.reference_pose.inverse().transform(centers.centers_world)
+    context = CandidateContext(
+        cfg=config,
+        reference_pose=centers.reference_pose,
+        sampling_pose=centers.sampling_pose,
+        gt_mesh=request.scene.gt_mesh,
+        mesh_verts=request.scene.mesh_verts,
+        mesh_faces=request.scene.mesh_faces,
+        occupancy_extent=request.scene.occupancy_extent_world.to(request.scene.device),
+        camera_calib_template=_camera_to_device(
+            request.scene.camera_calibration,
+            request.scene.device,
+        ),
+        shell_poses=proposal.shell_poses,
+        centers_world=centers.centers_world,
+        shell_offsets_ref=offsets_ref,
+        mask_valid=torch.ones(
+            centers.centers_world.shape[0],
+            dtype=torch.bool,
+            device=request.scene.device,
+        ),
+        mesh_query=request.scene.prepared_mesh_query,
+        debug=dict(proposal.debug),
+    )
+    if config.collect_debug_stats:
+        collision_enabled = bool(
+            config.ensure_collision_free and config.step_clearance > 0 and request.scene.gt_mesh is not None
+        )
+        context.mark_debug(
+            "path_collision_applicable_mask",
+            torch.full_like(context.mask_valid, collision_enabled),
+        )
+        context.mark_debug("path_collision_evaluated_mask", torch.zeros_like(context.mask_valid))
+        context.mark_debug("path_collision_detected", torch.zeros_like(context.mask_valid))
+        context.mark_debug("path_collision_mask", torch.zeros_like(context.mask_valid))
+    if config.position_target_point_world is not None:
+        context.mark_debug("target_bearing_yaw_rad", _target_bearing_yaw_rad(context))
+        context.mark_debug("target_distance_m", _target_distance_m(context))
+        for name, value in _target_view_diagnostics(context).items():
+            context.mark_debug(name, value)
+    for rule in _admission_rules(config):
+        rule(context)
+        if config.collect_rule_masks:
+            context.record_mask(rule.__class__.__name__, context.mask_valid)
+    return context
+
+
+def _admission_rules(config: _AdmissionKernelConfig) -> tuple[Rule, ...]:
+    rules: list[Rule] = []
+    if config.ensure_free_space:
+        rules.append(FreeSpaceRule(config))
+    if config.enforce_motion_realism:
+        rules.append(MotionRealismRule(config))
+    if config.min_distance_to_mesh > 0:
+        rules.append(MinDistanceToMeshRule(config))
+    if config.ensure_collision_free:
+        rules.append(PathCollisionRule(config))
+    return tuple(rules)
 
 
 def _assemble_candidate_set(

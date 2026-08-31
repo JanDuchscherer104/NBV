@@ -22,12 +22,10 @@ import trimesh  # type: ignore[import-untyped]
 from ..utils import Console
 from ..utils.frames import world_up_tensor
 from .geometry import bounded_ray_intersects_any, point_mesh_distance
-from .types import CandidateContext, CollisionBackend
+from .types import CandidateContext, CollisionBackend, _CandidateRuleConfig
 
 if TYPE_CHECKING:
     from efm3d.aria.pose import PoseTW
-
-    from .candidate_generation import CandidateViewGeneratorConfig
 
 
 class Rule(Protocol):
@@ -39,7 +37,7 @@ class Rule(Protocol):
 class RuleBase:
     """Shared utilities for pruning rules (logging and mask helpers)."""
 
-    def __init__(self, config: "CandidateViewGeneratorConfig"):
+    def __init__(self, config: _CandidateRuleConfig):
         self.config = config
         self.console = Console.with_prefix(self.__class__.__name__)
         self._warned_backend = False
@@ -66,7 +64,7 @@ class MinDistanceToMeshRule(RuleBase):
     `ctx.debug['min_distance_to_mesh']` for later analysis.
     """
 
-    def __init__(self, config: "CandidateViewGeneratorConfig"):
+    def __init__(self, config: _CandidateRuleConfig):
         super().__init__(config)
 
     def __call__(self, ctx: CandidateContext) -> None:
@@ -146,7 +144,7 @@ class PathCollisionRule(RuleBase):
     5. Calls `CandidateContext.invalidate` to apply the collision mask as a rejection mask.
     """
 
-    def __init__(self, config: "CandidateViewGeneratorConfig"):
+    def __init__(self, config: _CandidateRuleConfig):
         super().__init__(config)
         self._pyembree_available = False
         if self.config.collision_backend == CollisionBackend.PYEMBREE:
@@ -324,7 +322,7 @@ def _forward_yaw_delta(reference_pose: "PoseTW", shell_poses: "PoseTW") -> torch
 class FreeSpaceRule(RuleBase):
     """Restrict candidate centers to a world-space AABB."""
 
-    def __init__(self, config: "CandidateViewGeneratorConfig"):
+    def __init__(self, config: _CandidateRuleConfig):
         super().__init__(config)
 
     def __call__(self, ctx: CandidateContext) -> None:

@@ -29,7 +29,7 @@ Theory:
 from __future__ import annotations
 
 from math import ceil
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Protocol
 
 import torch
 from power_spherical import HypersphericalUniform, PowerSpherical  # type: ignore[import-untyped]
@@ -41,13 +41,57 @@ from .types import CandidatePositionMode, SamplingStrategy
 if TYPE_CHECKING:
     from efm3d.aria.pose import PoseTW
 
-    from .candidate_generation import CandidateViewGeneratorConfig
+
+class _PositionSamplingConfig(Protocol):
+    """Private center-kernel facts consumed by :class:`PositionSampler`."""
+
+    @property
+    def num_samples(self) -> int: ...
+
+    @property
+    def oversample_factor(self) -> float: ...
+
+    @property
+    def device(self) -> torch.device: ...
+
+    @property
+    def sampling_strategy(self) -> SamplingStrategy: ...
+
+    @property
+    def kappa(self) -> float: ...
+
+    @property
+    def min_radius(self) -> float: ...
+
+    @property
+    def max_radius(self) -> float: ...
+
+    @property
+    def min_elev_rad(self) -> float: ...
+
+    @property
+    def max_elev_rad(self) -> float: ...
+
+    @property
+    def delta_azimuth_deg(self) -> float: ...
+
+    @property
+    def delta_azimuth_rad(self) -> float: ...
+
+    @property
+    def position_mode(self) -> CandidatePositionMode: ...
+
+    @property
+    def position_target_point_world(self) -> torch.Tensor | None: ...
+
+    @property
+    def target_orbit_angles_deg(self) -> tuple[float, ...]: ...
 
 
 class PositionSampler:
     """Sample candidate centers around a reference pose."""
 
-    def __init__(self, cfg: CandidateViewGeneratorConfig):
+    def __init__(self, cfg: _PositionSamplingConfig):
         self.cfg = cfg
 
     @staticmethod

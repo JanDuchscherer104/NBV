@@ -22,7 +22,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import StrEnum
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Protocol
 
 import torch
 from efm3d.aria.camera import CameraTW
@@ -35,7 +35,6 @@ if TYPE_CHECKING:
     from trimesh import Trimesh  # type: ignore[import-untyped]
 
     from ..geometry import PreparedMeshQuery
-    from .candidate_generation import CandidateViewGeneratorConfig
 
 
 class SamplingStrategy(StrEnum):
@@ -93,6 +92,46 @@ class CandidatePositionMode(StrEnum):
     REVISIT_BACKTRACK = "revisit_backtrack"
 
 
+class _CandidateRuleConfig(Protocol):
+    """Private facts consumed by shipped hard-admission rules."""
+
+    @property
+    def collect_debug_stats(self) -> bool: ...
+
+    @property
+    def collect_rule_masks(self) -> bool: ...
+
+    @property
+    def position_target_point_world(self) -> torch.Tensor | None: ...
+
+    @property
+    def min_distance_to_mesh(self) -> float: ...
+
+    @property
+    def ensure_collision_free(self) -> bool: ...
+
+    @property
+    def collision_backend(self) -> CollisionBackend: ...
+
+    @property
+    def ray_subsample(self) -> int: ...
+
+    @property
+    def step_clearance(self) -> float: ...
+
+    @property
+    def max_step_distance_m(self) -> float | None: ...
+
+    @property
+    def max_height_delta_m(self) -> float | None: ...
+
+    @property
+    def max_backward_step_m(self) -> float | None: ...
+
+    @property
+    def max_yaw_delta_deg(self) -> float | None: ...
+
+
 class CollisionBackend(StrEnum):
     """Backend used for point-distance and reference-path collision tests."""
 
@@ -141,7 +180,7 @@ class CandidateContext:
     candidates with reason codes while exposing only valid actions to policies.
     """
 
-    cfg: "CandidateViewGeneratorConfig"
+    cfg: _CandidateRuleConfig
     """Generation policy shared by all rules in this pruning pass."""
 
     reference_pose: PoseTW

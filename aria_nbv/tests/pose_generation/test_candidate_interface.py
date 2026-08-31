@@ -52,11 +52,14 @@ from aria_nbv.pose_generation.sampling_keys import (
 from aria_nbv.pose_generation.types import (
     CandidateGenerationRuntimeContext,
     CandidatePositionMode,
+    CandidateSamplingResult,
+    SamplingStrategy,
     ViewDirectionMode,
 )
 from aria_nbv.rollouts.replay.policy import derive_rollout_seed
 from aria_nbv.targets import TargetDescriptor
 from aria_nbv.utils.canonical_binding import CanonicalBindingError, canonical_binding_bytes, canonical_binding_sha256
+from aria_nbv.utils.frames import world_up_tensor
 
 
 def _pose(device: torch.device | str = "cpu") -> PoseTW:
@@ -147,13 +150,24 @@ def _scene(device: torch.device | str = "cpu") -> PreparedCandidateScene:
     )
 
 
-def _actor() -> ActorTargetContext:
-    descriptor = _target()
+def _actor(descriptor: TargetDescriptor | None = None) -> ActorTargetContext:
+    descriptor = _target() if descriptor is None else descriptor
     return ActorTargetContext(
         descriptor=descriptor,
         protocol_version="v1_observed",
         descriptor_hash=canonical_binding_sha256(descriptor),
         source_binding_hash="actor-visible-source-sha256",
+    )
+
+
+def _target_at(center_world: tuple[float, float, float]) -> TargetDescriptor:
+    pose = (1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, *center_world)
+    return TargetDescriptor(
+        sem_id=1,
+        class_name="chair",
+        pose_world_object=pose,
+        extents_m=(1.0, 1.0, 1.0),
+        relative_pose_reference_object=pose,
     )
 
 
@@ -178,6 +192,104 @@ def _query_free(config: CandidateMixtureViewGeneratorConfig) -> CandidateMixture
             )
         }
     )
+
+
+def _assert_optional_tensor_equal(
+    actual: torch.Tensor | None,
+    expected: torch.Tensor | None,
+    *,
+    profile: str,
+    field: str,
+) -> None:
+    assert (actual is None) is (expected is None), (profile, field)
+    if actual is not None and expected is not None:
+        _assert_tensor_equal(actual, expected, profile=profile, field=field)
+
+
+def _assert_tensor_equal(
+    actual: torch.Tensor,
+    expected: torch.Tensor,
+    *,
+    profile: str,
+    field: str,
+) -> None:
+    assert actual.dtype == expected.dtype, (profile, field, "dtype")
+    assert actual.shape == expected.shape, (profile, field, "shape")
+    equal = actual == expected
+    if actual.is_floating_point():
+        equal = equal | (torch.isnan(actual) & torch.isnan(expected))
+    assert bool(equal.all()), (profile, field)
+
+
+def _assert_legacy_projection_equal(
+    actual: CandidateSamplingResult,
+    expected: CandidateSamplingResult,
+    *,
+    profile: str,
+) -> None:
+    assert torch.equal(actual.views.tensor(), expected.views.tensor()), (profile, "views")
+    assert torch.equal(actual.reference_pose.tensor(), expected.reference_pose.tensor()), (
+        profile,
+        "reference_pose",
+    )
+    assert torch.equal(actual.shell_poses.tensor(), expected.shell_poses.tensor()), (
+        profile,
+        "shell_poses",
+    )
+    assert torch.equal(actual.mask_valid, expected.mask_valid), (profile, "mask_valid")
+    assert actual.component_name == expected.component_name, (profile, "component_name")
+    for field in (
+        "shell_offsets_ref",
+        "strategy_id",
+        "position_id",
+        "mixture_id",
+        "sampler_probability",
+        "position_pair_id",
+        "gaze_variant_id",
+    ):
+        _assert_optional_tensor_equal(
+            getattr(actual, field),
+            getattr(expected, field),
+            profile=profile,
+            field=field,
+        )
+    assert (actual.sampling_pose is None) is (expected.sampling_pose is None), (
+        profile,
+        "sampling_pose",
+    )
+    if actual.sampling_pose is not None and expected.sampling_pose is not None:
+        assert torch.equal(actual.sampling_pose.tensor(), expected.sampling_pose.tensor()), (
+            profile,
+            "sampling_pose",
+        )
+    assert actual.masks.keys() == expected.masks.keys(), (profile, "masks")
+    for field in actual.masks:
+        _assert_tensor_equal(
+            actual.masks[field],
+            expected.masks[field],
+            profile=profile,
+            field=f"masks.{field}",
+        )
+    assert actual.extras.keys() == expected.extras.keys(), (profile, "extras")
+    for field in actual.extras:
+        actual_value = actual.extras[field]
+        expected_value = expected.extras[field]
+        if isinstance(actual_value, PoseTW) and isinstance(expected_value, PoseTW):
+            _assert_tensor_equal(
+                actual_value.tensor(),
+                expected_value.tensor(),
+                profile=profile,
+                field=f"extras.{field}",
+            )
+        else:
+            assert isinstance(actual_value, torch.Tensor), (profile, f"extras.{field}")
+            assert isinstance(expected_value, torch.Tensor), (profile, f"extras.{field}")
+            _assert_tensor_equal(
+                actual_value,
+                expected_value,
+                profile=profile,
+                field=f"extras.{field}",
+            )
 
 
 @pytest.mark.parametrize("source", ["rollout_proposal", "direct_base"])
@@ -216,25 +328,215 @@ def test_program_generator_preserves_paired_mixture_values_and_order(source: str
         seed=legacy_seed,
     )
 
-    assert torch.equal(projected.shell_poses.tensor(), legacy.shell_poses.tensor())
-    assert torch.equal(projected.views.tensor(), legacy.views.tensor())
-    assert torch.equal(projected.mask_valid, legacy.mask_valid)
-    assert projected.component_name == legacy.component_name
-    assert torch.equal(projected.position_pair_id, legacy.position_pair_id)
-    assert torch.equal(projected.gaze_variant_id, legacy.gaze_variant_id)
-    assert torch.equal(projected.strategy_id, legacy.strategy_id)
-    assert torch.equal(projected.position_id, legacy.position_id)
-    assert torch.equal(projected.mixture_id, legacy.mixture_id)
-    assert torch.equal(projected.sampler_probability, legacy.sampler_probability)
-    assert projected.masks.keys() == legacy.masks.keys()
-    for name in projected.masks:
-        assert torch.equal(projected.masks[name], legacy.masks[name])
-    assert projected.extras.keys() == legacy.extras.keys()
-    for name in projected.extras:
-        assert torch.equal(projected.extras[name], legacy.extras[name])
+    _assert_legacy_projection_equal(projected, legacy, profile=f"paired_{source}")
     assert torch.equal(candidate_set.action_indices, candidate_set.valid_indices)
     assert candidate_set.attempts.semantic_group_id[0] == "target_forward_pair"
     assert candidate_set.attempts.candidate_family_id[0] == "target_forward_pair/primary"
+
+
+def test_atomic_center_batch_is_sampled_once_and_reused_by_identity(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from aria_nbv.pose_generation.orientations import OrientationBuilder
+    from aria_nbv.pose_generation.positional_sampling import PositionSampler
+
+    sampled_center_ids: list[int] = []
+    gaze_center_ids: list[int] = []
+    original_sample = PositionSampler.sample
+    original_build = OrientationBuilder.build
+
+    def sample(self, *args, **kwargs):
+        result = original_sample(self, *args, **kwargs)
+        sampled_center_ids.append(id(result[0]))
+        return result
+
+    def build(self, reference_pose, centers_world):
+        gaze_center_ids.append(id(centers_world))
+        return original_build(self, reference_pose, centers_world)
+
+    monkeypatch.setattr(PositionSampler, "sample", sample)
+    monkeypatch.setattr(OrientationBuilder, "build", build)
+    config = _query_free(CandidateMixtureViewGeneratorConfig.paired_center_gaze_family())
+    program = compile_candidate_program(config)
+
+    ProgramCandidateGenerator().generate(_request(config, seed=37))
+
+    assert len(sampled_center_ids) == len(program.groups)
+    expected_gaze_ids = [
+        center_id
+        for center_id, group in zip(sampled_center_ids, program.groups, strict=True)
+        for _ in group.gaze_variants
+    ]
+    assert gaze_center_ids == expected_gaze_ids
+
+
+def test_unkeyed_atomic_generation_preserves_continuous_global_rng_parity() -> None:
+    config = _query_free(CandidateMixtureViewGeneratorConfig.paired_center_gaze_family())
+    config = config.model_copy(
+        update={"base": config.base.model_copy(update={"seed": None, "device": torch.device("cpu")})}
+    )
+    program = compile_candidate_program(config)
+    scene = _scene()
+    request = CandidateRequest.bind(
+        program=program,
+        conditioning=CandidateConditioning(_pose()),
+        scene=scene,
+        actor_target=_actor(),
+        random_key=CandidateSamplingKey(
+            CandidateSubstreamRevision.SHIPPED_V1,
+            "rollout_proposal",
+            None,
+        ),
+    )
+
+    torch.manual_seed(1234)
+    projected = candidate_set_to_legacy_result(ProgramCandidateGenerator().generate(request))
+    program_rng_state = torch.get_rng_state()
+    torch.manual_seed(1234)
+    legacy = config.setup_target().generate(
+        reference_pose=_pose(),
+        gt_mesh=scene.gt_mesh,
+        mesh_verts=scene.mesh_verts,
+        mesh_faces=scene.mesh_faces,
+        camera_calib_template=scene.camera_calibration,
+        occupancy_extent=scene.occupancy_extent_world,
+        runtime_context=CandidateGenerationRuntimeContext(descriptor=_target()),
+        seed=None,
+    )
+    legacy_rng_state = torch.get_rng_state()
+
+    _assert_legacy_projection_equal(projected, legacy, profile="unkeyed_paired")
+    assert torch.equal(program_rng_state, legacy_rng_state)
+
+
+@pytest.mark.parametrize("align_to_gravity", [True, False])
+def test_atomic_target_orbit_preserves_bilateral_fixed_standoff_parity(
+    align_to_gravity: bool,
+) -> None:
+    target = _target_at((0.0, 3.0, 0.0))
+    pitch = torch.deg2rad(torch.tensor(25.0))
+    rotation = torch.tensor(
+        [
+            [1.0, 0.0, 0.0],
+            [0.0, torch.cos(pitch), -torch.sin(pitch)],
+            [0.0, torch.sin(pitch), torch.cos(pitch)],
+        ]
+    )
+    reference_pose = PoseTW.from_Rt(rotation, torch.zeros(3))
+    base = CandidateViewGeneratorConfig(
+        num_samples=12,
+        oversample_factor=1.0,
+        align_to_gravity=align_to_gravity,
+        ensure_collision_free=False,
+        ensure_free_space=False,
+        min_distance_to_mesh=0.0,
+        collect_debug_stats=True,
+        device="cpu",
+    )
+    config = CandidateMixtureViewGeneratorConfig(
+        base=base,
+        components=[
+            CandidateMixtureComponentConfig(
+                name="target_orbit",
+                count=12,
+                view_mode=ViewDirectionMode.TARGET_POINT,
+                position_mode=CandidatePositionMode.TARGET_ORBIT,
+            )
+        ],
+    )
+    scene = _scene()
+    request = CandidateRequest.bind(
+        program=compile_candidate_program(config),
+        conditioning=CandidateConditioning(reference_pose),
+        scene=scene,
+        actor_target=_actor(target),
+        random_key=CandidateSamplingKey(
+            CandidateSubstreamRevision.SHIPPED_V1,
+            "rollout_proposal",
+            23,
+        ),
+    )
+
+    candidate_set = ProgramCandidateGenerator().generate(request)
+    projected = candidate_set_to_legacy_result(candidate_set)
+    legacy = config.setup_target().generate(
+        reference_pose=reference_pose,
+        gt_mesh=scene.gt_mesh,
+        mesh_verts=scene.mesh_verts,
+        mesh_faces=scene.mesh_faces,
+        camera_calib_template=scene.camera_calibration,
+        occupancy_extent=scene.occupancy_extent_world,
+        runtime_context=CandidateGenerationRuntimeContext(descriptor=target),
+        seed=23,
+    )
+
+    _assert_legacy_projection_equal(projected, legacy, profile=f"target_orbit_{align_to_gravity}")
+    target_world = target.center_world_tensor()
+    world_up = world_up_tensor(dtype=projected.shell_poses.t.dtype)
+    target_horizontal = target_world - (target_world @ world_up) * world_up
+    bearing = target_horizontal / target_horizontal.norm()
+    lateral = torch.cross(world_up, bearing, dim=0)
+    target_to_candidate = projected.shell_poses.t - target_world.reshape(1, 3)
+    horizontal = target_to_candidate - (target_to_candidate @ world_up)[:, None] * world_up[None, :]
+    signed_lateral = target_to_candidate @ lateral
+    assert torch.allclose(
+        horizontal.norm(dim=1),
+        torch.full((12,), target_horizontal.norm()),
+        atol=1e-5,
+    )
+    assert int((signed_lateral < 0).sum()) == int((signed_lateral > 0).sum()) == 6
+
+
+@pytest.mark.parametrize(
+    "strategy",
+    [SamplingStrategy.UNIFORM_SPHERE, SamplingStrategy.FORWARD_POWERSPHERICAL],
+)
+def test_atomic_zero_cap_spherical_gaze_preserves_uncapped_nonzero_residuals(
+    strategy: SamplingStrategy,
+) -> None:
+    config = CandidateViewGeneratorConfig(
+        num_samples=64,
+        oversample_factor=1.0,
+        min_radius=0.5,
+        max_radius=0.8,
+        ensure_collision_free=False,
+        ensure_free_space=False,
+        min_distance_to_mesh=0.0,
+        view_sampling_strategy=strategy,
+        view_max_azimuth_deg=0.0,
+        view_max_elevation_deg=0.0,
+        verbosity=0,
+        device="cpu",
+        seed=11,
+    )
+    scene = _scene()
+    request = CandidateRequest.bind(
+        program=compile_candidate_program(config),
+        conditioning=CandidateConditioning(_pose()),
+        scene=scene,
+        actor_target=None,
+        random_key=CandidateSamplingKey(CandidateSubstreamRevision.SHIPPED_V1, "direct_base", 11),
+    )
+
+    candidate_set = ProgramCandidateGenerator().generate(request)
+    projected = candidate_set_to_legacy_result(candidate_set)
+    legacy = config.setup_target().generate(
+        reference_pose=_pose(),
+        gt_mesh=scene.gt_mesh,
+        mesh_verts=scene.mesh_verts,
+        mesh_faces=scene.mesh_faces,
+        camera_calib_template=scene.camera_calibration,
+        occupancy_extent=scene.occupancy_extent_world,
+        seed=11,
+    )
+
+    _assert_legacy_projection_equal(projected, legacy, profile=f"zero_cap_{strategy.value}")
+    attempts = candidate_set.attempts
+    assert not attempts.view_jitter_is_bounded.any()
+    assert torch.all(attempts.view_jitter_azimuth_limit_deg == 0)
+    assert torch.all(attempts.view_jitter_elevation_limit_deg == 0)
+    assert torch.any(attempts.view_residual_yaw_deg.abs() > 1e-3)
+    assert torch.any(attempts.view_residual_pitch_deg.abs() > 1e-3)
 
 
 def test_single_family_projection_preserves_none_compatibility_fields() -> None:
@@ -578,7 +880,7 @@ def test_program_generator_translates_backend_failure_at_public_boundary(
 ) -> None:
     config = _query_free(CandidateMixtureViewGeneratorConfig.upper_bound_free_shell(count=4))
     monkeypatch.setattr(
-        "aria_nbv.pose_generation.program_generator.CandidateViewGenerator._generate_context",
+        "aria_nbv.pose_generation._candidate_centers.PositionSampler.sample",
         lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("backend")),
     )
 
@@ -671,8 +973,14 @@ def test_cuda_program_generator_preserves_paired_shell_and_provenance() -> None:
         random_key=CandidateSamplingKey(CandidateSubstreamRevision.SHIPPED_V1, "rollout_proposal", 37),
     )
 
+    torch.manual_seed(2026)
+    torch.cuda.manual_seed_all(2026)
     candidate_set = ProgramCandidateGenerator().generate(request)
     projected = candidate_set_to_legacy_result(candidate_set)
+    program_cpu_rng_state = torch.get_rng_state()
+    program_cuda_rng_state = torch.cuda.get_rng_state(device)
+    torch.manual_seed(2026)
+    torch.cuda.manual_seed_all(2026)
     legacy = config.setup_target().generate(
         reference_pose=_pose(device),
         gt_mesh=scene.gt_mesh,
@@ -683,6 +991,8 @@ def test_cuda_program_generator_preserves_paired_shell_and_provenance() -> None:
         runtime_context=CandidateGenerationRuntimeContext(descriptor=_target()),
         seed=37,
     )
+    legacy_cpu_rng_state = torch.get_rng_state()
+    legacy_cuda_rng_state = torch.cuda.get_rng_state(device)
 
     assert torch.equal(projected.shell_poses.tensor(), legacy.shell_poses.tensor())
     assert torch.equal(projected.views.tensor(), legacy.views.tensor())
@@ -691,6 +1001,8 @@ def test_cuda_program_generator_preserves_paired_shell_and_provenance() -> None:
     assert torch.equal(projected.gaze_variant_id, legacy.gaze_variant_id)
     assert projected.component_name == legacy.component_name
     assert candidate_set.valid_indices.data_ptr() == candidate_set.action_indices.data_ptr()
+    assert torch.equal(program_cpu_rng_state, legacy_cpu_rng_state)
+    assert torch.equal(program_cuda_rng_state, legacy_cuda_rng_state)
 
 
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required for warm transfer guard")
@@ -792,7 +1104,14 @@ def test_inference_mode_generation_retains_a_fixed_valid_projection_proof() -> N
 def test_candidate_core_has_no_rollout_or_consumer_imports() -> None:
     package = Path(__file__).parents[2] / "aria_nbv" / "pose_generation"
     forbidden = ("rollouts", "oracle", "zarr", "plotly", "streamlit", "rerun", "rri_metrics")
-    for name in ("candidate_interface.py", "candidate_program.py", "program_generator.py", "sampling_keys.py"):
+    for name in (
+        "_candidate_centers.py",
+        "_candidate_gaze.py",
+        "candidate_interface.py",
+        "candidate_program.py",
+        "program_generator.py",
+        "sampling_keys.py",
+    ):
         tree = ast.parse((package / name).read_text(encoding="utf-8"), filename=name)
         modules = []
         for node in ast.walk(tree):
@@ -801,6 +1120,19 @@ def test_candidate_core_has_no_rollout_or_consumer_imports() -> None:
             elif isinstance(node, ast.ImportFrom) and node.module is not None:
                 modules.append(node.module)
         assert not any(any(part == owner for part in module.split(".")) for module in modules for owner in forbidden)
+
+
+def test_program_interpreter_uses_only_private_atomic_center_gaze_seams() -> None:
+    package = Path(__file__).parents[2] / "aria_nbv" / "pose_generation"
+    source = (package / "program_generator.py").read_text(encoding="utf-8")
+    public = set(__import__("aria_nbv.pose_generation", fromlist=["__all__"]).__all__)
+
+    assert "CandidateViewGenerator" not in source
+    assert "CandidateViewGeneratorConfig" not in source
+    assert "model_construct" not in source
+    assert "_runtime_config" not in source
+    assert "_CenterBatch" not in public
+    assert "_PoseProposalBatch" not in public
 
 
 def test_pose_generation_public_surface_freezes_canonical_and_legacy_facades() -> None:
@@ -894,10 +1226,7 @@ def test_active_rollout_writer_tomls_compile_and_generate_with_legacy_parity() -
             seed=17,
         )
 
-        assert torch.equal(projected.shell_poses.tensor(), legacy.shell_poses.tensor()), name
-        assert torch.equal(projected.views.tensor(), legacy.views.tensor()), name
-        assert torch.equal(projected.mask_valid, legacy.mask_valid), name
-        assert projected.component_name == legacy.component_name, name
+        _assert_legacy_projection_equal(projected, legacy, profile=name)
 
 
 def test_program_generator_consumes_supplied_prepared_query_without_reacquisition(
