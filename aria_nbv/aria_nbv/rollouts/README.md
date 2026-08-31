@@ -43,18 +43,22 @@ broad generation: the later hash-bound issue-120/WP18 gate remains mandatory.
 `benchmark_from_sampling_result` is the candidate-only Phase-A seam. It copies
 the generator's full-shell component lineage, hard-valid mask, rule reason
 bitsets, and available continuous margins, while assigning no oracle labels or
-policy-selected transition. Its family `selected` counts mean compact final
-action-shell membership, exactly as in the store-backed reducer. The campaign
-preflight serializes these same benchmark records and reducer output into one
-content-hashed evidence JSON; it does not reinterpret candidate support.
+policy-selected transition. Candidate centres, target-relative vectors, and
+camera-forward directions use one target-aligned, world-Z-up basis: axis 0 is
+the horizontal expansion-to-target direction, axis 1 points left, and axis 2
+is world up. Positions are divided by the current three-dimensional target
+distance; directions remain unit vectors. Its family `selected` counts mean
+compact final action-shell membership, exactly as in the store-backed reducer.
+The campaign preflight serializes these same benchmark records and reducer
+output into one content-hashed evidence JSON; it does not reinterpret support.
 
 ### Current Phase-A evidence
 
 The frozen 100-scene control is
 [`candidate_family_phase_a_wp02.json`](../../../docs/contents/evidence/candidate_family_phase_a_wp02.json)
-(artifact SHA-256 `60b271db515a5e665fcb7bbeeecb87e6acb4bac2ff8e28b26b7308911328759c`;
+(artifact SHA-256 `6d33e9e3d68737c8a6a5589ae5117c1e4d7fcaa89056fcfcaec1d315e4509c83`;
 compact file SHA-256
-`f7bbc420ddc3723f5939dce4f5b293b6b4234216263bfa052fde4b597bb032ec`).
+`843d1e6c41df7746db1187a92eb7b29f9f18263bb33cbb5e3b4efc9f1acea017`).
 It covers all 100 reviewed source rows, scenes, and target states with no
 exclusions. Of 6,000 attempted rows, 3,146 entered the compact valid shell, but
 the gate is a no-go: 44 state/family cells collapsed, 24 states missed the
@@ -70,15 +74,16 @@ generation revision `a2ae86b7463930c9`, and the recorded CUDA runtime. It
 satisfies issue #54's mechanism and all-100-scene evidence checklist: the
 fail-closed gate exists and produced the required bounded no-go. Sampler
 remediation and a later passing rerun remain separate follow-up work; this
-artifact does not admit broad generation. The stored shells and execution
-revision are unchanged from the one real run; revision
-`phase-a-path-independent-config-reseal-v1` records only the authenticated
-path-independent provenance correction. Evidence assembly revision
-`phase-a-evidence-assembly-v1` records a metadata-only authenticated reseal
-from predecessor artifact
-`6c7fa8cb249687b80867261db1d1c7d1906e6b01f54d3cca3db4bfcbfa7bc670`;
-the 100 candidate records retain SHA-256
-`637f9747d3125a8e746866d18843f2ca6aa84e50bcc2c75b5532a49b15690f6f`.
+artifact does not admit broad generation. The stored shells, support counts,
+verdict, and execution revision are unchanged from the one real run.
+Transformation `authenticated_target_frame_correction_no_candidate_rerun`
+rotates only the stored candidate centres, target-relative vectors, and view
+directions into the canonical target-aligned Z-up basis. Geometry correction
+revision `phase-a-target-aligned-z-up-v1` and predecessor artifact
+`60b271db515a5e665fcb7bbeeecb87e6acb4bac2ff8e28b26b7308911328759c`
+bind that correction; no candidate generation or GPU population was rerun. The
+corrected 100-record payload has SHA-256
+`43a4fbba2e412c6a7d4b9a0c2a8b6f3d064dde4d9387566ea29f077365447c89`.
 
 The current record key is the composite `(scene_key, state_key)`. This is
 sufficient for the historical one-root Phase-A artifact. WP03/WP06 must extend

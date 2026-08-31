@@ -86,6 +86,15 @@ passing Phase-A family gate is necessary but not sufficient for broad rollout
 generation; the final hash-bound pre-scale decision remains a later issue-120
 gate.
 
+All persisted Phase-A geometry uses the proposal-support normalization
+$ #eqs.spatial.candidate_proposal_support_normalization $. The columns of
+$bold(B)_(r,t)^"Z-up"$ are the horizontal expansion-to-target direction, its
+world-Z-up left direction, and world up. Candidate centres and target-relative
+vectors are divided by the current three-dimensional target distance, while
+camera-forward directions are rotated by the same basis but remain unit
+vectors. Hence target-forward and target-lateral plots are invariant to factual
+rig yaw; rig-frame components cannot carry those axis labels directly.
+
 The frozen 100-scene Phase-A control attempted $6,000$ candidates and admitted
 $3,146$ into the compact valid shells. It nevertheless failed the support gate:
 $44$ applicable state/family cells had no selected row, $24$ states missed the
@@ -110,15 +119,14 @@ generation.
     artifact is bound to clean execution revision
     `2baf7cf6b276b81c50d01d45b152016d7cf68033`, generation revision
     `a2ae86b7463930c9`, and artifact SHA-256
+    `6d33e9e3d68737c8a6a5589ae5117c1e4d7fcaa89056fcfcaec1d315e4509c83`.
+    The stored shells, support counts, verdict, and execution identity are
+    unchanged. Geometry correction revision
+    `phase-a-target-aligned-z-up-v1` rotates the authenticated candidate
+    centres, target-relative vectors, and view directions into the canonical
+    target-aligned world-Z-up basis without rerunning candidate generation. Its
+    predecessor artifact is
     `60b271db515a5e665fcb7bbeeecb87e6acb4bac2ff8e28b26b7308911328759c`.
-    The stored shells and execution identity are unchanged; provenance
-    correction revision `phase-a-path-independent-config-reseal-v1` replaces
-    checkout-dependent configuration paths with the separately verified source
-    store identity. Evidence assembly revision
-    `phase-a-evidence-assembly-v1` records an authenticated metadata-only
-    reseal from predecessor artifact
-    `6c7fa8cb249687b80867261db1d1c7d1906e6b01f54d3cca3db4bfcbfa7bc670`;
-    the candidate-record payload itself is unchanged.
   ],
 ) <fig:candidate-family-phase-a-support>
 

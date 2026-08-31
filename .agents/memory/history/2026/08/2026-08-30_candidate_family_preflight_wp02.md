@@ -50,9 +50,9 @@ mechanism and bounded evidence checklist requested by issue #54 are complete;
 sampler remediation remains a separate later work package.
 
 The compact canonical JSON has artifact SHA-256
-`60b271db515a5e665fcb7bbeeecb87e6acb4bac2ff8e28b26b7308911328759c`
+`6d33e9e3d68737c8a6a5589ae5117c1e4d7fcaa89056fcfcaec1d315e4509c83`
 and file SHA-256
-`f7bbc420ddc3723f5939dce4f5b293b6b4234216263bfa052fde4b597bb032ec`.
+`843d1e6c41df7746db1187a92eb7b29f9f18263bb33cbb5e3b4efc9f1acea017`.
 It records execution revision
 `2baf7cf6b276b81c50d01d45b152016d7cf68033`, generation revision
 `a2ae86b7463930c9`, source-manifest file SHA-256
@@ -76,6 +76,25 @@ The v4 evidence envelope names assembly revision
 `6c7fa8cb249687b80867261db1d1c7d1906e6b01f54d3cca3db4bfcbfa7bc670`.
 The exact 100-record payload retained SHA-256
 `637f9747d3125a8e746866d18843f2ca6aa84e50bcc2c75b5532a49b15690f6f`.
+
+Final PR review found that those candidate centres, target-relative vectors,
+and view directions were still serialized in rig/reference axes despite their
+target-forward and target-lateral labels. The canonical source reader joined
+the same 100 authenticated records to their factual final rig rotations and
+rotated only those vectors into the existing target-aligned world-Z-up basis.
+Transformation `authenticated_target_frame_correction_no_candidate_rerun`,
+geometry revision `phase-a-target-aligned-z-up-v1`, and predecessor artifact
+`60b271db515a5e665fcb7bbeeecb87e6acb4bac2ff8e28b26b7308911328759c`
+record the correction. No candidate generation or GPU population was rerun;
+the preflight payload, 76 blockers, support counts, and no-go verdict remain
+byte-identical. The corrected 100-record payload SHA-256 is
+`43a4fbba2e412c6a7d4b9a0c2a8b6f3d064dde4d9387566ea29f077365447c89`.
+
+The same review found that paired-view rows retained `gaze_variant_id` in the
+canonical rollout store but the reader decoded only the base mixture ID. The
+reader now combines manifest-owned component configuration with persisted gaze
+variant provenance, preserving base and `__paired_<mode>` family identities;
+legacy ambiguity fails closed.
 
 Final review repair also made the campaign worker leaf admit the immutable plan
 and explicit purpose before any runner or path effect, recomputes generation
