@@ -17,7 +17,7 @@ touched_owner_paths:
   - docs/contents/evidence/candidate_family_phase_a_wp02.json
 codex_thread: codex://threads/01a05281-f9f7-7f80-967e-4000d77aca81
 repo_object_format: sha1
-repo_head: 18e1970d842f231adbe502f7736c3413fa0bd2dc
+repo_head: fcecdf5f2da0afd9aa25dae717f4ec52fefe0c6e
 repo_branch: "codex/candidate-family-preflight"
 worktree_kind: linked
 ---
@@ -50,9 +50,9 @@ mechanism and bounded evidence checklist requested by issue #54 are complete;
 sampler remediation remains a separate later work package.
 
 The compact canonical JSON has artifact SHA-256
-`6c7fa8cb249687b80867261db1d1c7d1906e6b01f54d3cca3db4bfcbfa7bc670`
+`60b271db515a5e665fcb7bbeeecb87e6acb4bac2ff8e28b26b7308911328759c`
 and file SHA-256
-`8953fec21eec44680b34777dbcab1f97f78eeb2fafda1b3d76a7b908b58a4881`.
+`f7bbc420ddc3723f5939dce4f5b293b6b4234216263bfa052fde4b597bb032ec`.
 It records execution revision
 `2baf7cf6b276b81c50d01d45b152016d7cf68033`, generation revision
 `a2ae86b7463930c9`, source-manifest file SHA-256
@@ -70,6 +70,21 @@ field and its enclosing content hash with the independently reproducible,
 path-independent scientific writer identity. Artifact correction revision
 `phase-a-path-independent-config-reseal-v1` records this authenticated reseal;
 no candidate generation, rendering, scoring, or GPU population was rerun.
+The v4 evidence envelope names assembly revision
+`phase-a-evidence-assembly-v1`, transformation
+`authenticated_metadata_reseal_no_candidate_rerun`, and predecessor artifact
+`6c7fa8cb249687b80867261db1d1c7d1906e6b01f54d3cca3db4bfcbfa7bc670`.
+The exact 100-record payload retained SHA-256
+`637f9747d3125a8e746866d18843f2ca6aa84e50bcc2c75b5532a49b15690f6f`.
+
+Final review repair also made the campaign worker leaf admit the immutable plan
+and explicit purpose before any runner or path effect, recomputes generation
+revision identity from its constituents, rejects unconfigured families before
+root-support aggregation, streams complete preflight without geometry, and
+keeps Plotly event decoding in the app adapter. A heatmap selection explicitly
+loads only the selected identity-bound shell and caches it across ordinary
+reruns; the default interactive funnel is limited to one factual state per
+persisted audit stratum while the complete evidence figures remain available.
 
 ## Issue #54 acceptance
 
@@ -86,20 +101,20 @@ no candidate generation, rendering, scoring, or GPU population was rerun.
 
 ## Verification
 
-- Broad campaign/family/info/panel/cache/source-adapter suite: 465 passed.
-- Reporting and Zarr integration suite: 119 passed.
+- Broad campaign/family/info/panel/cache/source-adapter suite: 370 passed.
+- Reporting and Zarr integration suite: 68 passed.
 - CLI dispatch suite: 21 passed; 2 unrelated config-resolution tests were
   deselected because this linked worktree does not contain `.data/ase_efm`.
-- Strict focused mypy: eight changed Python owners passed.
+- Strict focused mypy: five changed Python owners passed.
 - Ruff check/format, Agents-DB validation, agent-memory validation, thesis
   compilation, and `git diff --check` passed.
 - Exact 100-scene command exited 2 after atomically writing the complete no-go
   artifact. The full heatmap and audit-stratum funnel views were reconstructed
   through the dedicated reader and plotting helper; their SVG SHA-256 values are
-  `b2d69302a46d50180c4b9b018b244cb77f9f04be50467f0449948282aea2d2eb`
-  and `78444ecc4146cc9afd60a271df2008f5ea5c595e63cdef7f53d3e362a4087807`.
+  `8fe696aa01ac79da23ed2bd032e310153b5b58dff747708b00f1da1b2c5f3cb7`
+  and `dd9cf0a27a5fe1d63ed450d7b320f724e2d74cd07e99aadf76cc1737f749d0f0`.
   The legible one-scene-per-stratum thesis projection has SVG SHA-256
-  `f40236cc60464bd827dc395e798c1fb0b2761151871bc5ee0d8c20c8fb14f315`.
+  `e53e84969bdf58ccc19c0c46f3b6e447ad1bdb27df2b84f5b83e2789a6e97f99`.
 
 ## Canonical impact
 
@@ -116,3 +131,6 @@ RRI result, or permission for broad generation.
 - [Pre-read writer-config identity repair](https://github.com/JanDuchscherer104/ARIA-NBV/commit/59a5d72413cc7d39744be08e05baec4ba6491afa)
 - [Final trust-boundary repair](https://github.com/JanDuchscherer104/ARIA-NBV/commit/d138fe72cc)
 - [Path-independent evidence reseal](https://github.com/JanDuchscherer104/ARIA-NBV/commit/18e1970d84)
+- Final admission and evidence seam repair: `c0f7a1abea17e87d8a1a2c610db3dad0328c86c4`.
+- Self-describing v4 metadata reseal: `103c44a5299734df11a2f0a772a060972bb54a50`.
+- Presentation-free streaming preflight: `fcecdf5f2da0afd9aa25dae717f4ec52fefe0c6e`.
