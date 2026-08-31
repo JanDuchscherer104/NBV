@@ -1,4 +1,4 @@
-#import "../experiment_data.typ": candidate-support-benchmark-name, candidate-support-benchmark-schema, candidate-support-decision-rule, candidate-support-receipt-name, candidate-support-receipt-schema, canonical-sidecar-id, measurement-benchmark-name, measurement-benchmark-schema, measurement-protocol-receipt-name, measurement-protocol-receipt-schema, measurement-rank-direction, measurement-rank-tie-policy, paired-interval-method, q1-analysis-receipt-name, q1-audit-action-mask-semantics, q1-audit-actor-input-leaves, q1-audit-actor-input-manifest-schema, q1-audit-campaign-descriptor-provenance, q1-audit-campaign-target-source, q1-audit-experiment-profile, q1-audit-gt-match-status, q1-audit-selected-observation-protocol, q1-audit-target-protocol, q1-bundle-manifest-name, q1-decision-rule, q1-pairwise-chance, q1-population-benchmark-name, q1-population-benchmark-schema, q1-protocol-receipt-name, q1-protocol-receipt-schema, q1-ranking-interval-method, q1-scene-role, q1-target-source-protocol, q2-certification-receipt-schema, q2-certification-schema, q2-decision-rule, q2-independent-unit-aggregation, q2-independent-unit-semantics, q2-selection-semantics, repeatability-decision-rule, report-sidecar-projection-sha256, report-store-population-evidence-valid, report-store-measurement-evidence-valid, report-store-candidate-support-evidence-valid, report-store-q1-evidence-valid, report-stores-q1-evidence-valid, report-store-q2-evidence-valid, sha256-hex
+#import "../experiment_data.typ": candidate-support-benchmark-name, candidate-support-benchmark-schema, candidate-support-decision-rule, candidate-support-receipt-name, candidate-support-receipt-schema, canonical-sidecar-id, measurement-benchmark-name, measurement-benchmark-schema, measurement-protocol-receipt-name, measurement-protocol-receipt-schema, measurement-rank-direction, measurement-rank-tie-policy, paired-interval-method, q1-analysis-receipt-name, q1-audit-action-mask-semantics, q1-audit-actor-input-leaves, q1-audit-actor-input-manifest-schema, q1-audit-campaign-descriptor-provenance, q1-audit-campaign-target-source, q1-audit-experiment-profile, q1-audit-gt-match-status, q1-audit-selected-observation-protocol, q1-audit-target-protocol, q1-bundle-manifest-name, q1-decision-rule, q1-pairwise-chance, q1-population-benchmark-name, q1-population-benchmark-schema, q1-protocol-receipt-name, q1-protocol-receipt-schema, q1-ranking-interval-method, q1-scene-role, q1-structured-key, q1-target-source-protocol, q2-certification-receipt-schema, q2-certification-schema, q2-decision-rule, q2-independent-unit-aggregation, q2-independent-unit-semantics, q2-selection-rank-hash, q2-selection-semantics, repeatability-decision-rule, report-sidecar-projection-sha256, report-store-population-evidence-valid, report-store-measurement-evidence-valid, report-store-candidate-support-evidence-valid, report-store-q1-evidence-valid, report-stores-q1-evidence-valid, report-store-q2-evidence-valid, sha256-hex
 
 #let digest-a = "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
 #let digest-b = "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
@@ -60,6 +60,7 @@
 #let q1-actor-mask-key = "actor" + "_" + "action" + "_" + "mask"
 #let q1-label-mask-key = "oracle" + "_" + "label" + "_" + "mask"
 #let q1-train-mask-key = "q" + "_" + "train" + "_" + "mask"
+#assert(q1-structured-key((0, "a", 0, "1|x", digest-a)) != q1-structured-key((0, "a|0", 1, "x", digest-a)))
 #let support-source = "analysis/candidate-support-attempts.json|sidecar:" + support-sidecar
 #let measurement-source = "analysis/oracle-measurement-repeatability.json|sidecar:" + measurement-sidecar
 #let sidecars = (
@@ -127,6 +128,32 @@
   typed-sidecar-row("s", "e", -0.0),
   typed-sidecar-row("s", "f", 100000000000000000000.0),
 )), "1750c9bcf4b196a453faad414e2d901a7b7f4d3c71936c435fb0503316c5b529")
+#assert.eq(q2-selection-rank-hash((
+  candidate-config: "9292929292929292929292929292929292929292929292929292929292929292",
+  width-max: 4,
+  width-min: 4,
+  horizon: 2,
+  rollout-config: "9393939393939393939393939393939393939393939393939393939393939393",
+  rollout: 0,
+  scene: "scene-0",
+  policy: "oracle-lookahead",
+  source-sample: 0,
+  store: 0,
+  target: 0,
+), 0), "020d8d410fe026b7c80a4c027e063fcbe5d2608b754930ec76e50a1f7a27d15b")
+#assert.eq(q2-selection-rank-hash((
+  candidate-config: "9292929292929292929292929292929292929292929292929292929292929292",
+  width-max: 4,
+  width-min: 4,
+  horizon: 2,
+  rollout-config: "9393939393939393939393939393939393939393939393939393939393939393",
+  rollout: 0,
+  scene: "scène-😀",
+  policy: "oracle-lookahead",
+  source-sample: 0,
+  store: 0,
+  target: 0,
+), 0), "83719cc1b0daebe06cf7407a2d44b9731c5751cc936573eb864d56d8a1dd40e9")
 #let q2-aggregate-sidecar-value-rows(
   prefix,
   row-count,
@@ -323,10 +350,14 @@
   overlap-scenes: false,
 ) = {
   let roster = q1-fixture-roster(store-manifests, overlap-scenes: overlap-scenes)
-  let target-identities = roster.targets.map(
-    target => (target.store, target.scene, target.row, target.id, "9191919191919191919191919191919191919191919191919191919191919191").map(str).join("|"),
-  ).sorted()
-  let state-identities = roster.states.map(state => (
+  let target-identities = roster.targets.map(target => q1-structured-key((
+    target.store,
+    target.scene,
+    target.row,
+    target.id,
+    "9191919191919191919191919191919191919191919191919191919191919191",
+  ))).sorted()
+  let state-identities = roster.states.map(state => q1-structured-key((
     state.store,
     state.scene,
     state.rollout,
@@ -341,15 +372,15 @@
     state.candidate-pose-shell,
     state.actor-action-support,
     state.remaining-budget,
-  ).map(str).join("|")).sorted()
-  let candidate-identities = roster.candidates.map(candidate => (
+  ))).sorted()
+  let candidate-identities = roster.candidates.map(candidate => q1-structured-key((
     candidate.store,
     candidate.rollout,
     candidate.step-row,
     candidate.row,
     candidate.index,
     if candidate.action-mask { "true" } else { "false" },
-  ).map(str).join("|")).sorted()
+  ))).sorted()
   let roster-payload = "targets\n" + target-identities.join("\n") + "\nstates\n" + state-identities.join(
     "\n",
   ) + "\ncandidates\n" + candidate-identities.join("\n")
@@ -418,7 +449,7 @@
   store-manifests: (store-manifest,),
   overlap-scenes: false,
 ) = {
-  let implementation-contract = "8484848484848484848484848484848484848484848484848484848484848484"
+  let implementation-contract = qh-bundle-manifest
   let actor-contract = "8686868686868686868686868686868686868686868686868686868686868686"
   let learning-contract = "8585858585858585858585858585858585858585858585858585858585858585"
   let roster = q1-fixture-roster(store-manifests, overlap-scenes: overlap-scenes)
@@ -718,14 +749,14 @@
   let prefixes(suffix) = sidecar-value-rows.filter(row => row.key.ends-with(suffix)).map(
     row => row.key.replace(regex(suffix.replace(".", "\\.") + "$"), ""),
   )
-  let targets = prefixes(".target_id").filter(prefix => prefix.starts-with("expected_targets[")).map(prefix => (
+  let targets = prefixes(".target_id").filter(prefix => prefix.starts-with("expected_targets[")).map(prefix => q1-structured-key((
     value(prefix + ".store_index"),
     value(prefix + ".scene_id"),
     value(prefix + ".target_row_id"),
     value(prefix + ".target_id"),
     value(prefix + ".descriptor_hash"),
-  ).map(str).join("|")).sorted()
-  let states = prefixes(".step_row_id").filter(prefix => prefix.starts-with("expected_states[")).map(prefix => (
+  ))).sorted()
+  let states = prefixes(".step_row_id").filter(prefix => prefix.starts-with("expected_states[")).map(prefix => q1-structured-key((
     value(prefix + ".store_index"),
     value(prefix + ".scene_id"),
     value(prefix + ".rollout_row_id"),
@@ -740,15 +771,15 @@
     value(prefix + ".candidate_pose_shell_sha256"),
     value(prefix + ".actor_action_support_sha256"),
     value(prefix + ".remaining_budget"),
-  ).map(str).join("|")).sorted()
-  let candidates = prefixes("." + q1-candidate-row-key).filter(prefix => prefix.starts-with("expected_candidates[")).map(prefix => (
+  ))).sorted()
+  let candidates = prefixes("." + q1-candidate-row-key).filter(prefix => prefix.starts-with("expected_candidates[")).map(prefix => q1-structured-key((
     value(prefix + ".store_index"),
     value(prefix + ".rollout_row_id"),
     value(prefix + ".step_row_id"),
     value(prefix + "." + q1-candidate-row-key),
     value(prefix + ".candidate_index"),
     if value(prefix + "." + q1-actor-mask-key) { "true" } else { "false" },
-  ).map(str).join("|")).sorted()
+  ))).sorted()
   let payload = "targets\n" + targets.join("\n") + "\nstates\n" + states.join(
     "\n",
   ) + "\ncandidates\n" + candidates.join("\n")
@@ -1233,6 +1264,9 @@
     typed-sidecar-row(q2-receipt-sidecar, "exact_q2.spec.minimum_exact_rows_per_independent_unit", minimum-unit-rows),
     typed-sidecar-row(q2-receipt-sidecar, "exact_q2.spec.independent_unit_aggregation", q2-independent-unit-aggregation),
     typed-sidecar-row(q2-receipt-sidecar, "exact_q2.spec.minimum_population_coverage", coverage-minimum),
+    typed-sidecar-row(q2-receipt-sidecar, "exact_q2.spec.max_selected_chains", selected-count),
+    typed-sidecar-row(q2-receipt-sidecar, "exact_q2.spec.max_chains_per_stratum", 64),
+    typed-sidecar-row(q2-receipt-sidecar, "exact_q2.spec.selection_seed", 0),
     typed-sidecar-row(q2-receipt-sidecar, "exact_q2.population_census.selection_semantics", q2-selection-semantics),
     typed-sidecar-row(q2-receipt-sidecar, "exact_q2.population_census.population_chain_count", population-count),
     typed-sidecar-row(q2-receipt-sidecar, "exact_q2.population_census.selected_chain_count", selected-count),
@@ -2080,6 +2114,15 @@
   values
 }
 #assert(report-store-q1-evidence-valid(report(q1-rows()), "store-a"))
+#for provenance-key in (
+  "bound_contract.actor_manifest_payload_sha256",
+  "bound_contract.implementation_contract_payload_sha256",
+) {
+  assert(not report-store-q1-evidence-valid(report(
+    q1-rows(),
+    q1-audit-values: mutate-sidecar-value(q1-audit-values, provenance-key, digest-b),
+  ), "store-a"))
+}
 #assert(not report-store-q1-evidence-valid(report(
   q1-rows(),
   q1-bundle-values: omit-sidecar-value(q1-bundle-manifest-sidecar-value-rows(), "manifest_sha256"),
@@ -2205,6 +2248,18 @@
     q1-state-zero-leaf-prefixes.first() + ".presence",
     "true",
   ),
+), "store-a"))
+#let q1-mixed-history-values = {
+  let values = q1-audit-values + clone-sidecar-prefix(
+    q1-audit-values,
+    "states[1].history[0]",
+    "states[1].history[1]",
+  )
+  mutate-sidecar-value(values, "states[1].history[1].history_position", "1")
+}
+#assert(not report-store-q1-evidence-valid(report(
+  q1-rows(),
+  q1-audit-values: q1-mixed-history-values,
 ), "store-a"))
 #for leaf-prefix in q1-state-zero-leaf-prefixes {
   for mutation in (
@@ -2348,6 +2403,31 @@
 #assert(not report-store-q1-evidence-valid(report(
   q1-rows(),
   q1-audit-values: mutate-sidecar-value(q1-audit-values, "states[1].target_row_id", 1),
+), "store-a"))
+#let delimiter-bearing-q1-roster = {
+  let audit = mutate-sidecar-value(q1-audit-values, "targets[0].scene_id", "a")
+  audit = mutate-sidecar-value(audit, "targets[0].target_id", "1|x")
+  audit = mutate-sidecar-value(audit, "targets[1].scene_id", "a|0")
+  audit = mutate-sidecar-value(audit, "targets[1].target_id", "x")
+  audit = mutate-sidecar-value(audit, "states[0].scene_id", "a")
+  audit = mutate-sidecar-value(audit, "states[1].scene_id", "a")
+  audit = mutate-sidecar-value(audit, "states[2].scene_id", "a|0")
+
+  let benchmark = q1-population-benchmark-sidecar-value-rows()
+  benchmark = mutate-sidecar-value(benchmark, "expected_targets[0].scene_id", "a")
+  benchmark = mutate-sidecar-value(benchmark, "expected_targets[0].target_id", "1|x")
+  benchmark = mutate-sidecar-value(benchmark, "expected_targets[1].scene_id", "a|0")
+  benchmark = mutate-sidecar-value(benchmark, "expected_targets[1].target_id", "x")
+  benchmark = mutate-sidecar-value(benchmark, "expected_states[0].scene_id", "a")
+  benchmark = mutate-sidecar-value(benchmark, "expected_states[1].scene_id", "a")
+  benchmark = mutate-sidecar-value(benchmark, "expected_states[2].scene_id", "a|0")
+  benchmark = rebind-q1-benchmark-roster(benchmark)
+  (audit: audit, benchmark: benchmark)
+}
+#assert(report-store-q1-evidence-valid(report(
+  q1-rows(),
+  q1-audit-values: delimiter-bearing-q1-roster.audit,
+  q1-population-values: delimiter-bearing-q1-roster.benchmark,
 ), "store-a"))
 #assert(not report-store-q1-evidence-valid(report(
   q1-rows(),
@@ -2665,6 +2745,42 @@
 #assert(report-store-q1-evidence-valid(q1-two-store-configured-reverse-order, "store-a"))
 #assert(report-store-q1-evidence-valid(q1-two-store-configured-reverse-order, "store-b"))
 #assert(report-stores-q1-evidence-valid(q1-two-store-configured-reverse-order))
+#let q1-twelve-store-manifests = range(12).map(index => sha256-hex(
+  "q1-store-manifest-" + str(index),
+))
+#let q1-twelve-store-table = q1-twelve-store-manifests.enumerate().map(((index, manifest)) => (
+  store_id: "store-" + str(index),
+  manifest_sha256: manifest,
+))
+#let q1-twelve-store-rows = q1-twelve-store-table.map(store => q1-rows(
+  audit-receipt: q1-multi-audit-digest,
+  count-value: 60,
+).map(row => row + (store_id: store.store_id))).flatten()
+#let q1-twelve-store-report = report(
+  q1-twelve-store-rows,
+  sidecar-value-rows: analysis-sidecar-value-rows(
+    protocol-sidecar,
+    q1-analysis-receipt-name,
+    q1-twelve-store-rows,
+  ),
+  q1-audit-values: q1-audit-sidecar-value-rows(
+    sidecar-id: q1-multi-audit-sidecar,
+    population-digest: q1-multi-population-digest,
+    population-benchmark-digest: q1-multi-population-benchmark-digest,
+    store-manifests: q1-twelve-store-manifests,
+  ),
+  q1-population-values: q1-population-benchmark-sidecar-value-rows(
+    sidecar-id: q1-multi-population-sidecar,
+    population-digest: q1-multi-population-digest,
+    store-manifests: q1-twelve-store-manifests,
+  ),
+  q1-bundle-values: q1-bundle-manifest-sidecar-value-rows(
+    population-digest: q1-multi-population-digest,
+    store-manifests: q1-twelve-store-manifests,
+  ),
+  store-rows: q1-twelve-store-table,
+)
+#assert(report-stores-q1-evidence-valid(q1-twelve-store-report))
 #let q1-two-store-reversed = report(
   q1-two-store-rows,
   sidecar-value-rows: analysis-sidecar-value-rows(
@@ -2918,6 +3034,13 @@
 #assert(not report-store-q2-evidence-valid(q2-report(
   receipt-values: mutate-sidecar-value(
     q2-certification-sidecar-value-rows(),
+    "exact_q2.spec.max_selected_chains",
+    4,
+  ),
+), "store-a"))
+#assert(not report-store-q2-evidence-valid(q2-report(
+  receipt-values: mutate-sidecar-value(
+    q2-certification-sidecar-value-rows(),
     "test_population_sha256",
     digest-a,
   ),
@@ -2931,6 +3054,25 @@
 ), "store-a"))
 #assert(not report-store-q2-evidence-valid(q2-report(row-counts: (2, 1, 1, 1, 1)), "store-a"))
 #assert(report-store-q2-evidence-valid(q2-report(population-count: 10), "store-a"))
+#let q2-twelve-row-counts = (1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1)
+#let q2-twelve-lexical-values = q2-certification-sidecar-value-rows(
+  population-count: 13,
+  row-counts: q2-twelve-row-counts,
+).sorted(key: row => row.key)
+#assert(report-store-q2-evidence-valid(q2-report(
+  population-count: 13,
+  row-counts: q2-twelve-row-counts,
+  receipt-values: q2-twelve-lexical-values,
+), "store-a"))
+#assert(not report-store-q2-evidence-valid(q2-report(
+  population-count: 13,
+  row-counts: q2-twelve-row-counts,
+  receipt-values: mutate-sidecar-value(
+    q2-twelve-lexical-values,
+    "exact_q2.spec.selection_seed",
+    1,
+  ),
+), "store-a"))
 #assert(report-store-q2-evidence-valid(q2-report(error: 0.2), "store-a"))
 #assert(report-store-q2-evidence-valid(q2-report(row-counts: (0, 1, 1, 1, 1)), "store-a"))
 #assert(report-store-q2-evidence-valid(q2-report(

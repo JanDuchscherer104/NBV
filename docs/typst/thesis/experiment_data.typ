@@ -166,6 +166,8 @@
 #let q1-ranking-interval-method = "scene_clustered_jackknife_normal_95_v1"
 #let recovery-interval-method = "paired_scene_joint_ratio_bootstrap_95_v1"
 #let recovery-ratio-definition = "ratio_of_paired_scene_mean_differences"
+#let recovery-receipt-schema = "paired_scene_recovery_receipt_v1"
+#let recovery-bootstrap-algorithm = "lcg32_high_bits_paired_scene_joint_ratio_resample_v1"
 #let q1-pairwise-chance = 0.5
 #let repeatability-decision-rule = "max_abs_diff_lte_tolerance_and_rank_identity_v2"
 #let measurement-protocol-receipt-name = "oracle-measurement-repeatability-v1"
@@ -175,6 +177,13 @@
 #let measurement-rank-direction = "descending_root_normalized_gain"
 #let measurement-rank-tie-policy = "competition_equal_rank_v1"
 #let headroom-decision-rule = "effect_gte_minimum_and_ci_low_gt_zero_v1"
+#let headroom-receipt-schema = "paired_scene_headroom_receipt_v1"
+#let headroom-estimator = "arithmetic_mean_of_paired_scene_endpoint_differences_v1"
+#let headroom-bootstrap-algorithm = "lcg32_high_bits_paired_scene_mean_resample_v2"
+#let headroom-bootstrap-samples = 2000
+#let headroom-bootstrap-seed = 0
+#let headroom-bootstrap-confidence = 0.95
+#let headroom-bootstrap-quantile = "linear_interpolation_r7_v1"
 #let candidate-support-decision-rule = "p05_support_gte_minimum_and_failed_root_rate_lte_maximum_v1"
 #let candidate-support-receipt-name = "candidate-support-attempts-v2"
 #let candidate-support-receipt-schema = "candidate_support_attempt_receipt_v2"
@@ -202,6 +211,86 @@
 #let q1-audit-ranking-pair-policy = "unordered_unequal_label_pairs_prediction_ties_incorrect_v1"
 #let q1-audit-calibration-aggregation = "candidate_then_state_then_scene_macro_v1"
 #let q1-audit-independent-unit-semantics = "ase_scene_id_v1"
+#let q1-structured-key(parts) = parts.map(part => {
+  let encoded = str(part)
+  str(bytes(encoded).len()) + ":" + encoded
+}).join("")
+#let headroom-cohort-sha256(scene-ids) = sha256-hex(
+  scene-ids.sorted().map(scene-id => q1-structured-key((scene-id,))).join(""),
+)
+#let headroom-bootstrap-interval(
+  paired-differences,
+  samples: headroom-bootstrap-samples,
+  seed: headroom-bootstrap-seed,
+  confidence: headroom-bootstrap-confidence,
+) = {
+  assert(paired-differences.len() >= 3, message: "paired bootstrap requires at least three scenes")
+  assert(type(samples) == int and samples > 0, message: "paired bootstrap samples must be positive")
+  assert(type(seed) == int and seed >= 0, message: "paired bootstrap seed must be nonnegative")
+  assert(confidence > 0 and confidence < 1, message: "paired bootstrap confidence must be in (0, 1)")
+  let state = seed
+  let estimates = ()
+  for _ in range(samples) {
+    let total = 0.0
+    for _ in range(paired-differences.len()) {
+      state = calc.rem(1664525 * state + 1013904223, 0x100000000)
+      let draw-index = calc.quo(state * paired-differences.len(), 0x100000000)
+      total += paired-differences.at(draw-index)
+    }
+    estimates.push(total / paired-differences.len())
+  }
+  let ordered = estimates.sorted()
+  let quantile(probability) = {
+    let position = probability * (ordered.len() - 1)
+    let low = calc.floor(position)
+    let high = calc.ceil(position)
+    let weight = position - low
+    ordered.at(low) * (1 - weight) + ordered.at(high) * weight
+  }
+  let tail = (1 - confidence) / 2
+  (low: quantile(tail), high: quantile(1 - tail))
+}
+#let recovery-bootstrap-interval(
+  paired-scenes,
+  samples: headroom-bootstrap-samples,
+  seed: headroom-bootstrap-seed,
+  confidence: headroom-bootstrap-confidence,
+) = {
+  assert(paired-scenes.len() >= 3, message: "joint ratio bootstrap requires at least three scenes")
+  assert(type(samples) == int and samples > 0, message: "joint ratio bootstrap samples must be positive")
+  assert(type(seed) == int and seed >= 0, message: "joint ratio bootstrap seed must be nonnegative")
+  assert(confidence > 0 and confidence < 1, message: "joint ratio bootstrap confidence must be in (0, 1)")
+  let state = seed
+  let estimates = ()
+  for _ in range(samples) {
+    let one-step-total = 0.0
+    let lookahead-total = 0.0
+    let learned-total = 0.0
+    for _ in range(paired-scenes.len()) {
+      state = calc.rem(1664525 * state + 1013904223, 0x100000000)
+      let draw-index = calc.quo(state * paired-scenes.len(), 0x100000000)
+      let scene = paired-scenes.at(draw-index)
+      one-step-total += scene.one-step
+      lookahead-total += scene.lookahead
+      learned-total += scene.learned
+    }
+    let denominator = lookahead-total - one-step-total
+    if calc.abs(denominator) <= 1e-10 {
+      return none
+    }
+    estimates.push((learned-total - one-step-total) / denominator)
+  }
+  let ordered = estimates.sorted()
+  let quantile(probability) = {
+    let position = probability * (ordered.len() - 1)
+    let low = calc.floor(position)
+    let high = calc.ceil(position)
+    let weight = position - low
+    ordered.at(low) * (1 - weight) + ordered.at(high) * weight
+  }
+  let tail = (1 - confidence) / 2
+  (low: quantile(tail), high: quantile(1 - tail))
+}
 #let q1-audit-actor-input-leaves = (
   (name: "root_observation_evidence", role: "actor_root_evidence", schema-id: "qh_root_observation_evidence_v1", source-owner: "actor_manifest", derivation: "actor_manifest_member_v1", presence: true),
   (name: "root_reference_pose", role: "actor_reference_frame", schema-id: "pose_tw_12_float32_v1", source-owner: "rollout_manifest", derivation: "rollout_state_projection_v1", presence: true),
@@ -270,6 +359,13 @@
   item => item.key in learned-endpoint-evidence-facts,
 )
 #let headroom-evidence-facts = (
+  "policy.paired_scene_endpoint.receipt_schema",
+  "policy.paired_scene_endpoint.estimator",
+  "policy.paired_scene_endpoint.bootstrap_algorithm",
+  "policy.paired_scene_endpoint.bootstrap_samples",
+  "policy.paired_scene_endpoint.bootstrap_seed",
+  "policy.paired_scene_endpoint.bootstrap_confidence",
+  "policy.paired_scene_endpoint.bootstrap_quantile",
   "policy.paired_scene_endpoint.effect",
   "policy.paired_scene_endpoint.ci_low",
   "policy.paired_scene_endpoint.ci_high",
@@ -281,6 +377,13 @@
   "headroom_gate.passed",
 )
 #let headroom-evidence-contract = (
+  (key: "policy.paired_scene_endpoint.receipt_schema", aggregation: "analysis_identity", unit: "identity", value_kind: "string"),
+  (key: "policy.paired_scene_endpoint.estimator", aggregation: "analysis_identity", unit: "identity", value_kind: "string"),
+  (key: "policy.paired_scene_endpoint.bootstrap_algorithm", aggregation: "analysis_identity", unit: "identity", value_kind: "string"),
+  (key: "policy.paired_scene_endpoint.bootstrap_samples", aggregation: "analysis_identity", unit: "count", value_kind: "integer", minimum: 1),
+  (key: "policy.paired_scene_endpoint.bootstrap_seed", aggregation: "analysis_identity", unit: "identity", value_kind: "integer", minimum: 0),
+  (key: "policy.paired_scene_endpoint.bootstrap_confidence", aggregation: "analysis_identity", unit: "fraction", value_kind: "number", minimum: 0, maximum: 1),
+  (key: "policy.paired_scene_endpoint.bootstrap_quantile", aggregation: "analysis_identity", unit: "identity", value_kind: "string"),
   (key: "policy.paired_scene_endpoint.effect", aggregation: "paired_scene_mean_difference", unit: "fraction", value_kind: "number"),
   (key: "policy.paired_scene_endpoint.ci_low", aggregation: "paired_scene_mean_difference", unit: "fraction", value_kind: "number"),
   (key: "policy.paired_scene_endpoint.ci_high", aggregation: "paired_scene_mean_difference", unit: "fraction", value_kind: "number"),
@@ -292,6 +395,12 @@
   (key: "headroom_gate.passed", aggregation: "paired_scene_decision", unit: "bool", value_kind: "boolean"),
 )
 #let recovery-evidence-facts = (
+  "policy.q_recovery.receipt_schema",
+  "policy.q_recovery.bootstrap_algorithm",
+  "policy.q_recovery.bootstrap_samples",
+  "policy.q_recovery.bootstrap_seed",
+  "policy.q_recovery.bootstrap_confidence",
+  "policy.q_recovery.bootstrap_quantile",
   "policy.q_recovery.fraction",
   "policy.q_recovery.ci_low",
   "policy.q_recovery.ci_high",
@@ -304,6 +413,12 @@
   "policy.q_recovery.passed",
 )
 #let recovery-evidence-contract = (
+  (key: "policy.q_recovery.receipt_schema", aggregation: "analysis_identity", unit: "identity", value_kind: "string"),
+  (key: "policy.q_recovery.bootstrap_algorithm", aggregation: "analysis_identity", unit: "identity", value_kind: "string"),
+  (key: "policy.q_recovery.bootstrap_samples", aggregation: "analysis_identity", unit: "count", value_kind: "integer", minimum: 1),
+  (key: "policy.q_recovery.bootstrap_seed", aggregation: "analysis_identity", unit: "identity", value_kind: "integer", minimum: 0),
+  (key: "policy.q_recovery.bootstrap_confidence", aggregation: "analysis_identity", unit: "fraction", value_kind: "number", minimum: 0, maximum: 1),
+  (key: "policy.q_recovery.bootstrap_quantile", aggregation: "analysis_identity", unit: "identity", value_kind: "string"),
   (key: "policy.q_recovery.fraction", aggregation: "paired_scene_ratio_of_mean_differences", unit: "fraction", value_kind: "number"),
   (key: "policy.q_recovery.ci_low", aggregation: "paired_scene_ratio_of_mean_differences", unit: "fraction", value_kind: "number"),
   (key: "policy.q_recovery.ci_high", aggregation: "paired_scene_ratio_of_mean_differences", unit: "fraction", value_kind: "number"),
@@ -779,25 +894,26 @@
 #let report-store-facts-match-contract(report, store-id, contracts, expected-n) = {
   contracts.all(contract => {
     let matches = report.tables.facts.rows.filter(
-      row => row.store_id == store-id and row.key == contract.key,
+      row => type(row) == dictionary and row.at("store_id", default: none) == store-id and row.at("key", default: none) == contract.key,
     )
     matches.len() == 1 and {
       let row = matches.first()
+      let value = row.at("value", default: none)
       let expected-unit = contract.at("unit", default: none)
       let expected-kind = contract.at("value_kind", default: none)
       let minimum = contract.at("minimum", default: none)
       let maximum = contract.at("maximum", default: none)
-      row.value != none and row.n == expected-n and row.aggregation == contract.aggregation and (
+      value != none and row.at("n", default: none) == expected-n and row.at("aggregation", default: none) == contract.aggregation and (
         expected-unit == none or row.at("unit", default: none) == expected-unit
       ) and (
-        expected-kind == none or report-value-matches-kind(row.value, expected-kind)
+        expected-kind == none or report-value-matches-kind(value, expected-kind)
       ) and (
         minimum == none or (
-          report-value-matches-kind(row.value, "number") and row.value >= minimum
+          report-value-matches-kind(value, "number") and value >= minimum
         )
       ) and (
         maximum == none or (
-          report-value-matches-kind(row.value, "number") and row.value <= maximum
+          report-value-matches-kind(value, "number") and value <= maximum
         )
       )
     }
@@ -807,22 +923,22 @@
 #let report-store-fact-values-match(report, store-id, expected-values) = {
   expected-values.all(expected => {
     let matches = report.tables.facts.rows.filter(
-      row => row.store_id == store-id and row.key == expected.key,
+      row => type(row) == dictionary and row.at("store_id", default: none) == store-id and row.at("key", default: none) == expected.key,
     )
-    matches.len() == 1 and matches.first().value == expected.value
+    matches.len() == 1 and matches.first().at("value", default: none) == expected.value
   })
 }
 
 #let report-store-interval-is-ordered(report, store-id, low-key, high-key) = {
   let low-matches = report.tables.facts.rows.filter(
-    row => row.store_id == store-id and row.key == low-key,
+    row => type(row) == dictionary and row.at("store_id", default: none) == store-id and row.at("key", default: none) == low-key,
   )
   let high-matches = report.tables.facts.rows.filter(
-    row => row.store_id == store-id and row.key == high-key,
+    row => type(row) == dictionary and row.at("store_id", default: none) == store-id and row.at("key", default: none) == high-key,
   )
   low-matches.len() == 1 and high-matches.len() == 1 and {
-    let low = low-matches.first().value
-    let high = high-matches.first().value
+    let low = low-matches.first().at("value", default: none)
+    let high = high-matches.first().at("value", default: none)
     report-value-matches-kind(low, "number") and report-value-matches-kind(
       high,
       "number",
@@ -832,10 +948,10 @@
 
 #let report-store-fact-is-sha256(report, store-id, key) = {
   let matches = report.tables.facts.rows.filter(
-    row => row.store_id == store-id and row.key == key,
+    row => type(row) == dictionary and row.at("store_id", default: none) == store-id and row.at("key", default: none) == key,
   )
   matches.len() == 1 and {
-    let value = matches.first().value
+    let value = matches.first().at("value", default: none)
     type(value) == str and value.match(regex("^[0-9a-f]{64}$")) != none
   }
 }
@@ -976,20 +1092,31 @@
 #let report-store-fact-index(report) = {
   let rows = (:)
   let duplicates = ()
+  let malformed = false
   for row in report.tables.facts.rows {
-    let indexed-key = row.store_id + "\u{1f}" + row.key
-    if indexed-key in rows {
-      duplicates.push(indexed-key)
+    if type(row) != dictionary {
+      malformed = true
     } else {
-      rows.insert(indexed-key, row)
+      let store-id = row.at("store_id", default: none)
+      let key = row.at("key", default: none)
+      if type(store-id) != str or type(key) != str {
+        malformed = true
+      } else {
+        let indexed-key = store-id + "\u{1f}" + key
+        if indexed-key in rows {
+          duplicates.push(indexed-key)
+        } else {
+          rows.insert(indexed-key, row)
+        }
+      }
     }
   }
-  (rows: rows, duplicates: duplicates)
+  (rows: rows, duplicates: duplicates, valid: not malformed)
 }
 
 #let report-store-indexed-row-or-none(index, store-id, key) = {
   let indexed-key = store-id + "\u{1f}" + key
-  if index.duplicates.contains(indexed-key) {
+  if not index.at("valid", default: false) or index.duplicates.contains(indexed-key) {
     none
   } else {
     index.rows.at(indexed-key, default: none)
@@ -1193,13 +1320,11 @@
 
 #let report-store-number-value(report, store-id, key) = {
   let matches = report.tables.facts.rows.filter(
-    row => row.store_id == store-id and row.key == key,
+    row => type(row) == dictionary and row.at("store_id", default: none) == store-id and row.at("key", default: none) == key,
   )
-  if matches.len() == 1 and report-value-matches-kind(
-    matches.first().value,
-    "number",
-  ) {
-    matches.first().value
+  let value = if matches.len() == 1 { matches.first().at("value", default: none) } else { none }
+  if value != none and report-value-matches-kind(value, "number") {
+    value
   } else {
     none
   }
@@ -1207,13 +1332,181 @@
 
 #let report-store-boolean-value(report, store-id, key) = {
   let matches = report.tables.facts.rows.filter(
-    row => row.store_id == store-id and row.key == key,
+    row => type(row) == dictionary and row.at("store_id", default: none) == store-id and row.at("key", default: none) == key,
   )
-  if matches.len() == 1 and type(matches.first().value) == bool {
-    matches.first().value
+  let value = if matches.len() == 1 { matches.first().at("value", default: none) } else { none }
+  if type(value) == bool {
+    value
   } else {
     none
   }
+}
+
+#let report-store-headroom-ledger(report, store-id, expected-n) = {
+  let facts-shape-valid = report.tables.facts.rows.all(row => type(row) == dictionary and (
+    type(row.at("store_id", default: none)) == str,
+    type(row.at("key", default: none)) == str,
+  ).all(check => check))
+  if not facts-shape-valid or type(expected-n) != int or expected-n < 3 {
+    return (valid: false, fact-keys: ())
+  }
+  let collection-prefix = "policy.paired_scene_endpoint.scenes"
+  let fact-keys = range(expected-n).map(index => (
+    collection-prefix + "[" + str(index) + "].scene_id",
+    collection-prefix + "[" + str(index) + "].oracle_one_step",
+    collection-prefix + "[" + str(index) + "].oracle_lookahead",
+  )).flatten()
+  let contracts = range(expected-n).map(index => {
+    let prefix = collection-prefix + "[" + str(index) + "]"
+    (
+      (key: prefix + ".scene_id", aggregation: "paired_scene_identity", unit: "identity", value_kind: "string"),
+      (key: prefix + ".oracle_one_step", aggregation: "paired_scene_endpoint_input", unit: "fraction", value_kind: "number", maximum: 1),
+      (key: prefix + ".oracle_lookahead", aggregation: "paired_scene_endpoint_input", unit: "fraction", value_kind: "number", maximum: 1),
+    )
+  }).flatten()
+  let ledger-facts = report.tables.facts.rows.filter(row => {
+    let row-store = row.at("store_id", default: none)
+    let row-key = row.at("key", default: none)
+    type(row-store) == str and type(row-key) == str and row-store == store-id and row-key.match(
+      regex("^policy\\.paired_scene_endpoint\\.scenes\\[[0-9]+\\]\\.(scene_id|oracle_one_step|oracle_lookahead)$"),
+    ) != none
+  })
+  let fact-index = report-store-fact-index(report)
+  let scenes = range(expected-n).map(index => {
+    let prefix = collection-prefix + "[" + str(index) + "]"
+    let scene-row = report-store-indexed-row-or-none(fact-index, store-id, prefix + ".scene_id")
+    let one-step-row = report-store-indexed-row-or-none(fact-index, store-id, prefix + ".oracle_one_step")
+    let lookahead-row = report-store-indexed-row-or-none(fact-index, store-id, prefix + ".oracle_lookahead")
+    let scene-value = if scene-row == none { none } else { scene-row.at("value", default: none) }
+    let one-step-value = if one-step-row == none { none } else { one-step-row.at("value", default: none) }
+    let lookahead-value = if lookahead-row == none { none } else { lookahead-row.at("value", default: none) }
+    if (scene-value, one-step-value, lookahead-value).all(value => value != none) {
+      (scene: scene-value, one-step: one-step-value, lookahead: lookahead-value)
+    } else { none }
+  })
+  let records-valid = ledger-facts.len() == expected-n * 3 and report-store-facts-match-contract(
+    report,
+    store-id,
+    contracts,
+    expected-n,
+  ) and scenes.all(scene => scene != none and (
+    type(scene.scene) == str and scene.scene.len() > 0,
+    report-value-is-finite-float32(scene.one-step),
+    report-value-is-finite-float32(scene.lookahead),
+  ).all(check => check))
+  if not records-valid or scenes.map(scene => scene.scene).dedup().len() != expected-n {
+    return (valid: false, fact-keys: fact-keys)
+  }
+  let ordered-scenes = scenes.sorted(key: scene => scene.scene)
+  let differences = ordered-scenes.map(scene => scene.lookahead - scene.one-step)
+  let interval = headroom-bootstrap-interval(differences)
+  (
+    valid: true,
+    fact-keys: fact-keys,
+    scenes: ordered-scenes,
+    one-step-mean: ordered-scenes.map(scene => scene.one-step).sum() / expected-n,
+    lookahead-mean: ordered-scenes.map(scene => scene.lookahead).sum() / expected-n,
+    effect: differences.sum() / expected-n,
+    ci-low: interval.low,
+    ci-high: interval.high,
+    cohort-sha256: headroom-cohort-sha256(ordered-scenes.map(scene => scene.scene)),
+  )
+}
+
+#let report-store-recovery-ledger(report, store-id, expected-n) = {
+  let facts-shape-valid = report.tables.facts.rows.all(row => type(row) == dictionary and (
+    type(row.at("store_id", default: none)) == str,
+    type(row.at("key", default: none)) == str,
+  ).all(check => check))
+  if not facts-shape-valid or type(expected-n) != int or expected-n < 3 {
+    return (valid: false, fact-keys: ())
+  }
+  let oracle-ledger = report-store-headroom-ledger(report, store-id, expected-n)
+  if not oracle-ledger.valid {
+    return (valid: false, fact-keys: ())
+  }
+  let collection-prefix = "policy.q_recovery.scenes"
+  let fact-keys = range(expected-n).map(index => (
+    collection-prefix + "[" + str(index) + "].scene_id",
+    collection-prefix + "[" + str(index) + "].learned_q",
+  )).flatten()
+  let contracts = range(expected-n).map(index => {
+    let prefix = collection-prefix + "[" + str(index) + "]"
+    (
+      (key: prefix + ".scene_id", aggregation: "paired_scene_identity", unit: "identity", value_kind: "string"),
+      (key: prefix + ".learned_q", aggregation: "paired_scene_recovery_input", unit: "fraction", value_kind: "number", maximum: 1),
+    )
+  }).flatten()
+  let ledger-facts = report.tables.facts.rows.filter(row => {
+    let row-store = row.at("store_id", default: none)
+    let row-key = row.at("key", default: none)
+    type(row-store) == str and type(row-key) == str and row-store == store-id and row-key.match(
+      regex("^policy\\.q_recovery\\.scenes\\[[0-9]+\\]\\.(scene_id|learned_q)$"),
+    ) != none
+  })
+  let fact-index = report-store-fact-index(report)
+  let scenes = range(expected-n).map(index => {
+    let prefix = collection-prefix + "[" + str(index) + "]"
+    let scene-row = report-store-indexed-row-or-none(fact-index, store-id, prefix + ".scene_id")
+    let learned-row = report-store-indexed-row-or-none(fact-index, store-id, prefix + ".learned_q")
+    let scene-value = if scene-row == none { none } else { scene-row.at("value", default: none) }
+    let learned-value = if learned-row == none { none } else { learned-row.at("value", default: none) }
+    if (scene-value, learned-value).all(value => value != none) {
+      (
+        scene: scene-value,
+        learned: learned-value,
+      )
+    } else { none }
+  })
+  let records-valid = ledger-facts.len() == expected-n * 2 and report-store-facts-match-contract(
+    report,
+    store-id,
+    contracts,
+    expected-n,
+  ) and scenes.all(scene => scene != none and (
+    type(scene.scene) == str and scene.scene.len() > 0,
+    report-value-is-finite-float32(scene.learned),
+  ).all(check => check))
+  if not records-valid or scenes.map(scene => scene.scene).dedup().len() != expected-n {
+    return (valid: false, fact-keys: fact-keys)
+  }
+  let ordered-learned-scenes = scenes.sorted(key: scene => scene.scene)
+  let scene-identities-match = range(expected-n).all(index => (
+    ordered-learned-scenes.at(index).scene == oracle-ledger.scenes.at(index).scene
+  ))
+  if not scene-identities-match {
+    return (valid: false, fact-keys: fact-keys)
+  }
+  let ordered-scenes = range(expected-n).map(index => {
+    let oracle-scene = oracle-ledger.scenes.at(index)
+    let learned-scene = ordered-learned-scenes.at(index)
+    (
+      scene: oracle-scene.scene,
+      one-step: oracle-scene.one-step,
+      lookahead: oracle-scene.lookahead,
+      learned: learned-scene.learned,
+    )
+  })
+  let one-step-mean = ordered-scenes.map(scene => scene.one-step).sum() / expected-n
+  let lookahead-mean = ordered-scenes.map(scene => scene.lookahead).sum() / expected-n
+  let learned-mean = ordered-scenes.map(scene => scene.learned).sum() / expected-n
+  let denominator = lookahead-mean - one-step-mean
+  let interval = recovery-bootstrap-interval(ordered-scenes)
+  if calc.abs(denominator) <= derived-identity-abs-tolerance or interval == none {
+    return (valid: false, fact-keys: fact-keys)
+  }
+  (
+    valid: true,
+    fact-keys: fact-keys,
+    scenes: ordered-scenes,
+    one-step-mean: one-step-mean,
+    lookahead-mean: lookahead-mean,
+    learned-mean: learned-mean,
+    fraction: (learned-mean - one-step-mean) / denominator,
+    ci-low: interval.low,
+    ci-high: interval.high,
+    cohort-sha256: headroom-cohort-sha256(ordered-scenes.map(scene => scene.scene)),
+  )
 }
 
 #let report-store-headroom-identity-valid(
@@ -1236,9 +1529,17 @@
     store-id,
     "policy.paired_scene_endpoint.effect",
   )
-  (one-step, lookahead, effect).all(value => value != none) and calc.abs(
-    effect - (lookahead - one-step),
-  ) <= tolerance
+  let scene-count = report-store-number-value(
+    report,
+    store-id,
+    "policy.paired_scene_endpoint.n_scenes",
+  )
+  let ledger = report-store-headroom-ledger(report, store-id, scene-count)
+  ledger.valid and (one-step, lookahead, effect).all(value => value != none) and (
+    calc.abs(one-step - ledger.one-step-mean) <= tolerance,
+    calc.abs(lookahead - ledger.lookahead-mean) <= tolerance,
+    calc.abs(effect - ledger.effect) <= tolerance,
+  ).all(check => check)
 }
 
 #let report-store-recovery-identity-valid(
@@ -1266,12 +1567,14 @@
     store-id,
     "policy.q_recovery.fraction",
   )
-  (one-step, lookahead, learned, recovery).all(value => value != none) and {
-    let denominator = lookahead - one-step
-    calc.abs(denominator) > tolerance and calc.abs(
-      recovery - (learned - one-step) / denominator,
-    ) <= tolerance
-  }
+  let scene-count = report-store-number-value(report, store-id, "policy.q_recovery.n_scenes")
+  let ledger = report-store-recovery-ledger(report, store-id, scene-count)
+  ledger.valid and (one-step, lookahead, learned, recovery).all(value => value != none) and (
+    calc.abs(one-step - ledger.one-step-mean) <= tolerance,
+    calc.abs(lookahead - ledger.lookahead-mean) <= tolerance,
+    calc.abs(learned - ledger.learned-mean) <= tolerance,
+    calc.abs(recovery - ledger.fraction) <= tolerance,
+  ).all(check => check)
 }
 
 #let report-store-analysis-family-valid(
@@ -1873,8 +2176,10 @@
   )
   let manifest-rows = index.rows.values().filter(
     row => row.key.match(regex("^bound_contract\\.ordered_test_store_manifests\\[[0-9]+\\]$")) != none,
-  ).sorted(key: row => row.key)
-  let manifests = manifest-rows.map(report-sidecar-row-value-or-none)
+  )
+  let manifests = range(manifest-rows.len()).map(index => value(
+    "bound_contract.ordered_test_store_manifests[" + str(index) + "]",
+  ))
   let report-store-rows = report.tables.stores.rows
   let report-store-ids = report-store-rows.map(row => row.store_id)
   let report-manifests = report-store-rows.map(row => row.manifest_sha256)
@@ -1896,8 +2201,10 @@
   let bundle-value(key) = report-sidecar-indexed-value-or-none(bundle-index, key)
   let bundle-manifest-rows = bundle-index.rows.values().filter(
     row => row.key.match(regex("^identity\\.ordered_store_manifests\\.test\\[[0-9]+\\]$")) != none,
-  ).sorted(key: row => row.key)
-  let bundle-manifests = bundle-manifest-rows.map(report-sidecar-row-value-or-none)
+  )
+  let bundle-manifests = range(bundle-manifest-rows.len()).map(index => bundle-value(
+    "identity.ordered_store_manifests.test[" + str(index) + "]",
+  ))
   let frozen-population-digest = bundle-value("identity.dataset_payload_sha256s.test")
   let frozen-provenance-digest = bundle-value("identity.dataset_provenance_payload_sha256s.test")
   let population-benchmark-digest = value("population_benchmark_sha256")
@@ -1909,7 +2216,11 @@
     "bundle_manifest_sha256",
   ) == bundle-manifest.value and value("test_population_sha256") == frozen-population-digest and value(
     "test_provenance_sha256",
-  ) == frozen-provenance-digest and report-sha256-value-valid(population-benchmark-digest) and (
+  ) == frozen-provenance-digest and value(
+    "bound_contract.actor_manifest_payload_sha256",
+  ) == bundle-manifest.value and value(
+    "bound_contract.implementation_contract_payload_sha256",
+  ) == bundle-manifest.value and report-sha256-value-valid(population-benchmark-digest) and (
     "actor_manifest_payload_sha256",
     "implementation_contract_payload_sha256",
     "actor_state_contract_payload_sha256",
@@ -1955,8 +2266,10 @@
   let benchmark-value(key) = report-sidecar-indexed-value-or-none(benchmark-index, key)
   let benchmark-manifest-rows = benchmark-index.rows.values().filter(
     row => row.key.match(regex("^ordered_test_store_manifests\\[[0-9]+\\]$")) != none,
-  ).sorted(key: row => row.key)
-  let benchmark-manifests = benchmark-manifest-rows.map(report-sidecar-row-value-or-none)
+  )
+  let benchmark-manifests = range(benchmark-manifest-rows.len()).map(index => benchmark-value(
+    "ordered_test_store_manifests[" + str(index) + "]",
+  ))
   let benchmark-header-valid = benchmark-value(
     "schema_version",
   ) == q1-population-benchmark-schema and benchmark-value(
@@ -2019,10 +2332,14 @@
     index: benchmark-value(prefix + ".candidate_index"),
     action-mask: benchmark-value(prefix + ".actor_action_mask"),
   ))
-  let expected-target-identities = expected-targets.map(
-    target => (target.store, target.scene, target.row, target.id, target.descriptor-hash).map(str).join("|"),
-  ).sorted()
-  let expected-state-identities = expected-states.map(state => (
+  let expected-target-identities = expected-targets.map(target => q1-structured-key((
+    target.store,
+    target.scene,
+    target.row,
+    target.id,
+    target.descriptor-hash,
+  ))).sorted()
+  let expected-state-identities = expected-states.map(state => q1-structured-key((
     state.store,
     state.scene,
     state.rollout,
@@ -2037,18 +2354,18 @@
     state.candidate-pose-shell,
     state.actor-action-support,
     state.remaining-budget,
-  ).map(str).join("|")).sorted()
+  ))).sorted()
   let expected-candidate-identities = if expected-candidates.all(
     candidate => type(candidate.action-mask) == bool,
   ) {
-    expected-candidates.map(candidate => (
+    expected-candidates.map(candidate => q1-structured-key((
       candidate.store,
       candidate.rollout,
       candidate.step-row,
       candidate.row,
       candidate.index,
       if candidate.action-mask { "true" } else { "false" },
-    ).map(str).join("|")).sorted()
+    ))).sorted()
   } else { () }
   let expected-roster-payload = "targets\n" + expected-target-identities.join(
     "\n",
@@ -2125,9 +2442,13 @@
     report-value-is-finite-float32(target.match-iou) and target.match-iou > 0.20 and target.match-iou <= 1,
     target.target-valid == true,
   ).all(check => check)
-  let target-identities = targets.map(
-    target => (target.store, target.scene, target.row, target.id, target.descriptor-hash).map(str).join("|"),
-  )
+  let target-identities = targets.map(target => q1-structured-key((
+    target.store,
+    target.scene,
+    target.row,
+    target.id,
+    target.descriptor-hash,
+  )))
   let targets-valid = targets.len() > 0 and targets.all(target => (
     type(target.store) == int and target.store >= 0 and target.store < manifests.len(),
     type(target.scene) == str and target.scene.len() > 0,
@@ -2153,11 +2474,14 @@
     ).all(check => check)).map(
       row => row.key.replace(regex("\\.history_position$"), ""),
     )
-    let history = history-prefixes.map(history-prefix => (
+    let unsorted-history = history-prefixes.map(history-prefix => (
       position: value(history-prefix + ".history_position"),
       source-step: value(history-prefix + ".source_step_index"),
       selected-row: value(history-prefix + ".selected_candidate_row_id"),
-    )).sorted(key: entry => entry.position)
+    ))
+    let history = if unsorted-history.all(entry => type(entry.position) == int) {
+      unsorted-history.sorted(key: entry => entry.position)
+    } else { unsorted-history }
     let actor-leaf-prefixes = index.rows.values().filter(row => (
       row.key.starts-with(prefix + ".actor_input_leaves["),
       row.key.ends-with(".name"),
@@ -2475,7 +2799,7 @@
       candidate.rollout == state.rollout,
       candidate.step-row == state.step-row,
     ).all(check => check))
-    (
+    q1-structured-key((
       state.store,
       state.scene,
       state.rollout,
@@ -2490,16 +2814,16 @@
       state.candidate-pose-shell,
       state.actor-action-support,
       state.remaining-budget,
-    ).map(str).join("|")
+    ))
   }).sorted()
-  let measured-candidate-identities = candidates.map(candidate => (
+  let measured-candidate-identities = candidates.map(candidate => q1-structured-key((
     candidate.store,
     candidate.rollout,
     candidate.step-row,
     candidate.row,
     candidate.index,
     if candidate.action-mask { "true" } else { "false" },
-  ).map(str).join("|")).sorted()
+  ))).sorted()
   let state-candidate-roster-valid = states.all(state => {
     let roster = candidates.filter(candidate => (
       candidate.store == state.store,
@@ -2762,6 +3086,101 @@
   chain.policy,
 ))
 
+#let q2-json-hex4(value) = {
+  let digits = "0123456789abcdef"
+  (4096, 256, 16, 1).map(
+    divisor => digits.at(calc.rem(calc.quo(value, divisor), 16)),
+  ).join("")
+}
+
+#let q2-json-string(value) = "\"" + value.codepoints().map(character => {
+  let codepoint = character.to-unicode()
+  if codepoint <= 127 {
+    json.encode(character).slice(1, -1)
+  } else if codepoint <= 65535 {
+    "\\u" + q2-json-hex4(codepoint)
+  } else {
+    let supplementary = codepoint - 65536
+    let high-surrogate = 55296 + calc.quo(supplementary, 1024)
+    let low-surrogate = 56320 + calc.rem(supplementary, 1024)
+    "\\u" + q2-json-hex4(high-surrogate) + "\\u" + q2-json-hex4(low-surrogate)
+  }
+}).join("") + "\""
+
+#let q2-selection-string-valid(value) = type(value) == str and value.len() > 0
+
+#let q2-selection-identity-json(chain) = "{" + (
+  "\"candidate_config_hash\":" + q2-json-string(chain.candidate-config),
+  "\"candidate_width_max\":" + str(chain.width-max),
+  "\"candidate_width_min\":" + str(chain.width-min),
+  "\"configured_horizon\":" + str(chain.horizon),
+  "\"rollout_config_hash\":" + q2-json-string(chain.rollout-config),
+  "\"rollout_row_id\":" + str(chain.rollout),
+  "\"scene_id\":" + q2-json-string(chain.scene),
+  "\"selection_policy\":" + q2-json-string(chain.policy),
+  "\"source_sample_index\":" + str(chain.source-sample),
+  "\"store_index\":" + str(chain.store),
+  "\"target_row_id\":" + str(chain.target),
+).join(",") + "}"
+
+#let q2-selection-stratum-json(chain) = "{" + (
+  "\"candidate_branch_bin\":" + q2-json-string(q2-candidate-branch-bin(chain.width-max)),
+  "\"candidate_config_hash\":" + q2-json-string(chain.candidate-config),
+  "\"configured_horizon\":" + str(chain.horizon),
+  "\"rollout_config_hash\":" + q2-json-string(chain.rollout-config),
+  "\"scene_id\":" + q2-json-string(chain.scene),
+  "\"selection_policy\":" + q2-json-string(chain.policy),
+  "\"store_index\":" + str(chain.store),
+  "\"target_row_id\":" + str(chain.target),
+).join(",") + "}"
+
+#let q2-selection-rank-hash(chain, seed) = sha256-hex(
+  "{\"identity\":" + q2-selection-identity-json(chain) + ",\"selection_seed\":" + str(seed) + "}",
+)
+
+#let q2-expected-selected-datasets(population, seed, maximum, per-stratum) = {
+  let grouped = (:)
+  for chain in population {
+    let key = q2-selection-stratum-json(chain)
+    let values = grouped.at(key, default: ())
+    values.push((hash: q2-selection-rank-hash(chain, seed), dataset: chain.dataset, scene: chain.scene))
+    grouped.insert(key, values)
+  }
+  let capped = (:)
+  for key in grouped.keys().sorted() {
+    let values = grouped.at(key).sorted(key: item => item.hash)
+    if values.map(item => item.hash).dedup().len() != values.len() { return none }
+    capped.insert(key, values.slice(0, calc.min(per-stratum, values.len())))
+  }
+  let allocated = ()
+  let selected-scenes = ()
+  let depth = 0
+  while allocated.len() < maximum {
+    let wave = ()
+    for key in capped.keys().sorted() {
+      let values = capped.at(key)
+      if depth < values.len() { wave.push(values.at(depth)) }
+    }
+    if wave.len() == 0 { break }
+    let deferred = ()
+    for item in wave {
+      if allocated.len() < maximum {
+        if selected-scenes.contains(item.scene) {
+          deferred.push(item)
+        } else {
+          allocated.push(item)
+          selected-scenes.push(item.scene)
+        }
+      }
+    }
+    for item in deferred {
+      if allocated.len() < maximum { allocated.push(item) }
+    }
+    depth += 1
+  }
+  allocated.map(item => item.dataset).sorted()
+}
+
 #let q2-row-stratum-key(row) = q2-structured-key((
   row.scene,
   row.store,
@@ -2962,14 +3381,14 @@
     type(chain.store) == int and chain.store >= 0 and chain.store < manifest-values.len(),
     type(chain.rollout) == int and chain.rollout >= 0,
     type(chain.source-sample) == int and chain.source-sample >= 0,
-    type(chain.scene) == str and chain.scene.len() > 0,
+    q2-selection-string-valid(chain.scene),
     type(chain.target) == int and chain.target >= 0,
     type(chain.horizon) == int and chain.horizon >= 1,
     type(chain.width-min) == int and chain.width-min >= 1,
     type(chain.width-max) == int and type(chain.width-min) == int and chain.width-max >= chain.width-min,
-    type(chain.candidate-config) == str and chain.candidate-config.len() > 0,
-    type(chain.rollout-config) == str and chain.rollout-config.len() > 0,
-    type(chain.policy) == str and chain.policy.len() > 0,
+    q2-selection-string-valid(chain.candidate-config),
+    q2-selection-string-valid(chain.rollout-config),
+    q2-selection-string-valid(chain.policy),
     report-sha256-value-valid(chain.unit-manifest),
     chain.unit-manifest == expected-ordered-manifest-digest,
     chain.unit-scene == chain.scene,
@@ -3007,14 +3426,14 @@
     type(chain.store) == int and chain.store >= 0 and chain.store < manifest-values.len(),
     type(chain.rollout) == int and chain.rollout >= 0,
     type(chain.source-sample) == int and chain.source-sample >= 0,
-    type(chain.scene) == str and chain.scene.len() > 0,
+    q2-selection-string-valid(chain.scene),
     type(chain.target) == int and chain.target >= 0,
     type(chain.horizon) == int and chain.horizon >= 1,
     type(chain.width-min) == int and chain.width-min >= 1,
     type(chain.width-max) == int and type(chain.width-min) == int and chain.width-max >= chain.width-min,
-    type(chain.candidate-config) == str and chain.candidate-config.len() > 0,
-    type(chain.rollout-config) == str and chain.rollout-config.len() > 0,
-    type(chain.policy) == str and chain.policy.len() > 0,
+    q2-selection-string-valid(chain.candidate-config),
+    q2-selection-string-valid(chain.rollout-config),
+    q2-selection-string-valid(chain.policy),
   ).all(check => check)) and population.map(chain => chain.dataset).sorted() == range(
     population.len(),
   ) and population.map(
@@ -3030,6 +3449,25 @@
     population-chain != none and q2-chain-identities-equal(population-chain, chain)
   })
   if not selected-population-binding-valid { return false }
+  let selection-seed = value("exact_q2.spec.selection_seed")
+  let maximum-selected = value("exact_q2.spec.max_selected_chains")
+  let maximum-per-stratum = value("exact_q2.spec.max_chains_per_stratum")
+  let selection-spec-valid = type(selection-seed) == int and type(
+    maximum-selected,
+  ) == int and maximum-selected >= 1 and type(
+    maximum-per-stratum,
+  ) == int and maximum-per-stratum >= 1
+  let expected-selected-datasets = if selection-spec-valid {
+    q2-expected-selected-datasets(
+      population,
+      selection-seed,
+      maximum-selected,
+      maximum-per-stratum,
+    )
+  } else { none }
+  if expected-selected-datasets == none or selected.map(
+    chain => chain.dataset,
+  ).sorted() != expected-selected-datasets { return false }
   let current-store-index = manifest-values.position(
     manifest => manifest == store-manifest,
   )
@@ -3702,6 +4140,22 @@
 }
 
 #let report-store-oracle-endpoint-evidence-valid(report, store-id, expected-n) = {
+  let ledger = report-store-headroom-ledger(report, store-id, expected-n)
+  let one-step-mean = report-store-number-value(report, store-id, "policy.endpoint_gain.oracle_one_step.mean")
+  let one-step-ci-low = report-store-number-value(report, store-id, "policy.endpoint_gain.oracle_one_step.ci_low")
+  let one-step-ci-high = report-store-number-value(report, store-id, "policy.endpoint_gain.oracle_one_step.ci_high")
+  let lookahead-mean = report-store-number-value(report, store-id, "policy.endpoint_gain.oracle_lookahead.mean")
+  let lookahead-ci-low = report-store-number-value(report, store-id, "policy.endpoint_gain.oracle_lookahead.ci_low")
+  let lookahead-ci-high = report-store-number-value(report, store-id, "policy.endpoint_gain.oracle_lookahead.ci_high")
+  let cohort = report.tables.facts.rows.filter(
+    row => type(row) == dictionary and row.at("store_id", default: none) == store-id and row.at("key", default: none) == "policy.endpoint_gain.cohort_sha256",
+  )
+  let one-step-interval = if ledger.valid {
+    headroom-bootstrap-interval(ledger.scenes.map(scene => scene.one-step))
+  } else { none }
+  let lookahead-interval = if ledger.valid {
+    headroom-bootstrap-interval(ledger.scenes.map(scene => scene.lookahead))
+  } else { none }
   report-store-analysis-family-valid(
     report,
     store-id,
@@ -3715,10 +4169,43 @@
     ),
     digest-keys: ("policy.endpoint_gain.cohort_sha256",),
     required-source-fragment: "|sidecar:",
-  )
+  ) and ledger.valid and report-store-facts-share-source(
+    report,
+    store-id,
+    oracle-endpoint-evidence-facts + ledger.fact-keys,
+  ) and report-store-analysis-sidecar-binds-facts(
+    report,
+    store-id,
+    oracle-endpoint-evidence-facts + ledger.fact-keys,
+  ) and one-step-interval != none and lookahead-interval != none and cohort.len() == 1 and (
+    one-step-mean,
+    one-step-ci-low,
+    one-step-ci-high,
+    lookahead-mean,
+    lookahead-ci-low,
+    lookahead-ci-high,
+  ).all(value => value != none) and (
+    calc.abs(one-step-mean - ledger.one-step-mean) <= derived-identity-abs-tolerance,
+    calc.abs(one-step-ci-low - one-step-interval.low) <= derived-identity-abs-tolerance,
+    calc.abs(one-step-ci-high - one-step-interval.high) <= derived-identity-abs-tolerance,
+    calc.abs(lookahead-mean - ledger.lookahead-mean) <= derived-identity-abs-tolerance,
+    calc.abs(lookahead-ci-low - lookahead-interval.low) <= derived-identity-abs-tolerance,
+    calc.abs(lookahead-ci-high - lookahead-interval.high) <= derived-identity-abs-tolerance,
+    cohort.first().at("value", default: none) == ledger.cohort-sha256,
+  ).all(check => check)
 }
 
 #let report-store-learned-endpoint-evidence-valid(report, store-id, expected-n) = {
+  let ledger = report-store-recovery-ledger(report, store-id, expected-n)
+  let learned-mean = report-store-number-value(report, store-id, "policy.endpoint_gain.learned_q.mean")
+  let learned-ci-low = report-store-number-value(report, store-id, "policy.endpoint_gain.learned_q.ci_low")
+  let learned-ci-high = report-store-number-value(report, store-id, "policy.endpoint_gain.learned_q.ci_high")
+  let cohort = report.tables.facts.rows.filter(
+    row => type(row) == dictionary and row.at("store_id", default: none) == store-id and row.at("key", default: none) == "policy.endpoint_gain.cohort_sha256",
+  )
+  let learned-interval = if ledger.valid {
+    headroom-bootstrap-interval(ledger.scenes.map(scene => scene.learned))
+  } else { none }
   report-store-analysis-family-valid(
     report,
     store-id,
@@ -3734,7 +4221,24 @@
       "policy.endpoint_gain.learned_q.bundle_manifest_sha256",
     ),
     required-source-fragment: "|sidecar:",
-  )
+  ) and ledger.valid and report-store-facts-share-source(
+    report,
+    store-id,
+    learned-endpoint-evidence-facts + ledger.fact-keys,
+  ) and report-store-analysis-sidecar-binds-facts(
+    report,
+    store-id,
+    learned-endpoint-evidence-facts + ledger.fact-keys,
+  ) and learned-interval != none and cohort.len() == 1 and (
+    learned-mean,
+    learned-ci-low,
+    learned-ci-high,
+  ).all(value => value != none) and (
+    calc.abs(learned-mean - ledger.learned-mean) <= derived-identity-abs-tolerance,
+    calc.abs(learned-ci-low - learned-interval.low) <= derived-identity-abs-tolerance,
+    calc.abs(learned-ci-high - learned-interval.high) <= derived-identity-abs-tolerance,
+    cohort.first().at("value", default: none) == ledger.cohort-sha256,
+  ).all(check => check)
 }
 
 #let report-store-endpoint-evidence-valid(report, store-id, expected-n) = {
@@ -3754,6 +4258,11 @@
 }
 
 #let report-store-headroom-evidence-valid(report, store-id, expected-n) = {
+  let facts-shape-valid = report.tables.facts.rows.all(row => type(row) == dictionary and (
+    type(row.at("store_id", default: none)) == str,
+    type(row.at("key", default: none)) == str,
+  ).all(check => check))
+  if not facts-shape-valid { return false }
   let effect = report-store-number-value(
     report,
     store-id,
@@ -3764,6 +4273,27 @@
     store-id,
     "policy.paired_scene_endpoint.ci_low",
   )
+  let ci-high = report-store-number-value(
+    report,
+    store-id,
+    "policy.paired_scene_endpoint.ci_high",
+  )
+  let cohort = report.tables.facts.rows.filter(
+    row => row.store_id == store-id and row.key == "policy.paired_scene_endpoint.cohort_sha256",
+  )
+  let endpoint-cohort = report.tables.facts.rows.filter(
+    row => row.store_id == store-id and row.key == "policy.endpoint_gain.cohort_sha256",
+  )
+  let one-step-mean = report-store-number-value(
+    report,
+    store-id,
+    "policy.endpoint_gain.oracle_one_step.mean",
+  )
+  let lookahead-mean = report-store-number-value(
+    report,
+    store-id,
+    "policy.endpoint_gain.oracle_lookahead.mean",
+  )
   let minimum-effect = report-store-number-value(
     report,
     store-id,
@@ -3772,6 +4302,7 @@
   let passed-matches = report.tables.facts.rows.filter(
     row => row.store_id == store-id and row.key == "headroom_gate.passed",
   )
+  let ledger = report-store-headroom-ledger(report, store-id, expected-n)
   report-store-analysis-family-valid(
     report,
     store-id,
@@ -3779,22 +4310,57 @@
     headroom-evidence-contract,
     expected-n,
     expected-values: (
+      (key: "policy.paired_scene_endpoint.receipt_schema", value: headroom-receipt-schema),
+      (key: "policy.paired_scene_endpoint.estimator", value: headroom-estimator),
+      (key: "policy.paired_scene_endpoint.bootstrap_algorithm", value: headroom-bootstrap-algorithm),
+      (key: "policy.paired_scene_endpoint.bootstrap_samples", value: headroom-bootstrap-samples),
+      (key: "policy.paired_scene_endpoint.bootstrap_seed", value: headroom-bootstrap-seed),
+      (key: "policy.paired_scene_endpoint.bootstrap_confidence", value: headroom-bootstrap-confidence),
+      (key: "policy.paired_scene_endpoint.bootstrap_quantile", value: headroom-bootstrap-quantile),
       (key: "policy.paired_scene_endpoint.interval_method", value: paired-interval-method),
       (key: "headroom_gate.rule", value: headroom-decision-rule),
     ),
     interval-pairs: ((low: "policy.paired_scene_endpoint.ci_low", high: "policy.paired_scene_endpoint.ci_high"),),
     digest-keys: ("policy.paired_scene_endpoint.cohort_sha256",),
     required-source-fragment: "|sidecar:",
-  ) and effect != none and ci-low != none and minimum-effect != none and minimum-effect > 0 and passed-matches.len() == 1 and passed-matches.first().value == (
-    effect >= minimum-effect and ci-low > 0
+  ) and ledger.valid and report-store-facts-share-source(
+    report,
+    store-id,
+    headroom-evidence-facts + ledger.fact-keys,
+  ) and report-store-analysis-sidecar-binds-facts(
+    report,
+    store-id,
+    headroom-evidence-facts + ledger.fact-keys,
+  ) and effect != none and ci-low != none and ci-high != none and one-step-mean != none and lookahead-mean != none and cohort.len() == 1 and endpoint-cohort.len() == 1 and minimum-effect != none and minimum-effect > 0 and (
+    calc.abs(one-step-mean - ledger.one-step-mean) <= derived-identity-abs-tolerance,
+    calc.abs(lookahead-mean - ledger.lookahead-mean) <= derived-identity-abs-tolerance,
+    calc.abs(effect - ledger.effect) <= derived-identity-abs-tolerance,
+    calc.abs(ci-low - ledger.ci-low) <= derived-identity-abs-tolerance,
+    calc.abs(ci-high - ledger.ci-high) <= derived-identity-abs-tolerance,
+    cohort.first().value == ledger.cohort-sha256,
+    endpoint-cohort.first().value == ledger.cohort-sha256,
+  ).all(check => check) and passed-matches.len() == 1 and passed-matches.first().value == (
+    ledger.effect >= minimum-effect and ledger.ci-low > 0
   )
 }
 
 #let report-store-recovery-evidence-valid(report, store-id, expected-n) = {
+  let facts-shape-valid = report.tables.facts.rows.all(row => type(row) == dictionary and (
+    type(row.at("store_id", default: none)) == str,
+    type(row.at("key", default: none)) == str,
+  ).all(check => check))
+  if not facts-shape-valid {
+    return false
+  }
   let fraction = report-store-number-value(report, store-id, "policy.q_recovery.fraction")
   let ci-low = report-store-number-value(report, store-id, "policy.q_recovery.ci_low")
+  let ci-high = report-store-number-value(report, store-id, "policy.q_recovery.ci_high")
   let minimum-fraction = report-store-number-value(report, store-id, "policy.q_recovery.minimum_fraction")
   let passed = report-store-boolean-value(report, store-id, "policy.q_recovery.passed")
+  let cohort = report.tables.facts.rows.filter(
+    row => row.at("store_id", default: none) == store-id and row.at("key", default: none) == "policy.q_recovery.cohort_sha256",
+  )
+  let ledger = report-store-recovery-ledger(report, store-id, expected-n)
   report-store-analysis-family-valid(
     report,
     store-id,
@@ -3802,6 +4368,12 @@
     recovery-evidence-contract,
     expected-n,
     expected-values: (
+      (key: "policy.q_recovery.receipt_schema", value: recovery-receipt-schema),
+      (key: "policy.q_recovery.bootstrap_algorithm", value: recovery-bootstrap-algorithm),
+      (key: "policy.q_recovery.bootstrap_samples", value: headroom-bootstrap-samples),
+      (key: "policy.q_recovery.bootstrap_seed", value: headroom-bootstrap-seed),
+      (key: "policy.q_recovery.bootstrap_confidence", value: headroom-bootstrap-confidence),
+      (key: "policy.q_recovery.bootstrap_quantile", value: headroom-bootstrap-quantile),
       (key: "policy.q_recovery.ratio_definition", value: recovery-ratio-definition),
       (key: "policy.q_recovery.interval_method", value: recovery-interval-method),
       (key: "policy.q_recovery.rule", value: recovery-decision-rule),
@@ -3809,8 +4381,21 @@
     interval-pairs: ((low: "policy.q_recovery.ci_low", high: "policy.q_recovery.ci_high"),),
     digest-keys: ("policy.q_recovery.cohort_sha256",),
     required-source-fragment: "|sidecar:",
-  ) and (fraction, ci-low, minimum-fraction).all(value => value != none) and minimum-fraction > 0 and passed != none and passed == (
-    fraction >= minimum-fraction and ci-low > 0
+  ) and ledger.valid and report-store-facts-share-source(
+    report,
+    store-id,
+    recovery-evidence-facts + ledger.fact-keys,
+  ) and report-store-analysis-sidecar-binds-facts(
+    report,
+    store-id,
+    recovery-evidence-facts + ledger.fact-keys,
+  ) and (fraction, ci-low, ci-high, minimum-fraction).all(value => value != none) and cohort.len() == 1 and minimum-fraction > 0 and (
+    calc.abs(fraction - ledger.fraction) <= derived-identity-abs-tolerance,
+    calc.abs(ci-low - ledger.ci-low) <= derived-identity-abs-tolerance,
+    calc.abs(ci-high - ledger.ci-high) <= derived-identity-abs-tolerance,
+    cohort.first().value == ledger.cohort-sha256,
+  ).all(check => check) and passed != none and passed == (
+    ledger.fraction >= minimum-fraction and ledger.ci-low > 0
   )
 }
 
