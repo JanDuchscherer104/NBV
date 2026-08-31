@@ -26,7 +26,7 @@ touched_owner_paths:
   - scripts/tests/test_typst_report_data_contract.py
 codex_thread: codex://threads/01a04fd9-0c7c-7813-a9c5-dc49f2f867a6
 repo_object_format: sha1
-repo_head: 8a6733b981d6429900b2082ab2d37d0f175511fb
+repo_head: 6583b7ec04efaaa04244eea6a0db82686d794547
 repo_branch: "codex/thesis-figure-qh-evidence-gates"
 worktree_kind: linked
 ---
@@ -201,6 +201,16 @@ reviews until zero P0--P2 findings remained.
   short-circuit expression. String and adjacent malformed-value fixtures reject
   without aborting, while nonnegative valid counts, positive thresholds,
   equality passage, and measured non-passes retain their intended semantics.
+- Exact-head rereview then separated the global exact-$Q_2$ receipt from
+  profile-scoped presentation. Admission now requires every report profile to
+  repeat the same complete receipt-derived $Q_2$ fact set, including receipt
+  identity, metrics, thresholds, rule, and decision. The table renders once at
+  global scope; coverage is census-relative, while error and tolerance
+  summaries remain conditional on selected admitted support.
+- The same rereview found that malformed or missing fact-row denominator
+  metadata could abort Results rendering. Generic denominator presence now
+  requires a positive integer obtained by fail-closed dictionary access;
+  missing, string, float, zero, and negative denominators reject cleanly.
 
 ## Commits
 
@@ -222,6 +232,7 @@ reviews until zero P0--P2 findings remained.
 - https://github.com/JanDuchscherer104/ARIA-NBV/commit/4cea0ec3ea021aa04b7eadf8f78c318c4c1dbf6f
 - https://github.com/JanDuchscherer104/ARIA-NBV/commit/87c907b39b72227c71c594f71b2f41e9bf8daeba
 - https://github.com/JanDuchscherer104/ARIA-NBV/commit/8a6733b981d6429900b2082ab2d37d0f175511fb
+- https://github.com/JanDuchscherer104/ARIA-NBV/commit/6583b7ec04efaaa04244eea6a0db82686d794547
 
 ## Verification
 
@@ -338,6 +349,18 @@ diff `a8fe473689d008034d5e0ab42a5d6a2810db95647d2b08a644e157a3b36450f3`
 with zero P0--P2 findings. Fourteen dynamic malformed-value cases rejected
 without a Typst evaluation abort, including malformed identities, booleans,
 counts, thresholds, row metadata, receipt fields, and benchmark fields.
+The global-$Q_2$ and denominator repair passed
+`make thesis-report-data-contract`, `make thesis-results-full-profile-render`,
+`make thesis-pdf-ci`, `make typst-authoring-contract`, `make thesis-pdf`, and
+`git diff --check`. The thesis remains 129 A4 pages with PDF SHA-256
+`f27167a3c643bfbe03a18b9ca65a7016242e6a4f6014bf44dd492b0c21ea77c5`;
+the synthetic full-profile fixture remains exactly two A4 pages and visibly
+labels the exact-$Q_2$ block as global. Independent contract and scientific
+reviewers approved exact four-source-file diff
+`547d4c028739eb387df7ab744f0c93250fc14e432b0a0dfc1006a8a853259185`
+with zero P0--P2 findings after adversarial missing/malformed denominator,
+conflicting receipt/value, store-order reversal, census-present unselected,
+and selected zero-row cases.
 
 ## Canonical Owner Impact
 
