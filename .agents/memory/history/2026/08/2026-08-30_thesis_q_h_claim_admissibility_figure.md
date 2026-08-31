@@ -26,7 +26,7 @@ touched_owner_paths:
   - scripts/tests/test_typst_report_data_contract.py
 codex_thread: codex://threads/01a04fd9-0c7c-7813-a9c5-dc49f2f867a6
 repo_object_format: sha1
-repo_head: 8dcd0cb539997bd41788a0190ec0c2ae7a009691
+repo_head: 6ba2e3fbb122b0ae51f10fd48fdec2289aab3a1f
 repo_branch: "codex/thesis-figure-qh-evidence-gates"
 worktree_kind: linked
 ---
@@ -175,6 +175,14 @@ reviews until zero P0--P2 findings remained.
   the full store-by-lane rectangle, so per-store consistency cannot hide model
   drift between report profiles. Oracle endpoints and headroom remain separate
   because they do not use learned weights.
+- A final exact-head robustness finding showed that malformed exact-$Q_2$
+  receipt numbers and identity components could reach arithmetic or string
+  operations before the validator returned false. Lineage, specification,
+  selected-chain, row, and census checks now short-circuit before dependent
+  operations. Support-stratum, row-stratum, and independent-unit key components
+  retain explicit types, so stringification cannot erase an invalid identity.
+  Adversarial malformed-value fixtures now fail closed without aborting Typst,
+  while measured non-passes remain admissible evidence.
 
 ## Commits
 
@@ -192,6 +200,7 @@ reviews until zero P0--P2 findings remained.
 - https://github.com/JanDuchscherer104/ARIA-NBV/commit/0c81a475ed3af85d3a21f9a68d970f0a4c52ea77
 - https://github.com/JanDuchscherer104/ARIA-NBV/commit/ae85a33ab218d943c837599f3dbf836fccf64686
 - https://github.com/JanDuchscherer104/ARIA-NBV/commit/8dcd0cb539997bd41788a0190ec0c2ae7a009691
+- https://github.com/JanDuchscherer104/ARIA-NBV/commit/6ba2e3fbb122b0ae51f10fd48fdec2289aab3a1f
 
 ## Verification
 
@@ -271,6 +280,15 @@ Independent contract and scientific reviewers approved source diff
 `27fe3616ed38fde46e2c747f7afa1465721178728d5a430215ae28aa775b6e7b`
 with zero P0--P2 findings. The final thesis PDF SHA-256 was
 `05e3dfa1d765913973029983ef6d5d145a8cc93b64ee2f2b0c1c985b20ba10eb`.
+The numeric and identity fail-closed repair passed
+`make thesis-report-data-contract`, `make thesis-results-full-profile-render`,
+`make thesis-pdf-ci`, `make typst-authoring-contract`, `make thesis-pdf`, and
+`git diff --check`. The thesis remains 129 A4 pages and its PDF SHA-256 is
+`00570be86cd6fcf0c4c4ea51a3211222a687709b0381e47b7f2dff7c0e95822d`.
+Independent contract and scientific reviewers approved exact two-source-file
+diff `861c4db105a7ccff85050d303f1fc0b93b44590e21c6d0383bb6dc30d234609b`
+with zero P0--P2 findings; eleven dynamic malformed-value cases returned false
+without a Typst evaluation abort.
 
 ## Canonical Owner Impact
 
