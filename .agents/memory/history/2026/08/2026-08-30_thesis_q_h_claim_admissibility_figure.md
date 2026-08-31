@@ -26,7 +26,7 @@ touched_owner_paths:
   - scripts/tests/test_typst_report_data_contract.py
 codex_thread: codex://threads/01a04fd9-0c7c-7813-a9c5-dc49f2f867a6
 repo_object_format: sha1
-repo_head: ae85a33ab218d943c837599f3dbf836fccf64686
+repo_head: 8dcd0cb539997bd41788a0190ec0c2ae7a009691
 repo_branch: "codex/thesis-figure-qh-evidence-gates"
 worktree_kind: linked
 ---
@@ -167,6 +167,14 @@ reviews until zero P0--P2 findings remained.
   that roster. Adversarial tests cover roster omission and duplication,
   reordered rosters without a matching digest, out-of-range indices, mutated
   scientific identity, contradictory aggregates and gates, and 100-row scale.
+- Exact-head review then exposed a cross-lane composition gap: valid actor-
+  $Q_1$, exact-$Q_2$, and learned-policy endpoints could originate from three
+  different selected models. Each learned family now records the verified
+  inference-bundle manifest SHA-256; exact-$Q_2$ additionally matches its fact
+  back to the canonical receipt. Claim composition requires one identity across
+  the full store-by-lane rectangle, so per-store consistency cannot hide model
+  drift between report profiles. Oracle endpoints and headroom remain separate
+  because they do not use learned weights.
 
 ## Commits
 
@@ -183,6 +191,7 @@ reviews until zero P0--P2 findings remained.
 - https://github.com/JanDuchscherer104/ARIA-NBV/commit/3b1a2e4dae1c1fe0ac86739ed1374ccbf9023abf
 - https://github.com/JanDuchscherer104/ARIA-NBV/commit/0c81a475ed3af85d3a21f9a68d970f0a4c52ea77
 - https://github.com/JanDuchscherer104/ARIA-NBV/commit/ae85a33ab218d943c837599f3dbf836fccf64686
+- https://github.com/JanDuchscherer104/ARIA-NBV/commit/8dcd0cb539997bd41788a0190ec0c2ae7a009691
 
 ## Verification
 
@@ -250,6 +259,18 @@ text diff `dede045cc3bcab172a364a38f9ad9344ca723d2069ff8118f7bf8e2a5b682046`
 with zero P0--P2 findings. The final thesis and layout-fixture PDF SHA-256 values
 were `3a5761176e4b9ddef8f8f1b8122b53b2a78812937169162d657e5db6d6a5bf2b`
 and `47ba07f113e30ce3281530b670f34190bfe18776ea57a3d434bc3577746b9070`.
+The learned-bundle lineage repair passed `make docs-render-core`,
+`make thesis-report-data-contract`, `make thesis-results-full-profile-render`,
+`make thesis-pdf-ci`, `make typst-authoring-contract`, `make thesis-pdf`, and
+`git diff --check`. Adversarial cases cover within-store and cross-store drift,
+missing, duplicate, malformed, alternate-valid, receipt-mismatched, and
+payload-mismatched identities. Oracle-only endpoint and headroom evidence stays
+valid without learned-policy rows. The thesis remains 129 A4 pages; physical
+Results pages 68--69 and Discussion page 70 were inspected at final size.
+Independent contract and scientific reviewers approved source diff
+`27fe3616ed38fde46e2c747f7afa1465721178728d5a430215ae28aa775b6e7b`
+with zero P0--P2 findings. The final thesis PDF SHA-256 was
+`05e3dfa1d765913973029983ef6d5d145a8cc93b64ee2f2b0c1c985b20ba10eb`.
 
 ## Canonical Owner Impact
 
