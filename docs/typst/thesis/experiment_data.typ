@@ -1811,9 +1811,9 @@
     "metric_contract.interval_method",
   ) == q1-ranking-interval-method and manifests.len() > 0 and manifests.all(
     report-sha256-value-valid,
-  ) and manifests.dedup().len() == manifests.len() and manifests == manifests.sorted() and report-store-ids.len() == report-store-ids.dedup().len() and report-manifests.len() > 0 and report-manifests.all(
+  ) and manifests.dedup().len() == manifests.len() and report-store-ids.len() == report-store-ids.dedup().len() and report-manifests.len() > 0 and report-manifests.all(
     report-sha256-value-valid,
-  ) and report-manifests.dedup().len() == report-manifests.len() and manifests == report-manifests.sorted() and current-store-index != none
+  ) and report-manifests.dedup().len() == report-manifests.len() and manifests.sorted() == report-manifests.sorted() and current-store-index != none
   if not header-valid { return false }
 
   // The content-addressed benchmark owns the expected roster independently of

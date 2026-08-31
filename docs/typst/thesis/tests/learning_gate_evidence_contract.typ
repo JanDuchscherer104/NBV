@@ -2453,6 +2453,34 @@
 #assert(report-store-q1-evidence-valid(q1-two-store-report, "store-a"))
 #assert(report-store-q1-evidence-valid(q1-two-store-report, "store-b"))
 #assert(report-stores-q1-evidence-valid(q1-two-store-report))
+#let q1-two-store-configured-reverse-order = report(
+  q1-two-store-rows,
+  sidecar-value-rows: analysis-sidecar-value-rows(
+    protocol-sidecar,
+    q1-analysis-receipt-name,
+    q1-two-store-rows,
+  ),
+  q1-audit-values: q1-audit-sidecar-value-rows(
+    sidecar-id: q1-multi-audit-sidecar,
+    population-digest: q1-multi-population-digest,
+    store-manifests: (store-manifest-b, store-manifest),
+  ),
+  q1-population-values: q1-population-benchmark-sidecar-value-rows(
+    sidecar-id: q1-multi-population-sidecar,
+    store-manifests: (store-manifest-b, store-manifest),
+  ),
+  q1-bundle-values: q1-bundle-manifest-sidecar-value-rows(
+    population-digest: q1-multi-population-digest,
+    store-manifests: (store-manifest-b, store-manifest),
+  ),
+  store-rows: (
+    (store_id: "store-a", manifest_sha256: store-manifest-b),
+    (store_id: "store-b", manifest_sha256: store-manifest),
+  ),
+)
+#assert(report-store-q1-evidence-valid(q1-two-store-configured-reverse-order, "store-a"))
+#assert(report-store-q1-evidence-valid(q1-two-store-configured-reverse-order, "store-b"))
+#assert(report-stores-q1-evidence-valid(q1-two-store-configured-reverse-order))
 #let q1-two-store-reversed = report(
   q1-two-store-rows,
   sidecar-value-rows: analysis-sidecar-value-rows(

@@ -499,6 +499,16 @@ The thesis remains 129 A4 pages; physical page 95 was inspected at final size,
 and the PDF SHA-256 is
 `21b1e3ed95c6c33e2a0f3464dbf145ec08395f87e4785139c983312e7dc45194`.
 
+Hosted exact-head review then exposed a Q1 store-order regression: the validator
+required lexicographically sorted manifest hashes even though configured test-
+store order defines executable `store_index`. Receipt, bundle, and population
+benchmark rosters remain positionally bound to that frozen order, while the
+presentation store table is compared as an order-independent set. A focused
+two-store fixture now proves that a valid reverse-lexicographic configured order
+is admitted for both stores. The complete Typst/report/PDF verification suite
+passed again; the thesis remains 129 A4 pages and its post-repair PDF SHA-256 is
+`b86bb58413ec235544f25a77ef14f512ffcd6af9042af8066f73472ef64a4c23`.
+
 ## Canonical Owner Impact
 
 Current thesis truth now lives in the touched Typst figure, report-data,
