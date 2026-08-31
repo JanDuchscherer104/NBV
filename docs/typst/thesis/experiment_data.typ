@@ -2089,7 +2089,10 @@
       report-sha256-value-valid(state.actor-payload),
       state.actor-contract == value("bound_contract.actor_state_contract_payload_sha256"),
     ).all(check => check)
-    if not scalar-fields-valid { false } else {
+    let leaf-presence-valid = state.actor-leaves.all(
+      leaf => type(leaf.presence) == bool,
+    )
+    if not scalar-fields-valid or not leaf-presence-valid { false } else {
       let expected-leaf-identities = q1-audit-actor-input-leaves.map(
         leaf => leaf.name + "|" + leaf.role + "|" + leaf.schema-id + "|" + leaf.source-owner + "|" + leaf.derivation + "|" + if leaf.presence { "true" } else { "false" },
       ).sorted()

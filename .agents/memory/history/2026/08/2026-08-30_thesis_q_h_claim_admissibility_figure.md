@@ -535,6 +535,14 @@ Python tests, Ruff, the report-data contract, all Typst/PDF gates, and
 `git diff --check`. The thesis remains 129 A4 pages with PDF SHA-256
 `86a7a8b9b7116311d927bc4f54c7e60e0c55e9f069b8c07706b272b274d2534c`.
 
+The final hosted rereview found one adjacent fail-open evaluation order: an
+actor-input leaf with malformed non-Boolean `presence` could reach payload
+serialization before leaf validation. State admission now proves every leaf
+presence is Boolean before any conditional branch. A string-presence fixture
+returns unavailable evidence without aborting Typst. The full report-data and
+Typst/PDF suite passes again; the thesis remains 129 A4 pages with PDF SHA-256
+`681b5107a4e53282ecd974715c551799ab49b6be9a824e2b50ce10f58008764e`.
+
 ## Canonical Owner Impact
 
 Current thesis truth now lives in the touched Typst figure, report-data,

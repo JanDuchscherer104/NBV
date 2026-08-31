@@ -2065,6 +2065,14 @@
   row.key.starts-with("states[0].actor_input_leaves["),
   row.key.ends-with(".name"),
 ).all(check => check)).map(row => row.key.replace(regex("\\.name$"), ""))
+#assert(not report-store-q1-evidence-valid(report(
+  q1-rows(),
+  q1-audit-values: mutate-sidecar-value(
+    q1-audit-values,
+    q1-state-zero-leaf-prefixes.first() + ".presence",
+    "true",
+  ),
+), "store-a"))
 #for leaf-prefix in q1-state-zero-leaf-prefixes {
   for mutation in (
     (suffix: ".member_schema_sha256", value: digest-b),
