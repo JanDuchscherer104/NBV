@@ -182,6 +182,22 @@ def main() -> None:
         primitive_point[None, :],
     )[0]
 
+    left_region = np.asarray(
+        ((0.0, 0.0, 0.0), (1.0, 0.0, 0.0), (1.0, 1.0, 0.0), (0.0, 1.0, 0.0)),
+        dtype=np.float32,
+    )
+    refined_payload = _metric_payload(
+        "left-weighted non-uniform tessellation",
+        refined_vertices,
+        refined_faces,
+        points,
+    )
+    refined_payload["left_region_outline"] = _project(left_region).tolist()
+    refined_payload["left_region_face_count"] = int(
+        np.all(refined_vertices[refined_faces][..., 0] <= 1.0, axis=1).sum()
+    )
+    refined_payload["face_count"] = int(len(refined_faces))
+
     payload = {
         "schema_version": 1,
         "evidential_role": "controlled metric-validity fixture; not an ASE result",
@@ -203,15 +219,10 @@ def main() -> None:
             coarse_faces,
             points,
         ),
-        "refined": _metric_payload(
-            "non-uniform left-half refinement",
-            refined_vertices,
-            refined_faces,
-            points,
-        ),
+        "refined": refined_payload,
         "invariant_support": "[0,2] x [0,1] planar rectangle at z=0",
         "interpretation": (
-            "The point set and planar support are identical. Only the triangle table changes; "
+            "The point set and planar support are identical. Only the tessellation changes; "
             "therefore the change in the equal-face completeness term isolates tessellation "
             "sensitivity of the implemented reduction."
         ),

@@ -263,7 +263,7 @@
     ]
   },
   "refined": {
-    "name": "non-uniform left-half refinement",
+    "name": "left-weighted non-uniform tessellation",
     "vertices": [
       [
         0.0,
@@ -1246,8 +1246,28 @@
         ],
         "squared_distance_m2": 0.04639999494552627
       }
-    ]
+    ],
+    "left_region_outline": [
+      [
+        0.0,
+        0.0
+      ],
+      [
+        1.0,
+        0.0
+      ],
+      [
+        1.34,
+        0.55
+      ],
+      [
+        0.34,
+        0.55
+      ]
+    ],
+    "left_region_face_count": 32,
+    "face_count": 40
   },
   "invariant_support": "[0,2] x [0,1] planar rectangle at z=0",
-  "interpretation": "The point set and planar support are identical. Only the triangle table changes; therefore the change in the equal-face completeness term isolates tessellation sensitivity of the implemented reduction."
+  "interpretation": "The point set and planar support are identical. Only the tessellation changes; therefore the change in the equal-face completeness term isolates tessellation sensitivity of the implemented reduction."
 }
