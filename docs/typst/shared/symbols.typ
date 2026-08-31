@@ -51,7 +51,6 @@
   (key: "vin.cand_valid", tex: "m", description: "Candidate validity indicator used by scorer diagnostics.", thesis_list: true, order: 190),
   (key: "entity.rri_e", tex: "\\mathrm{RRI}_e", description: "Target-specific Relative Reconstruction Improvement for entity e.", thesis_list: true, order: 200),
   (key: "entity.center", tex: "\\boldsymbol{p}_e^w", description: "World-space center of the selected target entity e.", thesis_list: true, order: 206),
-  (key: "entity.target_error", tex: "\\Delta_t^e", description: "Target reconstruction error at rollout step t.", thesis_list: true, order: 200),
   (key: "entity.target_rri_marginal", tex: "\\mathrm{RRI}_{t,i}^e", description: "State-relative marginal target RRI for candidate i at rollout step t.", thesis_list: true, order: 201),
   (key: "entity.target_rri_cumulative", tex: "C_t^{\\mathrm{RRI},e}", description: "Running sum of selected state-relative target RRIs.", thesis_list: true, order: 202),
   (key: "entity.target_root_gain_cumulative", tex: "J_t^e", description: "Running cumulative target gain normalized by rollout-root error.", thesis_list: true, order: 203),

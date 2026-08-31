@@ -134,12 +134,6 @@ symbols:
     description: 'World-space center of the selected target entity e.'
     thesis_list: true
     order: 206
-  entity.target_error:
-    tex: '\Delta_t^e'
-    typst: '#symb.entity.target_error'
-    description: 'Target reconstruction error at rollout step t.'
-    thesis_list: true
-    order: 200
   entity.target_rri_marginal:
     tex: '\mathrm{RRI}_{t,i}^e'
     typst: '#symb.entity.target_rri_marginal'
