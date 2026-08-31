@@ -191,8 +191,8 @@
   (name: "selected_observation_prefix_absent", role: "actor_selected_observation", schema-id: "selected_observation_prefix_none_v1", source-owner: "actor_state_contract", derivation: "qh_cf0_absence_v1", presence: false),
 )
 #let q2-decision-rule = "all_units_support_and_rowwise_abs_plus_relative_tolerance_v1"
-#let q2-certification-receipt-schema = "qh-exact-q2-certification-receipt-v5"
-#let q2-certification-schema = "qh-exact-q2-certification-v5"
+#let q2-certification-receipt-schema = "qh-exact-q2-certification-receipt-v6"
+#let q2-certification-schema = "qh-exact-q2-certification-v6"
 #let q2-selection-semantics = "balanced-hash-within-scene-target-support-strata-v2"
 #let q2-independent-unit-semantics = "ordered-store-manifest-and-scene-v1"
 #let q2-independent-unit-aggregation = "all_units_v1"
@@ -2939,6 +2939,16 @@
   }
 
   let rows = row-prefixes.map(prefix => {
+    let current-ledger-prefixes = receipt-index.rows.values().filter(row => (
+      row.key.starts-with(prefix + ".current_reward_ledger["),
+      row.key.ends-with(".candidate_index"),
+    ).all(check => check)).map(
+      row => row.key.replace(regex("\\.candidate_index$"), ""),
+    )
+    let current-ledger = current-ledger-prefixes.map(ledger-prefix => (
+      candidate: value(ledger-prefix + ".candidate_index"),
+      reward: value(ledger-prefix + ".reward"),
+    ))
     let ledger-prefixes = receipt-index.rows.values().filter(row => (
       row.key.starts-with(prefix + ".successor_reward_ledger["),
       row.key.ends-with(".candidate_index"),
@@ -2968,6 +2978,10 @@
     rollout-config: value(prefix + ".rollout_config_hash"),
     policy: value(prefix + ".selection_policy"),
     current-count: value(prefix + ".current_candidate_count"),
+    current-action-count: value(prefix + ".current_action_count"),
+    current-label-count: value(prefix + ".current_label_count"),
+    current-backup-count: value(prefix + ".current_backup_count"),
+    current-ledger: current-ledger,
     successor-candidate-count: value(prefix + ".successor_candidate_count"),
     successor-action-count: value(prefix + ".successor_action_count"),
     successor-count: value(prefix + ".successor_backup_count"),
@@ -3011,6 +3025,23 @@
       derived-absolute-error / calc.max(calc.abs(row.exact), float32-epsilon)
     } else { none }
     let successor-candidates = row.successor-ledger.map(entry => entry.candidate)
+    let current-candidates = row.current-ledger.map(entry => entry.candidate)
+    let current-cardinality-valid = if chain != none and type(
+      row.current-count,
+    ) == int and type(row.current-action-count) == int and type(
+      row.current-label-count,
+    ) == int and type(row.current-backup-count) == int {
+      row.current-count >= chain.width-min and row.current-count <= chain.width-max and row.current-action-count >= 1 and row.current-action-count <= row.current-count and row.current-label-count == row.current-action-count and row.current-backup-count == row.current-action-count
+    } else { false }
+    let current-ledger-valid = current-cardinality-valid and row.current-ledger.len() == row.current-backup-count and row.current-ledger.all(entry => if type(entry.candidate) == int {
+      entry.candidate >= 0 and entry.candidate < row.current-count and report-value-is-finite-float32(entry.reward)
+    } else { false }) and current-candidates == current-candidates.sorted() and current-candidates.dedup().len() == current-candidates.len()
+    let selected-ledger-entries = if type(row.selected-index) == int {
+      row.current-ledger.filter(entry => entry.candidate == row.selected-index)
+    } else { () }
+    let selected-current-reward = if selected-ledger-entries.len() == 1 {
+      selected-ledger-entries.first().reward
+    } else { none }
     let successor-cardinality-valid = if chain != none and type(
       row.successor-candidate-count,
     ) == int and type(row.successor-action-count) == int {
@@ -3022,8 +3053,9 @@
     let ledger-max-reward = if successor-ledger-valid {
       row.successor-ledger.map(entry => entry.reward).sorted().last()
     } else { none }
-    let transition-operands-valid = report-value-is-finite-float32(
+    let transition-operands-valid = current-ledger-valid and selected-ledger-entries.len() == 1 and q2-values-equal(
       row.immediate-reward,
+      selected-current-reward,
     ) and report-value-is-finite-float32(row.discount) and row.discount >= 0 and report-value-is-finite-float32(
       row.successor-max-reward,
     ) and report-value-is-finite-float32(ledger-max-reward) and q2-values-equal(
@@ -3034,7 +3066,7 @@
       row.discount * ledger-max-reward
     } else { none }
     let derived-exact = if report-value-is-finite-float32(discounted-successor) {
-      row.immediate-reward + discounted-successor
+      selected-current-reward + discounted-successor
     } else { none }
     let exact-identity-tolerance = if report-value-is-finite-float32(
       derived-exact,
@@ -3042,7 +3074,7 @@
       8 * float32-epsilon * calc.max(
         1.0,
         calc.max(
-          calc.abs(row.immediate-reward),
+          calc.abs(selected-current-reward),
           calc.max(calc.abs(discounted-successor), calc.abs(row.exact)),
         ),
       )
@@ -3070,7 +3102,7 @@
       successor-cardinality-valid,
       type(row.successor-count) == int and row.successor-count >= 1 and row.successor-count == row.successor-action-count and row.branch-bin == q2-candidate-branch-bin(row.successor-count),
       successor-ledger-valid and row.successor-ledger.len() == row.successor-action-count,
-      type(row.current-count) == int and row.current-count >= chain.width-min and row.current-count <= chain.width-max and type(row.selected-index) == int and row.selected-index >= 0 and row.selected-index < row.current-count,
+      current-cardinality-valid and type(row.selected-index) == int and row.selected-index >= 0 and row.selected-index < row.current-count,
       transition-operands-valid,
       type(row.terminal) == bool and row.terminal == false,
       report-value-is-finite-float32(derived-exact) and report-value-is-finite-float32(exact-identity-tolerance) and calc.abs(row.exact - derived-exact) <= exact-identity-tolerance,

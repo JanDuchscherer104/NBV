@@ -653,12 +653,13 @@ class QhExperiment:
             and headroom.get("positive_lookahead_headroom", False)
         )
         receipt = {
-            "schema_version": "qh-exact-q2-certification-receipt-v5",
+            "schema_version": "qh-exact-q2-certification-receipt-v6",
             "historical_compatibility": {
                 "qh-exact-q2-certification-receipt-v1": "inspection_only_not_promotable",
                 "qh-exact-q2-certification-receipt-v2": "inspection_only_not_promotable",
                 "qh-exact-q2-certification-receipt-v3": "inspection_only_not_promotable",
                 "qh-exact-q2-certification-receipt-v4": "inspection_only_not_promotable",
+                "qh-exact-q2-certification-receipt-v5": "inspection_only_not_promotable",
             },
             "bundle_manifest_sha256": request.bundle.manifest_sha256,
             "test_population_sha256": _json_payload_hash(request.test),

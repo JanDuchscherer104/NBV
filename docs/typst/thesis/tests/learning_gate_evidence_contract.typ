@@ -1293,6 +1293,10 @@
       typed-sidecar-row(q2-receipt-sidecar, prefix + ".successor_reward_ledger[" + str(candidate-index) + "].candidate_index", candidate-index),
       typed-sidecar-row(q2-receipt-sidecar, prefix + ".successor_reward_ledger[" + str(candidate-index) + "].reward", reward),
     )).flatten()
+    let current-ledger = (immediate-reward, 0.0, 0.0, 0.0).enumerate().map(((candidate-index, reward)) => (
+      typed-sidecar-row(q2-receipt-sidecar, prefix + ".current_reward_ledger[" + str(candidate-index) + "].candidate_index", candidate-index),
+      typed-sidecar-row(q2-receipt-sidecar, prefix + ".current_reward_ledger[" + str(candidate-index) + "].reward", reward),
+    )).flatten()
     (
       typed-sidecar-row(q2-receipt-sidecar, prefix + ".dataset_index", scene-index),
       typed-sidecar-row(q2-receipt-sidecar, prefix + ".selection_rank", scene-index),
@@ -1311,6 +1315,9 @@
       typed-sidecar-row(q2-receipt-sidecar, prefix + ".rollout_config_hash", rollout-config),
       typed-sidecar-row(q2-receipt-sidecar, prefix + ".selection_policy", "oracle-lookahead"),
       typed-sidecar-row(q2-receipt-sidecar, prefix + ".current_candidate_count", 4),
+      typed-sidecar-row(q2-receipt-sidecar, prefix + ".current_action_count", 4),
+      typed-sidecar-row(q2-receipt-sidecar, prefix + ".current_label_count", 4),
+      typed-sidecar-row(q2-receipt-sidecar, prefix + ".current_backup_count", 4),
       typed-sidecar-row(q2-receipt-sidecar, prefix + ".successor_candidate_count", 4),
       typed-sidecar-row(q2-receipt-sidecar, prefix + ".successor_action_count", 4),
       typed-sidecar-row(q2-receipt-sidecar, prefix + ".successor_backup_count", 4),
@@ -1326,7 +1333,7 @@
       typed-sidecar-row(q2-receipt-sidecar, prefix + ".relative_error", relative-error),
       typed-sidecar-row(q2-receipt-sidecar, prefix + ".tolerance", tolerance),
       typed-sidecar-row(q2-receipt-sidecar, prefix + ".within_tolerance", absolute-error <= tolerance),
-    ) + ledger
+    ) + current-ledger + ledger
   }).flatten()).flatten()
   let population-summary = (
     typed-sidecar-row(q2-receipt-sidecar, "exact_q2.population_census.candidate_branch_bins[0]", 1),
@@ -2966,6 +2973,25 @@
 #assert(not report-store-q2-evidence-valid(q2-report(
   receipt-values: q2-receipt-values.filter(
     row => not row.key.starts-with("exact_q2.factual_selected_action_exact_q2_rows[0].successor_reward_ledger"),
+  ),
+), "store-a"))
+#assert(not report-store-q2-evidence-valid(q2-report(
+  receipt-values: q2-receipt-values.filter(
+    row => not row.key.starts-with("exact_q2.factual_selected_action_exact_q2_rows[0].current_reward_ledger"),
+  ),
+), "store-a"))
+#assert(not report-store-q2-evidence-valid(q2-report(
+  receipt-values: mutate-sidecar-value(
+    q2-receipt-values,
+    "exact_q2.factual_selected_action_exact_q2_rows[0].current_reward_ledger[0].reward",
+    0.5,
+  ),
+), "store-a"))
+#assert(not report-store-q2-evidence-valid(q2-report(
+  receipt-values: mutate-sidecar-value(
+    q2-receipt-values,
+    "exact_q2.factual_selected_action_exact_q2_rows[0].current_action_count",
+    3,
   ),
 ), "store-a"))
 #assert(not report-store-q2-evidence-valid(q2-report(

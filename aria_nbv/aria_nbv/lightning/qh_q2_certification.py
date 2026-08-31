@@ -46,7 +46,7 @@ from ..data_handling.qh_data import QhBatch, QhChain, collate_qh_chains
 from ..rollouts.qh_reader import QhRolloutChainIdentity
 from .qh_module import QhLightningModule
 
-QH_EXACT_Q2_CERTIFICATION_SCHEMA_VERSION = "qh-exact-q2-certification-v5"
+QH_EXACT_Q2_CERTIFICATION_SCHEMA_VERSION = "qh-exact-q2-certification-v6"
 QH_EXACT_Q2_SELECTION_SEMANTICS = "balanced-hash-within-scene-target-support-strata-v2"
 QH_EXACT_Q2_INDEPENDENT_UNIT_SEMANTICS = "ordered-store-manifest-and-scene-v1"
 QH_EXACT_Q2_INDEPENDENT_UNIT_AGGREGATION = "all_units_v1"
@@ -486,7 +486,36 @@ class QhExactQ2Certifier:
             successor_action_width = int(successor_action.sum().item())
             successor_width = int(successor_backup.sum().item())
             selected_index = int(supervision.selected_index[0, step].item())
-            immediate_reward = float(supervision.candidate_reward[0, step, selected_index].item())
+            current_action = actor.action_mask[0, step]
+            current_label = supervision.label_mask[0, step]
+            current_backup = current_action & current_label
+            current_action_width = int(current_action.sum().item())
+            current_label_width = int(current_label.sum().item())
+            current_backup_width = int(current_backup.sum().item())
+            current_indices = torch.nonzero(current_backup, as_tuple=False).flatten().tolist()
+            if (
+                current_action_width < 1
+                or not torch.equal(current_backup, current_action)
+                or selected_index < 0
+                or selected_index >= current_width
+                or not bool(current_backup[selected_index].item())
+                or current_indices != sorted(set(current_indices))
+            ):
+                raise ValueError("Q_H exact-Q2 selected action must have complete hard-valid current-state support.")
+            current_reward_ledger = [
+                {
+                    "candidate_index": index,
+                    "reward": float(supervision.candidate_reward[0, step, index].item()),
+                }
+                for index in current_indices
+            ]
+            if len(current_reward_ledger) != current_backup_width or not all(
+                _is_finite_float32(entry["reward"]) for entry in current_reward_ledger
+            ):
+                raise ValueError("Q_H exact-Q2 current reward ledger must contain finite float32 evidence.")
+            immediate_reward = float(
+                next(entry["reward"] for entry in current_reward_ledger if entry["candidate_index"] == selected_index)
+            )
             discount = float(supervision.discount[0, step].item())
             terminal = bool(supervision.terminal[0, step].item())
             if terminal or step + 1 >= supervision.candidate_reward.shape[1]:
@@ -551,6 +580,10 @@ class QhExactQ2Certifier:
                     "rollout_config_hash": identity.rollout_config_hash,
                     "selection_policy": identity.selection_policy,
                     "current_candidate_count": current_width,
+                    "current_action_count": current_action_width,
+                    "current_label_count": current_label_width,
+                    "current_backup_count": current_backup_width,
+                    "current_reward_ledger": current_reward_ledger,
                     "successor_action_count": successor_action_width,
                     "successor_candidate_count": successor_candidate_count,
                     "successor_backup_count": successor_width,

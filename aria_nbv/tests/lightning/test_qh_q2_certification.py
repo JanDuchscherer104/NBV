@@ -101,7 +101,7 @@ def test_exact_q2_certifier_is_bounded_deterministic_and_semantically_explicit()
         "tolerance_passed": True,
     }
     assert first["learned_recursion_passed"] is True
-    assert first["schema_version"] == "qh-exact-q2-certification-v5"
+    assert first["schema_version"] == "qh-exact-q2-certification-v6"
     assert sum(row["factual_selected_action_exact_q2_row_count"] for row in first["support_stratum_aggregates"]) == 5
     assert first["evidence_semantics"] == {
         "quantity": "learned_recursive_q2_target_error_against_factual_dense_successor_control",
@@ -111,6 +111,12 @@ def test_exact_q2_certifier_is_bounded_deterministic_and_semantically_explicit()
     }
     assert {row["candidate_branch_bin"] for row in first["factual_selected_action_exact_q2_rows"]} == {"2-4"}
     for row in first["factual_selected_action_exact_q2_rows"]:
+        assert row["current_action_count"] == row["current_label_count"] == row["current_backup_count"] == 3
+        assert row["current_reward_ledger"] == [
+            {"candidate_index": 0, "reward": 0.0},
+            {"candidate_index": 1, "reward": 0.5},
+            {"candidate_index": 2, "reward": 0.0},
+        ]
         assert row["immediate_reward"] == pytest.approx(0.5)
         assert row["discount"] == pytest.approx(0.9)
         assert row["terminal"] is False
