@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from math import isfinite
 from typing import TYPE_CHECKING, Annotated, Any, ClassVar, Literal, Self, TypeAlias
 
 from pydantic import Field, FiniteFloat, field_validator, model_validator
