@@ -25,6 +25,7 @@ from ..data_handling import EfmSnippetView
 from ..targets import TargetDescriptor
 from ..utils import Console
 from ..utils.data_plotting import SnippetPlotBuilder, get_frustum_segments
+from .config import TargetShellCenterConfig, TargetShellSupportMode
 
 if TYPE_CHECKING:
     from ..rollouts.replay.state import CounterfactualRolloutResult, CounterfactualStepResult, CounterfactualTrajectory
@@ -155,6 +156,159 @@ def plot_candidate_frusta_simple(
         scene={"xaxis_title": "X (left)", "yaxis_title": "Y (up)", "zaxis_title": "Z (fwd)", "aspectmode": "data"},
     )
     return fig
+
+
+def plot_target_shell_support(
+    candidates: "CandidateSamplingResult",
+    *,
+    target_center_world: torch.Tensor,
+    config: TargetShellCenterConfig,
+    seed: int | None = None,
+    ray_length_m: float = 0.25,
+) -> go.Figure:
+    """Plot attempted target-shell centers, configured support, and gaze rays.
+
+    The support curves are derived from ``config`` rather than fitted to the
+    samples. Candidate markers retain full-shell validity, while short rays
+    expose the generated camera forward axes in world coordinates.
+    """
+
+    target = target_center_world.detach().cpu().numpy().reshape(3).astype(float, copy=False)
+    actor = candidates.reference_pose.t.detach().cpu().numpy().reshape(3).astype(float, copy=False)
+    actor_delta = actor - target
+    actor_distance = float(np.linalg.norm(actor_delta))
+    if actor_distance < 1e-8:
+        raise ValueError("target-shell plotting requires distinct target and reference centers.")
+    actor_direction = actor_delta / actor_distance
+    world_up = np.array([0.0, 0.0, 1.0])
+
+    def support_directions() -> np.ndarray:
+        if config.support_mode is TargetShellSupportMode.ACTOR_FACING_CAP:
+            assert config.cap_half_angle_deg is not None
+            basis_a = np.cross(world_up, actor_direction)
+            if np.linalg.norm(basis_a) < 1e-8:
+                basis_a = np.array([1.0, 0.0, 0.0])
+            basis_a /= np.linalg.norm(basis_a)
+            basis_b = np.cross(actor_direction, basis_a)
+            phi = np.linspace(-np.pi, np.pi, num=181)
+            theta = np.deg2rad(config.cap_half_angle_deg)
+            return np.cos(theta) * actor_direction[None, :] + np.sin(theta) * (
+                np.cos(phi)[:, None] * basis_a[None, :] + np.sin(phi)[:, None] * basis_b[None, :]
+            )
+
+        horizontal = actor_delta - np.dot(actor_delta, world_up) * world_up
+        if np.linalg.norm(horizontal) < 1e-8:
+            raise ValueError("target-shell angular plotting requires a nonzero horizontal target-to-actor bearing.")
+        forward = horizontal / np.linalg.norm(horizontal)
+        lateral = np.cross(world_up, forward)
+        az_min = -np.deg2rad(config.azimuth_half_width_deg)
+        az_max = np.deg2rad(config.azimuth_half_width_deg)
+        el_min = np.deg2rad(config.elevation_min_deg)
+        el_max = np.deg2rad(config.elevation_max_deg)
+        az_sweep = np.linspace(az_min, az_max, num=121)
+        el_sweep = np.linspace(el_min, el_max, num=61)
+
+        def directions(azimuth: np.ndarray, elevation: np.ndarray) -> np.ndarray:
+            horizontal_dirs = np.cos(azimuth)[:, None] * forward[None, :] + np.sin(azimuth)[:, None] * lateral[None, :]
+            return np.cos(elevation)[:, None] * horizontal_dirs + np.sin(elevation)[:, None] * world_up[None, :]
+
+        edges = (
+            directions(az_sweep, np.full_like(az_sweep, el_min)),
+            directions(az_sweep, np.full_like(az_sweep, el_max)),
+            directions(np.full_like(el_sweep, az_min), el_sweep),
+            directions(np.full_like(el_sweep, az_max), el_sweep),
+        )
+        separator = np.full((1, 3), np.nan)
+        return np.concatenate([np.concatenate((edge, separator), axis=0) for edge in edges], axis=0)
+
+    centers = candidates.shell_poses.t.detach().cpu().numpy().reshape(-1, 3)
+    directions = candidates.shell_poses.R[..., :, 2].detach().cpu().numpy().reshape(-1, 3)
+    valid = candidates.mask_valid.detach().cpu().numpy().reshape(-1).astype(bool, copy=False)
+    components = np.asarray(candidates.component_name or tuple("target_shell" for _ in range(centers.shape[0])))
+    figure = go.Figure()
+    for is_valid, symbol, color, label in (
+        (True, "circle", "#2E91E5", "valid candidates"),
+        (False, "x", "#E15F99", "rejected candidates"),
+    ):
+        mask = valid == is_valid
+        if not mask.any():
+            continue
+        figure.add_trace(
+            go.Scatter3d(
+                x=centers[mask, 0],
+                y=centers[mask, 1],
+                z=centers[mask, 2],
+                mode="markers",
+                name=label,
+                marker={"size": 4, "symbol": symbol, "color": color, "opacity": 0.85},
+                customdata=components[mask],
+                hovertemplate="component=%{customdata}<br>x=%{x:.3f}<br>y=%{y:.3f}<br>z=%{z:.3f}<extra></extra>",
+            )
+        )
+
+    ray_rows: list[np.ndarray] = []
+    for center, direction in zip(centers, directions, strict=True):
+        ray_rows.extend((center, center + float(ray_length_m) * direction, np.full(3, np.nan)))
+    rays = np.asarray(ray_rows)
+    figure.add_trace(
+        go.Scatter3d(
+            x=rays[:, 0],
+            y=rays[:, 1],
+            z=rays[:, 2],
+            mode="lines",
+            name="camera forward axes",
+            line={"color": "rgba(180,180,180,0.55)", "width": 2},
+            hoverinfo="skip",
+        )
+    )
+
+    boundary = support_directions()
+    for radius, label in (
+        (config.radius_min_m, "configured inner support"),
+        (config.radius_max_m, "configured outer support"),
+    ):
+        points = target[None, :] + float(radius) * boundary
+        figure.add_trace(
+            go.Scatter3d(
+                x=points[:, 0],
+                y=points[:, 1],
+                z=points[:, 2],
+                mode="lines",
+                name=label,
+                line={"color": "#FFA15A", "width": 4, "dash": "dot"},
+                hoverinfo="skip",
+            )
+        )
+    figure.add_trace(
+        go.Scatter3d(
+            x=[target[0], actor[0]],
+            y=[target[1], actor[1]],
+            z=[target[2], actor[2]],
+            mode="markers+text",
+            name="target and actor",
+            text=["target", "actor/reference"],
+            textposition="top center",
+            marker={"size": 8, "color": ["#FECB52", "#00CC96"], "symbol": ["diamond", "cross"]},
+            hoverinfo="text",
+        )
+    )
+    seed_text = "unspecified" if seed is None else str(seed)
+    figure.update_layout(
+        title=(
+            f"Target-shell support · {config.support_mode.value} · attempted={centers.shape[0]} · "
+            f"valid={int(valid.sum())} · seed={seed_text}"
+        ),
+        scene={
+            "xaxis_title": "world x / m",
+            "yaxis_title": "world y / m",
+            "zaxis_title": "world z / m",
+            "aspectmode": "data",
+        },
+        legend_title="candidate evidence",
+        height=720,
+        margin={"l": 20, "r": 20, "t": 70, "b": 20},
+    )
+    return figure
 
 
 class CandidatePlotBuilder(SnippetPlotBuilder):

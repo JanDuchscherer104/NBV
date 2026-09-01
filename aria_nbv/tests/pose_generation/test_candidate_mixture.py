@@ -35,6 +35,8 @@ from aria_nbv.pose_generation.config import (
     PowerSphericalConfig,
     SampledCenterConfig,
     TargetOrbitCenterConfig,
+    TargetShellCenterConfig,
+    TargetShellSupportMode,
     UniformSphereConfig,
     sphere_distribution_from_legacy,
 )
@@ -1358,6 +1360,43 @@ def test_target_orbit_attempts_both_sides_at_constant_world_horizontal_standoff(
     )
     assert result.extras["view_jitter_is_bounded"].all()
     assert torch.any(result.extras["view_jitter_yaw_deg"].abs() > 1e-3)
+
+
+def test_target_shell_crosses_one_center_table_with_multiple_gazes_and_stable_provenance() -> None:
+    center = TargetShellCenterConfig(
+        radius_min_m=0.8,
+        radius_max_m=1.2,
+        support_mode=TargetShellSupportMode.ANGULAR_BOX,
+        azimuth_half_width_deg=90.0,
+        elevation_min_deg=0.0,
+        elevation_max_deg=40.0,
+    )
+    jitter = BoxViewJitterConfig(yaw_half_width_deg=60.0, pitch_half_width_deg=30.0)
+    cfg = CandidateMixtureViewGeneratorConfig(
+        base=_base_cfg(),
+        components=[
+            CandidateMixtureComponentConfig(
+                name="target_shell",
+                count=12,
+                center=center,
+                gazes=(
+                    CandidateGazeConfig(name="target", mode=ViewDirectionMode.TARGET_POINT, jitter=jitter),
+                    CandidateGazeConfig(name="towards", mode=ViewDirectionMode.RADIAL_TOWARDS, jitter=jitter),
+                ),
+            )
+        ],
+    )
+    reference = PoseTW.from_Rt(torch.eye(3), torch.tensor([2.0, 0.0, 0.0]))
+
+    result = _run_generate(cfg, descriptor=_descriptor(), reference_pose=reference)
+
+    assert result.shell_poses.t.shape == (24, 3)
+    assert torch.equal(result.shell_poses.t[:12], result.shell_poses.t[12:])
+    assert result.position_id.tolist() == [candidate_position_id(CandidatePositionMode.TARGET_SHELL)] * 24
+    assert result.position_pair_id is not None
+    assert torch.equal(result.position_pair_id[:12], result.position_pair_id[12:])
+    assert result.gaze_variant_id is not None
+    assert result.gaze_variant_id.tolist() == [0] * 12 + [1] * 12
 
 
 def test_target_orbit_interleaves_reordered_angle_bank_for_small_component() -> None:

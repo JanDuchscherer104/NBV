@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from enum import StrEnum
+from math import isfinite
 from typing import TYPE_CHECKING, Annotated, Any, ClassVar, Literal, Self, TypeAlias
 
 from pydantic import Field, FiniteFloat, field_validator, model_validator
@@ -164,8 +166,65 @@ class TargetOrbitCenterConfig(BaseConfig):
         return values
 
 
+class TargetShellSupportMode(StrEnum):
+    """Target-relative directional support used by `TargetShellCenterConfig`."""
+
+    ANGULAR_BOX = "angular_box"
+    UPPER_ANGULAR_BOX = "upper_angular_box"
+    ACTOR_FACING_CAP = "actor_facing_cap"
+
+
+class TargetShellCenterConfig(BaseConfig):
+    """Configure an opt-in target-centric spherical-shell center family."""
+
+    kind: Literal["target_shell"] = "target_shell"
+    """Discriminator for target-shell authoring; provenance is target shell."""
+
+    radius_min_m: float = Field(gt=0.0)
+    """Minimum target-to-candidate radius in metres; equal bounds are valid."""
+
+    radius_max_m: float = Field(gt=0.0)
+    """Maximum target-to-candidate radius in metres; equal bounds are valid."""
+
+    support_mode: TargetShellSupportMode
+    """Directional support measure used around the actor-visible target center."""
+
+    azimuth_half_width_deg: float = Field(default=180.0, ge=0.0, le=180.0)
+    """Signed half-width about the target-to-actor horizontal bearing, in degrees."""
+
+    elevation_min_deg: float = Field(default=-90.0, ge=-90.0, le=90.0)
+    """Minimum world-horizontal elevation in the target-aligned frame, in degrees."""
+
+    elevation_max_deg: float = Field(default=90.0, ge=-90.0, le=90.0)
+    """Maximum world-horizontal elevation in the target-aligned frame, in degrees."""
+
+    cap_half_angle_deg: float | None = Field(default=None, gt=0.0, le=180.0)
+    """Actor-facing cone half-angle in degrees; required only for cap support."""
+
+    @model_validator(mode="after")
+    def _validate_support(self) -> Self:
+        if self.radius_min_m > self.radius_max_m:
+            raise ValueError("radius_min_m must not exceed radius_max_m")
+        if self.elevation_min_deg > self.elevation_max_deg:
+            raise ValueError("elevation_min_deg must not exceed elevation_max_deg")
+        if self.support_mode is TargetShellSupportMode.UPPER_ANGULAR_BOX and self.elevation_min_deg < 0.0:
+            raise ValueError("upper_angular_box requires elevation_min_deg >= 0")
+        if self.support_mode is TargetShellSupportMode.ACTOR_FACING_CAP:
+            if self.cap_half_angle_deg is None:
+                raise ValueError("actor_facing_cap requires cap_half_angle_deg")
+            if (
+                self.azimuth_half_width_deg != 180.0
+                or self.elevation_min_deg != -90.0
+                or self.elevation_max_deg != 90.0
+            ):
+                raise ValueError("actor_facing_cap requires full-range angular-box fields")
+        elif self.cap_half_angle_deg is not None:
+            raise ValueError("cap_half_angle_deg is valid only for actor_facing_cap")
+        return self
+
+
 CenterConfig = Annotated[
-    SampledCenterConfig | TargetOrbitCenterConfig,
+    SampledCenterConfig | TargetOrbitCenterConfig | TargetShellCenterConfig,
     Field(discriminator="kind"),
 ]
 """Discriminated center-family authoring accepted by mixed generation."""
@@ -312,6 +371,8 @@ __all__ = [
     "SphericalViewJitterConfig",
     "SphereDistributionConfig",
     "TargetOrbitCenterConfig",
+    "TargetShellCenterConfig",
+    "TargetShellSupportMode",
     "UniformSphereConfig",
     "ViewJitterConfig",
     "sphere_distribution_from_legacy",

@@ -9,12 +9,14 @@ import pytest
 import torch
 from efm3d.aria import CameraTW, PoseTW
 
+from aria_nbv.pose_generation.config import TargetShellCenterConfig, TargetShellSupportMode
 from aria_nbv.pose_generation.plotting import (
     plot_candidate_centers_simple,
     plot_candidate_frusta_simple,
     plot_paired_gaze_support,
     plot_position_sphere,
     plot_proposal_sequence_support,
+    plot_target_shell_support,
     plot_view_jitter_support,
 )
 from aria_nbv.pose_generation.types import CandidateSamplingResult
@@ -76,6 +78,41 @@ def test_plot_candidate_frusta_simple() -> None:
     candidates = _make_candidates(num=2)
     fig = plot_candidate_frusta_simple(candidates, scale=0.5, max_frustums=2)
     assert isinstance(fig, go.Figure)
+
+
+def test_plot_target_shell_support_exposes_boundary_validity_and_gaze() -> None:
+    candidates = _make_candidates(num=3)
+    candidates.mask_valid = torch.tensor([True, False, True])
+    candidates.component_name = ("target_shell",) * 3
+    config = TargetShellCenterConfig(
+        radius_min_m=0.6,
+        radius_max_m=1.2,
+        support_mode=TargetShellSupportMode.UPPER_ANGULAR_BOX,
+        azimuth_half_width_deg=100.0,
+        elevation_min_deg=0.0,
+        elevation_max_deg=35.0,
+    )
+
+    fig = plot_target_shell_support(
+        candidates,
+        target_center_world=torch.tensor([-1.0, 0.0, 0.0]),
+        config=config,
+        seed=17,
+    )
+
+    assert isinstance(fig, go.Figure)
+    assert {trace.name for trace in fig.data} == {
+        "valid candidates",
+        "rejected candidates",
+        "camera forward axes",
+        "configured inner support",
+        "configured outer support",
+        "target and actor",
+    }
+    assert "upper_angular_box" in fig.layout.title.text
+    assert "attempted=3" in fig.layout.title.text
+    assert "valid=2" in fig.layout.title.text
+    assert "seed=17" in fig.layout.title.text
 
 
 def test_plot_view_jitter_support_shows_components_validity_and_bounds() -> None:

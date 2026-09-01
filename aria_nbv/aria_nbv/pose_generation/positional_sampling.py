@@ -40,6 +40,8 @@ from .config import (
     PowerSphericalConfig,
     SampledCenterConfig,
     TargetOrbitCenterConfig,
+    TargetShellCenterConfig,
+    TargetShellSupportMode,
     UniformSphereConfig,
 )
 from .geometry import DEVICE_FWD
@@ -184,6 +186,70 @@ class PositionSampler:
         offsets_ref = reference_pose.inverse().rotate(offsets_world)
         return centers_world, offsets_ref
 
+    def _sample_target_shell(
+        self,
+        reference_pose: PoseTW,
+        n_draw: int,
+        target_center_world: torch.Tensor | None,
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        r"""Sample target-relative centers with the configured solid-angle measure.
+
+        Angular boxes use uniform azimuth and uniform ``sin(elevation)`` in a
+        world-Z-up target-to-actor frame. Actor-facing caps use uniform cosine
+        about the true three-dimensional target-to-actor direction. Radius is
+        uniform in metres for every support mode.
+        """
+
+        cfg = self.config
+        assert isinstance(cfg, TargetShellCenterConfig)
+        root_world = reference_pose.t.reshape(3)
+        target_world = self._target_point_world(target_center_world)
+        actor_delta = root_world - target_world
+        actor_distance = torch.linalg.norm(actor_delta)
+        if actor_distance < 1e-6:
+            raise ValueError("target_shell requires distinct target and reference centers.")
+        actor_direction = actor_delta / actor_distance
+        world_up = world_up_tensor(device=self.device, dtype=torch.float32)
+
+        if cfg.support_mode is TargetShellSupportMode.ACTOR_FACING_CAP:
+            assert cfg.cap_half_angle_deg is not None
+            cos_min = torch.cos(torch.tensor(radians(cfg.cap_half_angle_deg), device=self.device))
+            cos_theta = cos_min + torch.rand(n_draw, device=self.device) * (1.0 - cos_min)
+            sin_theta = torch.sqrt(torch.clamp(1.0 - cos_theta.square(), min=0.0))
+            phi = (torch.rand(n_draw, device=self.device) * 2.0 - 1.0) * torch.pi
+            basis_a = torch.cross(world_up, actor_direction, dim=0)
+            if torch.linalg.norm(basis_a) < 1e-6:
+                basis_a = torch.tensor([1.0, 0.0, 0.0], device=self.device)
+            basis_a = basis_a / basis_a.norm().clamp_min(1e-8)
+            basis_b = torch.cross(actor_direction, basis_a, dim=0)
+            directions_world = cos_theta[:, None] * actor_direction[None, :] + sin_theta[:, None] * (
+                torch.cos(phi)[:, None] * basis_a[None, :] + torch.sin(phi)[:, None] * basis_b[None, :]
+            )
+        else:
+            horizontal = actor_delta - (actor_delta @ world_up) * world_up
+            if torch.linalg.norm(horizontal) < 1e-6:
+                raise ValueError("target_shell angular support requires a nonzero horizontal target-to-actor bearing.")
+            forward = horizontal / horizontal.norm()
+            lateral = torch.cross(world_up, forward, dim=0)
+            azimuth_limit = radians(cfg.azimuth_half_width_deg)
+            azimuth = (torch.rand(n_draw, device=self.device) * 2.0 - 1.0) * azimuth_limit
+            sin_elevation_min = torch.sin(torch.tensor(radians(cfg.elevation_min_deg), device=self.device))
+            sin_elevation_max = torch.sin(torch.tensor(radians(cfg.elevation_max_deg), device=self.device))
+            sin_elevation = sin_elevation_min + torch.rand(n_draw, device=self.device) * (
+                sin_elevation_max - sin_elevation_min
+            )
+            cos_elevation = torch.sqrt(torch.clamp(1.0 - sin_elevation.square(), min=0.0))
+            directions_world = (
+                cos_elevation[:, None]
+                * (torch.cos(azimuth)[:, None] * forward[None, :] + torch.sin(azimuth)[:, None] * lateral[None, :])
+                + sin_elevation[:, None] * world_up[None, :]
+            )
+
+        radii = torch.empty(n_draw, device=self.device).uniform_(cfg.radius_min_m, cfg.radius_max_m)
+        centers_world = target_world[None, :] + radii[:, None] * directions_world
+        offsets_ref = reference_pose.inverse().transform(centers_world)
+        return centers_world, offsets_ref
+
     def _direction_around(self, base: torch.Tensor, noise: torch.Tensor, *, spread: float) -> torch.Tensor:
         """Blend a base direction with orthogonal noise in the reference frame."""
 
@@ -221,6 +287,8 @@ class PositionSampler:
                 return self._direction_around(target_dir, dirs_rig, spread=0.4)
             case CandidatePositionMode.TARGET_ORBIT:
                 raise RuntimeError("target_orbit centers must be sampled by _sample_target_orbit.")
+            case CandidatePositionMode.TARGET_SHELL:
+                raise RuntimeError("target_shell centers must be sampled by _sample_target_shell.")
             case CandidatePositionMode.LATERAL_TARGET_BYPASS:
                 target_dir = self._target_direction_ref(reference_pose, target_center_world).to(
                     device=dirs_rig.device, dtype=dirs_rig.dtype
@@ -257,6 +325,8 @@ class PositionSampler:
 
         if isinstance(self.config, TargetOrbitCenterConfig):
             return self._sample_target_orbit(reference_pose, n_draw, target_center_world)
+        if isinstance(self.config, TargetShellCenterConfig):
+            return self._sample_target_shell(reference_pose, n_draw, target_center_world)
 
         cfg = self.config
         assert isinstance(cfg, SampledCenterConfig)
@@ -304,6 +374,8 @@ def _position_mode(config: CenterConfig) -> CandidatePositionMode:
             return CandidatePositionMode(mode)
         case TargetOrbitCenterConfig():
             return CandidatePositionMode.TARGET_ORBIT
+        case TargetShellCenterConfig():
+            return CandidatePositionMode.TARGET_SHELL
         case _:
             raise TypeError(f"unsupported center configuration: {type(config).__name__}")
 
