@@ -32,6 +32,7 @@ Theory:
 
 from __future__ import annotations
 
+from copy import deepcopy
 from dataclasses import dataclass
 from typing import Any, Self
 
@@ -530,7 +531,7 @@ class CandidateMixtureViewGenerator:
     """
 
     def __init__(self, config: CandidateMixtureViewGeneratorConfig) -> None:
-        self.config = config
+        self.config = deepcopy(config)
         self._mesh_query: PreparedMeshQuery | None = None
         self._component_runtimes = tuple(
             _ComponentRuntime(

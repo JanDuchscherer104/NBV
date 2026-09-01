@@ -41,6 +41,17 @@ from aria_nbv.pose_generation.config import (
 from aria_nbv.targets import TargetDescriptor
 from aria_nbv.utils.fingerprints import stable_config_hash
 from aria_nbv.utils.frames import world_up_tensor
+from aria_nbv.utils.seeding import derive_stable_seed
+
+
+def test_stable_seed_rejects_unsupported_and_nonfinite_parts() -> None:
+    assert derive_stable_seed("component", 3, (True, None, 1.5)) == derive_stable_seed(
+        "component", 3, (True, None, 1.5)
+    )
+    with pytest.raises(TypeError):
+        derive_stable_seed(object())  # type: ignore[arg-type]
+    with pytest.raises(TypeError):
+        derive_stable_seed(float("nan"))
 
 
 def _identity_pose(device: torch.device | str = "cpu") -> PoseTW:
@@ -1412,3 +1423,13 @@ def _descriptor(center: tuple[float, float, float] = (0.0, 0.0, 0.0)) -> TargetD
         extents_m=(0.5, 0.5, 0.5),
         relative_pose_reference_object=(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, *center),
     )
+
+
+def test_mixture_runtime_snapshots_mutable_authoring_tree() -> None:
+    config = CandidateMixtureViewGeneratorConfig()
+    runtime = CandidateMixtureViewGenerator(config)
+    original_name = runtime.config.components[0].name
+    config.components[0].name = "mutated-after-setup"
+    config.components[0].count = 1
+    assert runtime.config.components[0].name == original_name
+    assert runtime.config.components[0].count == 24

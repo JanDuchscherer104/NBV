@@ -293,9 +293,13 @@ class PositionSampler:
 
 
 def _position_mode(config: CenterConfig) -> CandidatePositionMode:
-    if isinstance(config, SampledCenterConfig):
-        return CandidatePositionMode(config.mode)
-    return CandidatePositionMode.TARGET_ORBIT
+    match config:
+        case SampledCenterConfig(mode=mode):
+            return CandidatePositionMode(mode)
+        case TargetOrbitCenterConfig():
+            return CandidatePositionMode.TARGET_ORBIT
+        case _:
+            raise TypeError(f"unsupported center configuration: {type(config).__name__}")
 
 
 __all__ = [
