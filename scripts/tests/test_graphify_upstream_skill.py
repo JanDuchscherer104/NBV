@@ -75,7 +75,9 @@ class UpstreamGraphifySkillTests(unittest.TestCase):
         self.assertIn("references/graphify-aria-boundary.md", context)
         self.assertIn("Graphify 0.9.48 writes `graphify-out/needs_update`", boundary)
         self.assertRegex(boundary, r"Remove\s+`graphify-out/needs_update` only after")
-        self.assertIn("leave it after partial, failed, or unverified work", boundary)
+        self.assertRegex(
+            boundary, r"Leave\s+it after partial, failed, or unverified work"
+        )
 
     def test_hook_boundary_preserves_upstream_bytes_and_runtime_caveat(self) -> None:
         hooks = (SKILL_ROOT / "references/hooks.md").read_text(encoding="utf-8")
@@ -85,7 +87,7 @@ class UpstreamGraphifySkillTests(unittest.TestCase):
         self.assertIn(
             "`graphify-maintain` completion and pre-commit ownership", boundary
         )
-        self.assertIn("do not refresh semantic inputs manually", boundary)
+        self.assertIn("an active Codex task uses the approved host-agent route", boundary)
         self.assertNotIn("refresh those semantic inputs explicitly", boundary)
         self.assertNotIn("marks changed documents", boundary)
 
@@ -99,7 +101,7 @@ class UpstreamGraphifySkillTests(unittest.TestCase):
         self.assertIn("## Graphify And Context7 Plugin", root_guidance)
         self.assertIn("scripts/setup_worktree_env.sh", boundary)
         self.assertIn("CODEX_SOURCE_WORKSPACE_PATH", boundary)
-        self.assertIn("upstream incremental maintenance", boundary)
+        self.assertRegex(boundary, r"never invokes upstream semantic\s+extraction")
         self.assertIn("Models query the admitted graph", boundary)
         self.assertIn("## Branch Index", context)
         self.assertNotIn("## Graphify Branch", context)
