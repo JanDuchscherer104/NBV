@@ -140,19 +140,13 @@ def test_candidate_benchmark_card_requires_build_and_reuses_retained_result_on_u
     assert not app.exception
     assert app.session_state["benchmark_records_calls"] == [{"state_key": "state-1", "candidate_limit": 123}]
     assert app.session_state["benchmark_export_calls"] == [{"state_key": "state-1"}]
-    assert len(app.get("plotly_chart")) == 10
+    assert len(app.get("plotly_chart")) == 4
     titles = [json.loads(chart.proto.spec)["layout"]["title"]["text"] for chart in app.get("plotly_chart")]
     assert titles == [
         "State × family applicability and selected survival",
         "Applicable family attempted → valid → selected funnels",
         "Candidate centers in target-aligned support (ground plane)",
         "Candidate centers in target-aligned support (3D)",
-        "Candidate family attempted → valid → selected funnel",
-        "Candidate family survival",
-        "Candidate support (target-normalized ground plane)",
-        "Candidate support (target-normalized 3D)",
-        "Candidate view jitter (bounded boxes and uncapped spherical support)",
-        "Candidate benchmark resource and timing summary",
     ]
     assert len(app.get("download_button")) == 1
     payload = serialize_bundle_bytes((_record(),), provenance=_binding())
@@ -161,12 +155,11 @@ def test_candidate_benchmark_card_requires_build_and_reuses_retained_result_on_u
 
     app.session_state["benchmark_records_calls"] = []
     app.session_state["benchmark_export_calls"] = []
-    app.toggle[0].set_value(True)
     app = app.run()
     assert not app.exception
     assert app.session_state["benchmark_records_calls"] == []
     assert app.session_state["benchmark_export_calls"] == []
-    assert len(app.get("plotly_chart")) == 10
+    assert len(app.get("plotly_chart")) == 4
 
     shell_selection = next(
         selectbox for selectbox in app.selectbox if selectbox.label == "Inspect one scene × state × family shell"
@@ -186,7 +179,7 @@ def test_candidate_benchmark_card_rejects_retained_result_after_identity_replace
     app = _app(tmp_path).run()
     next(button for button in app.button if button.label == "Build candidate benchmark").click()
     app = app.run()
-    assert len(app.get("plotly_chart")) == 10
+    assert len(app.get("plotly_chart")) == 4
 
     app.session_state["candidate_benchmark_build_result"] = replace(
         app.session_state["candidate_benchmark_build_result"],

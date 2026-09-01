@@ -11,7 +11,7 @@ from collections.abc import Iterator
 from dataclasses import asdict, dataclass, field, is_dataclass
 from enum import Enum
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import torch
 
@@ -24,6 +24,10 @@ from ..rendering.candidate_pointclouds import CandidatePointClouds
 from ..rri_metrics.rri import RriResult
 from ..vin.types import VinPrediction
 from ..vin.types.diagnostics import VinForwardDiagnostics
+from .candidate_evidence import CandidateEvidenceView, LiveCandidateEvidenceRequest
+
+if TYPE_CHECKING:
+    from ..pose_generation import CandidateSet
 
 
 def _to_jsonable(value: Any) -> Any:
@@ -96,6 +100,15 @@ class CandidatesCache:
 
     candidates: CandidateSamplingResult | None = None
     """Candidate poses, validity masks, and provenance aligned to the finite shell ``N``."""
+
+    evidence: CandidateEvidenceView | None = None
+    """Canonical immutable evidence retained when a truthful ``CandidateSet`` is supplied."""
+
+    evidence_request: LiveCandidateEvidenceRequest | None = None
+    """Complete external-composition identity behind :attr:`evidence`."""
+
+    evidence_candidate_set: CandidateSet | None = None
+    """Exact immutable scientific output behind :attr:`evidence`; compared by object identity."""
 
 
 @dataclass(slots=True)
