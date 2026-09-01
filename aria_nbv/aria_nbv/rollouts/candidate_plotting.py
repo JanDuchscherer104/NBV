@@ -177,28 +177,20 @@ def candidate_support_plot_models(
     ground.update_yaxes(constrain="domain")
     _annotate_missing_frame(ground, snapshots)
 
-    support = go.Figure()
-    if not frame.empty:
-        support.add_trace(
-            go.Scatter3d(
-                x=frame.x,
-                y=frame.y,
-                z=frame.z,
-                mode="markers",
-                name="candidate support",
-                customdata=frame[["candidate_id", "family", "status", "lineage"]],
-                hovertemplate=(
-                    "candidate=%{customdata[0]}<br>family=%{customdata[1]}"
-                    "<br>status=%{customdata[2]}<br>lineage=%{customdata[3]}<extra></extra>"
-                ),
-            )
-        )
-    if not frame.empty:
-        support.data[0].marker = {
-            "symbol": frame["status"]
-            .map({"selected": "diamond", "action": "circle", "valid": "circle", "invalid": "x"})
-            .tolist()
-        }
+    support = px.scatter_3d(
+        frame,
+        x="x",
+        y="y",
+        z="z",
+        color="family" if not frame.empty else None,
+        symbol="status" if not frame.empty else None,
+        hover_data=["candidate_id", "state", "lineage"] if not frame.empty else None,
+        title=support_title,
+        template="plotly",
+        color_discrete_sequence=px.colors.qualitative.Plotly,
+        labels={"x": "", "y": "", "z": ""},
+    )
+    support.update_traces(marker={"size": 5, "opacity": 0.9})
     if any(snapshot.projection_frame_availability is CandidateFactAvailability.AVAILABLE for snapshot in snapshots):
         support.add_trace(
             go.Scatter3d(
@@ -222,10 +214,39 @@ def candidate_support_plot_models(
             )
         )
     support.update_layout(
-        title=support_title,
-        template="plotly",
         scene_aspectmode="data",
-        scene_camera={"eye": {"x": 1.5, "y": 1.5, "z": 1.2}},
+        scene_camera={
+            "center": {"x": 0.0, "y": 0.0, "z": 0.14},
+            "eye": {"x": 1.2, "y": 1.2, "z": 0.9},
+        },
+        scene_domain={"x": [0.03, 0.82], "y": [0.12, 0.97]},
+        annotations=[
+            {
+                "text": "forward / d",
+                "x": 0.60,
+                "y": 0.10,
+                "xref": "paper",
+                "yref": "paper",
+                "showarrow": False,
+            },
+            {
+                "text": "lateral / d",
+                "x": 0.23,
+                "y": 0.10,
+                "xref": "paper",
+                "yref": "paper",
+                "showarrow": False,
+            },
+            {
+                "text": "up / d",
+                "textangle": -90,
+                "x": 0.13,
+                "y": 0.48,
+                "xref": "paper",
+                "yref": "paper",
+                "showarrow": False,
+            },
+        ],
     )
     _annotate_missing_frame(support, snapshots)
 
@@ -240,6 +261,7 @@ def candidate_support_plot_models(
         template="plotly",
         color_discrete_sequence=px.colors.qualitative.Plotly,
     )
+    survival.update_traces(texttemplate="%{y}", textposition="outside", cliponaxis=False)
 
     jitter_rows = [
         {
@@ -299,19 +321,34 @@ def candidate_support_plot_models(
             )
             for availability in CandidateFactAvailability
         }
-        availability_summary = ", ".join(
-            f"{availability.value.replace('_', '-')} for {count} attempted rows"
+        availability_summary = "<br>".join(
+            {
+                CandidateFactAvailability.LEGACY_MISSING: (
+                    f"This legacy rollout does not contain view-jitter evidence for {count} attempted candidates."
+                ),
+                CandidateFactAvailability.UNAVAILABLE: (
+                    f"View-jitter evidence is unavailable for {count} attempted candidates."
+                ),
+                CandidateFactAvailability.PARTIAL: (
+                    f"View-jitter evidence is incomplete for {count} attempted candidates."
+                ),
+                CandidateFactAvailability.AVAILABLE: (
+                    f"View-jitter evidence is available for {count} attempted candidates."
+                ),
+            }[availability]
             for availability, count in availability_counts.items()
             if count
         )
         jitter.add_annotation(
-            text=f"View-jitter evidence {availability_summary or 'unavailable: no attempted rows'}",
+            text=availability_summary or "No attempted candidates are available for view-jitter inspection.",
             x=0.5,
             y=0.5,
             xref="paper",
             yref="paper",
             showarrow=False,
         )
+        jitter.update_xaxes(visible=False, showgrid=False, zeroline=False)
+        jitter.update_yaxes(visible=False, showgrid=False, zeroline=False)
     if not snapshots:
         for figure in (ground, support, survival, jitter):
             figure.add_annotation(
@@ -322,6 +359,13 @@ def candidate_support_plot_models(
                 yref="paper",
                 showarrow=False,
             )
+    for figure in (ground, support, survival, jitter):
+        figure.update_layout(
+            title_x=0.5,
+            title_xanchor="center",
+            margin={"l": 90, "r": 90, "t": 100, "b": 80},
+        )
+    support.update_layout(margin={"l": 90, "r": 180, "t": 100, "b": 130})
 
     return (
         _model("candidate-ground-support", ground_title, ground, snapshots, context, uses_webgl=False),

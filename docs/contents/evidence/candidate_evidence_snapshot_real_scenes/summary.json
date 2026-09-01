@@ -3,10 +3,10 @@
   "attempted": 120,
   "hard_valid": 67,
   "plot_ids": [
-    "candidate-ground-support:6328211b0e98da86",
-    "candidate-support-3d:e2fc2cf5a07ce0e8",
-    "candidate-family-survival:75736158edf98016",
-    "candidate-view-jitter:3b787aa2db7fab90"
+    "candidate-ground-support:ac46af1eb1c9d3ff",
+    "candidate-support-3d:469c45c688ffb52a",
+    "candidate-family-survival:529ec515e364af1b",
+    "candidate-view-jitter:e83fc994d7a19782"
   ],
   "schema_revision": "candidate-evidence-real-scene-summary-v1",
   "selected": 2,

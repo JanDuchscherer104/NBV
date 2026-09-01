@@ -21,7 +21,7 @@ action, and selected rows. Titles retain the common rollout horizon and the
 factual step/budget. Family names from these older stores are explicitly
 legacy display labels; they are not upgraded to canonical semantic family IDs.
 The old stores also predate persisted view-jitter evidence, so the jitter plot
-truthfully remains empty rather than inventing zero residuals or a bounded box.
+reports that absence rather than inventing zero residuals or a bounded box.
 
 - [`candidate-ground-support.html`](candidate-ground-support.html): normalized
   target-aligned ground support with action gaze arrows.

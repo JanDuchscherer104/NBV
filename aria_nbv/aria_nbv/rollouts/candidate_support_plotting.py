@@ -179,6 +179,7 @@ def _snapshot_support_figures(
             incomplete_with_points,
             show_view_directions=show_view_directions,
         )
+    _replace_legacy_support_trace(figures[1], records)
     survival_rows = [
         {"family": family.family, "stage": stage, "count": count}
         for record in records
@@ -239,6 +240,54 @@ def _snapshot_support_figures(
     ):
         figure.update_layout(title=title)
     return cast(tuple[go.Figure, go.Figure, go.Figure, go.Figure], tuple(figures))
+
+
+def _replace_legacy_support_trace(
+    support: go.Figure,
+    records: tuple[CandidateBenchmark, ...],
+) -> None:
+    """Retain the legacy single-trace 3-D compatibility projection."""
+
+    rows = [
+        {
+            "x": point.xyz[0],
+            "y": point.xyz[1],
+            "z": point.xyz[2],
+            "candidate_id": point.candidate_id,
+            "family": point.family,
+            "status": "selected" if point.selected else "valid" if point.actor_valid else "invalid",
+            "lineage": point.candidate_config or "unavailable",
+        }
+        for record in records
+        for point in record.points
+    ]
+    anchors = tuple(
+        trace
+        for trace in support.data
+        if trace.name in {"Factual expansion/root", "Task target centre", "Persisted task target centre"}
+    )
+    support.data = ()
+    if not rows:
+        for anchor in anchors:
+            support.add_trace(anchor)
+        return
+    frame = pd.DataFrame(rows)
+    candidate_trace = go.Scatter3d(
+        x=frame.x,
+        y=frame.y,
+        z=frame.z,
+        mode="markers",
+        name="candidate support",
+        marker={"symbol": frame["status"].map({"selected": "diamond", "valid": "circle", "invalid": "x"}).tolist()},
+        customdata=frame[["candidate_id", "family", "status", "lineage"]],
+        hovertemplate=(
+            "candidate=%{customdata[0]}<br>family=%{customdata[1]}"
+            "<br>status=%{customdata[2]}<br>lineage=%{customdata[3]}<extra></extra>"
+        ),
+    )
+    support.add_trace(candidate_trace)
+    for anchor in anchors:
+        support.add_trace(anchor)
 
 
 def _append_legacy_known_point_traces(

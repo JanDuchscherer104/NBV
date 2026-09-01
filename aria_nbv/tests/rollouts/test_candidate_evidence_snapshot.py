@@ -294,6 +294,12 @@ def test_plot_models_retain_statuses_rotated_frame_horizon_and_jitter_support() 
     assert any("invalid" in value for value in statuses)
     assert any("action" in value for value in statuses)
     assert any("selected" in value for value in statuses)
+    support_figure = support.build_figure()
+    support_trace_names = {str(trace.name) for trace in support_figure.data}
+    assert any("bearing/glance" in name and "action" in name for name in support_trace_names)
+    assert any("bearing/glance" in name and "invalid" in name for name in support_trace_names)
+    assert any("orbit/exact" in name and "selected" in name for name in support_trace_names)
+    assert all(model.build_figure().layout.title.x == 0.5 for model in (ground, support, survival, jitter))
     jitter_figure = jitter.build_figure()
     assert len(jitter_figure.layout.shapes) == 1
     assert jitter_figure.layout.shapes[0].line.dash == "dot"
@@ -317,10 +323,10 @@ def test_candidate_plot_static_export_bytes_are_canonical_and_stable() -> None:
 
     assert all(isinstance(json.loads(payload), dict) for payload in payloads)
     assert tuple(hashlib.sha256(payload).hexdigest() for payload in payloads) == (
-        "5802fb18feca0f20e943302f445c59f57b390b85177cbf0aeb2632804438007d",
-        "f131fed0e21be5d370f97cbd22350d48a56baf4e1c56123ceea96f98b60fbc26",
-        "5aa9a54cf4c49347bb587d9937916568b995615d4293d052b7ba8ae5f0bc8def",
-        "4ab4a9285c79f41256e5f11922a03915303710f057ea67cf9861b94a8b75872e",
+        "950a1dee3e9653313b93c12c53eee836b6ea28881dd1bbe366b471f5b916da0f",
+        "025a9db61cc363c1795946a815b1c6b3b28e767a900ff39c694b512dec9ff5b0",
+        "27118664cc8301a9d7a55d55dddf32ed405d7847f89e64460f6c81eb7f956379",
+        "3154a08cf1fbd9cb71ef7c273d26bf4d81068acde686d666f5576dfbaa75f3cb",
     )
 
 
@@ -498,9 +504,11 @@ def test_stored_adapter_retains_persisted_jitter_reasons_and_normalizes_legacy_i
     )
     jitter = candidate_support_plot_models((legacy_missing,))[3].build_figure()
     assert any(
-        f"legacy-missing for {step.num_candidates} attempted rows" in str(annotation.text)
+        f"does not contain view-jitter evidence for {step.num_candidates} attempted candidates" in str(annotation.text)
         for annotation in jitter.layout.annotations
     )
+    assert jitter.layout.xaxis.visible is False
+    assert jitter.layout.yaxis.visible is False
 
 
 def test_stored_adapter_rejects_alignment_and_previous_selection_identity_drift(tmp_path: Path) -> None:
