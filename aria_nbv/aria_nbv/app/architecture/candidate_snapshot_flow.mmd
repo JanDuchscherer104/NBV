@@ -1,0 +1,21 @@
+flowchart LR
+  Store["selected rollout store"]
+  Session["stored-rollout session\nselected-store identity"]
+  Snapshot["CandidateEvidenceSnapshot\nimmutable UI DTO"]
+  Panel["candidate evidence panel\nread-only rendering"]
+  Plot["candidate support plots\nretained full shell"]
+
+  Store --> Session
+  Session --> Snapshot
+  Snapshot --> Panel
+  Snapshot --> Plot
+  Plot --> Panel
+
+  classDef input fill:#D5E8D4,stroke:#82B366,color:#17202A,stroke-width:1.5px,rx:0,ry:0;
+  classDef compute fill:#E1D5E7,stroke:#9673A6,color:#17202A,stroke-width:1.5px,rx:8,ry:8;
+  classDef data fill:#F5F5F5,stroke:#9E9E9E,color:#17202A,stroke-width:1.2px,rx:0,ry:0;
+  classDef output fill:#F8CECC,stroke:#B85450,color:#17202A,stroke-width:1.5px,rx:0,ry:0;
+  class Store input;
+  class Session,Plot compute;
+  class Snapshot data;
+  class Panel output;
