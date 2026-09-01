@@ -35,9 +35,15 @@ import torch
 from power_spherical import HypersphericalUniform, PowerSpherical  # type: ignore[import-untyped]
 
 from ..utils.frames import world_up_tensor
-from .config import CenterConfig, SampledCenterConfig, TargetOrbitCenterConfig
+from .config import (
+    CenterConfig,
+    PowerSphericalConfig,
+    SampledCenterConfig,
+    TargetOrbitCenterConfig,
+    UniformSphereConfig,
+)
 from .geometry import DEVICE_FWD
-from .types import CandidatePositionMode, SamplingStrategy
+from .types import CandidatePositionMode
 
 if TYPE_CHECKING:
     from efm3d.aria.pose import PoseTW
@@ -255,24 +261,24 @@ class PositionSampler:
         cfg = self.config
         assert isinstance(cfg, SampledCenterConfig)
 
-        match cfg.sampling_strategy:
-            case SamplingStrategy.UNIFORM_SPHERE:
+        match cfg.distribution:
+            case UniformSphereConfig():
                 try:
                     dirs = HypersphericalUniform(dim=3, device=self.device).sample((n_draw,))
                 except Exception:
                     dirs = self._sample_unit_sphere(n_draw)
-            case SamplingStrategy.FORWARD_POWERSPHERICAL:
+            case PowerSphericalConfig(concentration=concentration):
                 mu = torch.tensor(DEVICE_FWD, device=self.device)
                 try:
                     dirs = PowerSpherical(
                         mu,
-                        torch.tensor(cfg.concentration, device=self.device),
+                        torch.tensor(concentration, device=self.device),
                     ).sample((n_draw,))
                 except Exception as exc:
                     raise RuntimeError(
                         "PowerSpherical position sampling failed for "
-                        f"strategy={cfg.sampling_strategy.value!r}, "
-                        f"device={str(self.device)!r}, kappa={cfg.concentration!r}. "
+                        f"strategy={cfg.distribution.kind!r}, "
+                        f"device={str(self.device)!r}, kappa={concentration!r}. "
                         "No alternate distribution was used; verify the sampler dependency, device, and profile values."
                     ) from exc
         dirs_rig = dirs / dirs.norm(dim=-1, keepdim=True)
