@@ -73,7 +73,10 @@ reported privileged `V0/GT` task-construction sanity control; they do not satisf
 the core RQ3 gate. The core learned comparison requires an observation-derived
 target instruction and matching path (`V1/observed`) in addition to actor-visible
 candidate support, hard validity, selected-state updates, and scorer inputs.
-Until that route exists, the core actor-visible comparison remains unavailable.
+The `v1_observed` admission and writer--reader route exists, but no frozen
+scene-disjoint observed-target corpus, causal observation-updated state,
+actor-visible action-support protocol, or end-to-end evidence bundle yet
+supports the core comparison; it therefore remains unavailable.
 The scorer then receives only the declared target descriptor, causal egocentric
 evidence, remaining budget, and requested horizon; evaluation separately audits
 matching failures, ranking and calibration, and actor/oracle leakage.

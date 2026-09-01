@@ -496,7 +496,7 @@
     short: "NBV MDP",
     long: "Target-Conditioned NBV MDP",
     description: [
-      Finite-horizon Markov decision process used to define ARIA-NBV's target-conditioned rollout and fitted #symb.rl.qh training contract. The actor observes only current reconstruction state, sampled candidate views, validity masks, target descriptors, history, and budget state; oracle meshes and GT crops are supervision and evaluation signals.
+      Finite-horizon Markov decision process used to define ARIA-NBV's target-conditioned rollout and fitted #symb.rl.qh training contract. The actor observes only the declared reconstruction state, sampled candidate views, action support, target descriptors, history, and budget state; the provenance of action support is part of the protocol. Oracle meshes, GT crops, and mesh-derived validity are privileged signals unless explicitly admitted as a named control.
     ],
     group: "Planning",
     custom: (
@@ -509,7 +509,7 @@
       category: "planning.mdp",
       parent: "next-best-view",
       definition_short: "Finite-horizon MDP contract for target-conditioned ARIA-NBV rollouts and fitted Q_H training.",
-      definition_long: "The ARIA-NBV MDP keeps actions restricted to sampled finite candidate views and keeps GT meshes or GT target crops outside the actor-visible state. It is the contract that connects target-conditioned rollout generation, reward computation, validity masks, and fitted finite-horizon Q learning.",
+      definition_long: "The ARIA-NBV MDP keeps actions restricted to sampled finite candidate views and keeps GT meshes or GT target crops outside the actor-visible state. Its named target, state, generator, action-support, reward, discount, and horizon protocols determine the supported decision problem. The current oracle action mask is a privileged control rather than actor-visible evidence.",
       internal_links: (
         "docs/contents/theory/rl_planning.qmd#rl-planning-theory",
         "docs/typst/thesis/sections/01-research-questions.typ#ssec:rq2",
@@ -1307,7 +1307,7 @@
       category: "planning.constraints",
       parent: "finite-candidate-action-set",
       definition_short: "Hard mask that separates feasible candidate actions from invalid candidates.",
-      definition_long: "The action mask $m_{t,i}$ gates selectable candidate rows, while actor evidence/support, target validity, oracle-label validity, and Q-training eligibility remain distinct fields. Only physical or explicitly contracted admissibility failures clear action validity. The scorer must not read this mask: changing it cannot change raw conditional Q or feasibility logits. Lightning and online adapters apply it to selection, Q supervision, and bootstrap; invalid rows receive no fabricated Q targets. Under the persisted `dense_valid` supervision profile, `q_train_mask` must equal this action mask on every realized state; under the historical `legacy_unspecified` profile, Q-label support may be only a subset. Padding is excluded in both cases. Learned-only feasibility is deferred until calibration, threshold, candidate-generator, source-population, abstention, and false-valid evidence are versioned. Invalid reason codes $\\rho_{t,i}$ preserve physical rejection causes, and invalidity is not a low target-RRI class.",
+      definition_long: "The action mask $m_{t,i}$ gates selectable candidate rows, while actor evidence/support, target validity, oracle-label validity, and Q-training eligibility remain distinct fields. Its persisted semantics distinguish privileged `oracle_action_mask_v1`, actor-observed support, and a separately calibrated learned-feasibility route; the storage field name `actor_action_mask` alone does not establish actor-visible provenance. Only physical or explicitly contracted admissibility failures clear action validity. The scorer must not read this mask: changing it cannot change raw conditional Q or feasibility logits. Lightning and online adapters apply it to selection, Q supervision, and bootstrap; invalid rows receive no fabricated Q targets. Under the persisted `dense_valid` supervision profile, `q_train_mask` must equal this action mask on every realized state; under the historical `legacy_unspecified` profile, Q-label support may be only a subset. Padding is excluded in both cases. Learned-only feasibility is deferred until calibration, threshold, candidate-generator, source-population, abstention, and false-valid evidence are versioned. Invalid reason codes $\\rho_{t,i}$ preserve physical rejection causes, and invalidity is not a low target-RRI class.",
       internal_links: (
         "docs/typst/thesis/sections/01-research-questions.typ#ssec:rq4",
         "docs/reference/aria_nbv.pose_generation.CandidateSamplingResult.qmd",

@@ -2,7 +2,7 @@
 
 #scientific_core_todo(
   domain: "editorial",
-  priority: "P1",
+  priority: "C1",
   readiness: "ready",
   claim: [a central claim],
   source: [test],

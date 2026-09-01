@@ -11,19 +11,21 @@
   evidence: "pending",
   citation: [@EFM3D-straub2024 @POMDPRobotics-lauri2023],
   source: "aria_nbv/aria_nbv/targets/protocol.py; aria_nbv/aria_nbv/targets/selection.py; aria_nbv/aria_nbv/oracle/pipelines/campaign.py; aria_nbv/aria_nbv/oracle/pipelines/rollout_dataset.py; aria_nbv/aria_nbv/data_handling/qh_data/views.py; aria_nbv/aria_nbv/vin/modules/qh_scene_encoders.py; aria_nbv/aria_nbv/rollouts/qh_reader.py; aria_nbv/aria_nbv/vin/models/target_finite_horizon.py",
-  gate: [freeze and evaluate an actor-visible target corpus; implement the causal state-update contract; pass source-dropout, no-future-observation, leakage, and held-out task-sufficiency tests],
-)[The selected #symb.rl.s_pose baseline and the independent `v1_observed` descriptor path are implemented and tested. The current selected experiment still uses privileged `v0_gt_input`; no frozen `v1_observed` evaluation or causal observation-updated actor state yet supports the scientific target.]
+  gate: [freeze and evaluate an actor-visible target corpus and action-support protocol; implement the causal state-update contract; pass source-dropout, no-future-observation, leakage, and held-out task-sufficiency tests],
+)[The selected #symb.rl.s_pose baseline and the independent `v1_observed` descriptor path are implemented and tested. The current selected experiment still uses privileged `v0_gt_input` and `oracle_action_mask_v1`; no frozen actor-visible target, action-support, or causal observation-updated state evidence yet supports the scientific target.]
 
 The @rollout-state:short is the information available before selecting action
 #symb.rl.a, not every quantity co-located in a replay row. Oracle target gains, mesh crops,
 ground-truth associations, current all-candidate renders, and labels are
-excluded from the scorer graph. Two independent protocol axes matter. The
+excluded from the scorer graph. Three independent protocol axes matter. The
 target-source axis distinguishes non-deployable `v0_gt_input` geometry from a
 `v1_observed` descriptor constructed from actor-visible observations with bound
 source and construction provenance. The dynamic-state axis distinguishes the
 pose-only #symb.rl.s_pose carrier from a state updated with selected observations.
-Sharing tensor shapes across either axis does not make their scientific claims
-interchangeable.
+The action-support axis distinguishes the current mesh-derived
+`oracle_action_mask_v1` from actor-observed support or a separately calibrated
+learned-feasibility route. Sharing tensor shapes or field names across these
+axes does not make their scientific claims interchangeable.
 
 Both the current and target states retain the same decision interface,
 
@@ -47,7 +49,8 @@ observation, a refreshed EFM3D field, or fused selected depth.
       [Root scene], [immutable semidense points and global moments of locally supported EFM3D features], [immutable actor-visible evidence with explicit finite support and missingness; absent evidence must not mean observed free space],
       [Target], [selected experiment: privileged `v0_gt_input`; an independent `v1_observed` admission and I/O path is implemented but not frozen or evaluated], [`v1_observed`: actor-visible identity and geometry with support, source, construction provenance, and explicit matching failures],
       [Dynamic state], [#symb.rl.selected_pose_prefix only], [a strictly causal update from the selected observation that preserves observed surface, observed free, unknown, support, uncertainty, source, and recency],
-      [Decision context], [#symb.rl.candidate_table, #symb.rl.action_mask, #symb.rl.budget, and #symb.rl.requested_horizon], [the same finite support plus target- and candidate-relative access to the actor-visible state needed for target-specific return],
+      [Action support], [`oracle_action_mask_v1`: privileged mesh-derived physical-validity support], [`actor_observed_action_mask_v1`, or a learned-feasibility route with frozen calibration, threshold, abstention, and false-valid evidence],
+      [Decision context], [#symb.rl.candidate_table, #symb.rl.budget, and #symb.rl.requested_horizon under the named oracle-support protocol], [the same finite-candidate interface under actor-visible target, state, and action-support protocols],
     ),
   ),
   caption: [Current baseline and scientific target. The right column is a promotion contract: it states information that must be represented and tested, not an architecture already implemented or a result already obtained.],

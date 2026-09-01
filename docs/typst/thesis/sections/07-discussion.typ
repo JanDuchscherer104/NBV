@@ -32,7 +32,7 @@ Sequence or recurrent models are similarly conditional. They become scientifical
 
 #scientific_core_todo(
   domain: "architecture",
-  priority: "P2",
+  priority: "C2",
   readiness: "contingent",
   claim: [which representation or interaction limitation explains residual held-out value error],
   source: [method design-space registry],

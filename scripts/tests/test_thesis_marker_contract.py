@@ -137,7 +137,7 @@ def main() -> None:
         assert scientific_todos == [
             {
                 "domain": "architecture",
-                "priority": "P1",
+                "priority": "C1",
                 "readiness": "blocked",
                 "claim": "[exact horizon-two recovery]",
                 "gate": "[frozen actor-visible corpus]",
