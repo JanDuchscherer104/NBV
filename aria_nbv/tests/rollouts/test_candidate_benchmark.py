@@ -7,6 +7,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from aria_nbv.oracle.pipelines.rollout_dataset import RolloutDatasetWriterConfig
 from aria_nbv.pose_generation import CandidateMixtureViewGeneratorConfig
 from aria_nbv.pose_generation.config import CandidateGazeConfig, SampledCenterConfig
 from aria_nbv.pose_generation.types import CandidatePositionMode, ViewDirectionMode
@@ -95,6 +96,35 @@ def test_candidate_preflight_marks_only_target_gaze_on_forward_center_target_awa
 
     assert preflight.configured_families == ("forward_mixed_gaze", "forward_mixed_gaze__target")
     assert preflight.target_aware_families == ("forward_mixed_gaze__target",)
+
+
+def test_candidate_preflight_marks_actual_v3_target_shell_gazes_target_aware() -> None:
+    config_path = Path(__file__).parents[3] / ".configs" / "build_rollouts_v3_target_shell_experiment.toml"
+    writer = RolloutDatasetWriterConfig.from_toml(config_path)
+
+    preflight = candidate_family_preflight_config_from_writer(writer)
+
+    shell = next(component for component in writer.candidate_mixture.components if component.name == "target_shell")
+    emitted_names = (shell.name, *(f"{shell.name}__{gaze.name}" for gaze in shell.gazes[1:]))
+    assert set(emitted_names) <= set(preflight.target_aware_families)
+
+
+def test_candidate_preflight_fails_closed_for_unknown_nested_center() -> None:
+    writer = SimpleNamespace(
+        candidate_mixture=SimpleNamespace(
+            total_count=4,
+            components=(
+                SimpleNamespace(
+                    name="future",
+                    center=SimpleNamespace(kind="future_center"),
+                    gazes=(SimpleNamespace(name="primary"),),
+                ),
+            ),
+        )
+    )
+
+    with pytest.raises(ValueError, match="unsupported nested candidate center kind"):
+        candidate_family_preflight_config_from_writer(writer)
 
 
 def test_bundle_requires_parquet_engine_or_round_trips(tmp_path: Path) -> None:

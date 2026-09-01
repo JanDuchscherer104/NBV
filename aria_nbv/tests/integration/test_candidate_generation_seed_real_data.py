@@ -12,25 +12,20 @@ from efm3d.aria.obb import ObbTW
 
 from aria_nbv.configs import PathConfig
 from aria_nbv.data_handling import AseEfmDatasetConfig
+from aria_nbv.oracle.pipelines.rollout_dataset import RolloutDatasetWriterConfig
 from aria_nbv.pose_generation import (
     CandidateGenerationRuntimeContext,
-    CandidateMixtureComponentConfig,
-    CandidateMixtureViewGeneratorConfig,
+    CandidatePositionMode,
     CandidateViewGeneratorConfig,
-    ViewDirectionMode,
+    candidate_position_id,
 )
-from aria_nbv.pose_generation.config import (
-    BoxViewJitterConfig,
-    CandidateGazeConfig,
-    TargetShellCenterConfig,
-    TargetShellSupportMode,
-)
+from aria_nbv.pose_generation.config import TargetShellCenterConfig
 from aria_nbv.targets import TargetDescriptor
 from aria_nbv.utils import Verbosity
 
 
 def _skip_if_missing_data() -> None:
-    paths = PathConfig()
+    paths = PathConfig(root=Path("/home/jd/repos/ARIA-NBV"))
     atek_dir = paths.resolve_atek_data_dir("efm")
     if not atek_dir.exists():
         pytest.skip(f"ATEK data dir missing: {atek_dir}", allow_module_level=True)
@@ -46,6 +41,7 @@ _skip_if_missing_data()
 
 def _load_sample():
     cfg = AseEfmDatasetConfig(
+        paths=PathConfig(root=Path("/home/jd/repos/ARIA-NBV")),
         scene_ids=["81283"],
         batch_size=None,
         load_meshes=True,
@@ -112,63 +108,41 @@ def _nearest_real_target(sample) -> tuple[TargetDescriptor, float]:
     return descriptor, float(distances.min().item())
 
 
+def _matched_mixture(config_name: str, *, device: str, seed: int):
+    config_path = Path(__file__).parents[3] / ".configs" / config_name
+    mixture = RolloutDatasetWriterConfig.from_toml(config_path).candidate_mixture
+    payload = mixture.model_dump()
+    payload["base"]["device"] = device
+    payload["base"]["seed"] = seed
+    return type(mixture).model_validate(payload)
+
+
 @pytest.mark.parametrize("device", ("cpu", "cuda"))
-def test_target_shell_real_scene_repeatability_and_admission(device: str) -> None:
+def test_target_shell_real_scene_matches_baseline_budget_admission_and_seed(device: str) -> None:
     if device == "cuda" and not torch.cuda.is_available():
         pytest.skip("CUDA is unavailable")
     sample = _load_sample()
-    descriptor, actor_distance = _nearest_real_target(sample)
-    count = 512
-    center = TargetShellCenterConfig(
-        radius_min_m=max(0.2, actor_distance - 0.5),
-        radius_max_m=actor_distance + 0.5,
-        support_mode=TargetShellSupportMode.ACTOR_FACING_CAP,
-        cap_half_angle_deg=25.0,
-    )
-    base = CandidateViewGeneratorConfig(
-        num_samples=count,
-        ensure_collision_free=False,
-        ensure_free_space=False,
-        min_distance_to_mesh=0.0,
-        enforce_motion_realism=True,
-        max_step_distance_m=1.2,
-        max_height_delta_m=0.75,
-        max_backward_step_m=1.2,
-        max_yaw_delta_deg=180.0,
-        collect_debug_stats=True,
-        device=device,
-        seed=73,
-        verbosity=Verbosity.QUIET,
-    )
-    config = CandidateMixtureViewGeneratorConfig(
-        base=base,
-        components=(
-            CandidateMixtureComponentConfig(
-                name="target_shell",
-                count=count,
-                center=center,
-                gazes=(
-                    CandidateGazeConfig(
-                        name="primary",
-                        mode=ViewDirectionMode.TARGET_POINT,
-                        jitter=BoxViewJitterConfig(),
-                    ),
-                ),
-            ),
-        ),
-    )
+    descriptor, _ = _nearest_real_target(sample)
+    baseline = _matched_mixture("build_rollouts_v2_realistic.toml", device=device, seed=73)
+    challenger = _matched_mixture("build_rollouts_v3_target_shell_experiment.toml", device=device, seed=73)
+    assert baseline.total_count == challenger.total_count == 60
+    assert baseline.base.model_dump() == challenger.base.model_dump()
     runtime = CandidateGenerationRuntimeContext(descriptor=descriptor)
-    generator = config.setup_target()
-
-    first = generator.generate_from_typed_sample(sample, runtime_context=runtime)
-    second = generator.generate_from_typed_sample(sample, runtime_context=runtime)
+    baseline_result = baseline.setup_target().generate_from_typed_sample(sample, runtime_context=runtime)
+    first = challenger.setup_target().generate_from_typed_sample(sample, runtime_context=runtime)
+    second = challenger.setup_target().generate_from_typed_sample(sample, runtime_context=runtime)
 
     assert torch.equal(first.shell_poses.tensor(), second.shell_poses.tensor())
     assert torch.equal(first.mask_valid, second.mask_valid)
-    assert first.shell_poses.t.shape == (count, 3)
-    assert 0 < int(first.mask_valid.sum().item()) < count
+    assert baseline_result.shell_poses.t.shape == first.shell_poses.t.shape == (60, 3)
+    assert 0 < int(baseline_result.mask_valid.sum().item()) < 60
+    assert 0 < int(first.mask_valid.sum().item()) < 60
+    shell_mask = first.position_id == candidate_position_id(CandidatePositionMode.TARGET_SHELL)
+    assert int(shell_mask.sum().item()) == 24
+    shell_component = next(component for component in challenger.components if component.name == "target_shell")
+    assert isinstance(shell_component.center, TargetShellCenterConfig)
     target = runtime.target_center_world.to(first.shell_poses.t.device)
-    radii = torch.linalg.norm(first.shell_poses.t - target.reshape(1, 3), dim=1)
-    assert float(radii.min()) >= center.radius_min_m - 1e-5
-    assert float(radii.max()) <= center.radius_max_m + 1e-5
+    radii = torch.linalg.norm(first.shell_poses.t[shell_mask] - target.reshape(1, 3), dim=1)
+    assert float(radii.min()) >= shell_component.center.radius_min_m - 1e-5
+    assert float(radii.max()) <= shell_component.center.radius_max_m + 1e-5
     assert first.extras["view_jitter_is_bounded"].all()

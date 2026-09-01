@@ -14,6 +14,7 @@ pytest.importorskip("efm3d")
 import torch
 import trimesh
 from efm3d.aria import CameraTW, PoseTW
+from pydantic import TypeAdapter
 
 from aria_nbv.oracle.pipelines.rollout_dataset import RolloutDatasetWriterConfig
 from aria_nbv.pose_generation import (
@@ -29,14 +30,15 @@ from aria_nbv.pose_generation import (
     candidate_position_id,
     candidate_strategy_id,
 )
+from aria_nbv.pose_generation.candidate_generation import LegacyCandidatePositionMode
 from aria_nbv.pose_generation.config import (
+    AngularBoxSupportConfig,
     BoxViewJitterConfig,
     CandidateGazeConfig,
     PowerSphericalConfig,
     SampledCenterConfig,
     TargetOrbitCenterConfig,
     TargetShellCenterConfig,
-    TargetShellSupportMode,
     UniformSphereConfig,
     sphere_distribution_from_legacy,
 )
@@ -1366,10 +1368,11 @@ def test_target_shell_crosses_one_center_table_with_multiple_gazes_and_stable_pr
     center = TargetShellCenterConfig(
         radius_min_m=0.8,
         radius_max_m=1.2,
-        support_mode=TargetShellSupportMode.ANGULAR_BOX,
-        azimuth_half_width_deg=90.0,
-        elevation_min_deg=0.0,
-        elevation_max_deg=40.0,
+        support=AngularBoxSupportConfig(
+            azimuth_half_width_deg=90.0,
+            elevation_min_deg=0.0,
+            elevation_max_deg=40.0,
+        ),
     )
     jitter = BoxViewJitterConfig(yaw_half_width_deg=60.0, pitch_half_width_deg=30.0)
     cfg = CandidateMixtureViewGeneratorConfig(
@@ -1412,10 +1415,11 @@ def test_target_shell_motion_offsets_use_physical_reference_when_gravity_aligned
     center = TargetShellCenterConfig(
         radius_min_m=2.5,
         radius_max_m=3.5,
-        support_mode=TargetShellSupportMode.UPPER_ANGULAR_BOX,
-        azimuth_half_width_deg=80.0,
-        elevation_min_deg=0.0,
-        elevation_max_deg=30.0,
+        support=AngularBoxSupportConfig(
+            azimuth_half_width_deg=80.0,
+            elevation_min_deg=0.0,
+            elevation_max_deg=30.0,
+        ),
     )
     config = CandidateMixtureViewGeneratorConfig(
         base=_base_cfg().model_copy(
@@ -1527,8 +1531,10 @@ def test_target_orbit_single_family_requires_two_attempted_proposals() -> None:
 
 
 def test_target_shell_is_rejected_by_legacy_single_family_authoring() -> None:
-    with pytest.raises(ValueError, match="requires nested TargetShellCenterConfig"):
+    with pytest.raises(ValueError, match="position_mode"):
         CandidateViewGeneratorConfig(position_mode=CandidatePositionMode.TARGET_SHELL)
+    schema = TypeAdapter(LegacyCandidatePositionMode).json_schema()
+    assert CandidatePositionMode.TARGET_SHELL.value not in schema["enum"]
 
 
 @pytest.mark.parametrize(

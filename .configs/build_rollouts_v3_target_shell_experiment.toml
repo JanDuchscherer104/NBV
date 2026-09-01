@@ -90,7 +90,8 @@ count = 24
 kind = "target_shell"
 radius_min_m = 0.6
 radius_max_m = 1.1
-support_mode = "upper_angular_box"
+[candidate_mixture.components.center.support]
+support_kind = "angular_box"
 azimuth_half_width_deg = 120.0
 elevation_min_deg = 0.0
 elevation_max_deg = 35.0

@@ -38,11 +38,11 @@ from aria_nbv.oracle.pipelines.rollout_dataset import (
 )
 from aria_nbv.pose_generation import CandidateMixtureViewGeneratorConfig
 from aria_nbv.pose_generation.config import (
+    ActorFacingCapSupportConfig,
     BoxViewJitterConfig,
     CandidateGazeConfig,
     SampledCenterConfig,
     TargetShellCenterConfig,
-    TargetShellSupportMode,
 )
 from aria_nbv.pose_generation.types import CandidatePositionMode, ViewDirectionMode
 from aria_nbv.rollouts.qh_reader import QhRolloutReader
@@ -124,8 +124,7 @@ def test_campaign_projects_target_shell_as_target_dependent() -> None:
         center=TargetShellCenterConfig(
             radius_min_m=0.8,
             radius_max_m=1.2,
-            support_mode=TargetShellSupportMode.ACTOR_FACING_CAP,
-            cap_half_angle_deg=45.0,
+            support=ActorFacingCapSupportConfig(half_angle_deg=45.0),
         ),
         gazes=(
             CandidateGazeConfig(

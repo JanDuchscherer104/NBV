@@ -102,10 +102,12 @@ POSE_GENERATION_CONTRACT_TESTS := \
 	tests/pose_generation/test_candidate_mixture.py \
 	tests/pose_generation/test_pose_generation.py \
 	tests/pose_generation/test_orientations.py \
+	tests/pose_generation/test_target_shell.py \
 	tests/pose_generation/test_plotting_helpers.py \
-	tests/rollouts/test_candidate_benchmark.py::test_candidate_preflight_projects_legacy_and_nested_components_identically \
-	tests/rollouts/test_candidate_benchmark.py::test_candidate_preflight_marks_only_target_gaze_on_forward_center_target_aware \
+	tests/rollouts/test_candidate_benchmark.py \
 	tests/oracle/test_campaign.py::test_campaign_projects_legacy_and_nested_component_roles_identically \
+	tests/oracle/test_campaign.py::test_campaign_rejects_unknown_nested_center_kind \
+	tests/oracle/test_campaign.py::test_campaign_projects_target_shell_as_target_dependent \
 	tests/oracle/test_campaign.py::test_campaign_projects_target_gaze_on_forward_center_as_target_dependent
 QH_CI_RUFF_PATHS := \
 	aria_nbv/data_handling/__init__.py \

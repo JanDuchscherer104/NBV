@@ -9,7 +9,8 @@ import pytest
 import torch
 from efm3d.aria import CameraTW, PoseTW
 
-from aria_nbv.pose_generation.config import TargetShellCenterConfig, TargetShellSupportMode
+from aria_nbv.pose_generation.candidate_mixture import candidate_position_id
+from aria_nbv.pose_generation.config import AngularBoxSupportConfig, TargetShellCenterConfig
 from aria_nbv.pose_generation.plotting import (
     plot_candidate_centers_simple,
     plot_candidate_frusta_simple,
@@ -19,7 +20,7 @@ from aria_nbv.pose_generation.plotting import (
     plot_target_shell_support,
     plot_view_jitter_support,
 )
-from aria_nbv.pose_generation.types import CandidateSamplingResult
+from aria_nbv.pose_generation.types import CandidatePositionMode, CandidateSamplingResult
 from aria_nbv.pose_generation.utils import rejected_pose_tensor
 
 
@@ -81,16 +82,22 @@ def test_plot_candidate_frusta_simple() -> None:
 
 
 def test_plot_target_shell_support_exposes_boundary_validity_and_gaze() -> None:
-    candidates = _make_candidates(num=3)
-    candidates.mask_valid = torch.tensor([True, False, True])
-    candidates.component_name = ("target_shell",) * 3
+    candidates = _make_candidates(num=5)
+    candidates.mask_valid = torch.tensor([True, True, False, True, False])
+    candidates.component_name = ("forward", "target_shell", "target_shell", "target_shell", "lateral")
+    candidates.position_id = torch.tensor(
+        [
+            candidate_position_id(CandidatePositionMode.FORWARD_LOCAL),
+            candidate_position_id(CandidatePositionMode.TARGET_SHELL),
+            candidate_position_id(CandidatePositionMode.TARGET_SHELL),
+            candidate_position_id(CandidatePositionMode.TARGET_SHELL),
+            candidate_position_id(CandidatePositionMode.LATERAL_TARGET_BYPASS),
+        ]
+    )
     config = TargetShellCenterConfig(
-        radius_min_m=0.6,
-        radius_max_m=1.2,
-        support_mode=TargetShellSupportMode.UPPER_ANGULAR_BOX,
-        azimuth_half_width_deg=100.0,
-        elevation_min_deg=0.0,
-        elevation_max_deg=35.0,
+        radius_min_m=0.5,
+        radius_max_m=10.0,
+        support=AngularBoxSupportConfig(),
     )
 
     fig = plot_target_shell_support(
@@ -109,10 +116,12 @@ def test_plot_target_shell_support_exposes_boundary_validity_and_gaze() -> None:
         "configured outer support",
         "target and actor",
     }
-    assert "upper_angular_box" in fig.layout.title.text
+    assert "angular_box" in fig.layout.title.text
     assert "attempted=3" in fig.layout.title.text
     assert "valid=2" in fig.layout.title.text
     assert "seed=17" in fig.layout.title.text
+    marker_rows = sum(len(trace.x) for trace in fig.data if trace.name in {"valid candidates", "rejected candidates"})
+    assert marker_rows == 3
 
 
 def test_plot_view_jitter_support_shows_components_validity_and_bounds() -> None:

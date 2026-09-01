@@ -25,7 +25,10 @@ from ..data_handling import EfmSnippetView
 from ..targets import TargetDescriptor
 from ..utils import Console
 from ..utils.data_plotting import SnippetPlotBuilder, get_frustum_segments
-from .config import TargetShellCenterConfig, TargetShellSupportMode
+from ._target_shell import target_shell_boundary_directions, target_shell_support_contains
+from .candidate_mixture import candidate_position_id
+from .config import TargetShellCenterConfig
+from .types import CandidatePositionMode
 
 if TYPE_CHECKING:
     from ..rollouts.replay.state import CounterfactualRolloutResult, CounterfactualStepResult, CounterfactualTrajectory
@@ -173,58 +176,33 @@ def plot_target_shell_support(
     expose the generated camera forward axes in world coordinates.
     """
 
-    target = target_center_world.detach().cpu().numpy().reshape(3).astype(float, copy=False)
-    actor = candidates.reference_pose.t.detach().cpu().numpy().reshape(3).astype(float, copy=False)
-    actor_delta = actor - target
-    actor_distance = float(np.linalg.norm(actor_delta))
-    if actor_distance < 1e-8:
-        raise ValueError("target-shell plotting requires distinct target and reference centers.")
-    actor_direction = actor_delta / actor_distance
-    world_up = np.array([0.0, 0.0, 1.0])
-
-    def support_directions() -> np.ndarray:
-        if config.support_mode is TargetShellSupportMode.ACTOR_FACING_CAP:
-            assert config.cap_half_angle_deg is not None
-            basis_a = np.cross(world_up, actor_direction)
-            if np.linalg.norm(basis_a) < 1e-8:
-                basis_a = np.array([1.0, 0.0, 0.0])
-            basis_a /= np.linalg.norm(basis_a)
-            basis_b = np.cross(actor_direction, basis_a)
-            phi = np.linspace(-np.pi, np.pi, num=181)
-            theta = np.deg2rad(config.cap_half_angle_deg)
-            return np.cos(theta) * actor_direction[None, :] + np.sin(theta) * (
-                np.cos(phi)[:, None] * basis_a[None, :] + np.sin(phi)[:, None] * basis_b[None, :]
-            )
-
-        horizontal = actor_delta - np.dot(actor_delta, world_up) * world_up
-        if np.linalg.norm(horizontal) < 1e-8:
-            raise ValueError("target-shell angular plotting requires a nonzero horizontal target-to-actor bearing.")
-        forward = horizontal / np.linalg.norm(horizontal)
-        lateral = np.cross(world_up, forward)
-        az_min = -np.deg2rad(config.azimuth_half_width_deg)
-        az_max = np.deg2rad(config.azimuth_half_width_deg)
-        el_min = np.deg2rad(config.elevation_min_deg)
-        el_max = np.deg2rad(config.elevation_max_deg)
-        az_sweep = np.linspace(az_min, az_max, num=121)
-        el_sweep = np.linspace(el_min, el_max, num=61)
-
-        def directions(azimuth: np.ndarray, elevation: np.ndarray) -> np.ndarray:
-            horizontal_dirs = np.cos(azimuth)[:, None] * forward[None, :] + np.sin(azimuth)[:, None] * lateral[None, :]
-            return np.cos(elevation)[:, None] * horizontal_dirs + np.sin(elevation)[:, None] * world_up[None, :]
-
-        edges = (
-            directions(az_sweep, np.full_like(az_sweep, el_min)),
-            directions(az_sweep, np.full_like(az_sweep, el_max)),
-            directions(np.full_like(el_sweep, az_min), el_sweep),
-            directions(np.full_like(el_sweep, az_max), el_sweep),
-        )
-        separator = np.full((1, 3), np.nan)
-        return np.concatenate([np.concatenate((edge, separator), axis=0) for edge in edges], axis=0)
-
-    centers = candidates.shell_poses.t.detach().cpu().numpy().reshape(-1, 3)
-    directions = candidates.shell_poses.R[..., :, 2].detach().cpu().numpy().reshape(-1, 3)
-    valid = candidates.mask_valid.detach().cpu().numpy().reshape(-1).astype(bool, copy=False)
-    components = np.asarray(candidates.component_name or tuple("target_shell" for _ in range(centers.shape[0])))
+    if candidates.position_id is None:
+        raise ValueError("target-shell plotting requires full-shell position_id provenance.")
+    row_mask = candidates.position_id == candidate_position_id(CandidatePositionMode.TARGET_SHELL)
+    if not bool(row_mask.any()):
+        raise ValueError("candidate result contains no target_shell rows.")
+    target_tensor = target_center_world.detach().to(candidates.shell_poses.t).reshape(3)
+    actor_tensor = candidates.reference_pose.t.detach().to(target_tensor).reshape(3)
+    target = target_tensor.cpu().numpy().astype(float, copy=False)
+    actor = actor_tensor.cpu().numpy().astype(float, copy=False)
+    centers = candidates.shell_poses.t[row_mask].detach().cpu().numpy().reshape(-1, 3)
+    directions = candidates.shell_poses.R[..., :, 2][row_mask].detach().cpu().numpy().reshape(-1, 3)
+    valid = candidates.mask_valid[row_mask].detach().cpu().numpy().reshape(-1).astype(bool, copy=False)
+    all_components = np.asarray(candidates.component_name or tuple("unspecified" for _ in range(len(row_mask))))
+    components = all_components[row_mask.detach().cpu().numpy()]
+    centers_tensor = candidates.shell_poses.t[row_mask].detach().to(target_tensor)
+    target_offsets = centers_tensor - target_tensor.reshape(1, 3)
+    radii = torch.linalg.norm(target_offsets, dim=-1)
+    directions_tensor = target_offsets / radii[:, None].clamp_min(1.0e-8)
+    support_valid = target_shell_support_contains(
+        directions_tensor,
+        actor_tensor,
+        target_tensor,
+        config.support,
+    )
+    radius_valid = (radii >= config.radius_min_m - 1.0e-5) & (radii <= config.radius_max_m + 1.0e-5)
+    if not bool((support_valid & radius_valid).all()):
+        raise ValueError("target_shell rows do not match the supplied support and radius configuration.")
     figure = go.Figure()
     for is_valid, symbol, color, label in (
         (True, "circle", "#2E91E5", "valid candidates"),
@@ -262,7 +240,7 @@ def plot_target_shell_support(
         )
     )
 
-    boundary = support_directions()
+    boundary = target_shell_boundary_directions(actor_tensor, target_tensor, config.support).detach().cpu().numpy()
     for radius, label in (
         (config.radius_min_m, "configured inner support"),
         (config.radius_max_m, "configured outer support"),
@@ -295,7 +273,7 @@ def plot_target_shell_support(
     seed_text = "unspecified" if seed is None else str(seed)
     figure.update_layout(
         title=(
-            f"Target-shell support · {config.support_mode.value} · attempted={centers.shape[0]} · "
+            f"Target-shell support · {config.support.support_kind} · attempted={centers.shape[0]} · "
             f"valid={int(valid.sum())} · seed={seed_text}"
         ),
         scene={
