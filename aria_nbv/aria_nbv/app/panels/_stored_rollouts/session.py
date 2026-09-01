@@ -27,6 +27,7 @@ from ....rollouts.candidate_benchmark import (
     reduce_candidate_records,
     serialize_bundle_bytes,
 )
+from ....rollouts.candidate_evidence import candidate_evidence_snapshot_from_stored
 from ....rollouts.inspection import (
     RolloutSuspiciousQueryConfig,
     build_effective_streamlit_trust,
@@ -59,15 +60,18 @@ from ....rollouts.inspection import (
     target_audit_rows,
     temporal_metric_summary_rows,
 )
+from ....rollouts.read_model import rollout_by_id, rollout_steps, target_by_id
 from ....rollouts.reporting import (
     RolloutCorpusSummary,
     build_rollout_corpus_summary,
     build_thesis_report_frames,
     serialize_thesis_report_bundle,
 )
+from ...candidate_evidence import CandidateEvidenceView, candidate_evidence_view_from_snapshots
 
 CORPUS_SUMMARY_STATE_KEY = "stored_rollouts_corpus_summary"
 CANDIDATE_BENCHMARK_STATE_KEY = "candidate_benchmark_build_result"
+CANDIDATE_EVIDENCE_STATE_KEY = "stored_rollouts_candidate_evidence_view"
 
 
 @dataclass(frozen=True, slots=True)
@@ -89,6 +93,30 @@ class CandidateBenchmarkBuildResult:
     records: tuple[CandidateBenchmark, ...]
     bundle_bytes: bytes
     family_preflight: CandidateFamilyPreflight | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class StoredCandidateEvidenceRequest:
+    """One explicit persisted-shell acquisition request.
+
+    Attributes:
+        rollout_row_id: Stable persisted rollout row identifier.
+        step_index: Zero-based factual step within the rollout.
+        show_view_directions: Whether retained support plots include optical-axis
+            arrows. This option participates in the retained-view identity.
+    """
+
+    rollout_row_id: int
+    step_index: int
+    show_view_directions: bool = False
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.rollout_row_id, int) or isinstance(self.rollout_row_id, bool) or self.rollout_row_id < 0:
+            raise ValueError("rollout_row_id must be a nonnegative integer")
+        if not isinstance(self.step_index, int) or isinstance(self.step_index, bool) or self.step_index < 0:
+            raise ValueError("step_index must be a nonnegative integer")
+        if not isinstance(self.show_view_directions, bool):
+            raise ValueError("show_view_directions must be a boolean")
 
 
 @st.cache_resource(show_spinner=False)
@@ -330,6 +358,60 @@ class StoredRolloutSession:
             bundle_bytes,
             family_preflight,
         )
+
+    def acquire_candidate_evidence(self, request: StoredCandidateEvidenceRequest) -> CandidateEvidenceView:
+        """Acquire one typed stored shell and retain its plot models exactly once.
+
+        The method is the sole store-reading boundary for canonical candidate
+        plots. It validates the replacement-sensitive store identity before
+        and after the complete rollout/step/target projection. The returned
+        view owns no reader and can be retained safely across ordinary UI
+        reruns while this session identity remains current.
+        """
+
+        identity = self._assert_current_identity()
+        rollout = rollout_by_id(self._reader, request.rollout_row_id)
+        steps = rollout_steps(self._reader, rollout)
+        matches = tuple(step for step in steps if step.step_index == request.step_index)
+        if len(matches) != 1:
+            raise KeyError(f"rollout {request.rollout_row_id} has no unique factual step {request.step_index}")
+        step = matches[0]
+        previous_step = next((row for row in steps if row.step_index == request.step_index - 1), None)
+        target = target_by_id(self._reader, rollout.target_row_id)
+        if target is None:
+            raise ValueError(f"rollout {request.rollout_row_id} references missing target {rollout.target_row_id}")
+        snapshot = candidate_evidence_snapshot_from_stored(
+            rollout,
+            step,
+            target,
+            previous_step=previous_step,
+        )
+        source_identity = (
+            f"{identity}:rollout={request.rollout_row_id}:step={request.step_index}:"
+            f"directions={int(request.show_view_directions)}"
+        )
+        view = candidate_evidence_view_from_snapshots(
+            (snapshot,),
+            source_identity=source_identity,
+            show_view_directions=request.show_view_directions,
+        )
+        self._assert_current_identity()
+        return view
+
+    def validate_candidate_evidence(
+        self,
+        view: CandidateEvidenceView,
+        request: StoredCandidateEvidenceRequest,
+    ) -> None:
+        """Fail closed when a retained view no longer matches store or controls."""
+
+        identity = self._assert_current_identity()
+        expected = (
+            f"{identity}:rollout={request.rollout_row_id}:step={request.step_index}:"
+            f"directions={int(request.show_view_directions)}"
+        )
+        if view.source_identity != expected:
+            raise RuntimeError("retained candidate evidence does not match the current store and controls")
 
     def invariants(self) -> Any:
         return _cached_invariants(self._projection_path(), store_identity=self.store_identity)

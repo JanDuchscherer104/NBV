@@ -14,9 +14,10 @@ from ....rollouts.candidate_benchmark import (
     CandidateFamilySelection,
     select_candidate_family_shell,
 )
-from ....rollouts.candidate_support_plotting import candidate_benchmark_figures as _candidate_benchmark_figures
 from ....rollouts.candidate_support_plotting import candidate_family_preflight_figures, candidate_support_figures
+from ...candidate_evidence import CandidateEvidenceView
 from ...scientific_labels import TheoryReferences
+from ..candidate_evidence import render_candidate_evidence_view
 from .candidate_generation import (
     _render_candidate_aggregate_breakdowns,
     _render_candidate_geometry_diagnostics,
@@ -24,12 +25,71 @@ from .candidate_generation import (
     _render_candidate_provenance_flow,
     _render_target_score_diagnostics,
 )
-from .session import CANDIDATE_BENCHMARK_STATE_KEY, CandidateBenchmarkBuildResult
+from .session import (
+    CANDIDATE_BENCHMARK_STATE_KEY,
+    CANDIDATE_EVIDENCE_STATE_KEY,
+    CandidateBenchmarkBuildResult,
+    StoredCandidateEvidenceRequest,
+)
 from .shared import ExplanationSection, ScientificExplanation
 from .shared import download_frame as _download_frame
 from .shared import render_plot as _render_plot
 
 _CANDIDATE_FAMILY_SHELL_STATE_KEY = "stored-rollouts:candidate-family-shell"
+
+
+def _render_canonical_candidate_evidence_card(session_handle: Any) -> None:
+    """Acquire one stored shell explicitly and render retained plot models."""
+
+    st.markdown("#### Canonical candidate evidence")
+    with st.form("stored_candidate_evidence_build", border=False):
+        rollout_row_id = int(
+            st.number_input(
+                "Rollout row ID",
+                min_value=0,
+                value=0,
+                step=1,
+                help="Stable persisted rollout_row_id, not its table position.",
+            )
+        )
+        step_index = int(
+            st.number_input(
+                "Factual step",
+                min_value=0,
+                value=0,
+                step=1,
+            )
+        )
+        show_view_directions = st.toggle(
+            "Include valid-candidate view directions",
+            value=False,
+            help="This plot option is frozen into the retained evidence view.",
+        )
+        build_requested = st.form_submit_button("Inspect candidate shell")
+    request = StoredCandidateEvidenceRequest(rollout_row_id, step_index, show_view_directions)
+    if build_requested:
+        try:
+            st.session_state[CANDIDATE_EVIDENCE_STATE_KEY] = session_handle.acquire_candidate_evidence(request)
+        except (KeyError, OSError, RuntimeError, ValueError) as error:
+            st.session_state.pop(CANDIDATE_EVIDENCE_STATE_KEY, None)
+            st.error(f"Candidate evidence acquisition failed: {error}")
+            return
+    retained = st.session_state.get(CANDIDATE_EVIDENCE_STATE_KEY)
+    if not isinstance(retained, CandidateEvidenceView):
+        if retained is not None:
+            st.session_state.pop(CANDIDATE_EVIDENCE_STATE_KEY, None)
+        st.info("Choose a rollout and factual step, then inspect its candidate shell.")
+        return
+    try:
+        session_handle.validate_candidate_evidence(retained, request)
+    except (RuntimeError, ValueError):
+        st.session_state.pop(CANDIDATE_EVIDENCE_STATE_KEY, None)
+        st.warning("The store or candidate controls changed; inspect the shell again.")
+        return
+    render_candidate_evidence_view(
+        retained,
+        key=f"stored-candidate-evidence:{retained.source_identity}",
+    )
 
 
 def _candidate_family_selection_from_plotly_event(event: Mapping[str, Any]) -> CandidateFamilySelection | None:
@@ -134,11 +194,6 @@ def _render_candidate_benchmark_card(session_handle: Any) -> None:
             "Build candidate benchmark",
             help="Construct bounded display records and the complete deterministic export.",
         )
-    show_view_directions = st.toggle(
-        "Show valid-candidate view directions",
-        value=False,
-        help="Adds short arrows for the camera optical axes projected into the target-aligned ground plane.",
-    )
     store_identity = str(session_handle.store_identity)
     if build_requested:
         try:
@@ -271,23 +326,10 @@ def _render_candidate_benchmark_card(session_handle: Any) -> None:
                         source_fields=("candidate_family_preflight", "candidate_benchmark.parquet"),
                     ),
                 )
-    st.markdown("#### Candidate benchmark support")
-    for figure in _candidate_benchmark_figures(
-        retained.records,
-        show_view_directions=show_view_directions,
-    ):
-        _render_plot(
-            figure,
-            ScientificExplanation(
-                question="What candidate support does the immutable benchmark contain?",
-                answer="The plot shows only validated, persisted candidate coordinates and IDs.",
-                sections=(
-                    ExplanationSection("Availability", "Unavailable metrics remain absent rather than zero-filled."),
-                ),
-                evidence_role="derived training data",
-                source_fields=("candidate_benchmark.parquet",),
-            ),
-        )
+    st.caption(
+        "The benchmark export and family-preflight views remain compatibility products. "
+        "Canonical shell plots are acquired once from typed stored rows below."
+    )
 
 
 def _render_targets_and_support(session_handle: Any) -> None:
@@ -354,6 +396,8 @@ def _render_targets_and_support(session_handle: Any) -> None:
         _render_target_score_diagnostics(targets)
 
     _render_candidate_provenance_flow(session_handle)
+
+    _render_canonical_candidate_evidence_card(session_handle)
 
     _render_candidate_benchmark_card(session_handle)
 

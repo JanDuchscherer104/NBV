@@ -10,11 +10,18 @@ from collections.abc import Callable
 from contextlib import AbstractContextManager, nullcontext
 
 from ..data_handling import EfmSnippetView
+from ..pose_generation import CandidateSet
 from ..pose_generation.types import CandidateSamplingResult
 from ..rendering import CandidateDepths, build_candidate_pointclouds
 from ..rendering.candidate_pointclouds import CandidatePointClouds
+from ..rollouts.candidate_evidence import CandidateRolloutOverlay
 from ..rri_metrics.rri import RriResult
 from ..utils import Console
+from .candidate_evidence import (
+    CandidateEvidenceView,
+    LiveCandidateEvidenceRequest,
+    candidate_evidence_view_from_live,
+)
 from .state_types import (
     AppState,
     candidates_key,
@@ -117,9 +124,59 @@ class PipelineController:
         cache.cfg_sig = cfg_sig
         cache.sample_key = skey
         cache.candidates = candidates
+        cache.evidence = None
+        cache.evidence_request = None
+        cache.evidence_candidate_set = None
 
         self._invalidate_after_candidates()
         return candidates
+
+    def retain_candidate_evidence(
+        self,
+        candidate_set: CandidateSet,
+        *,
+        selected_attempt_indices: tuple[int, ...] | None = None,
+        execution_hash: str | None = None,
+        state_key: str | None = None,
+        overlay: CandidateRolloutOverlay | None = None,
+        show_view_directions: bool = False,
+    ) -> CandidateEvidenceView:
+        """Retain one canonical live candidate view supplied by composition.
+
+        The current direct page still generates a legacy
+        ``CandidateSamplingResult`` and therefore cannot call this method until
+        the rollout composition owner propagates truthful actor, source, mesh,
+        program, and request identities.  This method intentionally provides
+        no reverse or synthetic compatibility path.
+        """
+
+        request = LiveCandidateEvidenceRequest(
+            candidate_set.request_binding_hash,
+            selected_attempt_indices,
+            execution_hash,
+            state_key,
+            overlay,
+            show_view_directions,
+        )
+        retained = self.state.candidates.evidence
+        if (
+            retained is not None
+            and self.state.candidates.evidence_candidate_set is candidate_set
+            and self.state.candidates.evidence_request == request
+        ):
+            return retained
+        view = candidate_evidence_view_from_live(
+            candidate_set,
+            selected_attempt_indices=selected_attempt_indices,
+            execution_hash=execution_hash,
+            state_key=state_key,
+            overlay=overlay,
+            show_view_directions=show_view_directions,
+        )
+        self.state.candidates.evidence = view
+        self.state.candidates.evidence_request = request
+        self.state.candidates.evidence_candidate_set = candidate_set
+        return view
 
     def get_depths(self, *, force: bool) -> CandidateDepths:
         """Render and cache candidate depths for the current sample."""
@@ -224,6 +281,9 @@ class PipelineController:
         self.state.candidates.candidates = batch.candidates
         self.state.candidates.cfg_sig = config_signature(cfg.generator)
         self.state.candidates.sample_key = skey
+        self.state.candidates.evidence = None
+        self.state.candidates.evidence_request = None
+        self.state.candidates.evidence_candidate_set = None
 
         self.state.depth.depths = batch.depths
         self.state.depth.cfg_sig = config_signature(cfg.depth)
