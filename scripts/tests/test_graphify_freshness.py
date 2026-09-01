@@ -565,7 +565,10 @@ save_manifest(result['files'], manifest_path=manifest, root=root, scan_corpus=co
             payload = freshness.check(self.root)
 
         self.assertEqual(payload["state"], "unusable", payload)
-        self.assertIn("unbounded stale-source set", " ".join(payload["reasons"]))
+        self.assertIn(
+            "non-ancestor Graphify corpus differs from HEAD",
+            " ".join(payload["reasons"]),
+        )
         self.assertGreaterEqual(len(calls), 2, "HEAD snapshot was not checked")
 
     def test_nonancestor_committed_source_drift_is_seen_after_worktree_restore(
@@ -777,6 +780,29 @@ save_manifest(result['files'], manifest_path=manifest, root=root, scan_corpus=co
 
         self.assertEqual(payload["state"], "usable-stale", payload)
         self.assertIn("semantic refresh required", " ".join(payload["reasons"]))
+
+    def test_removed_generated_projection_input_is_usable_stale(self) -> None:
+        generated = self.root / "graphify-input/thesis/obsolete.md"
+        generated.parent.mkdir(exist_ok=True)
+        generated.write_text("obsolete generated projection\n", encoding="utf-8")
+        self._save_upstream_manifest()
+        generated.unlink()
+
+        payload = self.payload()
+
+        self.assertEqual(payload["state"], "usable-stale", payload)
+        self.assertIn("projection removed", " ".join(payload["reasons"]))
+
+    def test_unbounded_semantic_refresh_is_usable_stale(self) -> None:
+        for index in range(freshness.MAX_STALE_SOURCES + 1):
+            path = self.root / f"semantic/{index}.md"
+            path.parent.mkdir(exist_ok=True)
+            path.write_text(f"semantic {index}\n", encoding="utf-8")
+
+        payload = self.payload()
+
+        self.assertEqual(payload["state"], "usable-stale", payload)
+        self.assertIn("semantic refresh requires an unbounded", " ".join(payload["reasons"]))
 
     def test_projection_index_symlink_is_unusable_even_when_target_is_in_root(
         self,

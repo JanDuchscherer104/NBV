@@ -180,6 +180,33 @@ def _contained_existing(root: Path, value: str) -> str:
     return relative
 
 
+def _generated_projection_path(root: Path, value: str) -> bool:
+    """Return whether a detector deletion is a local generated projection file."""
+    candidate = Path(value)
+    try:
+        if candidate.is_absolute():
+            relative = candidate.resolve(strict=False).relative_to(root.resolve())
+        else:
+            relative = Path(_normalize_path(value))
+    except (OSError, RuntimeError, ValueError):
+        return False
+    return relative.parts[:1] == ("graphify-input",) and relative.suffix == ".md"
+
+
+def _generated_projection_deletions(root: Path, result: dict[str, Any]) -> set[str]:
+    """Return validated removed projection paths from one detector result."""
+    values = result.get("deleted_files")
+    if not isinstance(values, list) or any(not isinstance(path, str) for path in values):
+        raise ValueError("Graphify detector has invalid deleted_files")
+    return {
+        Path(path).resolve(strict=False).relative_to(root.resolve()).as_posix()
+        if Path(path).is_absolute()
+        else _normalize_path(path)
+        for path in values
+        if _generated_projection_path(root, path)
+    }
+
+
 def _projection_metadata(
     index: Path,
 ) -> tuple[str, str | None, str, dict[str, str]]:
@@ -654,7 +681,12 @@ def _detector_sources(
         values = result.get(key)
         if not isinstance(values, list) or any(not isinstance(path, str) for path in values):
             raise ValueError(f"Graphify detector has invalid {key}")
-        if values:
+        unexpected = values
+        if key == "deleted_files":
+            unexpected = [
+                path for path in values if not _generated_projection_path(root, path)
+            ]
+        if unexpected:
             raise ValueError(f"Graphify detector reported {key}")
     files = result.get("files")
     if not isinstance(files, dict) or set(files) != supported_kinds:
@@ -741,11 +773,20 @@ def check(root: Path) -> dict[str, Any]:
         semantic_stale, _ = _detector_sources(
             root, semantic, {"document", "paper", "image"}
         )
+        projection_deletions = _generated_projection_deletions(
+            root, ast
+        ) | _generated_projection_deletions(root, semantic)
+        if projection_deletions:
+            reasons.append(
+                "Graphify projection removed "
+                f"{len(projection_deletions)} semantic input(s)"
+            )
         ast_refresh_required = bool(ast_stale)
+        semantic_refresh_unbounded = len(semantic_stale) > MAX_STALE_SOURCES
         if len(ast_stale) > MAX_STALE_SOURCES:
             raise ValueError("Graphify detector reported an unbounded stale-source set")
-        if len(semantic_stale) > MAX_STALE_SOURCES:
-            raise ValueError("Graphify detector reported an unbounded stale-source set")
+        if semantic_refresh_unbounded:
+            reasons.append("Graphify semantic refresh requires an unbounded source set")
         overlay_stale = sorted(ast_stale | semantic_stale)
         committed_stale: list[str] = []
         if projection_commit_tree != head_tree or graph_commit_tree != head_tree:
@@ -770,8 +811,9 @@ def check(root: Path) -> dict[str, Any]:
                         "Graphify detector reported an unbounded stale-source set"
                     )
                 if len(committed_semantic_stale) > MAX_STALE_SOURCES:
-                    raise ValueError(
-                        "Graphify detector reported an unbounded stale-source set"
+                    semantic_refresh_unbounded = True
+                    reasons.append(
+                        "Graphify semantic refresh requires an unbounded source set"
                     )
                 committed_stale = sorted(
                     committed_ast_stale | committed_semantic_stale

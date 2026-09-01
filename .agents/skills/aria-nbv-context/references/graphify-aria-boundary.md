@@ -40,10 +40,11 @@ The public states are exhaustive. `fresh` has intact artifacts, valid owner and
 detector checks, and a mandatory detector-proven zero-delta corpus. Matching
 recorded or locally derived Git trees establishes non-ancestor identity but
 never bypasses that detector requirement. `usable-stale` has an exact bounded
-`stale_sources` list or owner reasons; full-tree equality may retain this state
-for a bounded worktree delta. Every other incomplete, corrupt, wrong-root, true
-corpus mismatch, missing-object, or unscoped result is `unusable`. These states
-govern navigation only; Graphify never owns the located fact.
+`stale_sources` list, owner reasons, or a declared pending semantic refresh;
+full-tree equality may retain this state for a bounded worktree delta. Every
+other incomplete, corrupt, wrong-root, true AST/code corpus mismatch,
+missing-object, or unscoped result is `unusable`. These states govern
+navigation only; Graphify never owns the located fact.
 
 The checker records and accepts only canonical full hexadecimal commit OIDs and
 derives trees from objects independently verified as commits. It always scans
@@ -62,15 +63,15 @@ child projection only for owner changes and never invokes upstream semantic
 extraction during worktree creation. A
 receipt, matching semantic counts, or matching Git commit never substitutes for
 the pinned upstream detector and ancestry checks. A parent whose detector result
-is unbounded, has AST/code drift, or is otherwise unusable requires repair
-before a new session can start. A bounded pending semantic or semantic-deep
-refresh is `usable-stale`: setup may start the task with the last valid graph,
-and the task must verify affected sources directly until it completes an
-upstream-accounted refresh. A Git HEAD mismatch alone is not staleness when the
+has unbounded AST/code drift or is otherwise unusable requires repair before a
+new session can start. Pending semantic or semantic-deep refresh—whether its
+affected source set is bounded or not—is `usable-stale`: setup may start the
+task with the last valid graph, and the task must verify affected sources
+directly until it completes an upstream-accounted refresh. A Git HEAD mismatch alone is not staleness when the
 recorded graph and projection revisions are ancestors and indexed bytes still
 match. Semantic refreshes use `fork_turns="none"` and account for every
 dispatched file. Strict diagnostics remain internal CI and pre-push owner
-checks, not a worktree-creation gate for bounded semantic pending state.
+checks, not a worktree-creation gate for pending semantic state.
 
 ## Upstream Lifecycle And Hooks
 
