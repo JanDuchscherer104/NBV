@@ -1,68 +1,160 @@
 #import "@preview/fletcher:0.5.8" as fletcher: diagram, edge, node
 
-#set page(width: auto, height: auto, margin: 4mm, fill: white)
-#set text(font: "New Computer Modern", size: 9pt)
+#set page(width: 160mm, height: 88mm, margin: 1.5mm, fill: white)
+#set text(font: "New Computer Modern", size: 8.5pt, fill: rgb("#17202a"))
 
-#let ink = rgb("#1f2937")
-#let muted = rgb("#64748b")
-#let validity = rgb("#b45309")
-#let oracle = rgb("#7c3aed")
-#let actor = rgb("#2563eb")
-#let outcome = rgb("#15803d")
+#let ink = rgb("#17202a")
+#let muted = rgb("#52606d")
+#let foundation = rgb("#9a5a13")
+#let oracle = rgb("#6d45a8")
+#let actor = rgb("#2563a6")
+#let outcome = rgb("#187246")
+#let neutral-fill = rgb("#f5f7fa")
 
-#let gate(pos, number, title, evidence, tint, width: 51mm) = node(
+#let gate(pos, number, title, evidence, tint, name) = node(
   pos,
   align(left)[
-    #text(size: 6.4pt, weight: "bold", fill: tint)[GATE #number] \
-    #text(size: 8.0pt, weight: "bold", fill: ink)[#title] \
-    #text(size: 6.7pt, fill: muted)[#evidence]
+    #text(size: 7.1pt, weight: "bold", fill: tint)[G#number] \
+    #text(size: 8pt, weight: "bold", fill: ink)[#title] \
+    #text(size: 7.1pt, fill: muted)[#evidence]
   ],
-  width: width,
-  inset: 6pt,
+  name: name,
+  width: 31mm,
+  height: 17mm,
+  inset: 5pt,
   fill: tint.lighten(95%),
-  stroke: .85pt + tint,
+  stroke: .9pt + tint,
   corner-radius: 3pt,
 )
 
-#let flow(from, to, label: none) = edge(
+#let and-node(pos, name) = node(
+  pos,
+  text(size: 6.5pt, weight: "bold", fill: ink)[AND],
+  name: name,
+  radius: 4.1mm,
+  fill: white,
+  stroke: 1pt + ink,
+)
+
+#let lane-title(pos, body, width) = node(
+  pos,
+  text(size: 7pt, weight: "bold", fill: muted)[#upper(body)],
+  width: width,
+  inset: 0pt,
+  stroke: none,
+)
+
+#let relation(from, to, label: none) = edge(
   from,
   to,
   "-|>",
-  label: if label == none { none } else { text(size: 6.3pt, fill: muted)[#label] },
+  label: if label == none { none } else { text(size: 6.7pt, fill: muted)[#label] },
   label-fill: white,
-  stroke: .9pt + muted,
+  stroke: .95pt + muted,
 )
 
 #diagram(
-  spacing: 8pt,
-  cell-size: (55mm, 19mm),
-  edge-stroke: .85pt + muted,
-  edge-corner-radius: 4pt,
-  mark-scale: 72%,
+  spacing: 4pt,
+  cell-size: (18.5mm, 12mm),
+  edge-stroke: .95pt + muted,
+  edge-corner-radius: 3pt,
+  mark-scale: 70%,
 
-  gate((0, 0), [1], [Measurement validity], [frozen metric identity; repeatability within tolerance], validity),
-  gate((1.5, 0), [2], [Population and action support], [held-out scenes; admitted targets; complete hard-valid tables], validity),
-  gate((1.5, 1.5), [3], [Oracle headroom], [equal-budget lookahead versus one-step oracle greedy], oracle),
-  gate((0, 1.5), [4], [Actor-visible $Q_1$], [target-conditioned ranking and calibration without oracle inputs], actor),
-  gate((0, 3), [5], [Exact $Q_2$], [held-out recursive error and complete-support coverage], actor),
-  gate((1.5, 3), [6], [Endpoint recovery], [paired held-out endpoint gain and recovered headroom], outcome),
+  lane-title((.3, -.85), [shared foundations], 48mm),
+  lane-title((1.6, -.85), [parallel claim paths], 55mm),
+  lane-title((2.5, -.85), [RQ2 convergence], 31mm),
+
+  gate(
+    (0, 0),
+    [1],
+    [Measurement validity],
+    [repeatability statistic + decision],
+    foundation,
+    <g1>,
+  ),
+  gate(
+    (0, 1.5),
+    [2],
+    [Population / action],
+    [held-out coverage + support decision],
+    foundation,
+    <g2>,
+  ),
+  and-node((.55, .75), <foundation-and>),
+
+  gate(
+    (1.2, 0),
+    [3],
+    [Oracle headroom],
+    [paired held-out endpoint effect],
+    oracle,
+    <g3>,
+  ),
+  gate(
+    (1.2, 1.5),
+    [4],
+    [Actor-visible $Q_1$],
+    [target / mask / history; ranking + calibration],
+    actor,
+    <g4>,
+  ),
+  gate(
+    (1.95, 1.5),
+    [5],
+    [$Q_2$ agreement],
+    [learned vs. exact recursion + complete support],
+    actor,
+    <g5>,
+  ),
+
+  and-node((2.5, .75), <recovery-and>),
+  gate(
+    (2.5, 2.85),
+    [6],
+    [Endpoint recovery],
+    [paired recovered-headroom decision],
+    outcome,
+    <g6>,
+  ),
+
+  relation(<g1.east>, <foundation-and.north-west>),
+  relation(<g2.east>, <foundation-and.south-west>),
+  relation(<foundation-and.north-east>, <g3.west>),
+  relation(<foundation-and.south-east>, <g4.west>),
+  relation(<g4.east>, <g5.west>),
+  relation(<g3.east>, <recovery-and.north-west>),
+  relation(<g5.east>, <recovery-and.south-west>),
+  relation(<recovery-and.south>, <g6.north>, label: [both pass]),
 
   node(
-    (.75, 4.45),
+    (.65, 4.25),
     align(center)[
-      #text(size: 7.2pt, weight: "bold", fill: ink)[Interpret the first failed gate] \
-      #text(size: 6.7pt, fill: muted)[Downstream quantities remain unavailable; they are not recorded as zero and cannot rescue the claim.]
+      #text(size: 7.4pt, weight: "bold", fill: ink)[Evidence state — reported] \
+      #text(size: 7.2pt, fill: muted)[? unavailable  |  × measured non-pass  |  ✓ pass]
     ],
-    width: 126mm,
-    inset: 6pt,
-    fill: rgb("#f8fafc"),
+    width: 64mm,
+    inset: 5pt,
+    fill: neutral-fill,
+    stroke: (paint: muted, thickness: .75pt, dash: "dashed"),
+    corner-radius: 3pt,
+  ),
+  node(
+    (2.2, 4.25),
+    align(center)[
+      #text(size: 7.4pt, weight: "bold", fill: ink)[Claim state — derived] \
+      #text(size: 7.2pt, fill: muted)[admissible iff own gate + all predecessors pass]
+    ],
+    width: 66mm,
+    inset: 5pt,
+    fill: neutral-fill,
     stroke: .75pt + muted,
     corner-radius: 3pt,
   ),
-
-  flow((0, 0), (1.5, 0), label: [valid]),
-  flow((1.5, 0), (1.5, 1.5), label: [supported]),
-  flow((1.5, 1.5), (0, 1.5), label: [meaningful]),
-  flow((0, 1.5), (0, 3), label: [learnable]),
-  flow((0, 3), (1.5, 3), label: [recursive]),
+  node(
+    (1.43, 4.25),
+    text(size: 11pt, weight: "bold", fill: ink)[$!=$],
+    width: 8mm,
+    inset: 0pt,
+    stroke: none,
+  ),
 )

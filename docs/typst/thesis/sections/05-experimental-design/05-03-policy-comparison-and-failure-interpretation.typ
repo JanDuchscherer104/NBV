@@ -39,28 +39,51 @@ target-quality gain. Crop, mesh, rendering, backprojection, fusion, point cap,
 and point--mesh metric identity are shared across policies. The analysis
 manifest freezes exclusions, within-scene aggregation, interval procedure,
 comparison family, meaningful headroom, and recovered-headroom threshold before
-learned-policy outcomes are inspected. Ratios are reported only when their
-headroom denominator passes the meaningful-effect gate.
+learned-policy outcomes are inspected. The confirmatory analysis records the
+three per-policy endpoint estimates and intervals before deriving either
+contrast, and binds their scene count, cohort identity, aggregation, interval
+method, and provenance to both the headroom and recovery facts. Ratios and their
+decisions are reported only when this contract is complete and their headroom
+denominator passes the meaningful-effect gate. That gate records a positive,
+prospectively justified
+minimum effect in the analysis manifest and applies the frozen rule
+`effect_gte_minimum_and_ci_low_gt_zero_v1`: the paired point estimate must meet
+the declared minimum and the 95% interval's lower bound must be strictly above
+zero. Its reported boolean must equal that literal comparison; a measured
+non-pass remains available evidence, whereas a contradictory decision leaves
+the gate unavailable. The derived headroom effect and recovery point estimate
+must also reproduce the endpoint means within a fixed numeric serialization
+tolerance.
+
+The recovery gate analogously records a positive required fraction no larger
+than one and applies `fraction_gte_minimum_and_ci_low_gt_zero_v1`. Its point
+estimate must reach the frozen minimum and its interval must support positive
+mean recovery. The interval is obtained by jointly resampling paired scenes and
+recomputing numerator and denominator in every bootstrap replicate; unstable or
+nonpositive replicate denominators are handled by the frozen analysis rule, not
+silently discarded. This gate does not claim that the population recovery
+fraction exceeds the declared minimum; that stronger claim would require the
+interval lower bound itself to reach the minimum.
 
 #figure(
   publication-table(
-    text-size: 7.7pt,
-    columns: (0.72fr, 1.08fr, 1.32fr, 1.28fr),
-    header: ([*First failed gate*], [*Admitted interpretation*], [*Not implied*], [*Next discriminating evidence*]),
+    text-size: 7.3pt,
+    columns: (0.62fr, 0.9fr, 1.08fr, 1.6fr),
+    header: ([*Prerequisite*], [*If evidence is unavailable*], [*If its decision does not pass*], [*Boundary and next discriminating evidence*]),
     rows: (
-      [measurement], [the oracle outcome is not stable enough for comparison], [anything about planning, learning, or support], [repair and repeat the frozen metric protocol],
-      [population / action support], [the requested estimand lacks an adequate study or action population], [zero utility or policy failure], [report exclusions, family survival, horizon coverage, and resource failures],
-      [oracle headroom], [no meaningful non-myopic structure was detected in the frozen setup], [universal myopia or model inadequacy], [change support or horizon only in a separately declared study],
-      [actor-visible $Q_1$], [the available actor information does not recover immediate target value], [a specifically long-horizon failure], [audit target matching, leakage, calibration, and state support],
-      [exact $Q_2$], [the first learned recursion is unsupported or inaccurate], [endpoint planning value or a need for more architecture], [separate coverage, $Q_1$ error, successor linkage, and bootstrap error],
-      [endpoint recovery], [the admitted learned policy does not recover prespecified headroom], [which mechanism failed], [stratify by support, target observability, replay coverage, and state aliasing],
+      [measurement], [metric validity is unresolved], [the oracle outcome is not stable enough for comparison], [Neither state implies planning, learning, or support behavior; complete or repair and repeat the frozen metric protocol.],
+      [population / action support], [the study and action population is unresolved], [the requested estimand lacks adequate population support], [Neither state implies zero utility or policy failure; report exclusions, family survival, horizon coverage, and resource failures.],
+      [oracle headroom], [non-myopic headroom is unresolved], [the frozen study does not admit the headroom claim], [Inspect whether the point estimate misses the declared minimum, the interval includes zero, or both; none implies universal myopia or model inadequacy.],
+      [actor-visible $Q_1$], [immediate-value recovery is unresolved], [the available actor information does not recover immediate target value], [Neither state establishes a specifically long-horizon failure; complete or audit target matching, leakage, calibration, and state support.],
+      [learned / exact $Q_2$], [recursive agreement is unresolved], [the first learned recursion is unsupported or inaccurate], [Neither state establishes endpoint planning value or a need for more architecture; separate coverage, $Q_1$ error, linkage, and bootstrap error.],
+      [endpoint recovery], [endpoint recovery is unresolved], [the admitted learned policy does not recover prespecified headroom], [Neither state identifies the failed mechanism; complete or stratify by support, observability, replay coverage, and state aliasing.],
     ),
   ),
-  caption: [Failure-attribution matrix. Interpretation stops at the first failed gate; downstream architecture stories remain hypotheses.],
+  caption: [Failure-attribution matrix. Unavailable evidence and an observed non-pass both block dependent claims, but only the latter supports a negative gate result. Measurements on an independent lane remain diagnostics rather than counterevidence.],
 ) <tab:thesis-failure-attribution>
 
 #validation_todo(
-  [Populate the six gates in order. Missing upstream evidence blocks downstream quantities rather than becoming a zero result.],
+  [Populate all six gate decisions and their dependency paths. Missing evidence blocks dependent claims rather than becoming a zero result or suppressing measurements from an independent lane.],
   source: [confirmatory report bundle and exact-Q2 receipt],
   gate: [artifact-backed Results chapter],
 )

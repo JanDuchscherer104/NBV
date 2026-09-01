@@ -21,10 +21,11 @@ matches the factual finite-support control
 
 The resulting error is model evidence: it measures the learned ``Q_1`` path
 inside the recursion. Candidate and selected-action rows from one scene are
-correlated observations, not independent replications. V2 therefore aggregates
-the row ledger by ``(ordered_store_manifest_sha256, scene_id)`` and requires
-every selected unit to pass. It is distinct from implementation-recursion
-parity, which injects an exact one-step table and belongs in unit tests.
+correlated observations, not independent replications. The certification
+therefore aggregates the row ledger by
+``(ordered_store_manifest_sha256, scene_id)`` and requires every selected unit
+to pass. It is distinct from implementation-recursion parity, which injects an
+exact one-step table and belongs in unit tests.
 Positive oracle-lookahead headroom is also distinct and remains an
 independently owned endpoint-policy prerequisite for claims above horizon two.
 """
@@ -45,11 +46,23 @@ from ..data_handling.qh_data import QhBatch, QhChain, collate_qh_chains
 from ..rollouts.qh_reader import QhRolloutChainIdentity
 from .qh_module import QhLightningModule
 
-QH_EXACT_Q2_CERTIFICATION_SCHEMA_VERSION = "qh-exact-q2-certification-v2"
+QH_EXACT_Q2_CERTIFICATION_SCHEMA_VERSION = "qh-exact-q2-certification-v6"
 QH_EXACT_Q2_SELECTION_SEMANTICS = "balanced-hash-within-scene-target-support-strata-v2"
 QH_EXACT_Q2_INDEPENDENT_UNIT_SEMANTICS = "ordered-store-manifest-and-scene-v1"
 QH_EXACT_Q2_INDEPENDENT_UNIT_AGGREGATION = "all_units_v1"
 QH_CANDIDATE_BRANCH_BINS = (1, 4, 8, 16, 32, 64)
+_FLOAT32_MAX = float(torch.finfo(torch.float32).max)
+
+
+def _is_finite_float32(value: object) -> bool:
+    """Return whether ``value`` can be represented as finite float32 evidence."""
+
+    return (
+        isinstance(value, (int, float))
+        and not isinstance(value, bool)
+        and math.isfinite(value)
+        and abs(value) <= _FLOAT32_MAX
+    )
 
 
 class _QhCertificationDataset(Protocol):
@@ -127,9 +140,9 @@ class QhExactQ2CertificationSpec:
     def __post_init__(self) -> None:
         """Reject meaningless or unbounded certification settings."""
 
-        if not math.isfinite(self.absolute_tolerance) or self.absolute_tolerance < 0.0:
+        if not _is_finite_float32(self.absolute_tolerance) or self.absolute_tolerance < 0.0:
             raise ValueError("Q_H exact-Q2 absolute_tolerance must be finite and nonnegative.")
-        if not math.isfinite(self.relative_tolerance) or self.relative_tolerance < 0.0:
+        if not _is_finite_float32(self.relative_tolerance) or self.relative_tolerance < 0.0:
             raise ValueError("Q_H exact-Q2 relative_tolerance must be finite and nonnegative.")
         if self.minimum_independent_units < 5:
             raise ValueError("Q_H exact-Q2 minimum_independent_units must be at least the frozen core floor of five.")
@@ -420,6 +433,13 @@ class QhExactQ2Certifier:
         census = {
             "selection_semantics": QH_EXACT_Q2_SELECTION_SEMANTICS,
             "candidate_branch_bins": list(QH_CANDIDATE_BRANCH_BINS),
+            "chains": [
+                {
+                    "dataset_index": index,
+                    "identity": asdict(identity),
+                }
+                for index, identity in enumerate(identities)
+            ],
             "population_chain_count": len(identities),
             "selected_chain_count": len(allocated),
             "selected_chain_fraction": selected_fraction,
@@ -446,22 +466,99 @@ class QhExactQ2Certifier:
         # target owner; these attributes are its typed batching contract.
         actor = batch.actor
         supervision = batch.supervision
+        successor_action_mask = batch.successor_action_mask
         successor_backup_mask = batch.successor_backup_mask
         output: list[dict[str, object]] = []
         for step_tensor in step_indices:
             step = int(step_tensor.item())
             recursive = float(recursive_targets[0, step].item())
             exact = float(exact_targets[0, step].item())
-            if not math.isfinite(recursive) or not math.isfinite(exact):
+            if not _is_finite_float32(recursive) or not _is_finite_float32(exact):
                 raise ValueError("Q_H exact-Q2 certification encountered a non-finite target.")
             absolute_error = abs(recursive - exact)
             tolerance = self.spec.absolute_tolerance + self.spec.relative_tolerance * abs(exact)
             relative_error = absolute_error / max(abs(exact), torch.finfo(torch.float32).eps)
+            if not all(_is_finite_float32(value) for value in (absolute_error, tolerance, relative_error)):
+                raise ValueError("Q_H exact-Q2 error evidence must remain within the finite float32 domain.")
             current_width = int(actor.candidate_mask[0, step].sum().item())
-            successor_width = int(successor_backup_mask[0, step].sum().item())
+            successor_action = successor_action_mask[0, step]
+            successor_backup = successor_backup_mask[0, step]
+            successor_action_width = int(successor_action.sum().item())
+            successor_width = int(successor_backup.sum().item())
             selected_index = int(supervision.selected_index[0, step].item())
-            immediate_reward = float(supervision.candidate_reward[0, step, selected_index].item())
+            current_action = actor.action_mask[0, step]
+            current_label = supervision.label_mask[0, step]
+            current_backup = current_action & current_label
+            current_action_width = int(current_action.sum().item())
+            current_label_width = int(current_label.sum().item())
+            current_backup_width = int(current_backup.sum().item())
+            current_indices = torch.nonzero(current_backup, as_tuple=False).flatten().tolist()
+            if (
+                current_action_width < 1
+                or not torch.equal(current_backup, current_action)
+                or selected_index < 0
+                or selected_index >= current_width
+                or not bool(current_backup[selected_index].item())
+                or current_indices != sorted(set(current_indices))
+            ):
+                raise ValueError("Q_H exact-Q2 selected action must have complete hard-valid current-state support.")
+            current_reward_ledger = [
+                {
+                    "candidate_index": index,
+                    "reward": float(supervision.candidate_reward[0, step, index].item()),
+                }
+                for index in current_indices
+            ]
+            if len(current_reward_ledger) != current_backup_width or not all(
+                _is_finite_float32(entry["reward"]) for entry in current_reward_ledger
+            ):
+                raise ValueError("Q_H exact-Q2 current reward ledger must contain finite float32 evidence.")
+            immediate_reward = float(
+                next(entry["reward"] for entry in current_reward_ledger if entry["candidate_index"] == selected_index)
+            )
             discount = float(supervision.discount[0, step].item())
+            terminal = bool(supervision.terminal[0, step].item())
+            if terminal or step + 1 >= supervision.candidate_reward.shape[1]:
+                raise ValueError("Q_H exact-Q2 row must have a factual nonterminal successor state.")
+            successor_candidate_count = int(actor.candidate_mask[0, step + 1].sum().item())
+            if not (
+                identity.candidate_width_min <= current_width <= identity.candidate_width_max
+                and identity.candidate_width_min <= successor_candidate_count <= identity.candidate_width_max
+            ):
+                raise ValueError("Q_H exact-Q2 materialized width is outside the declared candidate-width range.")
+            if successor_action_width < 1 or not torch.equal(successor_backup, successor_action):
+                raise ValueError("Q_H exact-Q2 row must bind every hard-valid successor reward.")
+            successor_indices = torch.nonzero(successor_backup, as_tuple=False).flatten().tolist()
+            if (
+                len(successor_indices) != successor_width
+                or successor_indices != sorted(set(successor_indices))
+                or any(index < 0 or index >= successor_candidate_count for index in successor_indices)
+            ):
+                raise ValueError("Q_H exact-Q2 successor reward count is inconsistent with its support mask.")
+            successor_reward_ledger = [
+                {
+                    "candidate_index": index,
+                    "reward": float(supervision.candidate_reward[0, step + 1, index].item()),
+                }
+                for index in successor_indices
+            ]
+            if len(successor_reward_ledger) != successor_action_width or not all(
+                _is_finite_float32(entry["reward"]) for entry in successor_reward_ledger
+            ):
+                raise ValueError("Q_H exact-Q2 successor reward ledger must contain finite float32 evidence.")
+            successor_max_reward = max(float(entry["reward"]) for entry in successor_reward_ledger)
+            transition_values = (immediate_reward, discount, successor_max_reward)
+            if not all(_is_finite_float32(value) for value in transition_values) or discount < 0.0:
+                raise ValueError("Q_H exact-Q2 transition evidence must be finite with nonnegative discount.")
+            discounted_successor = discount * successor_max_reward
+            derived_exact = immediate_reward + discounted_successor
+            identity_scale = max(1.0, abs(immediate_reward), abs(discounted_successor), abs(exact))
+            identity_tolerance = 8.0 * torch.finfo(torch.float32).eps * identity_scale
+            transition_derivatives = (discounted_successor, derived_exact, identity_scale, identity_tolerance)
+            if not all(_is_finite_float32(value) for value in transition_derivatives):
+                raise ValueError("Q_H exact-Q2 transition arithmetic must remain within the finite float32 domain.")
+            if abs(exact - derived_exact) > identity_tolerance:
+                raise ValueError("Q_H exact-Q2 target is inconsistent with its factual transition evidence.")
             output.append(
                 {
                     "dataset_index": dataset_index,
@@ -483,11 +580,20 @@ class QhExactQ2Certifier:
                     "rollout_config_hash": identity.rollout_config_hash,
                     "selection_policy": identity.selection_policy,
                     "current_candidate_count": current_width,
+                    "current_action_count": current_action_width,
+                    "current_label_count": current_label_width,
+                    "current_backup_count": current_backup_width,
+                    "current_reward_ledger": current_reward_ledger,
+                    "successor_action_count": successor_action_width,
+                    "successor_candidate_count": successor_candidate_count,
                     "successor_backup_count": successor_width,
                     "candidate_branch_bin": _candidate_branch_bin(successor_width),
                     "selected_index": selected_index,
                     "immediate_reward": immediate_reward,
                     "discount": discount,
+                    "terminal": terminal,
+                    "successor_reward_ledger": successor_reward_ledger,
+                    "successor_max_reward": successor_max_reward,
                     "recursive_target": recursive,
                     "exact_target": exact,
                     "absolute_error": absolute_error,

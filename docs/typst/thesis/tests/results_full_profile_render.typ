@@ -1,0 +1,133 @@
+// Layout-only fixture: synthetic values exercise every confirmatory result row.
+// It is not a thesis evidence bundle and must never be cited as scientific data.
+#import "../experiment_data.typ": endpoint-evidence-contract, headroom-evidence-contract, recovery-evidence-contract, population-evidence-contract, measurement-evidence-contract, candidate-support-evidence-contract, q1-evidence-contract, q2-evidence-contract, report-stores-facts-share-values, report-value-matches-kind
+#import "../sections/06-results.typ": all-result-summary-families, result-summary-rows-for, result-summary-table
+
+#set page(paper: "a4", margin: 25mm)
+#set text(font: "New Computer Modern", size: 10pt)
+
+#let store-id = "synthetic-layout-only"
+#let evidence-fact-contract = (
+  population-evidence-contract,
+  measurement-evidence-contract,
+  candidate-support-evidence-contract,
+  endpoint-evidence-contract,
+  headroom-evidence-contract,
+  q1-evidence-contract,
+  q2-evidence-contract,
+  recovery-evidence-contract,
+).flatten()
+// Resource rows are presentation-only: experiment_data.typ does not yet define
+// a canonical evidence contract for them, so keep their exact writer units local.
+#let resource-fact-contract = (
+  (key: "runtime.wall_time_s", unit: "s", value_kind: "number"),
+  (key: "runtime.peak_gpu_bytes", unit: "byte", value_kind: "integer"),
+  (key: "storage.total_bytes", unit: "byte", value_kind: "integer"),
+)
+#let fact-contract = evidence-fact-contract + resource-fact-contract
+#let contract-for(key) = {
+  let matches = fact-contract.filter(contract => contract.key == key)
+  assert(matches.len() == 1, message: "expected one result fact contract: " + key)
+  matches.first()
+}
+#let fixture-value(contract) = if contract.value_kind == "boolean" {
+  true
+} else if contract.value_kind == "integer" {
+  24
+} else if contract.value_kind == "number" {
+  0.125
+} else if contract.value_kind == "string" {
+  "synthetic-layout-only"
+} else {
+  assert(false, message: "unsupported result fact value kind: " + contract.value_kind)
+}
+#let keys = ()
+#for family in all-result-summary-families {
+  for metric in family.metrics {
+    keys.push(metric.key)
+    for optional-key in (
+      metric.at("low-key", default: none),
+      metric.at("high-key", default: none),
+      metric.at("denominator-key", default: none),
+    ) {
+      if optional-key != none { keys.push(optional-key) }
+    }
+  }
+}
+#let keys = keys.dedup()
+#let facts = keys.map(key => {
+  let contract = contract-for(key)
+  (
+    store_id: store-id,
+    key: key,
+    value: fixture-value(contract),
+    unit: contract.unit,
+    n: 24,
+  )
+})
+#assert(facts.all(fact => {
+  let contract = contract-for(fact.key)
+  fact.unit == contract.unit and report-value-matches-kind(fact.value, contract.value_kind)
+}), message: "result fixture facts must match their exact unit and value-kind contracts")
+#let report = (
+  tables: (
+    stores: (rows: ((store_id: store-id, name: "synthetic-layout-only"),)),
+    facts: (rows: facts),
+  ),
+)
+#let two-store-report = (
+  tables: (
+    stores: (rows: report.tables.stores.rows + ((store_id: "synthetic-layout-only-b", name: "synthetic-layout-only-b"),)),
+    facts: (rows: facts + facts.map(fact => fact + (store_id: "synthetic-layout-only-b",))),
+  ),
+)
+#let reversed-two-store-report = (
+  tables: (
+    stores: (rows: two-store-report.tables.stores.rows.rev()),
+    facts: two-store-report.tables.facts,
+  ),
+)
+
+= Full-profile results layout fixture
+
+This page set exercises every current result family at final A4 size. Values are
+synthetic layout tokens only.
+
+#let bands = (
+  (id: "foundations", expected: 17, caption: [Population, measurement, and candidate-support rows]),
+  (id: "policy", expected: 9, caption: [Endpoint, headroom, and recovery rows]),
+  (id: "q1", expected: 5, caption: [Actor-$Q_1$ ranking, calibration, and threshold rows]),
+  (id: "q2", expected: 12, caption: [Exact-$Q_2$ agreement and threshold rows]),
+  (id: "resources", expected: 3, caption: [Resource rows]),
+)
+
+#for band in bands {
+  let families = all-result-summary-families.filter(family => family.band == band.id)
+  let metric-count = families.fold(0, (total, family) => total + family.metrics.len())
+  assert(metric-count == band.expected, message: "result-summary family size drift: " + band.id)
+  let global-band = band.id in ("q1", "q2")
+  let scope = if global-band { "global" } else { "profile" }
+  let rows = result-summary-rows-for(report, families, scope: scope)
+  if global-band {
+    let global-rows = result-summary-rows-for(two-store-report, families, scope: "global")
+    let reversed-global-rows = result-summary-rows-for(reversed-two-store-report, families, scope: "global")
+    assert(global-rows.len() == rows.len(), message: "global " + band.id + " rows must render once, not once per profile")
+    assert(global-rows == reversed-global-rows, message: "shared global " + band.id + " rows must not depend on store order")
+    let display-keys = families.map(family => family.metrics.map(metric => metric.key)).flatten()
+    assert(report-stores-facts-share-values(two-store-report, display-keys))
+    let divergent-key = if band.id == "q1" { "q1.calibration.mae" } else { "q2.exact.mae" }
+    let divergent-report = (
+      tables: (
+        stores: two-store-report.tables.stores,
+        facts: (rows: two-store-report.tables.facts.rows.map(fact => if fact.store_id == "synthetic-layout-only-b" and fact.key == divergent-key {
+          fact + (value: 0.875,)
+        } else { fact })),
+      ),
+    )
+    assert(not report-stores-facts-share-values(divergent-report, display-keys))
+  }
+  figure(
+    result-summary-table(rows),
+    caption: [Layout-only render of #band.caption.],
+  )
+}

@@ -25,10 +25,21 @@ validity rules, horizon, and budget defines oracle-lookahead headroom:
 #eqs.entity.lookahead_headroom
 
 The learned comparison proceeds only if headroom passes a predeclared
-meaningful-effect and uncertainty rule. Because that rule and the required
-recovery fraction are not yet frozen, RQ2 remains prospective. If headroom is
-absent, the evaluated support does not expose a non-myopic advantage; this does
-not establish its universal absence.
+meaningful-effect and uncertainty rule: the paired point estimate must reach a
+manifest-declared positive minimum effect and its 95% interval must exclude zero
+on the positive side. Because the numeric minimum effect and required
+recovery fraction are not yet supplied by a frozen analysis manifest, RQ2
+remains prospective. A non-pass means that the frozen study does not admit the
+headroom claim: the point estimate may fall below the declared minimum, its
+interval may not establish a positive mean effect, or both. None establishes
+the universal absence of non-myopic advantage.
+
+Conditional on admitted headroom and learned-value evidence, endpoint recovery
+uses the same two-part interpretation: its point estimate must reach a positive,
+manifest-declared fraction no larger than one, while a paired joint-bootstrap
+interval must support positive mean recovery. This is a threshold on the point
+estimate, not a confidence claim that the population recovers at least that
+fraction.
 
 === Conditions for interpretation
 
@@ -73,6 +84,12 @@ RQ4 measures candidate-family survival, invalidity, scene and target coverage,
 replay and horizon support, and resource cost. Scene-disjoint splits and
 scene-level aggregation prevent dense sampling from masquerading as population
 coverage.
+
+Its minimum factual-support gate is necessary but not sufficient for a positive
+answer: lower-tail valid count and failed-root frequency determine whether the
+other claim lanes have an operational action population. Candidate-family
+survival and target-relative side/orbit coverage remain separate diversity
+evidence and cannot be inferred from passage of that minimum gate.
 
 === Scope extensions
 

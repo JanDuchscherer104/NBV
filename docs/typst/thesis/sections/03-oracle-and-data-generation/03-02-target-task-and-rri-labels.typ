@@ -324,6 +324,21 @@ annotated as uncapped spherical support and are not represented by a bounded box
   caption: [Candidate-generation diagnostics and their aggregation populations. Every state-level quantity is reduced before scene and cohort aggregation.],
 ) <tab:candidate-support-metric-contract>
 
+Confirmatory admission uses one scene cohort and immutable sidecar. Within each
+scene it averages actor-valid counts across attempted roots, then takes the
+nearest-rank empirical P05 across scene means (the $ceil(0.05 n)$-th ordered
+scene value). Failed-root rate macro-averages the per-scene fractions below
+`min_valid_root_candidates`. The frozen rule admits minimum factual support only
+when P05 reaches its minimum and failed-root rate does not exceed its maximum.
+Actor-valid fraction, family-zero rate, side balance, and orbit span remain
+diagnostic; passage does not imply diverse proposal geometry. Missing, malformed,
+or contradictory rows leave the gate unresolved.
+
+The writer retains rejection outcomes but not passing-root counts. Admission
+therefore awaits an independently frozen benchmark roster plus an immutable
+receipt that records every planned scene/root identity, valid count, threshold,
+and outcome. The observed receipt cannot define its own completeness criterion.
+
 === Rollout Branch Sampling and Dataset Impact
 
 Rollout recipes select and retain finite chains from the valid action table. The implemented families are uniform valid sampling, one-step oracle greedy selection, bounded oracle lookahead, and temperature-softmax sampling. Their horizon, branch factor, beam width, temperature, and seed are resolved parameters. These recipes generate replay diversity and bounded references; they do not constitute a learned policy.
@@ -405,7 +420,10 @@ The completeness reduction gives every mesh face equal weight. It is deliberatel
 === Reliability under the Frozen Protocol
 
 Reliability asks whether repeated execution of the same declared intervention
-produces stable errors and candidate rankings. It therefore covers rendering,
+produces stable errors and candidate rankings. A frozen benchmark roster fixes
+the expected repeat identifiers and count, measurement identities, and ranking
+groups before the observed receipt is read; ranks are derived from bound gains
+under a declared direction and tie rule. Reliability therefore covers rendering,
 backprojection, crop construction, point fusion and capping, numerical failure
 handling, and any stochastic sampling used by the metric. Deterministic code
 paths and a fixed mesh make the protocol reproducible in principle, but they do

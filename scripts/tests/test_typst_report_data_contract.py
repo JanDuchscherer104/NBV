@@ -7,7 +7,6 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parents[2]
 TEST_ROOT = ROOT / "docs" / "typst" / "thesis" / "tests"
 
@@ -30,6 +29,7 @@ def _compile(
         ],
         cwd=ROOT,
         capture_output=True,
+        check=False,
         text=True,
     )
     succeeded = result.returncode == 0
@@ -49,6 +49,9 @@ def main() -> None:
     with tempfile.TemporaryDirectory(prefix="aria-nbv-report-data-") as temp:
         output_dir = Path(temp)
         _compile("report_data_smoke", output_dir, expect_success=True)
+        _compile("evidence_gate_state", output_dir, expect_success=True)
+        _compile("learning_gate_evidence_contract", output_dir, expect_success=True)
+        _compile("recovery_evidence_contract", output_dir, expect_success=True)
         expected_lookup_error = (
             "expected one thesis report fact for store and key: store-a / metric"
         )

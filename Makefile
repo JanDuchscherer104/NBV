@@ -1,5 +1,5 @@
 .DEFAULT_GOAL := help
-.PHONY: help ci ci-impact-self-test ownership-consolidation-contract typst-authoring-contract thesis-literature-provenance skill-source-self-test graphify-skill-upstream-self-test graphify-projection-self-test graphify-projection-live-check graphify-usable-check graphify-state-check graphify-maintain graphify-session-readiness-integration scaffold-check agents-db-validate package-smoke qh-ci replay-oracle-golden docs-render-core quarto-docs-ci typst-paper-ci thesis-pdf-ci thesis-marker-contract ruff-full ruff-targeted mypy-contract mypy-full mypy-targeted coverage-targeted agent-status
+.PHONY: help ci ci-impact-self-test ownership-consolidation-contract typst-authoring-contract thesis-literature-provenance skill-source-self-test graphify-skill-upstream-self-test graphify-projection-self-test graphify-projection-live-check graphify-usable-check graphify-state-check graphify-maintain graphify-session-readiness-integration scaffold-check agents-db-validate package-smoke qh-ci replay-oracle-golden docs-render-core quarto-docs-ci typst-paper-ci thesis-pdf-ci thesis-results-full-profile-render thesis-marker-contract ruff-full ruff-targeted mypy-contract mypy-full mypy-targeted coverage-targeted agent-status
 .PHONY: api-docs-self-test
 .PHONY: context-qmd-tree qmd-frontmatter-check
 .PHONY: context-index context-get context-contracts context-modules context-classes context-functions
@@ -785,6 +785,22 @@ thesis-pdf-ci: ## Compile the development thesis into an ignored CI artifact pat
 	@mkdir -p "$(CI_RENDER_DIR)"
 	@$(TYPST) compile --root $(TYPST_ROOT) $(TYPST_THESIS) "$(CI_RENDER_DIR)/thesis.pdf"
 
+thesis-results-full-profile-render: ## Render every dynamic Results family with synthetic layout-only values
+	@mkdir -p "$(CI_RENDER_DIR)"
+	@$(TYPST) compile --root $(TYPST_ROOT) docs/typst/thesis/tests/results_full_profile_render.typ "$(CI_RENDER_DIR)/thesis-results-full-profile.pdf"
+	@pdfinfo -f 1 -l 2 -box "$(CI_RENDER_DIR)/thesis-results-full-profile.pdf" | awk '\
+		/^Pages:/ { pages = $$2 } \
+		/^Page +[0-9]+ size:/ { \
+			page_sizes += 1; \
+			if ($$4 != "595.276" || $$6 != "841.89" || $$8 != "(A4)") bad_size = 1; \
+		} \
+		END { \
+			if (pages != 2 || page_sizes != 2 || bad_size) { \
+				printf "expected exactly 2 A4 pages, got pages=%s checked_sizes=%s bad_size=%s\n", pages, page_sizes, bad_size > "/dev/stderr"; \
+				exit 1; \
+			} \
+		}'
+
 scientific-report-v2-smoke: ## Compile bundle-v2 and prove pilot evidence fails its publication gate
 	@mkdir -p "$(CI_RENDER_DIR)"
 	@$(TYPST) compile --root $(TYPST_ROOT) docs/typst/thesis/tests/report_data_v2_smoke.typ "$(CI_RENDER_DIR)/report-data-v2-smoke.pdf"
@@ -811,7 +827,7 @@ typst-authoring-contract: _check_python ## Enforce shared-equation, notation, la
 thesis-literature-provenance: _check_python ## Check Related Work citation identity and source locators
 	@$(PYTHON_INTERPRETER) -m pytest --import-mode=importlib scripts/tests/test_thesis_literature_provenance.py
 
-docs-render-core: graphify-projection-self-test graphify-projection-live-check quarto-docs-ci typst-paper-ci typst-paper-table-contract thesis-pdf-ci scientific-report-v2-smoke typst-table-gallery thesis-report-data-contract typst-authoring-contract thesis-marker-contract thesis-literature-provenance ## Render the core docs surfaces used by root CI
+docs-render-core: graphify-projection-self-test graphify-projection-live-check quarto-docs-ci typst-paper-ci typst-paper-table-contract thesis-pdf-ci thesis-results-full-profile-render scientific-report-v2-smoke typst-table-gallery thesis-report-data-contract typst-authoring-contract thesis-marker-contract thesis-literature-provenance ## Render the core docs surfaces used by root CI
 
 qh-ci: ## Run the focused CPU-only Q_H training and distributed contracts
 	@cd $(PKG_DIR) && $(QH_CI_PYTHON) -m ruff format --check $(QH_CI_RUFF_PATHS)

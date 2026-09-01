@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import shutil
 from pathlib import Path
 from typing import Any, cast
@@ -56,6 +57,18 @@ from aria_nbv.rollouts.reporting import (
 )
 from aria_nbv.rollouts.zarr_store import RolloutZarrStoreReader, write_rollout_zarr_store
 from tests.rollout_fixtures import build_rollout_records
+
+
+def test_sidecar_projection_digest_matches_typst_contract_vector() -> None:
+    rows = reporting._typed_leaf_rows(  # noqa: SLF001 - cross-language contract vector
+        "sidecar_id",
+        "s",
+        {"a": 1.0, "b": True, "c": "x", "d": None, "e": -0.0, "f": 100000000000000000000.0},
+    )
+
+    assert reporting._sidecar_projection_sha256(rows) == (  # noqa: SLF001
+        "1750c9bcf4b196a453faad414e2d901a7b7f4d3c71936c435fb0503316c5b529"
+    )
 
 
 def test_persisted_contract_payload_separates_one_compatibility_field() -> None:
@@ -173,7 +186,7 @@ def test_requested_shallow_tables_skip_unrelated_deep_projections(
     assert not frames["stores"].empty
     assert not frames["facts"].empty
     assert frames["targets"].empty
-    assert b'"schema_version":"aria-nbv-thesis-report-v1"' in serialize_thesis_report_bundle(frames)
+    assert b'"schema_version":"aria-nbv-thesis-report-v2"' in serialize_thesis_report_bundle(frames)
 
 
 def test_report_export_requests_only_candidate_facets_it_serializes(
@@ -1294,6 +1307,7 @@ def test_report_frames_preserve_parameters_sidecars_missingness_and_provenance(t
     assert sidecar_values.loc["records[0].accepted", "value_bool"]
     expected_hash = hashlib.sha256(sidecar.read_bytes()).hexdigest()
     assert frames["sidecars"].iloc[0]["sha256"] == expected_hash
+    assert re.fullmatch(r"[0-9a-f]{64}", frames["sidecars"].iloc[0]["projection_sha256"])
     assert frames["sidecars"].iloc[0]["path"] == sidecar.name
     assert frames["sidecars"].iloc[0]["status"] == "pilot"
     assert frames["stores"].iloc[0]["manifest_sha256"] == result.manifest_sha256
@@ -1428,6 +1442,13 @@ def test_analysis_fact_sidecar_promotes_typed_facts_with_stable_provenance(tmp_p
         assert row["source"].startswith("analysis/paired_policy.json|sidecar:")
     assert frames["sidecars"].iloc[0]["name"] == "paired-policy-analysis"
     assert frames["sidecars"].iloc[0]["path"] == "paired-policy-analysis"
+    expected_sidecar_id = hashlib.sha256(
+        (
+            f"paired-policy-analysis\0{frames['sidecars'].iloc[0]['sha256']}"
+            f"\0{frames['sidecars'].iloc[0]['projection_sha256']}"
+        ).encode()
+    ).hexdigest()
+    assert frames["sidecars"].iloc[0]["sidecar_id"] == expected_sidecar_id
     assert set(frames["sidecar_values"]["sidecar_id"]) == {frames["sidecars"].iloc[0]["sidecar_id"]}
 
 

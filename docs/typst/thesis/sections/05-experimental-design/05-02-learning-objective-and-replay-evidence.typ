@@ -62,3 +62,49 @@ checkpoint bundle, or low error on a few rows cannot establish finite-horizon
 value. Actor-visible $Q_1$ must first pass on held-out scenes; exact $Q_2$ must
 then pass its frozen independent-unit, coverage, and tolerance rules; endpoint
 recovery is interpreted only if oracle headroom is already meaningful.
+
+The report contract preserves those populations explicitly. Its
+content-addressed candidate ledger binds each decoded actor-visible prediction
+to its persisted one-step target and admission masks. Pairwise accuracy first
+averages strict unequal-label comparisons within state and then averages states
+within globally unique held-out scenes; prediction ties are errors. States with
+no unequal-label pair do not contribute a ranking value, and a scene with no
+pair-supported state invalidates the receipt rather than silently changing the
+scene population. Calibration still uses every state with admitted finite
+prediction--label rows. The reported
+point estimate is the scene macro-average and its 95% bounds use a deterministic
+leave-one-scene-out jackknife normal interval. One-step calibration MAE averages
+candidate absolute errors within state and then uses the same scene weighting.
+The frozen $Q_1$
+rule requires the point ranking to reach a declared threshold above chance, the
+interval lower bound to exceed chance $0.5$, and calibration MAE not to exceed
+its declared maximum. This supports point-estimated threshold attainment and
+evidence above chance, not the stronger claim that the population ranking
+exceeds the declared threshold.
+
+The exact-$Q_2$ receipt keeps aggregate MAE diagnostic. Its coverage
+denominator is reconstructed from the complete metadata-only held-out chain
+identity roster captured before bounded selection; every selected chain and
+reported stratum must reconcile to that roster. Promotion instead
+mirrors the executable `all_units_v1` contract: selected-chain coverage reaches
+its frozen minimum, every selected support stratum contains an exact factual
+row, the selected independent-unit count and minimum rows per unit meet their
+floors, and the maximum rowwise excess over the frozen absolute-plus-relative
+tolerance is nonpositive. Each metric, threshold, count, and boolean decision
+shares its declared positive population denominator and one immutable sidecar
+source; a malformed value, aggregation, unit, count, provenance, rule identity,
+or contradictory boolean leaves the gate unresolved rather than producing a
+measured non-pass. Actor-$Q_1$, exact-$Q_2$, and learned-policy endpoint evidence
+must name one content-addressed inference bundle before their claims compose;
+weight-free oracle headroom remains independent.
+
+For each exact row, the tolerance contract is
+
+$
+  #eqs.rl.qh_exact_q2_error
+$
+
+and the reported tolerance excess subtracts the right-hand allowance from the
+left-hand absolute error. Thus a maximum excess at or below zero proves that
+every admitted exact row satisfies the frozen absolute-plus-relative bound; it
+cannot be replaced by a pooled MAE.

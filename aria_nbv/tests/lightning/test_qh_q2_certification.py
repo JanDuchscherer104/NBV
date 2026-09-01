@@ -4,11 +4,12 @@
 
 from __future__ import annotations
 
-from dataclasses import replace
+from dataclasses import asdict, replace
 
 import pytest
 import torch
 
+from aria_nbv.data_handling.qh_data import collate_qh_chains
 from aria_nbv.lightning.qh_q2_certification import (
     QhDecoderSupport,
     QhExactQ2CertificationSpec,
@@ -63,16 +64,17 @@ def test_exact_q2_certifier_is_bounded_deterministic_and_semantically_explicit()
         selection_seed=17,
     )
     certifier = QhExactQ2Certifier(spec)
+    dataset = _dataset(10, scene_count=5)
 
     first = certifier.certify(
         module=module,
-        dataset=_dataset(10, scene_count=5),
+        dataset=dataset,
         device=torch.device("cpu"),
         ordered_store_manifest_sha256=_ORDERED_STORE_MANIFEST_SHA256,
     )
     second = certifier.certify(
         module=module,
-        dataset=_dataset(10, scene_count=5),
+        dataset=dataset,
         device=torch.device("cpu"),
         ordered_store_manifest_sha256=_ORDERED_STORE_MANIFEST_SHA256,
     )
@@ -82,7 +84,11 @@ def test_exact_q2_certifier_is_bounded_deterministic_and_semantically_explicit()
     assert census["selected_chain_count"] == 5
     assert census["selected_chain_fraction"] == pytest.approx(0.5)
     assert census["near_exhaustive"] is False
+    assert census["chains"] == [
+        {"dataset_index": index, "identity": asdict(dataset.chain_identity(index))} for index in range(len(dataset))
+    ]
     assert first["selected_chain_support"] == second["selected_chain_support"]
+    assert first["factual_selected_action_exact_q2_rows"] == second["factual_selected_action_exact_q2_rows"]
     assert first["aggregate"] == {
         "factual_selected_action_exact_q2_row_count": 5,
         "within_tolerance_count": 5,
@@ -95,6 +101,7 @@ def test_exact_q2_certifier_is_bounded_deterministic_and_semantically_explicit()
         "tolerance_passed": True,
     }
     assert first["learned_recursion_passed"] is True
+    assert first["schema_version"] == "qh-exact-q2-certification-v6"
     assert sum(row["factual_selected_action_exact_q2_row_count"] for row in first["support_stratum_aggregates"]) == 5
     assert first["evidence_semantics"] == {
         "quantity": "learned_recursive_q2_target_error_against_factual_dense_successor_control",
@@ -103,6 +110,27 @@ def test_exact_q2_certifier_is_bounded_deterministic_and_semantically_explicit()
         "longer_horizon_claim": False,
     }
     assert {row["candidate_branch_bin"] for row in first["factual_selected_action_exact_q2_rows"]} == {"2-4"}
+    for row in first["factual_selected_action_exact_q2_rows"]:
+        assert row["current_action_count"] == row["current_label_count"] == row["current_backup_count"] == 3
+        assert row["current_reward_ledger"] == [
+            {"candidate_index": 0, "reward": 0.0},
+            {"candidate_index": 1, "reward": 0.5},
+            {"candidate_index": 2, "reward": 0.0},
+        ]
+        assert row["immediate_reward"] == pytest.approx(0.5)
+        assert row["discount"] == pytest.approx(0.9)
+        assert row["terminal"] is False
+        assert row["successor_action_count"] == row["successor_backup_count"] == 3
+        assert row["successor_candidate_count"] == 3
+        assert row["successor_reward_ledger"] == [
+            {"candidate_index": 0, "reward": 2.0},
+            {"candidate_index": 1, "reward": 0.0},
+            {"candidate_index": 2, "reward": 0.0},
+        ]
+        assert row["successor_max_reward"] == pytest.approx(2.0)
+        assert row["exact_target"] == pytest.approx(
+            row["immediate_reward"] + row["discount"] * row["successor_max_reward"]
+        )
     assert first["independent_unit_gate"] == {
         "independent_unit_semantics": "ordered-store-manifest-and-scene-v1",
         "aggregation": "all_units_v1",
@@ -122,6 +150,155 @@ def test_exact_q2_certifier_is_bounded_deterministic_and_semantically_explicit()
         "states_with_complete_hard_valid_successor_labels_count": 5,
         "factual_selected_action_exact_q2_row_count": 5,
     }
+
+
+def test_exact_q2_successor_reward_ledger_is_canonical_for_negative_ties() -> None:
+    chain = _dataset(1, scene_count=1).chains[0]
+    chain = replace(
+        chain,
+        supervision=replace(
+            chain.supervision,
+            candidate_reward=torch.tensor([[0.0, 0.5, 0.0], [-2.0, -2.0, -3.0]]),
+        ),
+    )
+
+    evidence = QhExactQ2Certifier(
+        QhExactQ2CertificationSpec(
+            absolute_tolerance=100.0,
+            relative_tolerance=0.0,
+            minimum_independent_units=5,
+            minimum_exact_rows_per_independent_unit=1,
+            independent_unit_aggregation="all_units_v1",
+            minimum_population_coverage=1.0,
+        )
+    ).certify(
+        module=_module(),
+        dataset=_ChainDataset([chain], scene="held-out"),
+        device=torch.device("cpu"),
+        ordered_store_manifest_sha256=_ORDERED_STORE_MANIFEST_SHA256,
+    )
+
+    row = evidence["factual_selected_action_exact_q2_rows"][0]
+    assert row["successor_reward_ledger"] == [
+        {"candidate_index": 0, "reward": -2.0},
+        {"candidate_index": 1, "reward": -2.0},
+        {"candidate_index": 2, "reward": -3.0},
+    ]
+    assert row["successor_max_reward"] == -2.0
+
+
+def test_exact_q2_certifier_rejects_different_action_and_backup_candidates() -> None:
+    dataset = _dataset(1, scene_count=1)
+    chain = dataset.chains[0]
+    supervision = replace(
+        chain.supervision,
+        label_mask=torch.tensor([[True, True, True], [False, True, True]]),
+    )
+    batch = collate_qh_chains([replace(chain, supervision=supervision)])
+    certifier = QhExactQ2Certifier(
+        QhExactQ2CertificationSpec(
+            absolute_tolerance=100.0,
+            relative_tolerance=0.0,
+            minimum_independent_units=5,
+            minimum_exact_rows_per_independent_unit=1,
+            independent_unit_aggregation="all_units_v1",
+            minimum_population_coverage=1.0,
+        )
+    )
+
+    with pytest.raises(ValueError, match="every hard-valid successor reward"):
+        certifier._row_evidence(
+            batch=batch,
+            identity=dataset.chain_identity(0),
+            dataset_index=0,
+            selection_rank=0,
+            step_indices=torch.tensor([0]),
+            recursive_targets=torch.tensor([[2.3, 0.0]]),
+            exact_targets=torch.tensor([[2.3, 0.0]]),
+            ordered_store_manifest_sha256=_ORDERED_STORE_MANIFEST_SHA256,
+        )
+
+
+@pytest.mark.parametrize("materialized_width, declared_width", [(2, 3), (3, 2)])
+def test_exact_q2_certifier_rejects_materialized_width_outside_declared_range(
+    materialized_width: int,
+    declared_width: int,
+) -> None:
+    dataset = _dataset(1, scene_count=1)
+    chain = dataset.chains[0]
+    candidate_mask = chain.actor.candidate_mask.clone()
+    action_mask = chain.actor.action_mask.clone()
+    label_mask = chain.supervision.label_mask.clone()
+    candidate_mask[1, materialized_width:] = False
+    action_mask[1, materialized_width:] = False
+    label_mask[1, materialized_width:] = False
+    chain = replace(
+        chain,
+        key=replace(
+            chain.key,
+            candidate_width_min=declared_width,
+            candidate_width_max=declared_width,
+        ),
+        actor=replace(
+            chain.actor,
+            candidate_mask=candidate_mask,
+            action_mask=action_mask,
+        ),
+        supervision=replace(chain.supervision, label_mask=label_mask),
+    )
+    certifier = QhExactQ2Certifier(
+        QhExactQ2CertificationSpec(
+            absolute_tolerance=100.0,
+            relative_tolerance=0.0,
+            minimum_independent_units=5,
+            minimum_exact_rows_per_independent_unit=1,
+            independent_unit_aggregation="all_units_v1",
+            minimum_population_coverage=1.0,
+        )
+    )
+
+    with pytest.raises(ValueError, match="declared candidate-width range"):
+        certifier.certify(
+            module=_module(),
+            dataset=_ChainDataset([chain], scene="held-out"),
+            device=torch.device("cpu"),
+            ordered_store_manifest_sha256=_ORDERED_STORE_MANIFEST_SHA256,
+        )
+
+
+@pytest.mark.parametrize("reward", [float("inf"), float("nan"), 1e100])
+def test_exact_q2_certifier_rejects_nonfinite_successor_ledger_rewards(reward: float) -> None:
+    dataset = _dataset(1, scene_count=1)
+    chain = dataset.chains[0]
+    candidate_reward = chain.supervision.candidate_reward.to(torch.float64).clone()
+    candidate_reward[1, 0] = reward
+    chain = replace(
+        chain,
+        supervision=replace(chain.supervision, candidate_reward=candidate_reward),
+    )
+    batch = collate_qh_chains([chain])
+    certifier = QhExactQ2Certifier(
+        QhExactQ2CertificationSpec(
+            absolute_tolerance=100.0,
+            relative_tolerance=0.0,
+            minimum_independent_units=5,
+            minimum_exact_rows_per_independent_unit=1,
+            independent_unit_aggregation="all_units_v1",
+            minimum_population_coverage=1.0,
+        )
+    )
+
+    with pytest.raises(ValueError, match="successor reward ledger"):
+        certifier._row_evidence(
+            batch=batch,
+            identity=dataset.chain_identity(0),
+            dataset_index=0,
+            selection_rank=0,
+            step_indices=torch.tensor([0]),
+            recursive_targets=torch.tensor([[0.0, 0.0]]),
+            exact_targets=torch.tensor([[0.0, 0.0]]),
+            ordered_store_manifest_sha256=_ORDERED_STORE_MANIFEST_SHA256,
+        )
 
 
 def test_exact_q2_certifier_reports_coral_support_saturation_separately() -> None:
@@ -273,11 +450,32 @@ def test_exact_q2_certifier_fails_closed_on_incomplete_lineage() -> None:
         )
 
 
+def test_exact_q2_certifier_rejects_derived_metrics_outside_float32() -> None:
+    spec = QhExactQ2CertificationSpec(
+        absolute_tolerance=0.0,
+        relative_tolerance=float(torch.finfo(torch.float32).max),
+        minimum_independent_units=5,
+        minimum_exact_rows_per_independent_unit=1,
+        independent_unit_aggregation="all_units_v1",
+    )
+
+    with pytest.raises(ValueError, match="finite float32 domain"):
+        QhExactQ2Certifier(spec).certify(
+            module=_module(),
+            dataset=_dataset(1),
+            device=torch.device("cpu"),
+            ordered_store_manifest_sha256=_ORDERED_STORE_MANIFEST_SHA256,
+        )
+
+
 @pytest.mark.parametrize(
     "update",
     [
         {"absolute_tolerance": -1.0},
+        {"absolute_tolerance": True},
         {"relative_tolerance": float("nan")},
+        {"relative_tolerance": 1e308},
+        {"relative_tolerance": True},
         {"minimum_independent_units": 4},
         {"minimum_exact_rows_per_independent_unit": 0},
         {"independent_unit_aggregation": "mean_units_v1"},

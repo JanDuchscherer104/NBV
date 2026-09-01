@@ -113,7 +113,7 @@ class _ManifestSnapshotReader(RolloutZarrStoreReader):
         return getattr(self._reader, name)
 
 
-THESIS_REPORT_BUNDLE_VERSION = "aria-nbv-thesis-report-v1"
+THESIS_REPORT_BUNDLE_VERSION = "aria-nbv-thesis-report-v2"
 """Schema version for compact thesis-report JSON bundles."""
 
 THESIS_REPORT_BUNDLE_ROLE = "evidence"
@@ -529,7 +529,7 @@ THESIS_REPORT_TABLE_COLUMNS: dict[str, tuple[str, ...]] = {
         "status",
         "source",
     ),
-    "sidecars": ("sidecar_id", "path", "name", "sha256", "format", "status"),
+    "sidecars": ("sidecar_id", "path", "name", "sha256", "projection_sha256", "format", "status"),
     "sidecar_values": ("sidecar_id", "key", *_VALUE_COLUMNS),
 }
 """Stable table names and column order consumed by the thesis bundle."""
@@ -1949,7 +1949,11 @@ def _append_sidecar_rows(
         raise ValueError(f"Unsupported report sidecar format for {sidecar_path}; expected .json or .jsonl.")
     digest = hashlib.sha256(data).hexdigest()
     logical_name = _sidecar_logical_name(payload, fallback=sidecar_path.name)
-    sidecar_id = hashlib.sha256(f"{logical_name}\0{digest}".encode()).hexdigest()
+    projected_rows = _typed_leaf_rows("sidecar_id", "", payload)
+    projection_digest = _sidecar_projection_sha256(projected_rows)
+    sidecar_id = hashlib.sha256(f"{logical_name}\0{digest}\0{projection_digest}".encode()).hexdigest()
+    for row in projected_rows:
+        row["sidecar_id"] = sidecar_id
     if any(row["sidecar_id"] == sidecar_id for row in rows["sidecars"]):
         return
     promoted = _analysis_fact_rows(
@@ -1973,11 +1977,12 @@ def _append_sidecar_rows(
             "path": logical_name,
             "name": logical_name,
             "sha256": digest,
+            "projection_sha256": projection_digest,
             "format": format_name,
             "status": evidence_status,
         }
     )
-    rows["sidecar_values"].extend(_typed_leaf_rows("sidecar_id", sidecar_id, payload))
+    rows["sidecar_values"].extend(projected_rows)
     rows["facts"].extend(promoted)
 
 
@@ -2086,6 +2091,39 @@ def _typed_leaf_rows(owner_key: str, owner: str, payload: Any) -> list[dict[str,
     for key, value in _flatten_leaves(payload):
         output.append({owner_key: owner, "key": key, **_typed_value(value)})
     return output
+
+
+def _sidecar_projection_sha256(rows: list[dict[str, Any]]) -> str:
+    """Hash the canonical typed projection consumed by the thesis."""
+
+    def token(value: str) -> str:
+        return f"{len(value.encode('utf-8'))}:{value}"
+
+    def canonical_value(row: dict[str, Any]) -> str:
+        value_type = str(row["value_type"])
+        if value_type == "null":
+            return ""
+        if value_type == "bool":
+            return "true" if bool(row["value_bool"]) else "false"
+        if value_type == "int":
+            return str(int(row["value_int"]))
+        if value_type == "float":
+            value = float(row["value_float"])
+            if value == 0.0:
+                return "0"
+            return np.format_float_positional(value, unique=True, trim="-")
+        if value_type == "str":
+            return str(row["value_text"])
+        raise ValueError(f"Unsupported sidecar projection value_type {value_type!r}.")
+
+    payload = "\n".join(
+        token(str(row["key"]))
+        + token(str(row["value_type"]))
+        + token("true" if bool(row["is_missing"]) else "false")
+        + token(canonical_value(row))
+        for row in sorted(rows, key=lambda row: str(row["key"]))
+    )
+    return hashlib.sha256(payload.encode()).hexdigest()
 
 
 def _fact_rows(

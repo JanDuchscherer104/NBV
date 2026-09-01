@@ -58,11 +58,15 @@ _PYTORCH3D_VCS_COMMIT = "b6a77ad7aaf41ed90fca80ce6a2bac3c462a7881"
 _IDENTITY_FIELDS = {
     "actor_state_contract",
     "actor_state_contract_hash",
+    "actor_state_contract_payload_sha256",
     "learning_contract",
     "learning_contract_hash",
+    "learning_contract_payload_sha256",
     "geometry_contract_hash",
     "datasets",
+    "dataset_payload_sha256s",
     "dataset_provenance",
+    "dataset_provenance_payload_sha256s",
     "ordered_store_manifests",
     "ordered_store_paths",
     "warm_start_parent_manifest_sha256",
@@ -649,9 +653,13 @@ class QhExperiment:
             and headroom.get("positive_lookahead_headroom", False)
         )
         receipt = {
-            "schema_version": "qh-exact-q2-certification-receipt-v2",
+            "schema_version": "qh-exact-q2-certification-receipt-v6",
             "historical_compatibility": {
                 "qh-exact-q2-certification-receipt-v1": "inspection_only_not_promotable",
+                "qh-exact-q2-certification-receipt-v2": "inspection_only_not_promotable",
+                "qh-exact-q2-certification-receipt-v3": "inspection_only_not_promotable",
+                "qh-exact-q2-certification-receipt-v4": "inspection_only_not_promotable",
+                "qh-exact-q2-certification-receipt-v5": "inspection_only_not_promotable",
             },
             "bundle_manifest_sha256": request.bundle.manifest_sha256,
             "test_population_sha256": _json_payload_hash(request.test),
@@ -663,8 +671,10 @@ class QhExperiment:
                 "module_config": manifest["module_config"],
                 "learning_contract_hash": identity["learning_contract_hash"],
                 "learning_contract": identity["learning_contract"],
+                "learning_contract_payload_sha256": identity["learning_contract_payload_sha256"],
                 "actor_state_contract_hash": identity["actor_state_contract_hash"],
                 "actor_state_contract": identity["actor_state_contract"],
+                "actor_state_contract_payload_sha256": identity["actor_state_contract_payload_sha256"],
                 "geometry_contract_hash": identity["geometry_contract_hash"],
                 "action_mask_semantics": identity["action_mask_semantics"],
                 "representation_semantics": identity["representation_semantics"],
@@ -767,6 +777,15 @@ class QhExperiment:
         }
         for name, digest in sorted((artifact_hashes or {}).items()):
             artifacts[name] = {"path": name, "sha256": digest}
+        identity = dict(identity)
+        identity["actor_state_contract_payload_sha256"] = _json_payload_hash(identity["actor_state_contract"])
+        identity["learning_contract_payload_sha256"] = _json_payload_hash(identity["learning_contract"])
+        identity["dataset_payload_sha256s"] = {
+            stage: _json_payload_hash(payload) for stage, payload in identity["datasets"].items()
+        }
+        identity["dataset_provenance_payload_sha256s"] = {
+            stage: _json_payload_hash(payload) for stage, payload in identity["dataset_provenance"].items()
+        }
         manifest: dict[str, Any] = {
             "schema_version": QH_INFERENCE_BUNDLE_SCHEMA_VERSION,
             "scorer_type": "TargetFiniteHorizonScorer",
@@ -979,7 +998,9 @@ class QhExperiment:
             )
             artifacts = manifest["artifacts"]
             datasets = identity["datasets"]
+            dataset_payload_sha256s = identity["dataset_payload_sha256s"]
             dataset_provenance = identity["dataset_provenance"]
+            dataset_provenance_payload_sha256s = identity["dataset_provenance_payload_sha256s"]
             ordered_store_manifests = identity["ordered_store_manifests"]
             ordered_store_paths = identity["ordered_store_paths"]
         except (KeyError, TypeError, ValueError) as error:
@@ -998,6 +1019,10 @@ class QhExperiment:
             raise ValueError("Q_H bundle actor-state contract hash does not match its payload.")
         if identity.get("learning_contract_hash") != learning_hash:
             raise ValueError("Q_H bundle learning contract hash does not match its payload.")
+        if identity.get("actor_state_contract_payload_sha256") != _json_payload_hash(actor_payload):
+            raise ValueError("Q_H bundle actor-state contract payload digest does not match its payload.")
+        if identity.get("learning_contract_payload_sha256") != _json_payload_hash(learning_payload):
+            raise ValueError("Q_H bundle learning contract payload digest does not match its payload.")
         if module.actor_state_contract_hash != actor_hash or module.learning_contract_hash != learning_hash:
             raise ValueError("Q_H bundle module config is not bound to the manifest contracts.")
         if learning_contract.max_horizon > scorer.max_horizon:
@@ -1059,11 +1084,18 @@ class QhExperiment:
         if set(datasets) != {"train", "validation", "test"}:
             raise ValueError("Q_H bundle must bind train, validation, and test dataset configs.")
         if (
-            set(dataset_provenance) != set(datasets)
+            set(dataset_payload_sha256s) != set(datasets)
+            or set(dataset_provenance) != set(datasets)
+            or set(dataset_provenance_payload_sha256s) != set(datasets)
             or set(ordered_store_manifests) != set(datasets)
             or set(ordered_store_paths) != set(datasets)
         ):
             raise ValueError("Q_H bundle dataset provenance stages are incomplete.")
+        for stage in datasets:
+            if dataset_payload_sha256s[stage] != _json_payload_hash(datasets[stage]):
+                raise ValueError(f"Q_H bundle {stage} dataset payload digest does not match its payload.")
+            if dataset_provenance_payload_sha256s[stage] != _json_payload_hash(dataset_provenance[stage]):
+                raise ValueError(f"Q_H bundle {stage} provenance payload digest does not match its payload.")
         if isinstance(identity["seed"], bool) or not isinstance(identity["seed"], int):
             raise ValueError("Q_H bundle seed identity must be one integer.")
         warm_start_identity = identity["warm_start_parent_manifest_sha256"]
