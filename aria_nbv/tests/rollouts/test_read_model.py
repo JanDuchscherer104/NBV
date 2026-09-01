@@ -10,6 +10,7 @@ import zarr
 
 from aria_nbv.rollouts import RolloutZarrStoreReader
 from aria_nbv.rollouts.read_model import (
+    StoredCandidateCriterion,
     rollout_at,
     rollout_by_id,
     rollout_rows,
@@ -29,6 +30,35 @@ def _reader(tmp_path, *, selected_depth_enabled: bool = True) -> RolloutZarrStor
         selected_depth_enabled=selected_depth_enabled,
     )
     return RolloutZarrStoreReader(result.store_dir)
+
+
+def _criterion_axis(value: int, *, dtype: np.dtype) -> np.ndarray:
+    axis = np.asarray([value], dtype=dtype)
+    axis.setflags(write=False)
+    return axis
+
+
+@pytest.mark.parametrize(("reason_code", "source_role"), [(999, 1), (-1, 999)])
+def test_stored_candidate_criterion_rejects_undeclared_codes(
+    reason_code: int,
+    source_role: int,
+) -> None:
+    """Known criterion revisions reject unregistered audit-code values."""
+
+    with pytest.raises(ValueError, match="undeclared codes"):
+        StoredCandidateCriterion(
+            criterion_id="fixture",
+            legacy_cumulative_valid=_criterion_axis(1, dtype=np.dtype(np.bool_)),
+            local_available=_criterion_axis(1, dtype=np.dtype(np.bool_)),
+            applicable=_criterion_axis(1, dtype=np.dtype(np.bool_)),
+            evaluated=_criterion_axis(1, dtype=np.dtype(np.bool_)),
+            passed=_criterion_axis(1, dtype=np.dtype(np.bool_)),
+            reason_code=_criterion_axis(reason_code, dtype=np.dtype(np.int64)),
+            margin=_criterion_axis(0, dtype=np.dtype(np.float32)),
+            source_role=_criterion_axis(source_role, dtype=np.dtype(np.int64)),
+            reason_revision="candidate_admission_v1",
+            source_role_revision="candidate_admission_v1",
+        )
 
 
 def test_rollout_at_decodes_context_and_orders_steps(tmp_path) -> None:
@@ -115,7 +145,6 @@ def test_rollout_steps_reuse_reader_local_candidate_shell_index(tmp_path) -> Non
     assert np.array_equal(second[0].candidate_row_positions, expected_positions)
     assert [step.candidate_row_ids.tolist() for step in second] == [step.candidate_row_ids.tolist() for step in first]
     assert calls == {
-        "candidates/candidate_row_id": 1,
         "candidates/step_row_id": 1,
         "candidates/shell_index": 1,
     }
@@ -132,6 +161,9 @@ def test_candidate_shell_index_caches_empty_candidate_table(tmp_path) -> None:
         dtype = np.int32 if path == "candidates/shell_index" else np.int64
         return np.empty(0, dtype=dtype)
 
+    empty_ids = np.empty(0, dtype=np.int64)
+    empty_ids.setflags(write=False)
+    reader._candidate_row_ids = empty_ids  # noqa: SLF001 - exercise the empty cached-axis contract.
     reader.array = empty_array  # type: ignore[method-assign]
     first = reader.candidate_shell_index()
     second = reader.candidate_shell_index()
@@ -140,7 +172,6 @@ def test_candidate_shell_index_caches_empty_candidate_table(tmp_path) -> None:
     assert first.candidate_ids.size == 0
     assert first.positions_by_step == {}
     assert calls == {
-        "candidates/candidate_row_id": 1,
         "candidates/step_row_id": 1,
         "candidates/shell_index": 1,
     }

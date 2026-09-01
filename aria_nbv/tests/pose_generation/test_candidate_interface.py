@@ -8,12 +8,14 @@ import ast
 from dataclasses import replace
 from pathlib import Path
 
+import numpy as np
 import pytest
 import torch
 import trimesh
 from efm3d.aria.camera import CameraTW
 from efm3d.aria.pose import PoseTW
 
+from aria_nbv.data_handling.vin_store.candidate_codec import VinCandidateFacts, vin_candidate_facts
 from aria_nbv.geometry import PreparedMeshQuery
 from aria_nbv.oracle.pipelines.rollout_dataset import RolloutDatasetWriterConfig
 from aria_nbv.pose_generation.candidate_errors import CandidateBackendFailureError
@@ -58,6 +60,7 @@ from aria_nbv.pose_generation.types import (
 )
 from aria_nbv.rollouts.inspection import CandidateFactAvailability, candidate_evidence_snapshot_from_live
 from aria_nbv.rollouts.replay.policy import derive_rollout_seed
+from aria_nbv.rollouts.trace import candidate_trace_facts
 from aria_nbv.targets import TargetDescriptor
 from aria_nbv.utils.canonical_binding import CanonicalBindingError, canonical_binding_bytes, canonical_binding_sha256
 from aria_nbv.utils.frames import world_up_tensor
@@ -651,7 +654,14 @@ def test_one_component_mixture_preserves_mixture_mask_and_extra_asymmetry() -> N
     assert set(candidate_set.attempts.target_frame_availability) == {"unavailable"}
 
 
-def test_program_admission_is_typed_n_aligned_and_legacy_projection_exact() -> None:
+def _typed_admission_fixture() -> tuple[
+    CandidateViewGeneratorConfig,
+    PreparedCandidateScene,
+    CandidateRequest,
+    CandidateSet,
+]:
+    """Build the production-shaped mixed-availability admission fixture."""
+
     config = CandidateViewGeneratorConfig(
         num_samples=8,
         oversample_factor=1.0,
@@ -688,8 +698,12 @@ def test_program_admission_is_typed_n_aligned_and_legacy_projection_exact() -> N
         actor_target=None,
         random_key=CandidateSamplingKey(CandidateSubstreamRevision.SHIPPED_V1, "direct_base", 31),
     )
+    return config, scene, request, ProgramCandidateGenerator().generate(request)
 
-    candidate_set = ProgramCandidateGenerator().generate(request)
+
+def test_program_admission_is_typed_n_aligned_and_legacy_projection_exact() -> None:
+    config, scene, request, candidate_set = _typed_admission_fixture()
+
     projected = candidate_set_to_legacy_result(candidate_set)
     legacy = config.setup_target().generate(
         reference_pose=_pose(),
@@ -741,6 +755,143 @@ def test_legacy_projection_rejects_action_subset_of_valid_rows() -> None:
 
     with pytest.raises(ValueError, match="fixed-valid generation proof"):
         candidate_set_to_legacy_result(narrowed)
+
+
+def test_candidate_persistence_codecs_project_real_program_facts_immutably() -> None:
+    config = _query_free(CandidateMixtureViewGeneratorConfig.paired_center_gaze_family())
+    candidate_set = ProgramCandidateGenerator().generate(_request(config, seed=37))
+    rollout = candidate_trace_facts(
+        candidate_set,
+        proposal_key_revision="rollout-proposal-v1",
+        proposal_replica=2,
+        legacy_candidate_config_hash="legacy-config-hash",
+    )
+    vin = vin_candidate_facts(
+        candidate_set,
+        proposal_key_revision="rollout-proposal-v1",
+        proposal_replica=2,
+        legacy_candidate_config_hash="legacy-config-hash",
+        labeled_prefix_count=min(3, candidate_set.completion.valid_count),
+    )
+
+    assert rollout.semantic_group_id == candidate_set.attempts.semantic_group_id
+    assert rollout.candidate_family_id == candidate_set.attempts.candidate_family_id
+    assert rollout.valid_indices.tolist() == candidate_set.valid_indices.tolist()
+    assert rollout.action_indices.tolist() == candidate_set.action_indices.tolist()
+    assert rollout.action_count == candidate_set.action_indices.shape[0]
+    assert not rollout.center_id.flags.writeable
+    assert not rollout.valid_indices.flags.writeable
+    assert tuple(criterion.criterion_id for criterion in rollout.criteria) == tuple(
+        criterion.criterion_id for criterion in candidate_set.admission.criteria
+    )
+    assert vin.semantic_group_id == rollout.semantic_group_id
+    assert vin.valid_indices == tuple(rollout.valid_indices.tolist())
+    assert vin.action_indices == tuple(rollout.action_indices.tolist())
+    decoded = VinCandidateFacts.from_record(vin.to_record())
+    assert decoded.codec_version == vin.codec_version
+    assert decoded.semantic_group_id == vin.semantic_group_id
+    assert decoded.valid_indices == vin.valid_indices
+
+
+def test_candidate_trace_rejects_lineage_and_cumulative_admission_corruption() -> None:
+    candidate_set = ProgramCandidateGenerator().generate(
+        _request(_query_free(CandidateMixtureViewGeneratorConfig.paired_center_gaze_family()), seed=37)
+    )
+    facts = candidate_trace_facts(candidate_set)
+
+    negative_center = facts.center_id.copy()
+    negative_center[0] = -1
+    negative_center.setflags(write=False)
+    with pytest.raises(ValueError, match="non-negative"):
+        replace(facts, center_id=negative_center)
+
+    invalid_pair = facts.position_pair_id.copy()
+    invalid_pair[0] = -2
+    invalid_pair.setflags(write=False)
+    with pytest.raises(ValueError, match="exactly -1"):
+        replace(facts, position_pair_id=invalid_pair)
+
+    terminal = np.zeros(facts.attempted_count, dtype=np.bool_)
+    terminal.setflags(write=False)
+    with pytest.raises(ValueError, match="cumulative admission mask"):
+        replace(
+            facts,
+            criteria=(*facts.criteria[:-1], replace(facts.criteria[-1], legacy_cumulative_valid=terminal)),
+        )
+
+    first = np.zeros(facts.attempted_count, dtype=np.bool_)
+    first.setflags(write=False)
+    with pytest.raises(ValueError, match="cumulative admission mask"):
+        replace(
+            facts,
+            criteria=(replace(facts.criteria[0], legacy_cumulative_valid=first), *facts.criteria[1:]),
+        )
+
+    with pytest.raises(ValueError, match="revisions are unsupported"):
+        replace(facts.criteria[0], reason_revision="future_v9")
+
+    criterion = next(item for item in facts.criteria if item.applicable is not None and np.any(item.local_availability))
+    available_index = int(np.flatnonzero(criterion.local_availability)[0])
+    assert criterion.applicable is not None
+    assert criterion.evaluated is not None
+    assert criterion.passed is not None
+    assert criterion.reason_code is not None
+    assert criterion.margin is not None
+
+    invalid_applicable = criterion.applicable.copy()
+    invalid_evaluated = criterion.evaluated.copy()
+    invalid_applicable[available_index] = False
+    invalid_evaluated[available_index] = True
+    invalid_applicable.setflags(write=False)
+    invalid_evaluated.setflags(write=False)
+    with pytest.raises(ValueError, match="applicability/evaluation subsets"):
+        replace(criterion, applicable=invalid_applicable, evaluated=invalid_evaluated)
+
+    invalid_evaluated = criterion.evaluated.copy()
+    invalid_passed = criterion.passed.copy()
+    valid_reason = criterion.reason_code.copy()
+    invalid_evaluated[available_index] = False
+    invalid_passed[available_index] = True
+    valid_reason[available_index] = 0
+    invalid_evaluated.setflags(write=False)
+    invalid_passed.setflags(write=False)
+    valid_reason.setflags(write=False)
+    with pytest.raises(ValueError, match="applicability/evaluation subsets"):
+        replace(criterion, evaluated=invalid_evaluated, passed=invalid_passed, reason_code=valid_reason)
+
+    invalid_margin = criterion.margin.copy()
+    invalid_margin[available_index] = np.nan
+    invalid_margin.setflags(write=False)
+    with pytest.raises(ValueError, match="margins must be finite"):
+        replace(criterion, margin=invalid_margin)
+
+    passed_criterion = next(
+        item
+        for item in facts.criteria
+        if item.evaluated is not None
+        and item.passed is not None
+        and np.any(item.local_availability & item.evaluated & item.passed)
+    )
+    assert passed_criterion.reason_code is not None
+    failed_index = int(
+        np.flatnonzero(passed_criterion.local_availability & passed_criterion.evaluated & passed_criterion.passed)[0]
+    )
+    contradicted_pass = passed_criterion.passed.copy()
+    contradicted_reason = passed_criterion.reason_code.copy()
+    contradicted_pass[failed_index] = False
+    contradicted_reason[failed_index] = 1
+    contradicted_pass.setflags(write=False)
+    contradicted_reason.setflags(write=False)
+    contradicted_criterion = replace(
+        passed_criterion,
+        passed=contradicted_pass,
+        reason_code=contradicted_reason,
+    )
+    criterion_index = next(index for index, item in enumerate(facts.criteria) if item is passed_criterion)
+    contradicted_criteria = list(facts.criteria)
+    contradicted_criteria[criterion_index] = contradicted_criterion
+    with pytest.raises(ValueError, match="contradicts local criterion evidence"):
+        replace(facts, criteria=tuple(contradicted_criteria))
 
 
 def test_legacy_projection_preserves_partial_and_all_invalid_v_tables() -> None:

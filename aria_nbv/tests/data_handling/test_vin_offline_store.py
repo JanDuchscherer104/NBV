@@ -24,6 +24,7 @@ from efm3d.aria.pose import PoseTW
 from pytorch3d.renderer.cameras import PerspectiveCameras
 
 import aria_nbv.data_handling.vin_store.diagnostics as offline_diagnostics
+import aria_nbv.data_handling.vin_store.writer as vin_writer
 from aria_nbv.data_handling import (
     EfmSnippetView,
     VinOfflineDatasetConfig,
@@ -458,6 +459,202 @@ def test_prepare_vin_offline_sample_preserves_candidate_label_order_in_payloads(
     assert torch.allclose(_pose_tensor(decoded_depths.poses), _pose_tensor(decoded_candidates.poses_world_cam()))  # noqa: S101
 
 
+def test_prepare_vin_candidate_facts_is_additive_and_preserves_legacy_payload(monkeypatch) -> None:
+    candidates, depths = _make_ordered_candidates_and_depths()
+    base_kwargs = {
+        "scene_id": "scene-a",
+        "snippet_id": "snippet-000",
+        "vin_snippet": _make_vin_snippet(offset=0.0),
+        "candidates": candidates,
+        "depths": depths,
+        "rri": _make_stub_rri(2),
+        "candidate_pcs": None,
+        "backbone_out": None,
+        "max_candidates": 4,
+        "include_depths": True,
+        "include_candidate_pcs": False,
+        "include_backbone": False,
+        "include_diagnostic_payloads": True,
+        "sample_key": "sample-0",
+    }
+    legacy = prepare_vin_offline_sample(**base_kwargs)
+    fake_set = SimpleNamespace(
+        valid_indices=torch.tensor([1, 3], dtype=torch.int64),
+        attempts=SimpleNamespace(world_poses=candidates.shell_poses),
+        admission=SimpleNamespace(mask_valid=candidates.mask_valid),
+        validate_semantics=lambda: None,
+    )
+    encoded = SimpleNamespace(to_record=lambda: {"codec_version": "vin-candidate-facts-v1", "sentinel": 7})
+    monkeypatch.setattr(vin_writer, "vin_candidate_facts", lambda *_args, **_kwargs: encoded)
+    current = prepare_vin_offline_sample(
+        **base_kwargs,
+        candidate_set=fake_set,
+        candidate_config_hash="fixture-config",
+    )
+
+    legacy_payload = legacy.record_blocks["oracle.candidates"]
+    current_payload = current.record_blocks["oracle.candidates"]
+    assert set(legacy_payload) == set(current_payload)
+    for name in legacy_payload:
+        left = legacy_payload[name]
+        right = current_payload[name]
+        if isinstance(left, torch.Tensor):
+            assert torch.equal(left, right)
+        else:
+            assert left == right
+    assert current.record_blocks["oracle.candidate_facts"] == {
+        "codec_version": "vin-candidate-facts-v1",
+        "sentinel": 7,
+    }
+    assert set(legacy.numeric_blocks) == set(current.numeric_blocks)
+    for name in legacy.numeric_blocks:
+        assert np.array_equal(legacy.numeric_blocks[name], current.numeric_blocks[name], equal_nan=True)
+
+
+def test_vin_candidate_facts_round_trip_is_lazy_and_actor_invisible(tmp_path: Path, monkeypatch) -> None:
+    """Round-trip real paired candidate facts without changing actor tensors."""
+
+    from aria_nbv.pose_generation import candidate_set_to_legacy_result
+    from aria_nbv.pose_generation.candidate_mixture import CandidateMixtureViewGeneratorConfig
+    from aria_nbv.pose_generation.program_generator import ProgramCandidateGenerator
+    from tests.pose_generation.test_candidate_interface import _query_free, _request
+
+    config = _query_free(CandidateMixtureViewGeneratorConfig.paired_center_gaze_family())
+    candidate_set = ProgramCandidateGenerator().generate(_request(config, seed=47))
+    candidates = candidate_set_to_legacy_result(candidate_set)
+    valid_count = candidate_set.completion.valid_count
+    base_depths = _make_stub_depths(valid_count)
+    depths = CandidateDepths(
+        depths=base_depths.depths,
+        depths_valid_mask=base_depths.depths_valid_mask,
+        poses=candidates.poses_world_cam(),
+        reference_pose=candidates.reference_pose,
+        candidate_indices=candidate_set.valid_indices,
+        camera=candidates.views,
+        p3d_cameras=base_depths.p3d_cameras,
+    )
+    common = {
+        "scene_id": "scene-a",
+        "snippet_id": "snippet-000",
+        "vin_snippet": _make_vin_snippet(),
+        "candidates": candidates,
+        "depths": depths,
+        "rri": _make_stub_rri(valid_count),
+        "candidate_pcs": None,
+        "backbone_out": None,
+        "max_candidates": valid_count,
+        "include_depths": True,
+        "include_candidate_pcs": False,
+        "include_backbone": False,
+        "include_diagnostic_payloads": True,
+        "include_gt_obbs": False,
+        "include_detected_obbs": False,
+        "include_trajectory_metadata": False,
+        "sample_key": "sample-0",
+    }
+    legacy_row = prepare_vin_offline_sample(**common)
+    with pytest.raises(ValueError, match="include_diagnostic_payloads=True"):
+        prepare_vin_offline_sample(
+            **(common | {"include_diagnostic_payloads": False}),
+            candidate_set=candidate_set,
+            candidate_config_hash="fixture-config",
+        )
+    with pytest.raises(ValueError, match="independently supplied candidate_config_hash"):
+        prepare_vin_offline_sample(**common, candidate_set=candidate_set)
+    current_row = prepare_vin_offline_sample(
+        **common,
+        candidate_set=candidate_set,
+        candidate_proposal_key_revision="rollout-proposal-v1",
+        candidate_proposal_replica=5,
+        candidate_config_hash="fixture-config",
+    )
+    assert set(current_row.numeric_blocks) == set(legacy_row.numeric_blocks)
+    for name in legacy_row.numeric_blocks:
+        assert np.array_equal(current_row.numeric_blocks[name], legacy_row.numeric_blocks[name], equal_nan=True)
+    assert current_row.record_blocks["oracle.candidates"] == legacy_row.record_blocks["oracle.candidates"]
+
+    current_store = _write_single_row_store(tmp_path / "current", current_row)
+    dataset = VinOfflineDatasetConfig(store=current_store, return_format="sample", split=None).setup_target()
+    sample = _require_sample(dataset[0])
+    facts = sample.candidate_facts
+    assert facts is not None
+    assert facts.semantic_group_id == candidate_set.attempts.semantic_group_id
+    assert facts.candidate_family_id == candidate_set.attempts.candidate_family_id
+    assert facts.position_pair_id == tuple(candidate_set.attempts.position_pair_id.tolist())
+    assert facts.gaze_variant_id == tuple(candidate_set.attempts.gaze_variant_id.tolist())
+    assert facts.valid_indices == tuple(candidate_set.valid_indices.tolist())
+    assert facts.proposal_key_revision == "rollout-proposal-v1"
+    assert facts.proposal_replica == 5
+
+    no_candidates = VinOfflineDatasetConfig(
+        store=current_store,
+        return_format="sample",
+        split=None,
+        load_candidates=False,
+    ).setup_target()
+    original_read = no_candidates._store.read_optional_record
+    reads: list[str] = []
+
+    def _read_optional(record, block_name):
+        reads.append(block_name)
+        return original_read(record, block_name)
+
+    monkeypatch.setattr(no_candidates._store, "read_optional_record", _read_optional)
+    assert _require_sample(no_candidates[0]).candidate_facts is None
+    assert "oracle.candidate_facts" not in reads
+
+    legacy_store = _write_single_row_store(tmp_path / "legacy", legacy_row)
+    legacy_sample = _require_sample(
+        VinOfflineDatasetConfig(store=legacy_store, return_format="sample", split=None).setup_target()[0]
+    )
+    assert legacy_sample.candidate_facts is None
+
+    current_batch = _require_batch(
+        VinOfflineDatasetConfig(store=current_store, return_format="vin_batch", split=None).setup_target()[0]
+    )
+    legacy_batch = _require_batch(
+        VinOfflineDatasetConfig(store=legacy_store, return_format="vin_batch", split=None).setup_target()[0]
+    )
+    assert not hasattr(current_batch, "candidate_facts")
+    assert current_batch.scene_id == legacy_batch.scene_id
+    assert current_batch.snippet_id == legacy_batch.snippet_id
+    assert torch.equal(
+        _pose_tensor(current_batch.candidate_poses_world_cam), _pose_tensor(legacy_batch.candidate_poses_world_cam)
+    )
+    assert torch.equal(
+        _pose_tensor(current_batch.reference_pose_world_rig), _pose_tensor(legacy_batch.reference_pose_world_rig)
+    )
+    for name in (
+        "rri",
+        "pm_dist_before",
+        "pm_dist_after",
+        "pm_acc_before",
+        "pm_comp_before",
+        "pm_acc_after",
+        "pm_comp_after",
+        "candidate_count",
+    ):
+        assert torch.equal(getattr(current_batch, name), getattr(legacy_batch, name))
+    for name in ("R", "T", "focal_length", "principal_point", "image_size"):
+        assert torch.equal(getattr(current_batch.p3d_cameras, name), getattr(legacy_batch.p3d_cameras, name))
+
+    malformed = VinOfflineDatasetConfig(store=current_store, return_format="sample", split=None).setup_target()
+    malformed_original = malformed._store.read_optional_record
+    raw_facts = malformed_original(malformed._records[0], "oracle.candidate_facts")
+    assert isinstance(raw_facts, dict)
+    unknown_facts = dict(raw_facts)
+    unknown_facts["codec_version"] = "unknown-v9"
+    monkeypatch.setattr(
+        malformed._store,
+        "read_optional_record",
+        lambda record, block_name: (
+            unknown_facts if block_name == "oracle.candidate_facts" else malformed_original(record, block_name)
+        ),
+    )
+    with pytest.raises(ValueError, match="Unsupported or invalid VIN candidate-facts codec"):
+        malformed[0]
+
+
 def test_prepare_vin_offline_sample_rejects_candidate_index_drift() -> None:
     """Writer should reject candidates and labels that no longer share order."""
 
@@ -883,6 +1080,46 @@ def _write_test_store(
         torch.tensor([2], dtype=torch.long).numpy(),
         allow_pickle=False,
     )
+    return store_cfg
+
+
+def _write_single_row_store(tmp_path: Path, row: Any) -> VinOfflineStoreConfig:
+    """Materialize one prepared row through the production shard codec."""
+
+    store_cfg = VinOfflineStoreConfig(store_dir=tmp_path / "vin_offline")
+    store_cfg.store_dir.mkdir(parents=True, exist_ok=True)
+    store_cfg.shards_dir.mkdir(parents=True, exist_ok=True)
+    shard_spec, local_records = flush_prepared_samples_to_shard(
+        shard_index=0,
+        shard_dir=store_cfg.shards_dir / "shard-000000",
+        rows=[row],
+    )
+    local = local_records[0]
+    record = VinOfflineIndexRecord(
+        sample_index=0,
+        sample_key=local.sample_key,
+        scene_id=local.scene_id,
+        snippet_id=local.snippet_id,
+        split=Stage.TRAIN,
+        shard_id=local.shard_id,
+        row=local.row,
+    )
+    VinOfflineManifest(
+        version=OFFLINE_DATASET_VERSION,
+        created_at="2026-09-01T00:00:00Z",
+        source={"dataset_config": {}},
+        oracle={"max_candidates": int(row.numeric_blocks["oracle.candidate_indices"].shape[0])},
+        vin={"pad_points": 4},
+        materialized_blocks=VinOfflineMaterializedBlocks(
+            backbone=False,
+            depths=True,
+            candidate_pcs=False,
+        ),
+        stats={"num_samples": 1},
+        provenance={},
+        shards=[shard_spec],
+    ).write(store_cfg.manifest_path)
+    _write_sample_index(store_cfg.sample_index_path, [record])
     return store_cfg
 
 

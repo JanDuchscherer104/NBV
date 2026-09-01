@@ -760,6 +760,14 @@ def _branch_plot_descriptor(
     )
 
 
+def _stored_candidate_family_names(step: StoredStep) -> NDArray[np.str_]:
+    """Return canonical current-codec families or explicit legacy labels."""
+
+    if step.candidate_codec is not None:
+        return step.candidate_codec.candidate_family_ids
+    return step.mixture_names
+
+
 def _step_payload(
     reader: RolloutZarrStoreReader,
     *,
@@ -823,7 +831,7 @@ def _step_payload(
         target_rri_ranks=target_rri_ranks,
         target_rri_rank_total=target_rri_rank_total,
         probabilities=step.selection_probabilities,
-        mixture_names=step.mixture_names,
+        mixture_names=_stored_candidate_family_names(step),
         sampler_probabilities=step.sampler_probabilities,
         position_ids=step.position_ids,
         position_names=step.position_names,

@@ -43,7 +43,9 @@ from .candidate_evidence import (
 from .manifest import read_rollout_store_manifest
 from .read_model import (
     StoredRollout,
+    StoredStep,
     candidate_mixture_family_names,
+    candidate_semantic_identities,
     decode_invalid_reason,
     decode_position_id,
     rollout_at,
@@ -62,6 +64,35 @@ from .zarr_store import (
     RolloutZarrValidationResult,
     _required_groups,
 )
+
+
+def _stored_step_family_name(step: StoredStep, local_index: int) -> str:
+    """Return canonical family identity, with explicit legacy fallback."""
+
+    if step.candidate_codec is not None:
+        return str(step.candidate_codec.candidate_family_ids[local_index])
+    return str(step.mixture_names[local_index])
+
+
+def _canonical_candidate_identity_by_row(
+    reader: RolloutZarrStoreReader,
+    candidate_row_ids: NDArray[np.int64],
+) -> dict[int, tuple[str, str, str, str]]:
+    """Decode only persisted proposal/family/center/gaze identity columns."""
+
+    identities = candidate_semantic_identities(reader, candidate_row_ids)
+    if identities is None:
+        return {}
+    return {
+        identity.candidate_row_id: (
+            identity.proposal_key,
+            identity.candidate_family_id,
+            identity.center_family_id,
+            identity.gaze_family_id,
+        )
+        for identity in identities
+    }
+
 
 CandidateGroupField = Literal["position", "strategy", "mixture", "invalid_reason", "policy"]
 CANDIDATE_GROUP_FIELDS: tuple[CandidateGroupField, ...] = (
@@ -427,11 +458,25 @@ def rollout_statistics(
     selected = np.asarray(reader.array("candidates/selected_mask"), dtype=np.bool_).reshape(-1)
     primary_invalid_reason = np.asarray(reader.array("candidates/primary_invalid_reason"), dtype=np.int64).reshape(-1)
     strategy_id = np.asarray(reader.array("candidates/strategy_id"), dtype=np.int64).reshape(-1)
-    mixture_id = np.asarray(reader.array("candidates/mixture_id"), dtype=np.int64).reshape(-1)
     valid_per_step = np.asarray(reader.array("steps/num_valid_candidates"), dtype=np.float64).reshape(-1)
     policy_ids = np.asarray(reader.array("rollouts/policy_id"), dtype=np.int64).reshape(-1)
     policy_names = _read_string_array(reader, "dictionaries/policy")
-    component_names = _component_names(manifest_payload)
+    semantic_identities = (
+        candidate_semantic_identities(reader, reader.candidate_row_ids())
+        if reader.candidate_codec_tables() is not None
+        else None
+    )
+    if semantic_identities is not None:
+        candidate_families = np.asarray([identity.candidate_family_id for identity in semantic_identities], dtype=str)
+        if candidate_families.shape != valid.shape:
+            raise ValueError("Canonical candidate-family identities must align with candidate masks.")
+        selected_component_counts = _string_counts(candidate_families[selected])
+        valid_component_counts = _string_counts(candidate_families[valid])
+    else:
+        mixture_id = np.asarray(reader.array("candidates/mixture_id"), dtype=np.int64).reshape(-1)
+        component_names = _component_names(manifest_payload)
+        selected_component_counts = _id_counts(mixture_id[selected], names=component_names)
+        valid_component_counts = _id_counts(mixture_id[valid], names=component_names)
     return {
         "candidate_validity": {
             "valid": int(valid.sum()),
@@ -443,12 +488,12 @@ def rollout_statistics(
         "selected": {
             "total": int(selected.sum()),
             "strategy_counts": _id_counts(strategy_id[selected], names=_STRATEGY_NAMES),
-            "component_counts": _id_counts(mixture_id[selected], names=component_names),
+            "component_counts": selected_component_counts,
             "path_length_m": _distribution(_selected_path_lengths(reader)),
         },
         "valid_candidates": {
             "strategy_counts": _id_counts(strategy_id[valid], names=_STRATEGY_NAMES),
-            "component_counts": _id_counts(mixture_id[valid], names=component_names),
+            "component_counts": valid_component_counts,
         },
         "policy_counts": _id_counts(policy_ids, names=dict(enumerate(policy_names))),
         "source_coverage": dict(manifest_payload.get("manifest", {}).get("source_coverage", {})),
@@ -773,7 +818,7 @@ def candidate_audit_rows(
                     "position_id": int(step.position_ids[local]),
                     "position": str(step.position_names[local]),
                     "mixture_id": int(step.mixture_ids[local]),
-                    "mixture": str(step.mixture_names[local]),
+                    "mixture": _stored_step_family_name(step, local),
                     "gaze_variant_id": int(step.gaze_variant_ids[local]),
                     "sampler_probability": _finite_or_none(step.sampler_probabilities[local]),
                     "invalid_reason": str(step.primary_invalid_reason_names[local]),
@@ -3787,6 +3832,9 @@ def candidate_flow_rows(
 
     denominator = int(include.sum())
     component_names = _component_names(reader.manifest())
+    current_codec = hasattr(reader, "candidate_codec_tables") and reader.candidate_codec_tables() is not None
+    candidate_row_ids = reader.candidate_row_ids() if current_codec else np.arange(candidate_count, dtype=np.int64)
+    canonical_identities = _canonical_candidate_identity_by_row(reader, candidate_row_ids) if current_codec else {}
     transition_counts: Counter[tuple[str, str, str, str, str, str]] = Counter()
     root = (
         "root:scoped_candidates",
@@ -3794,11 +3842,26 @@ def candidate_flow_rows(
         "root",
     )
     for index in np.flatnonzero(include).tolist():
-        mixture = _decoded_id(int(mixture_ids[index]), names=component_names, prefix="mixture")
-        position = decode_position_id(int(position_ids[index])) if int(position_ids[index]) >= 0 else "unknown"
-        strategy = decode_strategy_id(int(strategy_ids[index]))
+        canonical = canonical_identities.get(int(candidate_row_ids[index]))
+        mixture = (
+            canonical[1]
+            if canonical is not None
+            else _decoded_id(int(mixture_ids[index]), names=component_names, prefix="mixture")
+        )
+        position = (
+            canonical[2]
+            if canonical is not None
+            else decode_position_id(int(position_ids[index]))
+            if int(position_ids[index]) >= 0
+            else "unknown"
+        )
+        strategy = canonical[3] if canonical is not None else decode_strategy_id(int(strategy_ids[index]))
         validity = "actor_valid" if bool(actor_action[index]) else "actor_invalid"
-        proposal_key = f"{int(mixture_ids[index])}:{int(position_ids[index])}:{int(strategy_ids[index])}"
+        proposal_key = (
+            canonical[0]
+            if canonical is not None
+            else f"legacy:{int(mixture_ids[index])}:{int(position_ids[index])}:{int(strategy_ids[index])}"
+        )
         proposal_label = f"{mixture} · center={position} · view={strategy}"
         if bool(selected[index]) and not bool(actor_action[index]):
             outcome = "selection_contract_violation"
@@ -5105,7 +5168,15 @@ def root_relative_candidate_rows(
     )
     relative = pose_centers - root_poses[rollout_positions, 9:12]
     distances = np.linalg.norm(relative, axis=1)
-    mixture_names = candidate_mixture_family_names(reader, mixture_ids, gaze_variant_ids)
+    canonical_identities = _canonical_candidate_identity_by_row(reader, candidate_ids)
+    mixture_names = (
+        np.asarray(
+            [canonical_identities[int(candidate_id)][1] for candidate_id in candidate_ids.tolist()],
+            dtype=np.str_,
+        )
+        if canonical_identities
+        else candidate_mixture_family_names(reader, mixture_ids, gaze_variant_ids)
+    )
 
     return [
         {
@@ -5242,7 +5313,7 @@ def rollout_step_objective_rows(
                     else _finite_or_none(step.sampler_probabilities[selected]),
                     "selected_strategy": decode_strategy_id(strategy_id),
                     "selected_position": "" if selected < 0 else str(step.position_names[selected]),
-                    "selected_mixture": "" if selected < 0 else str(step.mixture_names[selected]),
+                    "selected_mixture": "" if selected < 0 else _stored_step_family_name(step, selected),
                     "selected_invalid_reason": "" if selected < 0 else str(step.primary_invalid_reason_names[selected]),
                 }
             )
@@ -5419,7 +5490,7 @@ def selected_depth_summary_rows(
                         else decode_strategy_id(
                             int(reader.array("candidates/strategy_id")[step.candidate_row_positions[selected]])
                         ),
-                        "selected_mixture": "" if selected < 0 else str(step.mixture_names[selected]),
+                        "selected_mixture": "" if selected < 0 else _stored_step_family_name(step, selected),
                         "selected_target_root_gain": None
                         if selected < 0
                         else _finite_or_none(step.target_root_gain[selected]),
@@ -6610,6 +6681,13 @@ def _id_counts(values: np.ndarray, *, names: dict[int, str]) -> dict[str, int]:
     return dict(sorted(counts.items()))
 
 
+def _string_counts(values: np.ndarray) -> dict[str, int]:
+    """Count nonempty decoded canonical identities deterministically."""
+
+    counts = Counter(str(value) for value in np.asarray(values, dtype=str).reshape(-1) if str(value))
+    return dict(sorted(counts.items()))
+
+
 def _component_names(manifest_payload: dict[str, Any]) -> dict[int, str]:
     writer_config = manifest_payload.get("manifest", {}).get("generation", {}).get("writer_config")
     components: list[Any] = []
@@ -6962,6 +7040,7 @@ class _GeometryStep:
     pose_world_cam: NDArray[np.float32]
     position_names: NDArray[np.str_]
     mixture_names: NDArray[np.str_]
+    candidate_family_names: NDArray[np.str_]
 
 
 @dataclass(frozen=True, slots=True)
@@ -6981,17 +7060,19 @@ def _bounded_geometry_steps(reader: RolloutZarrStoreReader, rollout: StoredRollo
     diagnostics = reader.root["candidate_diagnostics"]
     steps = reader.root["steps"]
     candidate_count = int(candidates["candidate_row_id"].shape[0])
+    current_codec = reader.candidate_codec_tables() is not None
     component_names: dict[int, str] = {}
-    payload = reader.manifest().get("manifest", {}).get("generation", {}).get("writer_config", {})
-    mixture = payload.get("candidate_mixture") if isinstance(payload, dict) else None
-    components = mixture.get("components") if isinstance(mixture, dict) else None
-    if isinstance(components, list):
-        component_names = {
-            index: str(component.get("name") or component.get("family") or component.get("position_mode"))
-            for index, component in enumerate(components)
-            if isinstance(component, dict)
-            and (component.get("name") or component.get("family") or component.get("position_mode")) is not None
-        }
+    if not current_codec:
+        payload = reader.manifest().get("manifest", {}).get("generation", {}).get("writer_config", {})
+        mixture = payload.get("candidate_mixture") if isinstance(payload, dict) else None
+        components = mixture.get("components") if isinstance(mixture, dict) else None
+        if isinstance(components, list):
+            component_names = {
+                index: str(component.get("name") or component.get("family") or component.get("position_mode"))
+                for index, component in enumerate(components)
+                if isinstance(component, dict)
+                and (component.get("name") or component.get("family") or component.get("position_mode")) is not None
+            }
 
     result: list[_GeometryStep] = []
     for step_position in rollout.step_row_positions.tolist():
@@ -7017,6 +7098,12 @@ def _bounded_geometry_steps(reader: RolloutZarrStoreReader, rollout: StoredRollo
             raise ValueError(f"Step row {step_row_id} has an invalid selected-shell index.")
         position_ids = np.asarray(diagnostics["position_id"][start:stop], dtype=np.int32)
         mixture_ids = np.asarray(candidates["mixture_id"][start:stop], dtype=np.int32)
+        semantic_identities = candidate_semantic_identities(reader, candidate_ids) if current_codec else None
+        candidate_family_names = (
+            np.asarray([identity.candidate_family_id for identity in semantic_identities], dtype=str)
+            if semantic_identities is not None
+            else np.asarray([component_names.get(int(value), str(int(value))) for value in mixture_ids], dtype=str)
+        )
         result.append(
             _GeometryStep(
                 step_row_id=step_row_id,
@@ -7032,6 +7119,7 @@ def _bounded_geometry_steps(reader: RolloutZarrStoreReader, rollout: StoredRollo
                 mixture_names=np.asarray(
                     [component_names.get(int(value), str(int(value))) for value in mixture_ids], dtype=str
                 ),
+                candidate_family_names=candidate_family_names,
             )
         )
     return tuple(result)
@@ -7181,7 +7269,7 @@ def proposal_support_geometry(
                         selected=bool(step.selected_mask[local]),
                         position=str(step.position_names[local]),
                         strategy=decode_strategy_id(int(strategy_ids[int(step.candidate_row_positions[local])])),
-                        mixture=str(step.mixture_names[local]),
+                        mixture=str(step.candidate_family_names[local]),
                         x=float(normalized[0]),
                         y=float(normalized[1]),
                         z=float(normalized[2]),
@@ -7307,7 +7395,7 @@ def rollout_trajectory_geometry(
                     selected=True,
                     position=str(step.position_names[selected]),
                     strategy=decode_strategy_id(int(strategy_ids[candidate_position])),
-                    mixture=str(step.mixture_names[selected]),
+                    mixture=str(step.candidate_family_names[selected]),
                     x=float(normalized[0]),
                     y=float(normalized[1]),
                     z=float(normalized[2]),
