@@ -45,8 +45,16 @@ deterministic preparation, and does not run `graphify extract` during worktree
 creation. Focused regressions prove an actual temporary linked worktree starts
 with a locally copied graph and reports `usable-stale` for the marker.
 
+Follow-up reproduction found that rebuilding the projection can prune obsolete
+generated `graphify-input` Markdown entries. Those are semantic-only stale
+inputs, not source deletions; their removal and a large pending semantic set
+now remain `usable-stale`. Re-running setup also accepts a seed whose manifest
+still lists such pruned generated entries.
+
 ## Commits
 - https://github.com/JanDuchscherer104/ARIA-NBV/commit/f65990a06da09e57624fedef2dc8b83603ab32b0
+- https://github.com/JanDuchscherer104/ARIA-NBV/commit/982c973c70530aaa201b5f62c8d32d7584fe8326
+- https://github.com/JanDuchscherer104/ARIA-NBV/commit/d083cce526c8d598fabb0a50277ced5d69d76e2c
 
 ## Verification
 Passed the Graphify projection, freshness, seeding, reconciler, session
