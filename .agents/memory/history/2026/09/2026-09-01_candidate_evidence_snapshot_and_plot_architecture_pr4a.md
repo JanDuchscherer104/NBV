@@ -43,6 +43,7 @@ legacy-missing evidence rather than displaying invented zeros.
 
 ## Commits
 - [6e16f8aa994475ec3ff04151a97f77159e872f9f](https://github.com/JanDuchscherer104/ARIA-NBV/commit/6e16f8aa994475ec3ff04151a97f77159e872f9f)
+- [ab104ebcbe770ddce8ffc09a886006b17393759b](https://github.com/JanDuchscherer104/ARIA-NBV/commit/ab104ebcbe770ddce8ffc09a886006b17393759b)
 
 ## Verification
 - Focused snapshot, read-model, benchmark, and compatibility suite: 90 passed.
@@ -50,7 +51,7 @@ legacy-missing evidence rather than displaying invented zeros.
 - Repository-config Ruff on all owned Python files: passed.
 - Strict package-config mypy on six source/contract files: passed.
 - Real-scene Plotly JSON, HTML, and PNG rebuild: byte-identical across two runs;
-  ground and jitter PNGs visually inspected.
+  all four PNGs visually inspected after the legibility pass.
 - Repo `make ruff-targeted` and `make mypy-targeted` could not resolve the
   linked worktree's absent editable `external/efm3d`; equivalent checks used
   the primary checkout's shared environment with this worktree on `PYTHONPATH`.
