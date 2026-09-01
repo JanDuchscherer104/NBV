@@ -14,7 +14,7 @@ touched_owner_paths:
   - aria_nbv/aria_nbv/utils/seeding.py
 codex_thread: codex://threads/01a04842-7454-7353-9a6b-f59cc99302b5
 repo_object_format: sha1
-repo_head: 2b1856a5fcbd3494d09d542ea26abccf87122573
+repo_head: de1c28f9879fe4d16ae3bf7c18b07aebea24e2bf
 repo_branch: "codex/pose-generation-runtime-pr2"
 worktree_kind: linked
 ---
@@ -29,7 +29,7 @@ Narrowed helper inputs, prebuilt immutable mixture leaf runtimes, moved request-
 `PositionSampler` now owns only a center config and device; `OrientationBuilder` owns only a gaze config and verbosity. `CandidateMixtureViewGenerator` constructs children once and reuses them without retaining request targets or mesh queries. The legacy public generator preserves independent position and gaze target channels, while mixed generation supplies one request-local target to both. The transitional `_legacy_leaf_config` and pose-to-rollout dependency were deleted.
 
 ## Commits
-- [2b1856a5fcbd3494d09d542ea26abccf87122573](https://github.com/JanDuchscherer104/ARIA-NBV/commit/2b1856a5fcbd3494d09d542ea26abccf87122573)
+- [de1c28f9879fe4d16ae3bf7c18b07aebea24e2bf](https://github.com/JanDuchscherer104/ARIA-NBV/commit/de1c28f9879fe4d16ae3bf7c18b07aebea24e2bf)
 
 ## Verification
 The stacked focused suite passed with 185 passed and 1 skipped, including exact active-profile full-rule fingerprints. Ruff format/check, compileall, focused mypy for the shared seed owner and rollout wrapper, and `git diff --check` passed. Independent review approved with no findings after a regression for separate legacy position/gaze targets was repaired.
