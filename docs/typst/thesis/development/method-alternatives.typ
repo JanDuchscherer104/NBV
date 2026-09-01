@@ -37,13 +37,15 @@
 
   #heading(level: 2, numbering: none)[Interaction alternatives]
 
-  A2 DeepSets context, A3 masked candidate self-attention, A4 query-local
-  relation bias, A5 recurrent state reading, A6 residual value prediction, and
-  A7+ graph or exact-equivariant layers are ordered escalation points. A level
-  may enter the main method only after A0/A1 are measured under the same state,
-  target protocol, decoder, objective, and evaluation contract and a concrete
-  failure identifies the missing interaction. Candidate-set models must retain
-  row equivariance, invalid-row isolation, duplicate tests, and absolute-value
+  The canonical feature-integration order and per-stage maturity are recorded in
+  @tab:architecture-feature-integration-ladder. This register does not duplicate
+  that ladder. Candidate-relative relation embeddings are the planned next
+  one-factor comparison; candidate-set summaries, masked candidate interaction,
+  and recurrent reading remain possible extensions. A stage may be promoted only
+  after A0/A1 are measured under the same state, target protocol, decoder,
+  objective, and evaluation contract and a concrete failure identifies the
+  missing interaction. Candidate-set models must additionally retain row
+  equivariance, invalid-row isolation, duplicate tests, and absolute-value
   semantics.
 
   #heading(level: 2, numbering: none)[Objective and estimator alternatives]
@@ -118,7 +120,7 @@
     priority: "P2",
     readiness: "contingent",
     claim: [alternative explanation for residual value error after state and support gates pass],
-    source: [A2--A7 interaction ladder, H1, CORAL, residual, and separate-head controls],
+    source: [feature-integration ladder F2--F5, H1, CORAL, residual, and separate-head controls],
     gate: [one measured failure mapped to one factor-matched comparison],
   )[Promote exactly one control that tests the diagnosed limitation; do not bundle state, interaction, and objective changes.]
 
