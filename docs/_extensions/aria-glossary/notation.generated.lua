@@ -946,6 +946,12 @@ return {
       description = "",
       thesis_list = false,
     },
+    ["rl.candidate_camera_transition"] = {
+      tex = "q_{t,i}\\mapsto c_{t,i}^{\\mathrm{cand}},\\quad c_{t+1}^{\\mathrm{traj}}=c_{t,a_t}^{\\mathrm{cand}}",
+      typst = "#eqs.rl.candidate_camera_transition",
+      description = "A candidate action row carries a prospective camera endpoint; only the selected endpoint enters the factual trajectory.",
+      thesis_list = false,
+    },
     ["rl.candidate_mask_isolation"] = {
       tex = "\\operatorname{Mask}(\\boldsymbol{X}_t,\\boldsymbol{m}_t^{\\mathrm{cand}})=\\operatorname{Mask}(\\widetilde{\\boldsymbol{X}}_t,\\boldsymbol{m}_t^{\\mathrm{cand}})",
       typst = "#eqs.rl.candidate_mask_isolation",
