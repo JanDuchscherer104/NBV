@@ -1,7 +1,7 @@
 #import "../../../shared/macros.typ": *
 #import "../../../shared/symbols.typ": symb
 #import "../../../shared/equations.typ": eqs
-#import "../../draft_markers.typ": thesis_status
+#import "../../draft_markers.typ": thesis_status, development_only
 #import "../../../shared/tables.typ": publication-table
 
 == Selected Interaction and Acceptance Conditions <sec:thesis-method-geometry-contract>
@@ -27,39 +27,70 @@ can read a richer causal state without introducing candidate-to-candidate
 communication. Architecture should escalate only if a frozen comparison shows
 that an admitted state is informative but A0/A1 cannot recover its value.
 
-#figure(
-  publication-table(
-    text-size: 7.8pt,
-    columns: (0.48fr, 0.95fr, 0.83fr, 1.45fr),
-    header: ([*Level*], [*Interaction*], [*Scientific role*], [*Question isolated before promotion*]),
-    rows: (
-      [A0], [independent-row MLP], [implemented matched control], [Are the frozen descriptors and objective learnable without query-dependent state reading?],
-      [A1], [candidate-to-state cross-attention], [implemented selected interaction], [Does each candidate benefit from querying the shared state under the same inputs and decoder?],
-      [A2], [DeepSets summary @DeepSets-zaheer2017], [contingent alternative], [Do errors depend on a permutation-invariant summary of the admitted candidate set?],
-      [A3], [masked candidate self-attention @SetTransformer-lee2019], [contingent alternative], [Do pairwise candidate relations add value beyond a global set summary?],
-      [A4], [query-local relation bias], [contingent alternative], [Are remaining errors explained by explicit target--history--candidate geometry?],
-      [A5], [recurrent state reading], [contingent alternative], [Does iterative refinement help after the causal state itself is adequate?],
-      [A6], [one-step base + residual], [objective/architecture hypothesis], [Can calibrated immediate gain simplify learning the continuation term?],
-      [A7+], [graph or exact-equivariant layers @GeometricDeepLearning-bronstein2021], [exploratory idea], [Is a measured symmetry or relational failure still unresolved by lower levels?],
+#development_only(() => [
+  === Architectural feature-integration ladder
+
+  The ladder below is a development plan, not a family of co-equal thesis
+  methods. It orders feature integration by the smallest additional dependency
+  introduced after the current A0/A1 controls. “Implemented” means that the
+  tensor path and acceptance properties exist; it does not mean that the
+  feature has demonstrated scientific value. “Planned” names the next frozen
+  one-factor comparison. “Possible extension” preserves a conditional test
+  whose promotion still depends on a diagnosed failure.
+
+  #figure(
+    publication-table(
+      text-size: 7.4pt,
+      columns: (0.62fr, 1.18fr, 1.42fr, 1.58fr),
+      header: ([*Stage and status*], [*Integrated feature*], [*Scientific purpose*], [*Principal risk and promotion gate*]),
+      rows: (
+        ([F0 — implemented], [candidate-relative geometric query], [Complete candidate pose relative to root and current camera, plus target pose relative to the candidate.], [Already present; retain transform-direction and local-frame tests. It supplies geometry, not selected-observation state.]),
+        ([F1 — implemented], [A0/A1 state fusion], [Compare identical-input independent-row fusion with candidate-to-state cross-attention.], [The controls are not parameter matched; report parameters and runtime and require a frozen held-out comparison.]),
+        ([F2 — planned], [candidate-relative relation embeddings], [Embed each candidate’s relative transform to the target and pose-bearing causal history or state elements before A1 reads them.], [May duplicate information already contained in F0. Freeze one relation map, causal and padding masks, and a one-factor A1 comparison before promotion.]),
+        ([F3 — possible extension], [permutation-invariant candidate-set summary @DeepSets-zaheer2017], [Test whether the sampled admissible set supplies context beyond the physical state and query-local relations.], [Changes conditioning from one physical action to the sampled support; require duplicate-row and absolute-value tests.]),
+        ([F4 — possible extension], [masked candidate self-attention @SetTransformer-lee2019], [Test whether pairwise candidate relations explain residual error beyond an invariant set summary.], [Adds quadratic candidate interaction and stronger mask sensitivity; promote only after F3 fails under matched support.]),
+        ([F5 — possible extension], [iterative or recurrent state reading], [Test whether one candidate query needs repeated access to an already adequate causal state.], [May hide missing state information behind capacity; promote only after the state, F2 relations, and simpler fusion controls pass.]),
+      ),
     ),
-  ),
-  caption: [Interaction ladder. Only A0 and A1 are currently admitted; higher levels remain conceptually specified so a diagnosed failure maps to one test rather than an unconstrained architecture search.],
-) <tab:geometric-learning-ladder>
+    caption: [Development-only architectural feature-integration ladder. Status records implementation maturity, while promotion remains conditional on a named scientific failure and a one-factor comparison.],
+  ) <tab:architecture-feature-integration-ladder>
 
-The ladder is not a presumed performance ordering. A2 or A3 changes the
-conditional context of a row from the physical state alone to the sampled
-candidate set, so the value being approximated must still remain the absolute
-conditional value of that row. In particular, adding or duplicating an
-irrelevant row must not redefine an unchanged candidate through batch-relative
-centering. A4 targets geometric aliasing; A5 targets insufficient iterative
-computation; A6 changes the value decomposition; and A7+ is justified only by
-a measured symmetry or relational failure. These are different hypotheses and
-must not be bundled into one larger model.
+  Candidate-relative relation embeddings are the planned next architectural
+  addition because they preserve the current per-candidate value interface while
+  making query-to-context geometry explicit. Query-centric models use local
+  coordinate systems and relative positional embeddings so that the active query
+  can read other elements through their relation to it @zhou2023query. In
+  ARIA-NBV, the same construction can attach a shared embedding of candidate--
+  target and candidate--history transforms to the A1 key/value tokens. Applied
+  independently to every candidate, it preserves candidate-row equivariance and
+  does not make an action’s value depend on unrelated candidate rows.
 
-// Evidence map:
-// - @DeepSets-zaheer2017 -> docs/literature/tex-src/arXiv-Deep-Sets/nips_2017.tex:803-865,907-996 (permutation-invariant summaries and permutation-equivariant set layers)
-// - @SetTransformer-lee2019 -> docs/literature/tex-src/arXiv-Set-Transformer/01_introduction.tex:54-57; docs/literature/tex-src/arXiv-Set-Transformer/set_transformer.tex:82-86 (self-attention for pairwise or higher-order set interactions and permutation-invariant set modeling)
-// - @GeometricDeepLearning-bronstein2021 -> docs/literature/tex-src/arXiv-Geometric-Deep-Learning/geometricdomains.tex:190-207,290-331 (permutation equivariance and graph-local aggregation)
+  The case against immediate promotion is equally important. F0 already exposes
+  complete relative poses, so F2 adds an inductive bias rather than new raw
+  information. It can redundantly parameterize the same transform, overfit the
+  geometry of one proposal generator, increase cost with candidate--history
+  pairs, or encode an inappropriate symmetry if gravity, metric scale, camera
+  direction, or target orientation is suppressed. Geometric priors can reduce
+  the hypothesis space, but only when the chosen symmetry matches the task
+  @GeometricDeepLearning-bronstein2021. F2 is therefore justified by a matched
+  failure analysis showing that A1 cannot recover relevant relations from F0,
+  not by the existence of relation-embedding architectures in another domain.
+
+  Full SE(3)-Transformer and geometric-algebra Transformer variants are out of
+  scope for the core study. The current local frames already remove arbitrary
+  origin dependence while retaining gravity-aligned and metric quantities that
+  may affect sensing. No measured symmetry failure presently warrants the added
+  representation, implementation, and compute commitments of an exact
+  equivariant backbone. Candidate-set interaction remains a later and separate
+  hypothesis because it changes the conditioning context of each action rather
+  than only how its physical relations are encoded.
+
+  // Evidence map:
+  // - @zhou2023query -> docs/literature/tex-src/arXiv-QCNet/main.tex:159-161 (query-centric local frames and query-relative spatial-temporal positional embeddings)
+  // - @GeometricDeepLearning-bronstein2021 -> docs/literature/tex-src/arXiv-Geometric-Deep-Learning/geometricpriors.tex:339-345,950-969 (symmetry priors restrict the hypothesis class; locality and receptive-field tradeoffs)
+  // - @DeepSets-zaheer2017 -> docs/literature/tex-src/arXiv-Deep-Sets/nips_2017.tex:803-865,907-996 (permutation-invariant summaries and permutation-equivariant set layers)
+  // - @SetTransformer-lee2019 -> docs/literature/tex-src/arXiv-Set-Transformer/01_introduction.tex:54-57; docs/literature/tex-src/arXiv-Set-Transformer/set_transformer.tex:82-86 (self-attention for pairwise or higher-order set interactions and permutation-invariant set modeling)
+])
 
 Candidate order has no semantic meaning. Jointly permuting aligned rows by $Pi$
 must permute predictions identically:
