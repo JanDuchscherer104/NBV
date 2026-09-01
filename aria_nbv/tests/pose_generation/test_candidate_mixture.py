@@ -32,12 +32,14 @@ from aria_nbv.pose_generation import (
 from aria_nbv.pose_generation.config import (
     BoxViewJitterConfig,
     CandidateGazeConfig,
-    NoViewJitterConfig,
+    PowerSphericalConfig,
     SampledCenterConfig,
-    SphericalViewJitterConfig,
     TargetOrbitCenterConfig,
+    UniformSphereConfig,
+    sphere_distribution_from_legacy,
 )
 from aria_nbv.targets import TargetDescriptor
+from aria_nbv.utils.fingerprints import stable_config_hash
 from aria_nbv.utils.frames import world_up_tensor
 
 
@@ -117,38 +119,32 @@ def _component(
     else:
         center = SampledCenterConfig(
             mode=position_mode,
-            sampling_strategy=sampling_strategy,
+            distribution=sphere_distribution_from_legacy(sampling_strategy, kappa),
             min_radius_m=min_radius,
             max_radius_m=max_radius,
             min_elevation_deg=min_elev_deg,
             max_elevation_deg=max_elev_deg,
             azimuth_width_deg=delta_azimuth_deg,
-            concentration=kappa,
         )
 
     azimuth = view_max_angle_deg if view_max_azimuth_deg is None else view_max_azimuth_deg
     elevation = view_max_angle_deg if view_max_elevation_deg is None else view_max_elevation_deg
-    if azimuth > 0.0 or elevation > 0.0 or view_roll_jitter_deg > 0.0:
-        jitter = BoxViewJitterConfig(
+    gazes = [
+        CandidateGazeConfig.from_legacy(
+            mode=resolved_view_mode,
+            sampling_strategy=view_sampling_strategy,
+            concentration=view_kappa,
             yaw_half_width_deg=azimuth,
             pitch_half_width_deg=elevation,
             roll_half_width_deg=view_roll_jitter_deg,
         )
-    elif view_sampling_strategy is not None:
-        jitter = SphericalViewJitterConfig(
-            distribution=view_sampling_strategy,
-            concentration=view_kappa,
-            roll_half_width_deg=view_roll_jitter_deg,
-        )
-    else:
-        jitter = NoViewJitterConfig()
-    gazes = [CandidateGazeConfig(name="primary", mode=resolved_view_mode, jitter=jitter)]
+    ]
     if paired_view_mode is not None:
         gazes.append(
             CandidateGazeConfig(
                 name=f"paired_{paired_view_mode.value}",
                 mode=paired_view_mode,
-                jitter=jitter,
+                jitter=gazes[0].jitter,
             )
         )
     return CandidateMixtureComponentConfig(name=name, count=count, center=center, gazes=tuple(gazes))
@@ -826,13 +822,15 @@ def test_nested_config_defaults_and_identity_propagation_are_owned_once() -> Non
     assert center.model_dump() == {
         "kind": "sampled",
         "mode": CandidatePositionMode.FORWARD_LOCAL,
-        "sampling_strategy": SamplingStrategy.FORWARD_POWERSPHERICAL,
+        "distribution": {
+            "kind": SamplingStrategy.FORWARD_POWERSPHERICAL,
+            "concentration": 8.0,
+        },
         "min_radius_m": 0.25,
         "max_radius_m": 1.25,
         "min_elevation_deg": -12.0,
         "max_elevation_deg": 18.0,
         "azimuth_width_deg": 120.0,
-        "concentration": 8.0,
     }
     assert gaze.name == "primary"
     assert isinstance(gaze.jitter, BoxViewJitterConfig)
@@ -845,13 +843,41 @@ def test_nested_config_defaults_and_identity_propagation_are_owned_once() -> Non
     [
         ("min_radius_m", float("nan")),
         ("max_radius_m", float("inf")),
-        ("concentration", float("-inf")),
         ("azimuth_width_deg", float("inf")),
     ],
 )
 def test_sampled_center_rejects_non_finite_support(field: str, value: float) -> None:
     with pytest.raises(ValueError):
         SampledCenterConfig(mode=CandidatePositionMode.FORWARD_LOCAL, **{field: value})
+
+
+def test_sphere_distribution_is_discriminated_and_has_no_inert_uniform_concentration() -> None:
+    uniform = SampledCenterConfig.model_validate({"mode": "forward_local", "distribution": {"kind": "uniform_sphere"}})
+    powered = SampledCenterConfig.model_validate(
+        {
+            "mode": "forward_local",
+            "distribution": {"kind": "forward_powerspherical", "concentration": 12.0},
+        }
+    )
+
+    assert isinstance(uniform.distribution, UniformSphereConfig)
+    assert uniform.distribution.model_dump() == {"kind": SamplingStrategy.UNIFORM_SPHERE}
+    assert isinstance(powered.distribution, PowerSphericalConfig)
+    assert powered.distribution.concentration == pytest.approx(12.0)
+    assert stable_config_hash(SampledCenterConfig.model_validate(powered.model_dump())) == stable_config_hash(powered)
+    with pytest.raises(ValueError, match="concentration"):
+        SampledCenterConfig.model_validate(
+            {
+                "mode": "forward_local",
+                "distribution": {"kind": "uniform_sphere", "concentration": 12.0},
+            }
+        )
+
+
+@pytest.mark.parametrize("value", [float("nan"), float("inf"), float("-inf")])
+def test_power_spherical_distribution_rejects_non_finite_concentration(value: float) -> None:
+    with pytest.raises(ValueError):
+        PowerSphericalConfig(concentration=value)
 
 
 def test_component_count_replacement_revalidates_scalar_and_orbit_invariants() -> None:
@@ -1010,68 +1036,6 @@ def test_paired_center_gaze_preset_keeps_sixty_candidate_rows() -> None:
 
     assert cfg.total_count == 60
     assert cfg.components[0].gazes[1].mode is ViewDirectionMode.FORWARD_RIG
-
-
-def test_reviewed_component_templates_preserve_rich_family_fields() -> None:
-    writer_target_bearing = _component(
-        name="target_bearing_local",
-        count=24,
-        view_mode=ViewDirectionMode.TARGET_POINT,
-        position_mode=CandidatePositionMode.TARGET_BEARING_LOCAL,
-        sampling_strategy=SamplingStrategy.UNIFORM_SPHERE,
-        view_sampling_strategy=SamplingStrategy.FORWARD_POWERSPHERICAL,
-        min_radius=0.4,
-        max_radius=1.1,
-        min_elev_deg=-8.0,
-        max_elev_deg=14.0,
-        delta_azimuth_deg=90.0,
-        kappa=6.0,
-        view_kappa=12.0,
-        view_max_angle_deg=30.0,
-        view_max_azimuth_deg=20.0,
-        view_max_elevation_deg=10.0,
-        view_roll_jitter_deg=5.0,
-    )
-    components = CandidateMixtureViewGeneratorConfig.reviewed_component_templates(
-        (
-            ("target_bearing_local", 18),
-            ("forward_local", 18),
-            ("lateral_target_bypass", 12),
-            ("local_refinement", 6),
-            ("revisit_backtrack", 6),
-        ),
-        existing_components=[writer_target_bearing],
-    )
-
-    assert sum(component.count for component in components) == 60
-    by_name = {component.name: component for component in components}
-    assert by_name["target_bearing_local"].model_dump(exclude={"count"}) == writer_target_bearing.model_dump(
-        exclude={"count"}
-    )
-    assert by_name["target_bearing_local"].count == 18
-    assert isinstance(by_name["target_bearing_local"].center, SampledCenterConfig)
-    assert by_name["target_bearing_local"].center.min_radius_m == pytest.approx(0.4)
-    assert by_name["target_bearing_local"].center.max_radius_m == pytest.approx(1.1)
-    assert by_name["local_refinement"].gazes[0].mode is ViewDirectionMode.TARGET_POINT
-    assert isinstance(by_name["local_refinement"].center, SampledCenterConfig)
-    assert by_name["local_refinement"].center.min_radius_m == pytest.approx(0.25)
-    assert by_name["local_refinement"].center.max_radius_m == pytest.approx(0.7)
-    assert isinstance(by_name["revisit_backtrack"].center, SampledCenterConfig)
-    assert by_name["revisit_backtrack"].center.mode is CandidatePositionMode.REVISIT_BACKTRACK
-    assert by_name["revisit_backtrack"].center.min_radius_m == pytest.approx(0.25)
-    assert by_name["revisit_backtrack"].center.max_radius_m == pytest.approx(0.25)
-
-    with pytest.raises(ValueError, match="unsupported reviewed candidate component schedule"):
-        CandidateMixtureViewGeneratorConfig.reviewed_component_templates((("new_family", 60),))
-    for invalid_count in (0, -1):
-        with pytest.raises(ValueError, match="greater than 0"):
-            CandidateMixtureViewGeneratorConfig.reviewed_component_templates(
-                (
-                    ("forward_local", invalid_count),
-                    ("target_bearing_local", 24),
-                    ("lateral_target_bypass", 12),
-                )
-            )
 
 
 def test_radial_target_backtrack_family_is_diverse_rollout_profile() -> None:

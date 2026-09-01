@@ -539,7 +539,7 @@ def render_campaign_generation_page(
             "writer_config": str(cfg.writer_config_path or ""),
             "scientific_contract": {
                 "profile": profile.name,
-                "components": profile.components,
+                "components": [component.model_dump(mode="json") for component in profile.components],
                 "total_candidates": profile.total_count,
                 "device": profile.device,
                 "recipes": [

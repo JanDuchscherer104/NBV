@@ -55,6 +55,7 @@ from ...pose_generation.config import (
     CandidateGazeConfig,
     SampledCenterConfig,
     SampledCenterMode,
+    sphere_distribution_from_legacy,
 )
 from ...pose_generation.plotting import CounterfactualPlotBuilder, plot_counterfactual_paths_simple
 from ...rendering import CandidateDepthRendererConfig
@@ -494,13 +495,12 @@ def _target_mixture_config(
     ) -> SampledCenterConfig:
         return SampledCenterConfig(
             mode=mode,
-            sampling_strategy=base.sampling_strategy,
+            distribution=sphere_distribution_from_legacy(base.sampling_strategy, base.kappa),
             min_radius_m=min_radius_m,
             max_radius_m=max_radius_m,
             min_elevation_deg=base.min_elev_deg,
             max_elevation_deg=base.max_elev_deg,
             azimuth_width_deg=base.delta_azimuth_deg,
-            concentration=base.kappa,
         )
 
     def gaze(mode: ViewDirectionMode) -> CandidateGazeConfig:

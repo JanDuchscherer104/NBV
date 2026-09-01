@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from typing import Annotated, ClassVar, Literal, Self, TypeAlias
+from collections.abc import Mapping
+from typing import Annotated, Any, ClassVar, Literal, Self, TypeAlias
 
 from pydantic import Field, FiniteFloat, field_validator, model_validator
 
@@ -29,6 +30,42 @@ PitchHalfWidthDeg = Annotated[FiniteFloat, Field(ge=0.0, le=90.0)]
 OrbitAngleDeg = Annotated[FiniteFloat, Field(gt=-180.0, lt=180.0)]
 
 
+class UniformSphereConfig(BaseConfig):
+    """Select area-uniform directional sampling without inert parameters."""
+
+    model_config = BaseConfig.model_config | {"extra": "forbid"}
+    propagation_exclude_fields = {"kind"}
+
+    kind: Literal[SamplingStrategy.UNIFORM_SPHERE] = SamplingStrategy.UNIFORM_SPHERE
+
+
+class PowerSphericalConfig(BaseConfig):
+    """Select forward-biased power-spherical sampling."""
+
+    model_config = BaseConfig.model_config | {"extra": "forbid"}
+    propagation_exclude_fields = {"kind"}
+
+    kind: Literal[SamplingStrategy.FORWARD_POWERSPHERICAL] = SamplingStrategy.FORWARD_POWERSPHERICAL
+    concentration: NonNegativeFiniteFloat = 8.0
+
+
+SphereDistributionConfig = Annotated[
+    UniformSphereConfig | PowerSphericalConfig,
+    Field(discriminator="kind"),
+]
+
+
+def sphere_distribution_from_legacy(
+    strategy: SamplingStrategy,
+    concentration: float,
+) -> SphereDistributionConfig:
+    """Validate retained flat distribution controls into one closed value."""
+
+    if strategy is SamplingStrategy.UNIFORM_SPHERE:
+        return UniformSphereConfig()
+    return PowerSphericalConfig(concentration=concentration)
+
+
 class SampledCenterConfig(BaseConfig):
     """Configure one sampled candidate-center family in the proposal frame."""
 
@@ -38,7 +75,7 @@ class SampledCenterConfig(BaseConfig):
     mode: SampledCenterMode
     """Semantic center family applied in the gravity-aligned proposal frame."""
 
-    sampling_strategy: SamplingStrategy = SamplingStrategy.FORWARD_POWERSPHERICAL
+    distribution: SphereDistributionConfig = Field(default_factory=PowerSphericalConfig)
     """Distribution used to draw proposal directions before family shaping."""
 
     min_radius_m: NonNegativeFiniteFloat = 0.25
@@ -56,8 +93,18 @@ class SampledCenterConfig(BaseConfig):
     azimuth_width_deg: AzimuthWidthDeg = 120.0
     """Full azimuth support width about proposal-frame forward, in degrees."""
 
-    concentration: NonNegativeFiniteFloat = 8.0
-    """Power-spherical concentration; ignored by uniform-sphere sampling."""
+    @model_validator(mode="before")
+    @classmethod
+    def _migrate_flat_distribution(cls, value: Any) -> Any:
+        """Canonicalize retained flat TOML fields into the distribution value."""
+
+        if not isinstance(value, Mapping) or "distribution" in value or "sampling_strategy" not in value:
+            return value
+        migrated = dict(value)
+        strategy = SamplingStrategy(migrated.pop("sampling_strategy"))
+        concentration = float(migrated.pop("concentration", 8.0))
+        migrated["distribution"] = sphere_distribution_from_legacy(strategy, concentration).model_dump()
+        return migrated
 
     @model_validator(mode="after")
     def _validate_support(self) -> Self:
@@ -135,11 +182,8 @@ class SphericalViewJitterConfig(BaseConfig):
     kind: Literal["spherical"] = "spherical"
     """Discriminator for uncapped spherical directional support."""
 
-    distribution: SamplingStrategy
-    """Sphere distribution used to sample the local-camera forward direction."""
-
-    concentration: NonNegativeFiniteFloat
-    """Power-spherical concentration; ignored by uniform-sphere sampling."""
+    distribution: SphereDistributionConfig
+    """Closed sphere distribution used to sample the local-camera forward direction."""
 
     roll_half_width_deg: YawHalfWidthDeg = 0.0
     """Symmetric roll half-width about the sampled forward axis, in degrees."""
@@ -186,8 +230,7 @@ class CandidateGazeConfig(BaseConfig):
             )
         elif sampling_strategy is not None:
             jitter = SphericalViewJitterConfig(
-                distribution=sampling_strategy,
-                concentration=concentration,
+                distribution=sphere_distribution_from_legacy(sampling_strategy, concentration),
                 roll_half_width_deg=roll_half_width_deg,
             )
         elif roll_half_width_deg > 0.0:
@@ -239,9 +282,13 @@ __all__ = [
     "CandidateMixtureComponentConfig",
     "CenterConfig",
     "NoViewJitterConfig",
+    "PowerSphericalConfig",
     "SampledCenterConfig",
     "SampledCenterMode",
     "SphericalViewJitterConfig",
+    "SphereDistributionConfig",
     "TargetOrbitCenterConfig",
+    "UniformSphereConfig",
     "ViewJitterConfig",
+    "sphere_distribution_from_legacy",
 ]

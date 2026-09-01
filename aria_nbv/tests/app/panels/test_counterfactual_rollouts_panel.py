@@ -50,7 +50,7 @@ from aria_nbv.pose_generation import (
     SamplingStrategy,
     ViewDirectionMode,
 )
-from aria_nbv.pose_generation.config import SphericalViewJitterConfig
+from aria_nbv.pose_generation.config import SphericalViewJitterConfig, UniformSphereConfig
 from aria_nbv.pose_generation.types import CandidateSamplingResult
 from aria_nbv.rollouts import (
     CounterfactualRolloutResult,
@@ -1420,7 +1420,7 @@ def test_target_mixture_preserves_spherical_direction_sampling_with_roll() -> No
     for component in cfg.components:
         jitter = component.gazes[0].jitter
         assert isinstance(jitter, SphericalViewJitterConfig)
-        assert jitter.distribution is SamplingStrategy.UNIFORM_SPHERE
+        assert isinstance(jitter.distribution, UniformSphereConfig)
         assert jitter.roll_half_width_deg == pytest.approx(5.0)
 
 

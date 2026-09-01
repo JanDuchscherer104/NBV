@@ -19,7 +19,6 @@ from aria_nbv.pose_generation import (
     CandidateMixtureComponentConfig,
     CandidatePositionMode,
     CandidateViewGeneratorConfig,
-    SamplingStrategy,
     ViewDirectionMode,
 )
 from aria_nbv.pose_generation.config import BoxViewJitterConfig, CandidateGazeConfig, SampledCenterConfig
@@ -55,13 +54,11 @@ def _mixture_component(**kwargs: object) -> CandidateMixtureComponentConfig:
         name="constraint-test",
         center=SampledCenterConfig(
             mode=CandidatePositionMode.FORWARD_LOCAL,
-            sampling_strategy=SamplingStrategy.FORWARD_POWERSPHERICAL,
             min_radius_m=0.25,
             max_radius_m=1.25,
             min_elevation_deg=-12.0,
             max_elevation_deg=18.0,
             azimuth_width_deg=120.0,
-            concentration=8.0,
         ),
         gazes=(
             CandidateGazeConfig(

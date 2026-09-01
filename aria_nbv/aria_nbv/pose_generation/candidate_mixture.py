@@ -50,9 +50,11 @@ from .config import (
     CandidateMixtureComponentConfig,
     CenterConfig,
     NoViewJitterConfig,
+    PowerSphericalConfig,
     SampledCenterConfig,
     SphericalViewJitterConfig,
     TargetOrbitCenterConfig,
+    UniformSphereConfig,
 )
 from .types import (
     CandidateGenerationRuntimeContext,
@@ -194,49 +196,6 @@ class CandidateMixtureViewGeneratorConfig(TargetConfig["CandidateMixtureViewGene
         return sum(component.count * len(component.gazes) for component in self.components)
 
     @classmethod
-    def reviewed_component_templates(
-        cls,
-        components: list[tuple[str, int]] | tuple[tuple[str, int], ...],
-        *,
-        existing_components: list[CandidateMixtureComponentConfig]
-        | tuple[CandidateMixtureComponentConfig, ...]
-        | None = None,
-    ) -> list[CandidateMixtureComponentConfig]:
-        """Return typed templates for a reviewed campaign component schedule.
-
-        Campaign orchestration supplies the reviewed names and counts; this
-        method reuses writer-owned components by name and supplies reviewed
-        presets only for absent families. Counts are the campaign allocation;
-        all other typed component fields remain owned by their source template.
-        """
-
-        names = tuple(name for name, _count in components)
-        templates = {
-            tuple(component.name for component in preset.components): preset.components
-            for preset in (
-                cls(),
-                cls.rich_local_five_family(),
-                cls.radial_target_backtrack_family(),
-                cls.upper_bound_free_shell(),
-            )
-        }
-        try:
-            preset_components = templates[names]
-        except KeyError as exc:
-            raise ValueError(f"unsupported reviewed candidate component schedule: {names}") from exc
-
-        existing_by_name: dict[str, CandidateMixtureComponentConfig] = {}
-        for component in existing_components or ():
-            if component.name in existing_by_name:
-                raise ValueError(f"duplicate existing candidate component: {component.name}")
-            existing_by_name[component.name] = component
-
-        return [
-            existing_by_name.get(name, preset).with_count(count)
-            for preset, (name, count) in zip(preset_components, components, strict=True)
-        ]
-
-    @classmethod
     def upper_bound_free_shell(cls, *, count: int = 60) -> "CandidateMixtureViewGeneratorConfig":
         """Build the explicit legacy free-shell upper-bound ablation config."""
 
@@ -248,13 +207,12 @@ class CandidateMixtureViewGeneratorConfig(TargetConfig["CandidateMixtureViewGene
                     count=count,
                     center=SampledCenterConfig(
                         mode=CandidatePositionMode.UPPER_BOUND_FREE_SHELL,
-                        sampling_strategy=SamplingStrategy.UNIFORM_SPHERE,
+                        distribution=UniformSphereConfig(),
                         min_radius_m=0.5,
                         max_radius_m=1.8,
                         min_elevation_deg=-20.0,
                         max_elevation_deg=25.0,
                         azimuth_width_deg=170.0,
-                        concentration=4.0,
                     ),
                     gazes=(CandidateGazeConfig(mode=ViewDirectionMode.RADIAL_AWAY),),
                 ),
@@ -720,14 +678,23 @@ class CandidateMixtureViewGenerator:
 
         match component.center:
             case SampledCenterConfig() as center:
+                sampling_strategy = (
+                    SamplingStrategy.UNIFORM_SPHERE
+                    if isinstance(center.distribution, UniformSphereConfig)
+                    else SamplingStrategy.FORWARD_POWERSPHERICAL
+                )
                 updates.update(
-                    sampling_strategy=center.sampling_strategy,
+                    sampling_strategy=sampling_strategy,
                     min_radius=center.min_radius_m,
                     max_radius=center.max_radius_m,
                     min_elev_deg=center.min_elevation_deg,
                     max_elev_deg=center.max_elevation_deg,
                     delta_azimuth_deg=center.azimuth_width_deg,
-                    kappa=center.concentration,
+                    kappa=(
+                        center.distribution.concentration
+                        if isinstance(center.distribution, PowerSphericalConfig)
+                        else 0.0
+                    ),
                 )
             case TargetOrbitCenterConfig() as center:
                 updates.update(
@@ -761,9 +728,18 @@ class CandidateMixtureViewGenerator:
                     view_roll_jitter_deg=jitter.roll_half_width_deg,
                 )
             case SphericalViewJitterConfig() as jitter:
+                view_sampling_strategy = (
+                    SamplingStrategy.UNIFORM_SPHERE
+                    if isinstance(jitter.distribution, UniformSphereConfig)
+                    else SamplingStrategy.FORWARD_POWERSPHERICAL
+                )
                 updates.update(
-                    view_sampling_strategy=jitter.distribution,
-                    view_kappa=jitter.concentration,
+                    view_sampling_strategy=view_sampling_strategy,
+                    view_kappa=(
+                        jitter.distribution.concentration
+                        if isinstance(jitter.distribution, PowerSphericalConfig)
+                        else 0.0
+                    ),
                     view_max_angle_deg=0.0,
                     view_max_azimuth_deg=0.0,
                     view_max_elevation_deg=0.0,

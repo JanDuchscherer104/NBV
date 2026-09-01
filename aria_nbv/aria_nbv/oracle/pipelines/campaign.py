@@ -27,6 +27,7 @@ from typing import Any, ClassVar, Protocol, cast
 
 from pydantic import BaseModel, Field, ValidationInfo, field_validator, model_validator
 
+from ...pose_generation.config import CandidateMixtureComponentConfig
 from ...rollouts.candidate_benchmark import (
     EVIDENCE_ASSEMBLY_REVISION,
     PROVENANCE_CORRECTION_REVISION,
@@ -275,13 +276,13 @@ class CampaignProfileConfig(BaseModel):
     """One immutable, reviewed candidate-family schedule."""
 
     name: str
-    components: list[tuple[str, int]]
+    components: list[CandidateMixtureComponentConfig]
     device: str = "cuda"
     recipes: list[dict[str, Any]] = Field(default_factory=list)
 
     @property
     def total_count(self) -> int:
-        return sum(int(n) for _, n in self.components)
+        return sum(component.count * len(component.gazes) for component in self.components)
 
 
 def _default_recipes() -> list[dict[str, Any]]:
@@ -293,28 +294,35 @@ def _default_recipes() -> list[dict[str, Any]]:
     ]
 
 
-_PROFILE_COMPONENTS = {
-    "realistic_core_60": [("forward_local", 24), ("target_bearing_local", 24), ("lateral_target_bypass", 12)],
-    "rich_local_60": [
-        ("target_bearing_local", 18),
-        ("forward_local", 18),
-        ("lateral_target_bypass", 12),
-        ("local_refinement", 6),
-        ("revisit_backtrack", 6),
-    ],
-    "radial_backtrack_60": [
-        ("radial_towards_target_bearing", 20),
-        ("radial_away_target_bearing", 20),
-        ("revisit_backtrack", 15),
-        ("target_point_anchor", 5),
-    ],
-    "free_shell_upper_bound_60": [("upper_bound_free_shell", 60)],
-}
+_PROFILE_NAMES = (
+    "realistic_core_60",
+    "rich_local_60",
+    "radial_backtrack_60",
+    "free_shell_upper_bound_60",
+)
 
 
 def _default_profiles() -> list[CampaignProfileConfig]:
+    from ...pose_generation.candidate_mixture import CandidateMixtureViewGeneratorConfig
+
+    radial = CandidateMixtureViewGeneratorConfig.radial_target_backtrack_family()
+    configs = (
+        CandidateMixtureViewGeneratorConfig(),
+        CandidateMixtureViewGeneratorConfig.rich_local_five_family(),
+        CandidateMixtureViewGeneratorConfig.model_validate(
+            radial.model_dump()
+            | {
+                "components": [
+                    component.with_count(count).model_dump()
+                    for component, count in zip(radial.components, (20, 20, 15, 5), strict=True)
+                ]
+            }
+        ),
+        CandidateMixtureViewGeneratorConfig.upper_bound_free_shell(),
+    )
     return [
-        CampaignProfileConfig(name=n, components=c, recipes=_default_recipes()) for n, c in _PROFILE_COMPONENTS.items()
+        CampaignProfileConfig(name=name, components=list(config.components), recipes=_default_recipes())
+        for name, config in zip(_PROFILE_NAMES, configs, strict=True)
     ]
 
 
@@ -361,18 +369,18 @@ class CudaRolloutCampaignConfig(TargetConfig["CudaRolloutCampaign"]):
             raise ValueError("campaign scene count is a fixed reviewed constant")
         if self.mode not in {CampaignMode.BROAD, CampaignMode.PILOT}:
             raise ValueError("campaign mode must be broad or pilot")
-        if self.frozen_profile not in _PROFILE_COMPONENTS:
+        if self.frozen_profile not in _PROFILE_NAMES:
             raise ValueError("campaign frozen_profile is unknown")
         if tuple(self.temperatures) != (0.5, 1.0, 2.0, 4.0):
             raise ValueError("campaign temperatures are fixed reviewed constants")
         if self.work_unit_timeout_seconds < self.stage_timeout_seconds:
             raise ValueError("work_unit_timeout_seconds must be >= stage_timeout_seconds")
         names = [p.name for p in self.profiles]
-        if names != list(_PROFILE_COMPONENTS):
+        if names != list(_PROFILE_NAMES):
             raise ValueError("campaign profiles/order drifted from reviewed contract")
         expected_recipes = _default_recipes()
         for p in self.profiles:
-            if p.device != "cuda" or p.components != _PROFILE_COMPONENTS[p.name] or p.total_count != 60:
+            if p.device != "cuda" or p.total_count != 60:
                 raise ValueError(f"invalid reviewed profile {p.name}")
             if p.recipes != expected_recipes:
                 raise ValueError(f"invalid recipe suite for {p.name}")
@@ -2107,26 +2115,17 @@ class CudaRolloutCampaign:
                 # candidate config remains the construction/validation owner.
                 try:
                     cfg.components = [
-                        {"name": name, "count": count, "view_mode": "forward"} for name, count in profile.components
+                        {"name": component.name, "count": component.count, "view_mode": "forward"}
+                        for component in profile.components
                     ]
                 except (TypeError, ValueError):
-                    cfg.components = list(profile.components)
+                    cfg.components = [(component.name, component.count) for component in profile.components]
             mixture = getattr(cfg, "candidate_mixture", None)
             if mixture is not None and hasattr(mixture, "components"):
-                component_type = type(mixture.components[0]) if mixture.components else None
                 from ...pose_generation.candidate_mixture import CandidateMixtureViewGeneratorConfig
 
-                typed_components = CandidateMixtureViewGeneratorConfig.reviewed_component_templates(
-                    profile.components,
-                    existing_components=list(mixture.components),
-                )
-                resolved_components = (
-                    [component_type.model_validate(component.model_dump()) for component in typed_components]
-                    if component_type
-                    else typed_components
-                )
                 validated_mixture = CandidateMixtureViewGeneratorConfig.model_validate(
-                    mixture.model_dump() | {"components": [component.model_dump() for component in resolved_components]}
+                    mixture.model_dump() | {"components": [component.model_dump() for component in profile.components]}
                 )
                 cfg.candidate_mixture = validated_mixture
             from ...rollouts.replay.policy import CounterfactualSelectionPolicy, RolloutPolicySpec
@@ -2214,7 +2213,7 @@ class CudaRolloutCampaign:
         profile = next((p for p in self.config.profiles if p.name == profile_name), None)
         if profile is None:
             raise ValueError(f"unknown campaign profile: {profile_name}")
-        return tuple(profile.components)
+        return tuple((component.name, component.count) for component in profile.components)
 
     def shard_entry_for_unit(self, plan: CampaignPlan, unit: CampaignWorkUnit) -> Any:
         """Create the single-row manifest envelope used by the worker seam."""

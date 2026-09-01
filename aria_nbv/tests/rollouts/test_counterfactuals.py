@@ -98,13 +98,11 @@ def _test_component(
         count=count,
         center=SampledCenterConfig(
             mode=position_mode,  # type: ignore[arg-type]
-            sampling_strategy=SamplingStrategy.FORWARD_POWERSPHERICAL,
             min_radius_m=0.6,
             max_radius_m=0.6,
             min_elevation_deg=-12.0,
             max_elevation_deg=18.0,
             azimuth_width_deg=120.0,
-            concentration=8.0,
         ),
         gazes=(CandidateGazeConfig(name="primary", mode=view_mode, jitter=BoxViewJitterConfig()),),
     )

@@ -73,12 +73,13 @@ count = 24
 [candidate_mixture.components.center]
 kind = "sampled"
 mode = "forward_local"
-sampling_strategy = "forward_powerspherical"
 min_radius_m = 0.25
 max_radius_m = 1.1
 min_elevation_deg = -12.0
 max_elevation_deg = 18.0
 azimuth_width_deg = 100.0
+[candidate_mixture.components.center.distribution]
+kind = "forward_powerspherical"
 concentration = 8.0
 [[candidate_mixture.components.gazes]]
 name = "primary"
@@ -95,12 +96,13 @@ count = 24
 [candidate_mixture.components.center]
 kind = "sampled"
 mode = "target_bearing_local"
-sampling_strategy = "forward_powerspherical"
 min_radius_m = 0.4
 max_radius_m = 1.1
 min_elevation_deg = -12.0
 max_elevation_deg = 18.0
 azimuth_width_deg = 100.0
+[candidate_mixture.components.center.distribution]
+kind = "forward_powerspherical"
 concentration = 8.0
 [[candidate_mixture.components.gazes]]
 name = "primary"
@@ -117,12 +119,13 @@ count = 12
 [candidate_mixture.components.center]
 kind = "sampled"
 mode = "lateral_target_bypass"
-sampling_strategy = "forward_powerspherical"
 min_radius_m = 0.25
 max_radius_m = 1.1
 min_elevation_deg = -12.0
 max_elevation_deg = 18.0
 azimuth_width_deg = 100.0
+[candidate_mixture.components.center.distribution]
+kind = "forward_powerspherical"
 concentration = 8.0
 [[candidate_mixture.components.gazes]]
 name = "primary"

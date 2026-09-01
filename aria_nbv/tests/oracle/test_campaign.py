@@ -257,7 +257,6 @@ def test_all_profiles_adapt_into_real_writer_candidate_mixture(tmp_path):
     # This test exercises the legacy in-memory adapter seam. Production worker
     # tests retain the canonical manifest and verify exact sample binding.
     writer = writer.model_copy(update={"source_manifest_path": None})
-    writer_components = {component.name: component for component in writer.candidate_mixture.components}
     expected_modes = {
         "forward_local": "forward_rig",
         "target_bearing_local": "target_point",
@@ -303,23 +302,16 @@ def test_all_profiles_adapt_into_real_writer_candidate_mixture(tmp_path):
         assert adapted.candidate_mixture.base.max_backward_step_m == pytest.approx(0.25)
         assert adapted.candidate_mixture.base.max_yaw_delta_deg == pytest.approx(70.0)
         component_by_name = {component.name: component for component in components}
-        for name, reviewed_count in profile.components:
-            if name not in writer_components:
-                continue
-            assert component_by_name[name].model_dump(exclude={"count"}) == writer_components[name].model_dump(
-                exclude={"count"}
-            )
-            assert component_by_name[name].count == reviewed_count
-        if "target_bearing_local" in component_by_name:
-            center = component_by_name["target_bearing_local"].center
-            assert center.min_radius_m == pytest.approx(0.4)
-            assert center.max_radius_m == pytest.approx(1.1)
-        if "local_refinement" in component_by_name:
-            assert component_by_name["local_refinement"].gazes[0].mode.value == "target_point"
-        if "revisit_backtrack" in component_by_name:
-            assert component_by_name["revisit_backtrack"].center.max_radius_m <= 0.25
+        for reviewed_component in profile.components:
+            assert component_by_name[reviewed_component.name].model_dump() == reviewed_component.model_dump()
         assert [(c.name, c.count, c.gazes[0].mode.value, c.center.mode.value) for c in components] == [
-            (name, count, expected_modes[name], expected_positions[name]) for name, count in profile.components
+            (
+                component.name,
+                component.count,
+                expected_modes[component.name],
+                expected_positions[component.name],
+            )
+            for component in profile.components
         ]
         assert [r.name for r in adapted.recipes] == ["temperature_softmax_h8_t0.5"]
         assert [r.policy.selection_temperature for r in adapted.recipes] == [0.5]
@@ -383,6 +375,24 @@ def test_canonical_campaign_freezes_accepted_realistic_batch_profile():
 
     assert config.frozen_profile == "realistic_core_60"
     assert writer.target_scorer.depth.renderer.max_views_per_batch == 2
+
+
+def test_campaign_artifact_recovers_complete_typed_candidate_profiles(tmp_path):
+    config_path = REPO_ROOT / ".configs/build_rollouts_v2_cuda_campaign.toml"
+    config = CudaRolloutCampaignConfig.from_toml(config_path)
+    round_tripped = CudaRolloutCampaignConfig.model_validate(config.model_dump())
+    writer = RolloutDatasetWriterConfig.from_toml(REPO_ROOT / config.writer_config_path)
+    writer = writer.model_copy(update={"source_manifest_path": None})
+    campaign = CudaRolloutCampaign(config.model_copy(update={"output_root": tmp_path}))
+    profile = next(profile for profile in config.profiles if profile.name == "rich_local_60")
+    unit = CampaignWorkUnit(config.campaign_id, "sample", "target", profile.name, "unit")
+
+    adapted, _ = campaign.adapt_work_unit(unit, writer_config=writer, shard_entry=SimpleNamespace())
+
+    assert stable_config_hash(round_tripped) == stable_config_hash(config)
+    assert [component.model_dump() for component in adapted.candidate_mixture.components] == [
+        component.model_dump() for component in profile.components
+    ]
 
 
 def test_canonical_campaign_writes_to_shared_rollout_supervision_cache():
