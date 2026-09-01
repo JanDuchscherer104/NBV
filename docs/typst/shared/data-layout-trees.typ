@@ -223,9 +223,9 @@
             - #code("step_index") -- $t$; int16[1] #array_node
             - #code("selected_candidate_row_id") -- action chosen at step $t$ #array_node
             - #code("cumulative_target_root_gain") -- float32[1] #array_node
-            - #code-strong("candidate_shell/") -- $#symb.oracle.candidates_t$ #group
-              - #code("pose_world_cam") -- $#symb.oracle.candidate_qti$; float32[N_q,12] #array_node
-              - #code("actor_action_mask") -- $#symb.rl.validity_mask$; bool[N_q] #array_node
+            - #code-strong("candidate_shell/") -- $#symb.rl.candidate_table$ #group
+              - #code("pose_world_cam") -- $#symb.rl.candidate_qti$; float32[N_q,12] #array_node
+              - #code("actor_action_mask") -- $#symb.rl.action_mask$; bool[N_q] #array_node
               - #code("invalid_reason_bitset") -- uint32[N_q] #array_node
               - #code("target_root_gain") -- default reward float32[N_q] #array_node
               - #code("target_rri") -- diagnostic float32[N_q] #array_node

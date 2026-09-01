@@ -33,16 +33,12 @@
   target_error_0: $Delta_0^e$,
   // Target reconstruction error at horizon H.
   target_error_H: $Delta_H^e$,
-  // Canonical target reward; `rl.reward_target` is an unused duplicate.
-  target_reward: $r_t^e$,
   // State-relative marginal target RRI for candidate i at step t.
   target_rri_marginal: $op("RRI")_(t,i)^e$,
   // Running sum of selected state-relative target RRIs through step t.
   target_rri_cumulative: $C_t^("RRI",e)$,
   // Running cumulative root-normalized target gain through step t.
   target_root_gain_cumulative: $J_t^e$,
-  // Canonical target return; `rl.return_h` is an unused duplicate.
-  return_h: $G_t^((H))$,
   // Endpoint target gain across horizon H.
   endpoint_gain: $J_e^((H))$,
   // Log-scaled target gain across horizon H.

@@ -2,18 +2,12 @@
 #let oracle = (
     // Generic abstract reconstruction point set before time or candidate indexing.
     points: $cal(P)$,
-    // Unused duplicate of canonical actor-visible `obs.points_t`; prefer the observation owner.
-    points_t: $cal(P)_t$,
     // Candidate point set.
     points_q: $cal(P)_q$,
     // Reserved point-set tensor; no direct authored use in the 2026-08-14 audit.
     points_tensor: $bold(P)$,
     // Candidate pose set.
     candidates: $cal(Q)$,
-    // Oracle-facing candidate set; visually identical to used `rl.candidate_table`.
-    candidates_t: $cal(Q)_t$,
-    // Candidate i at rollout step t.
-    candidate_qti: $q_(t,i)$,
     // Reserved candidate-row tensor; no direct authored use in the 2026-08-14 audit.
     candidate_tensor: $bold(X)^"cand"$,
     // Candidate depth maps.
@@ -23,8 +17,6 @@
     mask_q: $bold(M)_q$,
     // Candidate camera intrinsics/extrinsics (non-PyTorch3D).
     cameras_q: $cal(C)_q$,
-    // Reserved sampling direction; duplicates `spatial.dir_unit` and VIN's unused alias.
-    dir: $bold(d)$,
     // Center / translation vector.
     center: $bold(c)$,
     // Reserved sampling offset; no direct authored use in the 2026-08-14 audit.

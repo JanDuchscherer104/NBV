@@ -327,6 +327,18 @@ def _validate_notation_metadata(
                     f"canonical {group} metadata: {key} has thesis_list: true "
                     "but no description"
                 )
+    rendered_symbols: dict[str, str] = {}
+    for key, entry in notation["symbols"].items():
+        if not entry.get("thesis_list"):
+            continue
+        rendered_tex = re.sub(r"\s+", "", entry["tex"])
+        previous_key = rendered_symbols.get(rendered_tex)
+        if previous_key is not None:
+            raise GlossaryError(
+                "canonical symbol metadata: duplicate thesis-list TeX "
+                f"{entry['tex']!r} for {previous_key!r} and {key!r}"
+            )
+        rendered_symbols[rendered_tex] = key
 
 
 def normalize_and_validate_metadata(

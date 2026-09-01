@@ -26,18 +26,6 @@ symbols:
     description: 'Finite candidate-view set considered by the planner.'
     thesis_list: true
     order: 40
-  oracle.candidates_t:
-    tex: '\mathcal{Q}_t'
-    typst: '#symb.oracle.candidates_t'
-    description: 'Candidate-view set available at rollout step t.'
-    thesis_list: true
-    order: 50
-  oracle.candidate_qti:
-    tex: 'q_{t,i}'
-    typst: '#symb.oracle.candidate_qti'
-    description: 'Candidate pose i at rollout step t.'
-    thesis_list: true
-    order: 60
   oracle.center:
     tex: '\boldsymbol{c}'
     typst: '#symb.oracle.center'
@@ -101,8 +89,8 @@ symbols:
   vin.rri:
     tex: 'r'
     typst: '#symb.vin.rri'
-    description: 'Target or scene RRI value used as a model target.'
-    thesis_list: true
+    description: 'Historical VIN RRI proxy.'
+    thesis_list: false
     order: 160
   vin.rri_hat:
     tex: '\hat{r}'
@@ -158,12 +146,6 @@ symbols:
     description: 'Target-specific reconstruction error at rollout step t.'
     thesis_list: true
     order: 204
-  entity.target_reward:
-    tex: 'r_t^e'
-    typst: '#symb.entity.target_reward'
-    description: 'Canonical target-specific reward at rollout step t.'
-    thesis_list: true
-    order: 331
   entity.target_desc:
     tex: '\boldsymbol{\phi}_e'
     typst: '#symb.entity.target_desc'
@@ -254,28 +236,28 @@ symbols:
     description: 'Oracle-only state used for labels, upper bounds, and evaluation.'
     thesis_list: true
     order: 320
-  rl.reward_target:
+  rl.target_reward:
     tex: 'r_t^e'
-    typst: '#symb.rl.reward_target'
-    description: 'Target-specific reward at rollout step t.'
+    typst: '#symb.rl.target_reward'
+    description: 'Target-specific immediate reward at rollout step t.'
     thesis_list: true
     order: 330
   rl.return_h:
-    tex: 'G_t^{(H)}'
+    tex: 'G_{t,e}^{(h)}'
     typst: '#symb.rl.return_h'
-    description: 'H-step finite-horizon return from rollout step t.'
+    description: 'Target-conditioned return from rollout step t over requested residual horizon h.'
     thesis_list: true
     order: 340
   rl.qh:
-    tex: 'Q_H'
+    tex: 'Q_{\theta}(\cdot,\cdot,\cdot,h)'
     typst: '#symb.rl.qh'
-    description: 'Finite-horizon candidate-value function.'
+    description: 'Horizon-conditioned candidate-value family represented by one shared scorer.'
     thesis_list: true
     order: 350
   rl.conditional_q:
-    tex: 'Q_{h,\theta,e,i}^{\mathrm{cond}}'
+    tex: 'Q_{\theta}(s_t,e,i,h)'
     typst: '#symb.rl.conditional_q'
-    description: 'Action-mask-independent conditional candidate value emitted by the scorer.'
+    description: 'Action-mask-independent candidate value emitted by the horizon-conditioned scorer.'
     thesis_list: true
     order: 351
   rl.feasibility_logits:
@@ -326,12 +308,6 @@ symbols:
     description: 'Scalar residual horizon requested for one scorer query; it must satisfy 1 <= h <= b_t <= H_max.'
     thesis_list: true
     order: 372
-  rl.validity_mask:
-    tex: 'm_{t,i}'
-    typst: '#symb.rl.validity_mask'
-    description: 'Hard validity mask for candidate i at rollout step t.'
-    thesis_list: true
-    order: 380
   rl.candidate_row_mask:
     tex: 'm_{t,i}^{\mathrm{cand}}'
     typst: '#symb.rl.candidate_row_mask'
@@ -363,9 +339,9 @@ symbols:
     thesis_list: true
     order: 385
   rl.source_role:
-    tex: '\ell_{t,i}^{\mathrm{src}}'
+    tex: '\zeta_{t,i}^{\mathrm{src}}'
     typst: '#symb.rl.source_role'
-    description: 'Actor-oracle source-provenance role for candidate evidence.'
+    description: 'Categorical actor-oracle source-provenance role for candidate evidence.'
     thesis_list: true
     order: 386
   rl.invalid_reason:
@@ -396,13 +372,13 @@ symbols:
     tex: 'N_q'
     typst: '#symb.shape.Nq'
     description: 'Number of candidate views in a candidate table.'
-    thesis_list: true
+    thesis_list: false
     order: 430
   shape.K:
     tex: 'K'
     typst: '#symb.shape.K'
     description: 'Number of ordinal bins or discrete levels when used in scorer losses.'
-    thesis_list: true
+    thesis_list: false
     order: 440
   scene.ray_memory_t:
     tex: '\boldsymbol{M}_t^{\mathrm{ray}}'
@@ -563,7 +539,7 @@ symbols:
   model.history_pose_feature:
     tex: '\boldsymbol{p}_{t,j}^{\mathrm{hist}}'
     typst: '#symb.model.history_pose_feature'
-    description: 'Previously selected pose j encoded from the current camera at decision state t.'
+    description: 'Factual trajectory pose at time j encoded from the current camera at decision state t.'
     thesis_list: true
     order: 612
   model.history_relative_age:
@@ -602,12 +578,30 @@ symbols:
     description: 'Fraction of the learned-myopic-to-oracle-lookahead endpoint gap closed by the Q policy.'
     thesis_list: true
     order: 650
-  entity.return_h:
-    tex: 'G_t^{(H)}'
-    typst: '#symb.entity.return_h'
-    description: 'Target-conditioned finite-horizon return.'
+  rl.candidate_table:
+    tex: '\mathcal{Q}_t'
+    typst: '#symb.rl.candidate_table'
+    description: 'Finite candidate-action table at rollout step t.'
     thesis_list: true
-    order: 660
+    order: 730
+  rl.candidate_qti:
+    tex: 'q_{t,i}'
+    typst: '#symb.rl.candidate_qti'
+    description: 'Candidate action row i at rollout step t; it carries one proposed endpoint pose.'
+    thesis_list: true
+    order: 731
+  spatial.candidate_camera_frame:
+    tex: 'c_{t,i}^{\mathrm{cand}}'
+    typst: '#symb.spatial.candidate_camera_frame'
+    description: 'Prospective camera frame carried by candidate action row i at decision step t.'
+    thesis_list: true
+    order: 732
+  spatial.trajectory_camera_frame:
+    tex: 'c_t^{\mathrm{traj}}'
+    typst: '#symb.spatial.trajectory_camera_frame'
+    description: 'Factual camera frame on the realised trajectory at decision step t.'
+    thesis_list: true
+    order: 733
   obs.depth:
     tex: '\boldsymbol{D}'
     typst: '#symb.obs.depth'
@@ -644,12 +638,6 @@ symbols:
     description: 'Point set available at rollout step t.'
     thesis_list: true
     order: 720
-  rl.candidate_table:
-    tex: '\mathcal{Q}_t'
-    typst: '#symb.rl.candidate_table'
-    description: 'Finite candidate-view table at rollout step t.'
-    thesis_list: true
-    order: 730
   rl.exact_q2_target:
     tex: 'y_t^{(2,\mathrm{exact})}'
     typst: '#symb.rl.exact_q2_target'

@@ -75,12 +75,12 @@
     bold(k)_(j,i), bold(v)_(j,i) & =
                                    f_(K,V) (op("concat") (bold(x)_(t,j), bold(r)_(j,i))) \
                      alpha_(i,j) & =
-                                   op("softmax")_(j in #symb.rl.action_set_t)
+                                   op("softmax")_(j in #symb.rl.action_set)
                                    (
                                      ((bold(W)_Q bold(x)_(t,i))^top bold(k)_(j,i)) / sqrt(d)
                                    ) \
                    bold(u)_(t,i) & =
-                                   sum_(j in #symb.rl.action_set_t)
+                                   sum_(j in #symb.rl.action_set)
                                    alpha_(i,j)
                                    bold(v)_(j,i)
   $,

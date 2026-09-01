@@ -738,8 +738,8 @@
           +
           A_(theta,i)^H
           -
-          (1) / (abs(#symb.rl.action_set_t))
-          sum_(j in #symb.rl.action_set_t) A_(theta,j)^H
+          (1) / (abs(#symb.rl.action_set))
+          sum_(j in #symb.rl.action_set) A_(theta,j)^H
         $
       ]
     ],

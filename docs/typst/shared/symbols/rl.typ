@@ -6,7 +6,7 @@
   o: $o$,
   // Generic action selected by a policy.
   a: $a$,
-  // Generic reward; plain r also labels the rig frame and VIN RRI proxy.
+  // Generic reward; use `target_reward` for the thesis target-specific objective.
   r: $r$,
   // Generic cumulative return.
   G: $G$,
@@ -32,10 +32,8 @@
   mdp_nbv: $cal(M)_"NBV"$,
   // State-dependent feasible action set.
   action_set: $cal(A)(s_t)$,
-  // Feasible action set at rollout step t.
-  action_set_t: $cal(A)_t$,
-  // Reserved transition operator; glyph T also denotes `shape.Tlen` and bold transforms.
-  transition: $T$,
+  // Selected-action transition operator.
+  transition: $cal(T)$,
   // History-only state available at rollout step t.
   s_hist: $s_t^"hist"$,
   // Offline-data state available at rollout step t.
@@ -56,14 +54,14 @@
   s_oracle: $s_t^"oracle"$,
   // Reserved rollout-state embedding; no direct authored use in the 2026-08-14 audit.
   state_emb: $bold(h)_t$,
-  // Unused duplicate of canonical `entity.target_reward`; prefer the entity owner.
-  reward_target: $r_t^e$,
-  // Unused duplicate of canonical `entity.return_h`; prefer the entity owner.
-  return_h: $G_t^((H))$,
-  // Horizon-conditioned action-value function.
-  qh: $Q_H$,
-  // Action-mask-independent conditional candidate value emitted by the scorer.
-  conditional_q: $Q_(h,theta,e,i)^"cond"$,
+  // Target-specific immediate reward at rollout step t.
+  target_reward: $r_t^e$,
+  // Target-conditioned return from step t over requested residual horizon h.
+  return_h: $G_(t,e)^((h))$,
+  // Horizon-conditioned candidate-value family represented by one shared scorer.
+  qh: $Q_theta(.,.,.,h)$,
+  // Action-mask-independent candidate value emitted by the horizon-conditioned scorer.
+  conditional_q: $Q_theta(s_t,e,i,h)$,
   // Physical or observed feasibility logit emitted by the scorer's feasibility head.
   feasibility_logits: $ell_(t,i)^"feas"$,
   // Fixed boundary assigning a continuous fitted-Q target to CORAL classes.
@@ -76,8 +74,6 @@
   qh_theta: $Q_(H,theta)$,
   // Reserved lagged target-network Q; no direct authored use in the 2026-08-14 audit.
   qh_target: $Q_(H,theta^-)$,
-  // Scalar validity mask for candidate i at step t.
-  validity_mask: $m_(t,i)$,
   // Materialized candidate row versus structural padding.
   candidate_row_mask: $m_(t,i)^"cand"$,
   // Authoritative physically valid action support.
@@ -88,8 +84,8 @@
   feasibility_label_mask: $m_(t,i)^F$,
   // Availability of a factual successor backup for transition t.
   successor_mask: $m_t^"succ"$,
-  // Actor/oracle source-provenance role for candidate evidence.
-  source_role: $ell_(t,i)^"src"$,
+  // Categorical actor/oracle source-provenance role for candidate evidence.
+  source_role: $zeta_(t,i)^"src"$,
   // Categorical invalidity reason for candidate i at step t.
   invalid_reason: $rho_(t,i)$,
   // Generic state or metric increment.
@@ -108,13 +104,11 @@
   b: $b$,
   // Reserved trajectory-acquisition cost; no direct authored use in the 2026-08-14 audit.
   acquisition_cost: $C(tau)$,
-  // Canonical RL candidate table; same rendered set as `oracle.candidates_t`.
+  // Canonical finite candidate-action table.
   candidate_table: $cal(Q)_t$,
-  // Unused compatibility alias for `candidate_table`; migrate or prune after registry review.
-  candidate_set: $cal(Q)_t$,
   // Learned token for candidate i at rollout step t.
   candidate_token: $bold(u)_(t,i)$,
-  // Candidate pose i at rollout step t.
+  // Candidate action row i at rollout step t; it carries one proposed endpoint pose.
   candidate_qti: $q_(t,i)$,
   // Reserved candidate-validity vector; no direct authored use in the 2026-08-14 audit.
   candidate_mask: $bold(m)_t$,

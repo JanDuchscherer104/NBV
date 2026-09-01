@@ -85,7 +85,7 @@ and is read together with the ordered selected-view history:
 #eqs.scene.actor_state_read
 
 Here the root field is immutable, while the accumulated evidence may grow
-only through selected observations. Candidate rows #symb.oracle.candidate_qti encode
+only through selected observations. Candidate rows #symb.rl.candidate_qti encode
 possible poses and proposal provenance. Observations from those poses become
 available only after selection. The hard mask #symb.rl.action_mask defines the
 action set. Invalid-reason codes explain exclusions as diagnostic fields outside

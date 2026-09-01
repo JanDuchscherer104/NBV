@@ -20,10 +20,6 @@
     points_next: $cal(P)_(t+1)$,
     // Reserved candidate-conditioned set; no direct authored use in the 2026-08-14 audit.
     points_cand_ti: $cal(P)_(t,i)^"cand"$,
-    // Unused duplicate of canonical `scene.ray_memory_t`; migrate or prune with its pair.
-    ray_memory_t: $bold(M)_t^"ray"$,
-    // Unused duplicate of canonical `scene.ray_memory_next`; migrate or prune with its pair.
-    ray_memory_next: $bold(M)_(t+1)^"ray"$,
     // Reserved candidate-ray set; no direct authored use in the 2026-08-14 audit.
     selected_rays_ti: $cal(R)_(t,i)^"sel"$,
     // Reserved accumulated-geometry tensor; no direct authored use in the 2026-08-14 audit.

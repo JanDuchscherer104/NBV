@@ -22,7 +22,7 @@
     )
   $,
   evidence_chain: $
-    cal(U)_"cov/unc" -> hat(r)_t^e (i) -> #symb.entity.target_reward -> #symb.entity.return_h -> #symb.rl.qh_theta
+    cal(U)_"cov/unc" -> hat(r)_t^e (i) -> #symb.rl.target_reward -> #symb.rl.return_h -> #symb.rl.qh_theta
   $,
   candidate_row_equivariance: $
     f_theta (Pi bold(X)_t, Pi bold(m)_t^"cand")
@@ -39,13 +39,13 @@
     op("Mask") (f_theta (bold(X)'_t, bold(m)_t^"cand"), bold(m)_t^"cand")
   $,
   masked_candidate_selection: $
-    cal(A)_t
+    #symb.rl.action_set
     =
     {i in {1, dots, #symb.shape.Nq} : m_(t,i)^"act"=1},
     quad
     a_t^theta
     =
-    op("argmax", limits: #true)_(i in cal(A)_t) Q_(h,theta,e) (s_t, i)
+    op("argmax", limits: #true)_(i in #symb.rl.action_set) Q_(h,theta,e) (s_t, i)
   $,
   s_hist: $
     #symb.rl.s_hist
@@ -67,8 +67,8 @@
     (
       #(symb.obs.points_semi) _t,
       #symb.ase.traj,
-      #symb.oracle.candidates_t,
-      #symb.rl.validity_mask,
+      #symb.rl.candidate_table,
+      #symb.rl.action_mask,
       #symb.vin.field_v
     )
   $,
@@ -78,8 +78,8 @@
     (
       #(symb.vin.field_v)^"root",
       #(symb.oracle.points) _t,
-      #symb.oracle.candidates_t,
-      #symb.rl.validity_mask,
+      #symb.rl.candidate_table,
+      #symb.rl.action_mask,
       #symb.rl.invalid_reason,
       #symb.rl.target,
       #symb.rl.budget
@@ -93,8 +93,8 @@
       cal(S)_"root"^"VIN",
       #(symb.vin.field_v)^"root",
       (bold(T)_(r,e), bold(l)_e),
-      #symb.oracle.candidates_t,
-      #symb.rl.validity_mask,
+      #symb.rl.candidate_table,
+      #symb.rl.action_mask,
       bold(H)_t^"pose",
       #symb.rl.budget
     )
@@ -145,7 +145,12 @@
   finite_action_set: $
     #symb.rl.candidate_table = {q_(t,i)}_(i=1)^(#symb.shape.Nq),
     quad
-    #symb.rl.action_set_t = {i in {1, dots, #symb.shape.Nq} : m_(t,i)^"act" = 1}
+    #symb.rl.action_set = {i in {1, dots, #symb.shape.Nq} : m_(t,i)^"act" = 1}
+  $,
+  candidate_camera_transition: $
+    q_(t,i) " carries " #symb.spatial.candidate_camera_frame,
+    quad
+    c_(t+1)^"traj" = c_(t,a_t)^"cand"
   $,
   replay_transition: $
     (x_(t+1), bold(H)_(t+1), b_(t+1), cal(Q)_(t+1))
@@ -174,7 +179,7 @@
     sum_(k=0)^(t-1) op("RRI")_(k,a_k)^e
   $,
   target_root_gain_reward: $
-    #symb.entity.target_reward
+    #symb.rl.target_reward
     =
     (#symb.entity.target_error - #symb.entity.target_error_next)
     /
@@ -201,7 +206,7 @@
     op("sup", limits: #true)_(pi in cal(Pi)^"act")
     bb(E)_pi [G_(t,e)^((h)) | s_t, a_t=i],
     quad
-    i in cal(A)_t,
+    i in #symb.rl.action_set,
     quad
     1 <= h <= b_t <= #symb.rl.H_max,
     quad
@@ -284,8 +289,8 @@
     cal(L)_delta
     =
     lambda_delta
-    (1) / (abs(#symb.rl.action_set_t))
-    sum_(j in #symb.rl.action_set_t) (delta_(theta,t,e,j)^h)^2
+    (1) / (abs(#symb.rl.action_set))
+    sum_(j in #symb.rl.action_set) (delta_(theta,t,e,j)^h)^2
   $,
   qh_candidate_token: $
     #symb.rl.candidate_token
@@ -323,7 +328,7 @@
   qh_doubleq_target: $
     y_t^((h,e))
     =
-    #symb.entity.target_reward
+    #symb.rl.target_reward
     +
     gamma
     B_t^((h,e))

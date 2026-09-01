@@ -540,7 +540,7 @@
         "rl.s",
         "rl.action_set",
         "rl.transition",
-        "rl.reward_target",
+        "rl.target_reward",
         "rl.gamma",
         "rl.H",
       ),
@@ -606,8 +606,8 @@
         "rl.s_cf_geom",
         "rl.s_oracle",
         "oracle.points",
-        "oracle.candidates_t",
-        "rl.validity_mask",
+        "rl.candidate_table",
+        "rl.action_mask",
         "rl.invalid_reason",
         "rl.target",
         "rl.budget",
@@ -918,9 +918,9 @@
       lookup_rank: 150,
       symbol_refs: (
         "rl.action_set",
-        "oracle.candidate_qti",
-        "oracle.candidates_t",
-        "rl.validity_mask",
+        "rl.candidate_qti",
+        "rl.candidate_table",
+        "rl.action_mask",
       ),
       equation_refs: (
         "rl.finite_action_set",
@@ -1029,7 +1029,7 @@
       tier: "core",
       lookup_rank: 170,
       symbol_refs: (
-        "rl.reward_target",
+        "rl.target_reward",
         "entity.rri_e",
         "oracle.points",
         "ase.mesh_target",
@@ -1101,7 +1101,7 @@
       lookup_rank: 180,
       symbol_refs: (
         "rl.return_h",
-        "rl.reward_target",
+        "rl.target_reward",
         "rl.gamma",
         "rl.H",
       ),
@@ -1252,7 +1252,7 @@
     short: "mask",
     long: "Validity Mask",
     description: [
-      Hard candidate-level feasibility mask used during candidate ranking, rollout generation, and #symb.rl.qh training. The scalar mask #symb.rl.validity_mask gates selectable rows, while the reason code #symb.rl.invalid_reason records why a row was rejected. Invalidity is represented separately from reconstruction quality and should not be encoded as the lowest RRI class.
+      Hard candidate-level feasibility mask used during candidate ranking, rollout generation, and finite-horizon Q training. The scalar mask #symb.rl.action_mask gates selectable rows, while the reason code #symb.rl.invalid_reason records why a row was rejected. Invalidity is represented separately from reconstruction quality and should not be encoded as the lowest RRI class.
     ],
     group: "Planning",
     custom: (
@@ -1284,7 +1284,7 @@
       tier: "core",
       lookup_rank: 200,
       symbol_refs: (
-        "rl.validity_mask",
+        "rl.action_mask",
         "rl.invalid_reason",
         "vin.cand_valid",
       ),
@@ -2095,8 +2095,8 @@
       tier: "core",
       lookup_rank: 70,
       symbol_refs: (
-        "oracle.candidates_t",
-        "oracle.candidate_qti",
+        "rl.candidate_table",
+        "rl.candidate_qti",
       ),
       typst_macro: none,
       notation: (

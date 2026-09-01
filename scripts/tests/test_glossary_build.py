@@ -7,6 +7,7 @@ from pathlib import Path
 from unittest import mock
 
 import yaml
+import pytest
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -57,6 +58,29 @@ def test_generated_notation_yaml_is_a_lossless_runtime_adapter(tmp_path: Path) -
     assert "do not edit by hand" in output.read_text(encoding="utf-8")
     assert yaml.safe_load(output.read_text(encoding="utf-8")) == notation
     assert glossary_build.load_notation(output) == notation
+
+
+def test_thesis_list_rejects_duplicate_rendered_tex() -> None:
+    """The List of Symbols has one canonical entry per rendered notation."""
+
+    notation = {
+        "symbols": {
+            "rl.reward": {
+                "tex": "r_t^e",
+                "description": "Reward.",
+                "thesis_list": True,
+            },
+            "entity.reward": {
+                "tex": " r_t^e ",
+                "description": "Duplicate reward.",
+                "thesis_list": True,
+            },
+        },
+        "equations": {},
+    }
+
+    with pytest.raises(glossary_build.GlossaryError, match="duplicate thesis-list TeX"):
+        glossary_build._validate_notation_metadata(notation)
 
 
 def test_notation_expression_validation_imports_selected_facades(
