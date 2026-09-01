@@ -280,7 +280,7 @@ class ReconcileGraphifyWorktreeTests(unittest.TestCase):
                 "a" * 40,
             )
 
-    def test_prepare_only_rebuilds_projection_without_extracting(self) -> None:
+    def test_prepare_only_rebuilds_projection_and_updates_ast_without_extracting(self) -> None:
         with tempfile.TemporaryDirectory(prefix="aria-reconcile-") as temporary:
             root = Path(temporary)
             (root / ".git").mkdir()
@@ -325,6 +325,9 @@ class ReconcileGraphifyWorktreeTests(unittest.TestCase):
                 )
             )
             self.assertNotIn((str(cli), "extract", str(root.resolve())), recorded)
+            self.assertIn(
+                (str(cli), "update", str(root.resolve()), "--no-cluster"), recorded
+            )
             self.assertFalse(any(command[-2:] == ("--usable", "--quiet") for command in recorded))
 
     def test_runs_cold_deep_extraction_even_when_standard_graph_tree_matches(self) -> None:

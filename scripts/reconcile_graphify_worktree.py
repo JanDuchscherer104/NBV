@@ -292,6 +292,12 @@ def run(
     revision = head(root)
     active_modes = configured_modes() if modes is None else modes
     rebuild_projection = bool(freshness.projection_owner_changes(root))
+    pending_marker = root / freshness.NEEDS_UPDATE
+    pending_contents: bytes | None = None
+    if pending_marker.exists() or pending_marker.is_symlink():
+        if pending_marker.is_symlink() or not pending_marker.is_file():
+            fail("Graphify semantic refresh marker is unsafe")
+        pending_contents = pending_marker.read_bytes()
 
     scripts = Path(__file__).resolve().parent
     with tempfile.TemporaryDirectory(
@@ -314,6 +320,21 @@ def run(
                     check=True,
                 )
             if not refresh:
+                # Keep the copied semantic graph, but let Graphify reconcile its
+                # local code/AST layer for this worktree.  `update` is Graphify's
+                # upstream no-LLM path; semantic and deep-semantic refreshes stay
+                # deferred to the active task.
+                subprocess.run(
+                    [str(cli), "update", str(root), "--no-cluster"],
+                    cwd=root,
+                    check=True,
+                )
+                # `graphify update` clears this semantic-maintenance signal.
+                # A seeded marker instead records pending work inherited from
+                # the parent, so retain it until semantic reconciliation does.
+                if pending_contents is not None:
+                    pending_marker.write_bytes(pending_contents)
+                stamp_graph_provenance(root, revision)
                 return
             # Graphify's detector and mode-specific cache are the only source
             # of truth for no-op, dirty-input, and cold-deep decisions. A Git

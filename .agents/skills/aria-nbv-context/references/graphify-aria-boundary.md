@@ -59,8 +59,8 @@ delta is `unusable`; an ancestor committed delta or bounded overlay delta is
 ## Freshness And Refresh
 
 Setup owns deterministic bootstrap reconciliation: it rebuilds the deterministic
-child projection only for owner changes and never invokes upstream semantic
-extraction during worktree creation. A
+child projection only for owner changes, then runs upstream `graphify update
+<worktree> --no-cluster` to reconcile the local no-LLM code/AST layer. It never invokes upstream semantic extraction during worktree creation. A
 receipt, matching semantic counts, or matching Git commit never substitutes for
 the pinned upstream detector and ancestry checks. A parent whose detector result
 has unbounded AST/code drift or is otherwise unusable requires repair before a
