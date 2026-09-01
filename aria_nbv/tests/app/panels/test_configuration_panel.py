@@ -43,4 +43,5 @@ def test_trusted_file_patterns_are_closed_over_the_catalog() -> None:
 
     assert patterns.keys() == trusted_config_catalog().keys()
     assert "build_rollouts_v1_cuda_campaign_writer.toml" not in patterns["Rollout writer"]
+    assert "build_rollouts_v2_realistic.toml" in patterns["Rollout writer"]
     assert patterns["Rerun inspector"] == ("rerun_offline.toml",)

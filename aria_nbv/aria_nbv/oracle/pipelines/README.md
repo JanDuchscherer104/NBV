@@ -42,7 +42,7 @@ privileged:
 
 ```sh
 uv run nbv-rollout-campaign preflight \
-  --config-path ../.configs/build_rollouts_v1_cuda_campaign.toml \
+  --config-path ../.configs/build_rollouts_v2_cuda_campaign.toml \
   --source-store /path/to/vin_offline_rollout_campaign100_v10_rebuilt \
   --family-phase-a-output ../docs/contents/evidence/candidate_family_phase_a_wp02.json
 ```

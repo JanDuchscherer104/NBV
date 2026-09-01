@@ -803,6 +803,35 @@ def test_reader_preflight_preserves_paired_gaze_family_identity(monkeypatch: pyt
             np.asarray([-1], dtype=np.int8),
         )
 
+    class NestedReader:
+        def manifest(self) -> dict[str, object]:
+            return {
+                "manifest": {
+                    "generation": {
+                        "writer_config": {
+                            "candidate_mixture": {
+                                "components": [
+                                    {
+                                        "name": base,
+                                        "gazes": [
+                                            {"name": "primary", "mode": "target_point"},
+                                            {"name": "paired_forward_rig", "mode": "forward_rig"},
+                                        ],
+                                    }
+                                ]
+                            }
+                        }
+                    }
+                }
+            }
+
+    nested = candidate_mixture_family_names(
+        NestedReader(),
+        np.asarray([0, 0], dtype=np.int32),
+        np.asarray([0, 1], dtype=np.int8),
+    )
+    assert nested.tolist() == decoded.tolist()
+
 
 def test_lightweight_reader_is_constant_row_memory_and_matches_materialized_reduction(
     monkeypatch: pytest.MonkeyPatch,

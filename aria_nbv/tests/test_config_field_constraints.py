@@ -14,8 +14,13 @@ from aria_nbv.oracle.pipelines.rollout_dataset import RolloutDatasetWriterConfig
 from aria_nbv.oracle.target_rri import TargetRriScorerConfig
 from aria_nbv.oracle.target_selection import OracleTargetTaskSamplerConfig
 from aria_nbv.pose_generation import (
+    BoxViewJitterConfig,
+    CandidateGazeConfig,
     CandidateMixtureComponentConfig,
+    CandidatePositionMode,
     CandidateViewGeneratorConfig,
+    SampledCenterConfig,
+    SamplingStrategy,
     ViewDirectionMode,
 )
 from aria_nbv.rerun_inspector._config import (
@@ -48,7 +53,23 @@ def _recipe(**kwargs: object) -> RolloutRecipeConfig:
 def _mixture_component(**kwargs: object) -> CandidateMixtureComponentConfig:
     return CandidateMixtureComponentConfig(
         name="constraint-test",
-        strategy=ViewDirectionMode.FORWARD_RIG,
+        center=SampledCenterConfig(
+            mode=CandidatePositionMode.FORWARD_LOCAL,
+            sampling_strategy=SamplingStrategy.FORWARD_POWERSPHERICAL,
+            min_radius_m=0.25,
+            max_radius_m=1.25,
+            min_elevation_deg=-12.0,
+            max_elevation_deg=18.0,
+            azimuth_width_deg=120.0,
+            concentration=8.0,
+        ),
+        gazes=(
+            CandidateGazeConfig(
+                name="primary",
+                mode=ViewDirectionMode.FORWARD_RIG,
+                jitter=BoxViewJitterConfig(),
+            ),
+        ),
         **kwargs,
     )
 

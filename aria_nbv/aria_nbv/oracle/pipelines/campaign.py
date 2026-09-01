@@ -104,6 +104,42 @@ def _phase_a_failure_record(
     )
 
 
+def _candidate_component_projection(
+    components: Iterable[Any],
+) -> tuple[dict[str, str], frozenset[str]]:
+    """Project nested or persisted-flat components into campaign family roles."""
+
+    from ...pose_generation.config import SampledCenterConfig
+    from ...pose_generation.types import CandidatePositionMode
+
+    component_positions: dict[str, str] = {}
+    target_families: set[str] = set()
+    target_modes = {
+        CandidatePositionMode.TARGET_BEARING_LOCAL,
+        CandidatePositionMode.LATERAL_TARGET_BYPASS,
+        CandidatePositionMode.TARGET_ORBIT,
+    }
+    for component in components:
+        center = getattr(component, "center", None)
+        if isinstance(center, SampledCenterConfig):
+            position_mode = CandidatePositionMode(center.mode)
+        elif center is not None:
+            position_mode = CandidatePositionMode.TARGET_ORBIT
+        else:
+            position_mode = CandidatePositionMode(component.position_mode)
+        family_names = [component.name]
+        gazes = getattr(component, "gazes", ())
+        if gazes:
+            family_names.extend(f"{component.name}__{gaze.name}" for gaze in gazes[1:])
+        elif component.paired_view_mode is not None:
+            family_names.append(f"{component.name}__paired_{component.paired_view_mode.value}")
+        for family_name in family_names:
+            component_positions[family_name] = position_mode.value
+        if position_mode in target_modes:
+            target_families.update(family_names)
+    return component_positions, frozenset(target_families)
+
+
 @dataclass(frozen=True, slots=True)
 class GenerationRevision:
     """Reproducibility identity required before campaign planning/output."""
@@ -1077,7 +1113,7 @@ class CudaRolloutCampaign:
         """
 
         from ...data_handling.vin_store.dataset import VinOfflineSample
-        from ...pose_generation.types import CandidateGenerationRuntimeContext, CandidatePositionMode
+        from ...pose_generation.types import CandidateGenerationRuntimeContext
         from ..target_selection import OracleTargetTaskSampler
         from .rollout_dataset import RolloutDatasetWriter
 
@@ -1112,22 +1148,9 @@ class CudaRolloutCampaign:
 
         sampler = OracleTargetTaskSampler(writer_config.oracle_target_task_sampler)
         generator = writer_config.candidate_mixture.setup_target()
-        component_positions: dict[str, str] = {}
-        target_families: list[str] = []
-        for component in writer_config.candidate_mixture.components:
-            assert component.position_mode is not None
-            component_positions[component.name] = component.position_mode.value
-            if component.paired_view_mode is not None:
-                paired_name = f"{component.name}__paired_{component.paired_view_mode.value}"
-                component_positions[paired_name] = component.position_mode.value
-            if component.position_mode in {
-                CandidatePositionMode.TARGET_BEARING_LOCAL,
-                CandidatePositionMode.LATERAL_TARGET_BYPASS,
-                CandidatePositionMode.TARGET_ORBIT,
-            }:
-                target_families.append(component.name)
-                if component.paired_view_mode is not None:
-                    target_families.append(paired_name)
+        component_positions, target_families = _candidate_component_projection(
+            writer_config.candidate_mixture.components
+        )
 
         records: list[CandidateBenchmark] = []
         excluded: dict[str, str] = {}
@@ -1145,7 +1168,7 @@ class CudaRolloutCampaign:
                         scene_key=source_row.scene_id,
                         state_key=f"source:{source_row.sample_key}/target:unavailable",
                         family_positions=component_positions,
-                        target_families=frozenset(target_families),
+                        target_families=target_families,
                         failure=reason,
                     )
                 )
@@ -1159,7 +1182,7 @@ class CudaRolloutCampaign:
                         scene_key=source_row.scene_id,
                         state_key=state_key,
                         family_positions=component_positions,
-                        target_families=frozenset(target_families),
+                        target_families=target_families,
                         failure="missing_snippet_or_mesh",
                     )
                 )

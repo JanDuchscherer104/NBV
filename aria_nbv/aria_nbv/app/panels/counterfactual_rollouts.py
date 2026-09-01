@@ -44,13 +44,19 @@ from ...oracle.target_selection import (
     TargetTaskIdentityStatus,
 )
 from ...pose_generation import (
+    BoxViewJitterConfig,
+    CandidateGazeConfig,
     CandidateGenerationRuntimeContext,
     CandidateMixtureComponentConfig,
     CandidateMixtureViewGeneratorConfig,
     CandidatePositionMode,
     CandidateViewGeneratorConfig,
+    NoViewJitterConfig,
+    SampledCenterConfig,
+    SphericalViewJitterConfig,
     ViewDirectionMode,
 )
+from ...pose_generation.config import SampledCenterMode
 from ...pose_generation.plotting import CounterfactualPlotBuilder, plot_counterfactual_paths_simple
 from ...rendering import CandidateDepthRendererConfig
 from ...rendering.plotting import (
@@ -481,43 +487,79 @@ def _target_mixture_config(
 ) -> CandidateMixtureViewGeneratorConfig:
     """Build a target-aware mixed candidate generator from per-family counts."""
 
+    def center(
+        mode: SampledCenterMode,
+        *,
+        min_radius_m: float = base.min_radius,
+        max_radius_m: float = base.max_radius,
+    ) -> SampledCenterConfig:
+        return SampledCenterConfig(
+            mode=mode,
+            sampling_strategy=base.sampling_strategy,
+            min_radius_m=min_radius_m,
+            max_radius_m=max_radius_m,
+            min_elevation_deg=base.min_elev_deg,
+            max_elevation_deg=base.max_elev_deg,
+            azimuth_width_deg=base.delta_azimuth_deg,
+            concentration=base.kappa,
+        )
+
+    def gaze(mode: ViewDirectionMode) -> CandidateGazeConfig:
+        yaw_half_width_deg = base.view_max_azimuth_deg
+        pitch_half_width_deg = base.view_max_elevation_deg
+        concentration = base.view_kappa
+        assert yaw_half_width_deg is not None
+        assert pitch_half_width_deg is not None
+        assert concentration is not None
+        if yaw_half_width_deg > 0.0 or pitch_half_width_deg > 0.0 or base.view_roll_jitter_deg > 0.0:
+            jitter = BoxViewJitterConfig(
+                yaw_half_width_deg=yaw_half_width_deg,
+                pitch_half_width_deg=pitch_half_width_deg,
+                roll_half_width_deg=base.view_roll_jitter_deg,
+            )
+        elif base.view_sampling_strategy is not None:
+            jitter = SphericalViewJitterConfig(
+                distribution=base.view_sampling_strategy,
+                concentration=concentration,
+                roll_half_width_deg=base.view_roll_jitter_deg,
+            )
+        else:
+            jitter = NoViewJitterConfig()
+        return CandidateGazeConfig(name="primary", mode=mode, jitter=jitter)
+
     components = [
         CandidateMixtureComponentConfig(
             name="target_bearing_local",
             count=int(counts["target_bearing_local"]),
-            view_mode=ViewDirectionMode.TARGET_POINT,
-            position_mode=CandidatePositionMode.TARGET_BEARING_LOCAL,
+            center=center(CandidatePositionMode.TARGET_BEARING_LOCAL),
+            gazes=(gaze(ViewDirectionMode.TARGET_POINT),),
         ),
         CandidateMixtureComponentConfig(
             name="forward_local",
             count=int(counts["forward_local"]),
-            view_mode=ViewDirectionMode.FORWARD_RIG,
-            position_mode=CandidatePositionMode.FORWARD_LOCAL,
+            center=center(CandidatePositionMode.FORWARD_LOCAL),
+            gazes=(gaze(ViewDirectionMode.FORWARD_RIG),),
         ),
         CandidateMixtureComponentConfig(
             name="lateral_target_bypass",
             count=int(counts["lateral_target_bypass"]),
-            view_mode=ViewDirectionMode.TARGET_POINT,
-            position_mode=CandidatePositionMode.LATERAL_TARGET_BYPASS,
+            center=center(CandidatePositionMode.LATERAL_TARGET_BYPASS),
+            gazes=(gaze(ViewDirectionMode.TARGET_POINT),),
         ),
         CandidateMixtureComponentConfig(
             name="local_refinement",
             count=int(counts["local_refinement"]),
-            view_mode=ViewDirectionMode.RADIAL_TOWARDS,
-            position_mode=CandidatePositionMode.LOCAL_REFINEMENT,
-            min_radius=0.2,
-            max_radius=0.7,
+            center=center(CandidatePositionMode.LOCAL_REFINEMENT, min_radius_m=0.2, max_radius_m=0.7),
+            gazes=(gaze(ViewDirectionMode.RADIAL_TOWARDS),),
         ),
         CandidateMixtureComponentConfig(
             name="revisit_backtrack",
             count=int(counts["revisit_backtrack"]),
-            view_mode=ViewDirectionMode.FORWARD_RIG,
-            position_mode=CandidatePositionMode.REVISIT_BACKTRACK,
-            min_radius=0.25,
-            max_radius=0.9,
+            center=center(CandidatePositionMode.REVISIT_BACKTRACK, min_radius_m=0.25, max_radius_m=0.9),
+            gazes=(gaze(ViewDirectionMode.FORWARD_RIG),),
         ),
     ]
-    return CandidateMixtureViewGeneratorConfig(base=base, components=components)
+    return CandidateMixtureViewGeneratorConfig(base=base, components=tuple(components))
 
 
 def _candidate_config_for_live_rollout(

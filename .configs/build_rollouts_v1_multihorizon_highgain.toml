@@ -80,28 +80,68 @@ seed = 0
 [[candidate_mixture.components]]
 name = "forward_local"
 count = 24
-view_mode = "forward_rig"
-position_mode = "forward_local"
-view_max_azimuth_deg = 60.0
-view_max_elevation_deg = 30.0
+[candidate_mixture.components.center]
+kind = "sampled"
+mode = "forward_local"
+sampling_strategy = "forward_powerspherical"
+min_radius_m = 0.25
+max_radius_m = 1.1
+min_elevation_deg = -12.0
+max_elevation_deg = 18.0
+azimuth_width_deg = 100.0
+concentration = 8.0
+[[candidate_mixture.components.gazes]]
+name = "primary"
+mode = "forward_rig"
+[candidate_mixture.components.gazes.jitter]
+kind = "box"
+yaw_half_width_deg = 60.0
+pitch_half_width_deg = 30.0
+roll_half_width_deg = 0.0
 
 [[candidate_mixture.components]]
 name = "target_bearing_local"
 count = 24
-view_mode = "target_point"
-position_mode = "target_bearing_local"
-min_radius = 0.4
-max_radius = 1.1
-view_max_azimuth_deg = 60.0
-view_max_elevation_deg = 30.0
+[candidate_mixture.components.center]
+kind = "sampled"
+mode = "target_bearing_local"
+sampling_strategy = "forward_powerspherical"
+min_radius_m = 0.4
+max_radius_m = 1.1
+min_elevation_deg = -12.0
+max_elevation_deg = 18.0
+azimuth_width_deg = 100.0
+concentration = 8.0
+[[candidate_mixture.components.gazes]]
+name = "primary"
+mode = "target_point"
+[candidate_mixture.components.gazes.jitter]
+kind = "box"
+yaw_half_width_deg = 60.0
+pitch_half_width_deg = 30.0
+roll_half_width_deg = 0.0
 
 [[candidate_mixture.components]]
 name = "lateral_target_bypass"
 count = 12
-view_mode = "target_point"
-position_mode = "lateral_target_bypass"
-view_max_azimuth_deg = 60.0
-view_max_elevation_deg = 30.0
+[candidate_mixture.components.center]
+kind = "sampled"
+mode = "lateral_target_bypass"
+sampling_strategy = "forward_powerspherical"
+min_radius_m = 0.25
+max_radius_m = 1.1
+min_elevation_deg = -12.0
+max_elevation_deg = 18.0
+azimuth_width_deg = 100.0
+concentration = 8.0
+[[candidate_mixture.components.gazes]]
+name = "primary"
+mode = "target_point"
+[candidate_mixture.components.gazes.jitter]
+kind = "box"
+yaw_half_width_deg = 60.0
+pitch_half_width_deg = 30.0
+roll_half_width_deg = 0.0
 
 [target_scorer]
 backprojection_stride = 2

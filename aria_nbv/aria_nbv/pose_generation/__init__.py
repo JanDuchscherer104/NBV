@@ -21,6 +21,14 @@ from .candidate_mixture import (
     candidate_position_id,
     candidate_strategy_id,
 )
+from .config import (
+    BoxViewJitterConfig,
+    CandidateGazeConfig,
+    NoViewJitterConfig,
+    SampledCenterConfig,
+    SphericalViewJitterConfig,
+    TargetOrbitCenterConfig,
+)
 from .types import (
     CandidateGenerationRuntimeContext,
     CandidatePositionMode,
@@ -38,11 +46,17 @@ from .utils import (
 __all__ = [
     "CandidateViewGenerator",
     "CandidateViewGeneratorConfig",
+    "BoxViewJitterConfig",
+    "CandidateGazeConfig",
     "CandidateMixtureComponentConfig",
     "CandidateMixtureViewGenerator",
     "CandidateMixtureViewGeneratorConfig",
     "CandidateGenerationRuntimeContext",
     "CandidatePositionMode",
+    "NoViewJitterConfig",
+    "SampledCenterConfig",
+    "SphericalViewJitterConfig",
+    "TargetOrbitCenterConfig",
     "ViewDirectionMode",
     "candidate_position_id",
     "candidate_strategy_id",
