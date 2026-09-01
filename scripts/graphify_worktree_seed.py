@@ -246,10 +246,9 @@ def validate_source(
 ) -> tuple[list[Path], str, dict[str, str]]:
     for path in (*CORE, Path("graphify-out/needs_update")):
         validate_parent_chain(source, path, "source", require_existing=True)
-    if (source / "graphify-out/needs_update").exists() or (
-        source / "graphify-out/needs_update"
-    ).is_symlink():
-        fail("source Graphify refresh is pending: graphify-out/needs_update exists")
+    pending = source / "graphify-out/needs_update"
+    if pending.exists() or pending.is_symlink():
+        regular(pending, "source Graphify semantic refresh marker")
     graph_revision = validate_graph(source, source_git_dir, "source")
     markdown = manifest_markdown(source)
     validate_interpreter(source)
@@ -399,7 +398,16 @@ def seed(
         source, source_git_dir, canonical_cache_root
     )
     source_head = git(source, source_git_dir, "rev-parse", "HEAD")
-    targets = [*CORE, *markdown, ROOT, SENTINEL, *(CACHE / name for name in CACHE_NAMES)]
+    pending = Path("graphify-out/needs_update")
+    pending_files = [pending] if (source / pending).exists() else []
+    targets = [
+        *CORE,
+        *markdown,
+        *pending_files,
+        ROOT,
+        SENTINEL,
+        *(CACHE / name for name in CACHE_NAMES),
+    ]
     for path in targets:
         validate_parent_chain(destination, path, "destination", require_existing=False)
     if any(
@@ -413,7 +421,7 @@ def seed(
         fail("missing seeded Graphify artifacts")
     staged = Path(tempfile.mkdtemp(prefix=".graphify-seed-", dir=destination))
     try:
-        files = [*CORE, *markdown]
+        files = [*CORE, *markdown, *pending_files]
         for path in files:
             target = staged / path
             target.parent.mkdir(parents=True, exist_ok=True)

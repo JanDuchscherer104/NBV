@@ -282,7 +282,9 @@ def configured_modes(raw: str | None = None) -> tuple[str, ...]:
     return modes
 
 
-def run(root: Path, *, modes: tuple[str, ...] | None = None) -> None:
+def run(
+    root: Path, *, modes: tuple[str, ...] | None = None, refresh: bool = True
+) -> None:
     root = root.resolve()
     if not (root / ".git").exists():
         fail(f"Graphify reconciliation root is not a Git worktree: {root}")
@@ -311,6 +313,8 @@ def run(root: Path, *, modes: tuple[str, ...] | None = None) -> None:
                     cwd=root,
                     check=True,
                 )
+            if not refresh:
+                return
             # Graphify's detector and mode-specific cache are the only source
             # of truth for no-op, dirty-input, and cold-deep decisions. A Git
             # tree match cannot prove any of those runtime states.
@@ -341,9 +345,14 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", type=Path, default=Path.cwd())
     parser.add_argument("--modes", default=None)
+    parser.add_argument("--prepare-only", action="store_true")
     args = parser.parse_args(argv)
     try:
-        run(args.root, modes=configured_modes(args.modes))
+        run(
+            args.root,
+            modes=configured_modes(args.modes),
+            refresh=not args.prepare_only,
+        )
     except (OSError, ValueError, subprocess.CalledProcessError) as error:
         print(f"error: Graphify reconciliation failed: {error}", file=sys.stderr)
         return 1

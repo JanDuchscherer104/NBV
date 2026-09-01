@@ -280,6 +280,53 @@ class ReconcileGraphifyWorktreeTests(unittest.TestCase):
                 "a" * 40,
             )
 
+    def test_prepare_only_rebuilds_projection_without_extracting(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="aria-reconcile-") as temporary:
+            root = Path(temporary)
+            (root / ".git").mkdir()
+            (root / "graphify-input").mkdir()
+            (root / "graphify-input/index.md").write_text("# fixture\n", encoding="utf-8")
+            output = root / "graphify-out"
+            output.mkdir()
+            (output / "graph.json").write_text(
+                json.dumps({"built_at_commit": "b" * 40, "nodes": [], "links": []}),
+                encoding="utf-8",
+            )
+            interpreter = root.parent / "trusted-python"
+            interpreter.write_text("#!/bin/sh\n", encoding="utf-8")
+            interpreter.chmod(0o755)
+            cli = root.parent / "trusted-graphify"
+            cli.write_text(f"#!{interpreter}\n", encoding="utf-8")
+            cli.chmod(0o755)
+            recorded: list[tuple[str, ...]] = []
+
+            def completed(command: list[str], **_: object) -> subprocess.CompletedProcess[str]:
+                recorded.append(tuple(command))
+                return subprocess.CompletedProcess(command, 0, "", "")
+
+            with (
+                mock.patch.object(
+                    reconcile, "trusted_graphify_runtime", return_value=(cli, interpreter)
+                ),
+                mock.patch.object(reconcile, "head", return_value="a" * 40),
+                mock.patch.object(reconcile, "graph_revision", return_value="b" * 40),
+                mock.patch.object(reconcile, "graph_tree_matches_head", return_value=False),
+                mock.patch.object(
+                    reconcile.freshness, "projection_owner_changes", return_value=["owner changed"]
+                ),
+                mock.patch.object(reconcile.subprocess, "run", side_effect=completed),
+            ):
+                reconcile.run(root, refresh=False)
+
+            self.assertTrue(
+                any(
+                    any("build_graphify_projection.py" in item for item in command)
+                    for command in recorded
+                )
+            )
+            self.assertNotIn((str(cli), "extract", str(root.resolve())), recorded)
+            self.assertFalse(any(command[-2:] == ("--usable", "--quiet") for command in recorded))
+
     def test_runs_cold_deep_extraction_even_when_standard_graph_tree_matches(self) -> None:
         with tempfile.TemporaryDirectory(prefix="aria-reconcile-") as temporary:
             root = Path(temporary)

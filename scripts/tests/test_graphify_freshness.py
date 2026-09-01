@@ -231,8 +231,8 @@ save_manifest(result['files'], manifest_path=manifest, root=root, scan_corpus=co
         code = self.root / "src/example.py"
         code.write_text("def example(): return 2\n", encoding="utf-8")
         code_payload = self.payload()
-        self.assertEqual(code_payload["state"], "usable-stale", code_payload)
-        self.assertIn("src/example.py", code_payload["stale_sources"])
+        self.assertEqual(code_payload["state"], "unusable", code_payload)
+        self.assertIn("AST refresh required", " ".join(code_payload["reasons"]))
 
         self._save_upstream_manifest()
         index = self.root / "graphify-input/index.md"
@@ -387,7 +387,7 @@ save_manifest(result['files'], manifest_path=manifest, root=root, scan_corpus=co
         ):
             payload = self.payload()
 
-        self.assertNotEqual(payload["state"], "unusable", payload)
+        self.assertIn(payload["state"], {"usable-stale", "unusable"}, payload)
         self.assertFalse(executed.exists())
 
     def test_repo_local_graphify_cli_is_not_executed(self) -> None:
@@ -748,9 +748,6 @@ save_manifest(result['files'], manifest_path=manifest, root=root, scan_corpus=co
             ),
             "nonancestor": lambda: self._write_graph("deadbeef"),
             "missing-node": lambda: self._write_graph(index_node=False),
-            "marker": lambda: (self.root / "graphify-out/needs_update").write_text(
-                "pending\n", encoding="utf-8"
-            ),
             "deleted": lambda: (self.root / "src/example.py").unlink(),
             "excluded": lambda: (self.root / ".graphifyignore").write_text(
                 "src/example.py\n", encoding="utf-8"
@@ -770,6 +767,16 @@ save_manifest(result['files'], manifest_path=manifest, root=root, scan_corpus=co
                 self._save_upstream_manifest()
                 mutate()
                 self.assertEqual(self.payload()["state"], "unusable")
+
+    def test_semantic_refresh_marker_is_usable_stale(self) -> None:
+        (self.root / "graphify-out/needs_update").write_text(
+            "pending\n", encoding="utf-8"
+        )
+
+        payload = self.payload()
+
+        self.assertEqual(payload["state"], "usable-stale", payload)
+        self.assertIn("semantic refresh required", " ".join(payload["reasons"]))
 
     def test_projection_index_symlink_is_unusable_even_when_target_is_in_root(
         self,

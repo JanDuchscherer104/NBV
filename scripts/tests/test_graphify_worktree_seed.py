@@ -255,6 +255,19 @@ class GraphifyWorktreeSeedTest(unittest.TestCase):
             (self.source / "graphify-out/graph.json").read_bytes(),
         )
 
+    def test_copies_a_pending_semantic_refresh_marker(self) -> None:
+        marker = self.source / "graphify-out/needs_update"
+        marker.write_text("pending\n", encoding="utf-8")
+
+        self.seed()
+
+        self.assertEqual(
+            (self.destination / "graphify-out/needs_update").read_text(
+                encoding="utf-8"
+            ),
+            "pending\n",
+        )
+
     def test_check_and_idempotent_seed_do_not_write_child_state(self) -> None:
         self.seed()
         owned = [

@@ -24,7 +24,7 @@ def graphify_interpreter() -> Path:
 
 
 class GraphifySessionReadinessTests(unittest.TestCase):
-    def test_parentless_setup_rejects_an_unadmitted_primary(self) -> None:
+    def test_parentless_setup_admits_a_pending_semantic_refresh(self) -> None:
         with tempfile.TemporaryDirectory(prefix="aria-graphify-session-") as temporary:
             parent = Path(temporary) / "parent"
             child = Path(temporary) / "child"
@@ -102,13 +102,29 @@ class GraphifySessionReadinessTests(unittest.TestCase):
                 text=True,
             )
 
-            self.assertNotEqual(result.returncode, 0)
-            self.assertIn(
-                "no query-admissible registered Graphify parent",
-                result.stderr,
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertTrue((child / "graphify-out/graph.json").is_file())
+            self.assertTrue((child / "graphify-input/index.md").is_file())
+            self.assertEqual(
+                (child / "graphify-out/needs_update").read_text(encoding="utf-8"),
+                "semantic refresh required\n",
             )
-            self.assertFalse((child / "graphify-out").exists())
-            self.assertFalse((child / "graphify-input").exists())
+            payload = json.loads(
+                subprocess.run(
+                    [
+                        str(parent / "aria_nbv/.venv/bin/python"),
+                        str(child / "scripts/check_graphify_freshness.py"),
+                        "--json",
+                        "--usable",
+                    ],
+                    cwd=child,
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                ).stdout
+            )
+            self.assertEqual(payload["state"], "usable-stale", payload)
+            self.assertIn("semantic refresh required", " ".join(payload["reasons"]))
 
     def git(self, root: Path, *args: str) -> None:
         subprocess.run(["git", *args], cwd=root, check=True)

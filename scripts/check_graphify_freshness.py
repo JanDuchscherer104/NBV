@@ -720,10 +720,10 @@ def check(root: Path) -> dict[str, Any]:
             _projection_metadata(projection_index)
         )
         graph_revision = _graph_revision(root)
-        if (root / NEEDS_UPDATE).exists() or (root / NEEDS_UPDATE).is_symlink():
-            raise ValueError(
-                "semantic refresh required: graphify-out/needs_update exists"
-            )
+        pending = root / NEEDS_UPDATE
+        if pending.exists() or pending.is_symlink():
+            _regular(pending, "Graphify semantic refresh marker")
+            reasons.append("semantic refresh required: graphify-out/needs_update exists")
         if owner_state == "dirty":
             raise ValueError("projection was built from a dirty owner worktree")
         reasons.extend(_owner_reasons(root, owners))
@@ -741,6 +741,7 @@ def check(root: Path) -> dict[str, Any]:
         semantic_stale, _ = _detector_sources(
             root, semantic, {"document", "paper", "image"}
         )
+        ast_refresh_required = bool(ast_stale)
         if len(ast_stale) > MAX_STALE_SOURCES:
             raise ValueError("Graphify detector reported an unbounded stale-source set")
         if len(semantic_stale) > MAX_STALE_SOURCES:
@@ -799,6 +800,15 @@ def check(root: Path) -> dict[str, Any]:
             graph_revision,
             stale_sources,
             [*reasons, "non-ancestor Graphify corpus differs from HEAD"],
+            STALE_ACTION,
+        )
+    if ast_refresh_required:
+        return _result(
+            "unusable",
+            head,
+            graph_revision,
+            stale_sources,
+            [*reasons, "Graphify AST refresh required"],
             STALE_ACTION,
         )
     if reasons or stale_sources:
