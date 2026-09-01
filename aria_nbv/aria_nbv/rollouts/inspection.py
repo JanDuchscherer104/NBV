@@ -30,6 +30,16 @@ from ..oracle.target_selection import TARGET_INVALID_REASON_CODES
 from ..pose_generation import ViewDirectionMode, candidate_strategy_id
 from ..targets.protocol import ORACLE_GT_TARGET_SOURCE, ActorVisibleTargetSource, TargetInputProtocol
 from .audits import candidate_policy_entropy
+from .candidate_evidence import (
+    CandidateCriterionSnapshot,
+    CandidateEvidenceRow,
+    CandidateEvidenceSnapshot,
+    CandidateFactAvailability,
+    CandidateProjectionUnavailableReason,
+    CandidateRolloutOverlay,
+    candidate_evidence_snapshot_from_live,
+    candidate_evidence_snapshot_from_stored,
+)
 from .manifest import read_rollout_store_manifest
 from .read_model import (
     StoredRollout,
@@ -7966,6 +7976,12 @@ def _geometry_frame(
 
 
 __all__ = [
+    "CandidateCriterionSnapshot",
+    "CandidateEvidenceRow",
+    "CandidateEvidenceSnapshot",
+    "CandidateFactAvailability",
+    "CandidateProjectionUnavailableReason",
+    "CandidateRolloutOverlay",
     "GeometryFrame",
     "GeometryIssue",
     "GeometryPoint",
@@ -7974,6 +7990,8 @@ __all__ = [
     "RolloutSuspiciousQueryConfig",
     "S2DirectionHistogram",
     "candidate_audit_rows",
+    "candidate_evidence_snapshot_from_live",
+    "candidate_evidence_snapshot_from_stored",
     "candidate_flow_rows",
     "candidate_group_summary_rows",
     "candidate_collision_support_rows",

@@ -1,0 +1,18 @@
+{
+  "action": 67,
+  "attempted": 120,
+  "hard_valid": 67,
+  "plot_ids": [
+    "candidate-ground-support:6328211b0e98da86",
+    "candidate-support-3d:e2fc2cf5a07ce0e8",
+    "candidate-family-survival:75736158edf98016",
+    "candidate-view-jitter:3b787aa2db7fab90"
+  ],
+  "schema_revision": "candidate-evidence-real-scene-summary-v1",
+  "selected": 2,
+  "source_sha256": [
+    "714dac011769a2c776a4b274c4872208f93f162b4ef6254fe36956e83186162d",
+    "f8695b8a52701fa536de4ce3ab7e2b2d4715eef30e8915d6cfd6440bb36ab0c1"
+  ],
+  "states": 2
+}

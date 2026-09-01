@@ -56,6 +56,7 @@ from aria_nbv.pose_generation.types import (
     SamplingStrategy,
     ViewDirectionMode,
 )
+from aria_nbv.rollouts.inspection import CandidateFactAvailability, candidate_evidence_snapshot_from_live
 from aria_nbv.rollouts.replay.policy import derive_rollout_seed
 from aria_nbv.targets import TargetDescriptor
 from aria_nbv.utils.canonical_binding import CanonicalBindingError, canonical_binding_bytes, canonical_binding_sha256
@@ -564,7 +565,8 @@ def test_single_family_projection_preserves_none_compatibility_fields() -> None:
         random_key=CandidateSamplingKey(CandidateSubstreamRevision.SHIPPED_V1, "direct_base", 19),
     )
 
-    projected = candidate_set_to_legacy_result(ProgramCandidateGenerator().generate(request))
+    candidate_set = ProgramCandidateGenerator().generate(request)
+    projected = candidate_set_to_legacy_result(candidate_set)
     legacy = config.setup_target().generate(
         reference_pose=_pose(),
         gt_mesh=scene.gt_mesh,
@@ -587,6 +589,10 @@ def test_single_family_projection_preserves_none_compatibility_fields() -> None:
             assert torch.equal(left, right)
         else:
             assert torch.equal(left.tensor(), right.tensor())
+
+    snapshot = candidate_evidence_snapshot_from_live(candidate_set)
+    assert all(row.position_pair_id is None and row.gaze_variant_id is None for row in snapshot.rows)
+    assert all(row.semantic_lineage_availability is CandidateFactAvailability.AVAILABLE for row in snapshot.rows)
 
 
 def test_one_component_mixture_preserves_mixture_mask_and_extra_asymmetry() -> None:

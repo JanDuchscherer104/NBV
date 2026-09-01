@@ -5,12 +5,21 @@ from __future__ import annotations
 from collections.abc import Collection, Iterable, Mapping
 from typing import cast
 
+import numpy as np
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
 from .candidate_benchmark import CandidateBenchmark, CandidateFamilyPreflight
+from .candidate_evidence import (
+    CandidateEvidenceRow,
+    CandidateEvidenceSnapshot,
+    CandidateFactAvailability,
+    CandidateProjectionUnavailableReason,
+    CandidateRolloutOverlay,
+)
+from .candidate_plotting import candidate_support_plot_models
 
 _BENCHMARK_FIGURE_TITLES = (
     "Candidate family attempted → valid → selected funnel",
@@ -22,47 +31,261 @@ _BENCHMARK_FIGURE_TITLES = (
 )
 
 
-def _point_frame(records: Iterable[CandidateBenchmark]) -> pd.DataFrame:
-    rows = []
-    for record in records:
-        for point in record.points:
-            xyz = point.xyz
-            rows.append(
-                {
-                    "x": xyz[0],
-                    "y": xyz[1],
-                    "z": xyz[2],
-                    "family": point.family,
-                    "status": "selected" if point.selected else "valid" if point.actor_valid else "invalid",
-                    "candidate_id": point.candidate_id,
-                    "state": point.state_key,
-                    "lineage": point.candidate_config or "unavailable",
-                }
-            )
-    return pd.DataFrame(rows, columns=("x", "y", "z", "family", "status", "candidate_id", "state", "lineage"))
+def _benchmark_snapshot(record: CandidateBenchmark) -> CandidateEvidenceSnapshot:
+    """Project legacy benchmark facts without upgrading them to semantic identity."""
+
+    if len(record.points) != sum(family.attempted for family in record.families):
+        raise ValueError("legacy benchmark lacks a complete attempted-row table")
+    phase_a_action_shell = record.lineage.get("selection_semantics") == "final_valid_action_shell"
+    unavailable_reason = record.lineage.get("proposal_support_unavailable_reason")
+    target: tuple[float, float, float] | None = (
+        (
+            float(record.geometry["target_x"]),
+            float(record.geometry["target_y"]),
+            float(record.geometry["target_z"]),
+        )
+        if all(record.geometry.get(name) is not None for name in ("target_x", "target_y", "target_z"))
+        else None
+    )
+    rows = tuple(
+        CandidateEvidenceRow(
+            attempted_index=index,
+            candidate_id=point.candidate_id,
+            center_world_m=None,
+            world_pose_availability=CandidateFactAvailability.LEGACY_MISSING,
+            world_pose_unavailable_reason=None,
+            center_target_normalized=(None if unavailable_reason is not None else point.xyz),
+            gaze_target_unit=(None if unavailable_reason is not None else point.view_direction_xyz),
+            projection_availability=(
+                CandidateFactAvailability.UNAVAILABLE
+                if unavailable_reason is not None
+                else CandidateFactAvailability.AVAILABLE
+            ),
+            projection_unavailable_reason=(
+                CandidateProjectionUnavailableReason.TARGET_MISSING if unavailable_reason is not None else None
+            ),
+            hard_valid=point.actor_valid,
+            action=point.actor_valid,
+            selected=(None if phase_a_action_shell else point.selected),
+            semantic_group_id=None,
+            center_family_id=None,
+            gaze_family_id=None,
+            candidate_family_id=None,
+            legacy_family_label=point.family,
+            legacy_invalid_reason_bitset=None,
+            legacy_primary_invalid_reason=None,
+            legacy_admission_measurements=(),
+            center_id=None,
+            position_pair_id=None,
+            gaze_variant_id=None,
+            legacy_position_pair_id=None,
+            legacy_gaze_variant_id=None,
+            attempt_round_id=None,
+            draw_id=None,
+            proposal_key=None,
+            proposal_probability=None,
+            view_jitter_yaw_deg=point.view_jitter_yaw_deg,
+            view_jitter_pitch_deg=point.view_jitter_pitch_deg,
+            view_jitter_is_bounded=point.view_jitter_is_bounded,
+            view_jitter_azimuth_limit_deg=point.view_jitter_azimuth_limit_deg,
+            view_jitter_elevation_limit_deg=point.view_jitter_elevation_limit_deg,
+            target_frame_identity=None,
+            admission=(),
+            semantic_lineage_availability=CandidateFactAvailability.LEGACY_MISSING,
+            action_availability=CandidateFactAvailability.AVAILABLE,
+            selection_availability=(
+                CandidateFactAvailability.UNAVAILABLE if phase_a_action_shell else CandidateFactAvailability.AVAILABLE
+            ),
+            proposal_key_availability=CandidateFactAvailability.LEGACY_MISSING,
+            proposal_probability_availability=CandidateFactAvailability.LEGACY_MISSING,
+            jitter_availability=(
+                CandidateFactAvailability.AVAILABLE
+                if all(
+                    value is not None
+                    for value in (
+                        point.view_jitter_yaw_deg,
+                        point.view_jitter_pitch_deg,
+                        point.view_jitter_is_bounded,
+                        point.view_jitter_azimuth_limit_deg,
+                        point.view_jitter_elevation_limit_deg,
+                    )
+                )
+                else CandidateFactAvailability.LEGACY_MISSING
+            ),
+            admission_availability=CandidateFactAvailability.LEGACY_MISSING,
+            generation_frame_availability=CandidateFactAvailability.LEGACY_MISSING,
+            legacy_family_label_availability=CandidateFactAvailability.AVAILABLE,
+            legacy_admission_availability=CandidateFactAvailability.LEGACY_MISSING,
+            legacy_pair_lineage_availability=CandidateFactAvailability.LEGACY_MISSING,
+        )
+        for index, point in enumerate(record.points)
+    )
+    return CandidateEvidenceSnapshot(
+        schema_revision="candidate-evidence-snapshot-v1",
+        state_key=record.state_key,
+        rows=rows,
+        completion_mode=None,
+        attempted_count=len(rows),
+        valid_count=sum(row.hard_valid for row in rows),
+        action_count=sum(bool(row.action) for row in rows),
+        selected_count=(None if phase_a_action_shell else sum(bool(row.selected) for row in rows)),
+        projection_frame_identity=(None if unavailable_reason is not None else f"legacy-benchmark:{record.state_key}"),
+        target_target_normalized=(None if unavailable_reason is not None else target),
+        candidate_program_hash=None,
+        request_binding_hash=None,
+        execution_hash=None,
+        overlay=CandidateRolloutOverlay.unavailable(),
+        completion_availability=CandidateFactAvailability.PARTIAL,
+        projection_frame_availability=(
+            CandidateFactAvailability.UNAVAILABLE
+            if unavailable_reason is not None
+            else CandidateFactAvailability.AVAILABLE
+        ),
+        projection_unavailable_reason=(
+            CandidateProjectionUnavailableReason.TARGET_MISSING if unavailable_reason is not None else None
+        ),
+        program_hash_availability=CandidateFactAvailability.LEGACY_MISSING,
+        request_hash_availability=CandidateFactAvailability.LEGACY_MISSING,
+        execution_hash_availability=CandidateFactAvailability.LEGACY_MISSING,
+    )
 
 
-def candidate_ground_support_figure(
+def _snapshot_support_figures(
     records: Iterable[CandidateBenchmark],
     *,
-    show_view_directions: bool = False,
-    family_colors: Mapping[str, str] | None = None,
-) -> go.Figure:
-    """Build the canonical target-aligned ground-plane support figure."""
-
+    show_view_directions: bool,
+) -> tuple[go.Figure, go.Figure, go.Figure, go.Figure]:
     records = tuple(records)
-    frame = _point_frame(records)
-    ground = px.scatter(
+    complete = tuple(
+        record
+        for record in records
+        if len(record.points) == sum(family.attempted for family in record.families)
+        and record.lineage.get("proposal_support_unavailable_reason") is None
+        and all(record.geometry.get(name) is not None for name in ("target_x", "target_y", "target_z"))
+    )
+    snapshots = tuple(_benchmark_snapshot(record) for record in complete)
+    models = candidate_support_plot_models(snapshots, show_view_directions=show_view_directions)
+    figures = [model.build_figure() for model in models]
+    incomplete_with_points = tuple(
+        record
+        for record in records
+        if record not in complete
+        and record.points
+        and record.lineage.get("proposal_support_unavailable_reason") is None
+    )
+    if incomplete_with_points:
+        _append_legacy_known_point_traces(
+            figures,
+            incomplete_with_points,
+            show_view_directions=show_view_directions,
+        )
+    survival_rows = [
+        {"family": family.family, "stage": stage, "count": count}
+        for record in records
+        for family in record.families
+        for stage, count in (
+            ("attempted", family.attempted),
+            ("valid", family.valid),
+            ("selected", family.selected),
+        )
+    ]
+    figures[2] = px.bar(
+        pd.DataFrame(survival_rows, columns=("family", "stage", "count")),
+        x="family",
+        y="count",
+        color="stage",
+        barmode="group",
+        title="Candidate family survival",
+    )
+    unavailable_reasons = sorted(
+        {
+            reason
+            for record in records
+            if (reason := record.lineage.get("proposal_support_unavailable_reason")) is not None
+        }
+    )
+    if unavailable_reasons:
+        for figure in figures[:2]:
+            figure.add_annotation(
+                text=f"proposal support unavailable: {', '.join(unavailable_reasons)}",
+                x=0.01,
+                y=0.99,
+                xref="paper",
+                yref="paper",
+                showarrow=False,
+            )
+    for figure in figures[:2]:
+        for trace in figure.data:
+            if isinstance(trace.name, str):
+                trace.name = trace.name.replace("action", "valid").replace(
+                    "Task target centre", "Persisted task target centre"
+                )
+    for trace in figures[1].data:
+        if trace.customdata is None:
+            continue
+        customdata = np.asarray(trace.customdata, dtype=object)
+        if customdata.ndim == 2 and customdata.shape[1] >= 3:
+            customdata[:, 2] = np.where(customdata[:, 2] == "action", "valid", customdata[:, 2])
+            trace.customdata = customdata
+    for figure, title in zip(
+        figures,
+        (
+            "Candidate centers in target-aligned support (ground plane)",
+            "Candidate centers in target-aligned support (3D)",
+            "Candidate family survival",
+            "Candidate view jitter",
+        ),
+        strict=True,
+    ):
+        figure.update_layout(title=title)
+    return cast(tuple[go.Figure, go.Figure, go.Figure, go.Figure], tuple(figures))
+
+
+def _append_legacy_known_point_traces(
+    figures: list[go.Figure],
+    records: tuple[CandidateBenchmark, ...],
+    *,
+    show_view_directions: bool,
+) -> None:
+    """Retain known legacy point traces without inventing missing attempted rows."""
+
+    ground, support, _, jitter = figures
+    for figure in (ground, support, jitter):
+        figure.layout.annotations = tuple(
+            annotation
+            for annotation in figure.layout.annotations or ()
+            if annotation.text != "No matching benchmark candidates"
+        )
+    ground.data = tuple(trace for trace in ground.data if trace.x is not None and len(trace.x) > 0)
+    jitter.data = tuple(trace for trace in jitter.data if trace.x is not None and len(trace.x) > 0)
+    rows = [
+        {
+            "x": point.xyz[0],
+            "y": point.xyz[1],
+            "z": point.xyz[2],
+            "family": point.family,
+            "status": "selected" if point.selected else "valid" if point.actor_valid else "invalid",
+            "candidate_id": point.candidate_id,
+            "state": point.state_key,
+            "lineage": point.candidate_config or "unavailable",
+        }
+        for record in records
+        for point in record.points
+    ]
+    frame = pd.DataFrame(
+        rows,
+        columns=("x", "y", "z", "family", "status", "candidate_id", "state", "lineage"),
+    )
+    legacy_ground = px.scatter(
         frame,
         x="x",
         y="y",
-        color="family" if not frame.empty else None,
-        symbol="status" if not frame.empty else None,
-        hover_data=["candidate_id", "state"] if not frame.empty else None,
-        title="Candidate centers in target-aligned support (ground plane)",
-        labels={"x": "target-forward / d", "y": "target-lateral / d"},
-        color_discrete_map=dict(family_colors or {}),
+        color="family",
+        symbol="status",
+        hover_data=["candidate_id", "state"],
     )
+    for trace in legacy_ground.data:
+        ground.add_trace(trace)
     ground.add_trace(
         go.Scatter(
             x=[0],
@@ -72,16 +295,18 @@ def candidate_ground_support_figure(
             marker={"symbol": "cross", "size": 12, "color": "black"},
         )
     )
-    targets = {
-        (float(record.geometry["target_x"]), float(record.geometry["target_y"]))
-        for record in records
-        if record.geometry.get("target_x") is not None and record.geometry.get("target_y") is not None
-    }
+    targets = sorted(
+        {
+            tuple(float(record.geometry[name]) for name in ("target_x", "target_y", "target_z"))
+            for record in records
+            if all(record.geometry.get(name) is not None for name in ("target_x", "target_y", "target_z"))
+        }
+    )
     if targets:
         ground.add_trace(
             go.Scatter(
-                x=[target[0] for target in sorted(targets)],
-                y=[target[1] for target in sorted(targets)],
+                x=[target[0] for target in targets],
+                y=[target[1] for target in targets],
                 mode="markers",
                 name="Persisted task target centre",
                 marker={"symbol": "star", "size": 12, "color": "#9467bd"},
@@ -94,12 +319,11 @@ def candidate_ground_support_figure(
                     continue
                 direction_x, direction_y, _ = point.view_direction_xyz
                 norm = (direction_x**2 + direction_y**2) ** 0.5
-                if norm <= 1e-9:
+                if norm <= 1.0e-9:
                     continue
-                arrow_length = 0.04
                 ground.add_annotation(
-                    x=point.xyz[0] + arrow_length * direction_x / norm,
-                    y=point.xyz[1] + arrow_length * direction_y / norm,
+                    x=point.xyz[0] + 0.04 * direction_x / norm,
+                    y=point.xyz[1] + 0.04 * direction_y / norm,
                     ax=point.xyz[0],
                     ay=point.xyz[1],
                     xref="x",
@@ -112,76 +336,21 @@ def candidate_ground_support_figure(
                     arrowwidth=1.0,
                     arrowcolor="rgba(40,40,40,0.65)",
                 )
-    ground.update_xaxes(scaleanchor="y", scaleratio=1)
-    ground.update_yaxes(constrain="domain")
-
-    unavailable_reasons = sorted(
-        {
-            reason
-            for record in records
-            if (reason := record.lineage.get("proposal_support_unavailable_reason")) is not None
-        }
-    )
-    if unavailable_reasons:
-        ground.add_annotation(
-            text=f"proposal support unavailable: {', '.join(unavailable_reasons)}",
-            x=0.01,
-            y=0.99,
-            xref="paper",
-            yref="paper",
-            showarrow=False,
+    support.add_trace(
+        go.Scatter3d(
+            x=frame.x,
+            y=frame.y,
+            z=frame.z,
+            mode="markers",
+            name="candidate support",
+            marker={"symbol": frame["status"].map({"selected": "diamond", "valid": "circle", "invalid": "x"}).tolist()},
+            customdata=frame[["candidate_id", "family", "status", "lineage"]],
+            hovertemplate=(
+                "candidate=%{customdata[0]}<br>family=%{customdata[1]}"
+                "<br>status=%{customdata[2]}<br>lineage=%{customdata[3]}<extra></extra>"
+            ),
         )
-    return ground
-
-
-def candidate_support_figures(
-    records: Iterable[CandidateBenchmark],
-    *,
-    show_view_directions: bool = False,
-) -> tuple[go.Figure, go.Figure, go.Figure, go.Figure]:
-    """Build ground-plane, 3-D, family-survival, and jitter figures.
-
-    Args:
-        records: Bounded factual-state records whose points already use the
-            normalized target-aligned proposal-support frame.
-        show_view_directions: Add short ground-plane camera-forward arrows for
-            actor-valid candidates when their persisted direction is present.
-
-    Returns:
-        Ground-plane support, three-dimensional support, family-survival, and
-        per-candidate view-jitter figures. The first two figures mark the
-        factual expansion/root and persisted task target explicitly. The jitter view
-        retains dotted caps only for bounded rows; any uncapped spherical row
-        selects fixed yaw ``[-180, 180]`` and pitch ``[-90, 90]`` axes.
-    """
-
-    records = tuple(records)
-    frame = _point_frame(records)
-    ground = candidate_ground_support_figure(records, show_view_directions=show_view_directions)
-
-    unavailable_reasons = sorted(
-        {
-            reason
-            for record in records
-            if (reason := record.lineage.get("proposal_support_unavailable_reason")) is not None
-        }
     )
-    support = go.Figure()
-    if not frame.empty:
-        support.add_trace(
-            go.Scatter3d(
-                x=frame.x,
-                y=frame.y,
-                z=frame.z,
-                mode="markers",
-                name="candidate support",
-                marker={
-                    "symbol": frame["status"].map({"selected": "diamond", "valid": "circle", "invalid": "x"}).tolist()
-                },
-                customdata=frame[["candidate_id", "family", "status", "lineage"]],
-                hovertemplate="candidate=%{customdata[0]}<br>family=%{customdata[1]}<br>status=%{customdata[2]}<br>lineage=%{customdata[3]}<extra></extra>",
-            )
-        )
     support.add_trace(
         go.Scatter3d(
             x=[0],
@@ -192,96 +361,46 @@ def candidate_support_figures(
             marker={"symbol": "cross", "size": 7},
         )
     )
-    targets_3d = {
-        tuple(float(record.geometry[name]) for name in ("target_x", "target_y", "target_z"))
-        for record in records
-        if all(record.geometry.get(name) is not None for name in ("target_x", "target_y", "target_z"))
-    }
-    if targets_3d:
+    if targets:
         support.add_trace(
             go.Scatter3d(
-                x=[target[0] for target in sorted(targets_3d)],
-                y=[target[1] for target in sorted(targets_3d)],
-                z=[target[2] for target in sorted(targets_3d)],
+                x=[target[0] for target in targets],
+                y=[target[1] for target in targets],
+                z=[target[2] for target in targets],
                 mode="markers",
                 name="Persisted task target centre",
                 marker={"symbol": "diamond", "size": 7},
             )
         )
-    support.update_layout(
-        title="Candidate centers in target-aligned support (3D)",
-        scene_aspectmode="data",
-        scene_camera={"eye": {"x": 1.5, "y": 1.5, "z": 1.2}},
-    )
-    if unavailable_reasons:
-        support.add_annotation(
-            text=f"proposal support unavailable: {', '.join(unavailable_reasons)}",
-            x=0.01,
-            y=0.99,
-            xref="paper",
-            yref="paper",
-            showarrow=False,
+    jitter_rows = [
+        {
+            "yaw": point.view_jitter_yaw_deg,
+            "pitch": point.view_jitter_pitch_deg,
+            "family": point.family,
+            "bounded": point.view_jitter_is_bounded,
+        }
+        for record in records
+        for point in record.points
+        if point.view_jitter_yaw_deg is not None and point.view_jitter_pitch_deg is not None
+    ]
+    if jitter_rows:
+        legacy_jitter = px.scatter(
+            pd.DataFrame(jitter_rows),
+            x="yaw",
+            y="pitch",
+            color="family",
+            symbol="bounded",
         )
-
-    survival_rows = []
-    for record in records:
-        for family in record.families:
-            survival_rows.extend(
-                [
-                    {"family": family.family, "stage": stage, "count": count}
-                    for stage, count in (
-                        ("attempted", family.attempted),
-                        ("valid", family.valid),
-                        ("selected", family.selected),
-                    )
-                ]
-            )
-    survival = px.bar(
-        pd.DataFrame(survival_rows, columns=("family", "stage", "count")),
-        x="family",
-        y="count",
-        color="stage",
-        barmode="group",
-        title="Candidate family survival",
-    )
-
-    jitter_rows = []
-    for record in records:
-        for point in record.points:
-            if point.view_jitter_yaw_deg is not None and point.view_jitter_pitch_deg is not None:
-                jitter_rows.append(
-                    {
-                        "yaw": point.view_jitter_yaw_deg,
-                        "pitch": point.view_jitter_pitch_deg,
-                        "family": point.family,
-                        "bounded": point.view_jitter_is_bounded,
-                    }
-                )
-    jitter = px.scatter(
-        pd.DataFrame(jitter_rows, columns=("yaw", "pitch", "family", "bounded")),
-        x="yaw",
-        y="pitch",
-        color="family" if jitter_rows else None,
-        symbol="bounded" if jitter_rows else None,
-        title="Candidate view jitter",
-        labels={"yaw": "yaw residual [deg]", "pitch": "pitch residual [deg]"},
-    )
-    for trace in jitter.data:
-        trace.name = trace.name or "candidate jitter"
-    bounded = [
-        point
+        for trace in legacy_jitter.data:
+            trace.name = trace.name or "candidate jitter"
+            jitter.add_trace(trace)
+    envelopes = {
+        (point.view_jitter_azimuth_limit_deg, point.view_jitter_elevation_limit_deg)
         for record in records
         for point in record.points
         if point.view_jitter_is_bounded is True
         and point.view_jitter_azimuth_limit_deg is not None
         and point.view_jitter_elevation_limit_deg is not None
-    ]
-    envelopes = {
-        (
-            cast(float, point.view_jitter_azimuth_limit_deg),
-            cast(float, point.view_jitter_elevation_limit_deg),
-        )
-        for point in bounded
     }
     for azimuth, elevation in sorted(envelopes):
         jitter.add_shape(
@@ -297,9 +416,39 @@ def candidate_support_figures(
         jitter.update_xaxes(range=[-180, 180])
         jitter.update_yaxes(range=[-90, 90])
         jitter.add_annotation(
-            text="uncapped spherical support", x=0.01, y=0.99, xref="paper", yref="paper", showarrow=False
+            text="uncapped spherical support",
+            x=0.01,
+            y=0.99,
+            xref="paper",
+            yref="paper",
+            showarrow=False,
         )
-    return ground, support, survival, jitter
+
+
+def candidate_ground_support_figure(
+    records: Iterable[CandidateBenchmark],
+    *,
+    show_view_directions: bool = False,
+    family_colors: Mapping[str, str] | None = None,
+) -> go.Figure:
+    """Compatibility projection through the canonical snapshot-only plot core."""
+
+    figure = _snapshot_support_figures(records, show_view_directions=show_view_directions)[0]
+    if family_colors:
+        for trace in figure.data:
+            if trace.name in family_colors and hasattr(trace, "marker"):
+                trace.marker.color = family_colors[trace.name]
+    return figure
+
+
+def candidate_support_figures(
+    records: Iterable[CandidateBenchmark],
+    *,
+    show_view_directions: bool = False,
+) -> tuple[go.Figure, go.Figure, go.Figure, go.Figure]:
+    """Compatibility projection through the canonical snapshot-only plot core."""
+
+    return _snapshot_support_figures(records, show_view_directions=show_view_directions)
 
 
 def candidate_benchmark_figures(

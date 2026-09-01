@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from typing import Any, cast
+from typing import Any
 
 import numpy as np
 from numpy.typing import NDArray
@@ -77,6 +77,9 @@ class StoredStep:
     mixture_ids: NDArray[np.int32]
     mixture_names: NDArray[np.str_]
     gaze_variant_ids: NDArray[np.int8]
+    gaze_variant_ids_persisted: bool
+    position_pair_ids: NDArray[np.int64]
+    position_pair_ids_persisted: bool
     sampler_probabilities: NDArray[np.float32]
     position_ids: NDArray[np.int32]
     position_names: NDArray[np.str_]
@@ -87,6 +90,11 @@ class StoredStep:
     path_min_clearance_m: NDArray[np.float32]
     motion_step_length_m: NDArray[np.float32]
     target_distance_m: NDArray[np.float32]
+    view_jitter_yaw_deg: NDArray[np.float32] | None
+    view_jitter_pitch_deg: NDArray[np.float32] | None
+    view_jitter_azimuth_limit_deg: NDArray[np.float32] | None
+    view_jitter_elevation_limit_deg: NDArray[np.float32] | None
+    view_jitter_is_bounded: NDArray[np.bool_] | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -299,19 +307,31 @@ def rollout_steps(reader: RolloutZarrStoreReader, rollout: StoredRollout) -> tup
         row_positions = shell_index.positions_by_step.get(step_row_id, np.empty(0, dtype=np.int64)).copy()
 
         def take(group: Any, name: str, dtype: Any, positions: np.ndarray = row_positions) -> np.ndarray:
-            return cast(np.ndarray, np.asarray(group[name][positions], dtype=dtype))
+            return np.asarray(group[name][positions], dtype=dtype)
 
         selected_mask = take(candidates, "selected_mask", np.bool_)
         selected_matches = np.flatnonzero(selected_mask)
         selected_local_index = int(selected_matches[0]) if selected_matches.size else -1
         mixture_ids = take(candidates, "mixture_id", np.int32)
+        gaze_variant_ids_persisted = "gaze_variant_id" in candidates
         gaze_variant_ids = (
             take(candidates, "gaze_variant_id", np.int8)
-            if "gaze_variant_id" in candidates
+            if gaze_variant_ids_persisted
             else np.full(row_positions.shape, -1, dtype=np.int8)
         )
         position_ids = take(diagnostics, "position_id", np.int32)
         reason_ids = take(candidates, "primary_invalid_reason", np.uint16)
+        view_bundle = (
+            "view_jitter_yaw_deg",
+            "view_jitter_pitch_deg",
+            "view_jitter_azimuth_limit_deg",
+            "view_jitter_elevation_limit_deg",
+            "view_jitter_is_bounded",
+        )
+        view_bundle_presence = tuple(name in diagnostics for name in view_bundle)
+        if any(view_bundle_presence) and not all(view_bundle_presence):
+            raise ValueError("persisted view-jitter evidence must contain the complete five-array bundle")
+        has_view_bundle = all(view_bundle_presence)
         steps.append(
             StoredStep(
                 row_position=int(step_position),
@@ -340,6 +360,13 @@ def rollout_steps(reader: RolloutZarrStoreReader, rollout: StoredRollout) -> tup
                 mixture_ids=mixture_ids,
                 mixture_names=candidate_mixture_family_names(reader, mixture_ids, gaze_variant_ids),
                 gaze_variant_ids=gaze_variant_ids,
+                gaze_variant_ids_persisted=gaze_variant_ids_persisted,
+                position_pair_ids=(
+                    take(candidates, "position_pair_id", np.int64)
+                    if "position_pair_id" in candidates
+                    else np.full(row_positions.shape, -1, dtype=np.int64)
+                ),
+                position_pair_ids_persisted="position_pair_id" in candidates,
                 sampler_probabilities=take(candidates, "sampler_probability", np.float32),
                 position_ids=position_ids,
                 position_names=np.asarray([decode_position_id(value) for value in position_ids], dtype=np.str_),
@@ -352,6 +379,19 @@ def rollout_steps(reader: RolloutZarrStoreReader, rollout: StoredRollout) -> tup
                 path_min_clearance_m=take(diagnostics, "path_min_clearance_m", np.float32),
                 motion_step_length_m=take(diagnostics, "motion_step_length_m", np.float32),
                 target_distance_m=take(diagnostics, "target_distance_m", np.float32),
+                view_jitter_yaw_deg=(take(diagnostics, "view_jitter_yaw_deg", np.float32) if has_view_bundle else None),
+                view_jitter_pitch_deg=(
+                    take(diagnostics, "view_jitter_pitch_deg", np.float32) if has_view_bundle else None
+                ),
+                view_jitter_azimuth_limit_deg=(
+                    take(diagnostics, "view_jitter_azimuth_limit_deg", np.float32) if has_view_bundle else None
+                ),
+                view_jitter_elevation_limit_deg=(
+                    take(diagnostics, "view_jitter_elevation_limit_deg", np.float32) if has_view_bundle else None
+                ),
+                view_jitter_is_bounded=(
+                    take(diagnostics, "view_jitter_is_bounded", np.bool_) if has_view_bundle else None
+                ),
             )
         )
     return tuple(steps)
