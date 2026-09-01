@@ -117,6 +117,7 @@ def test_zero_cap_legacy_spherical_view_sampling_retains_unbounded_residuals() -
         view_sampling_strategy=SamplingStrategy.UNIFORM_SPHERE,
         view_max_azimuth_deg=0.0,
         view_max_elevation_deg=0.0,
+        view_roll_jitter_deg=17.0,
         verbosity=0,
         seed=11,
     )

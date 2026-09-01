@@ -416,7 +416,7 @@ def _gaze_config_from_legacy(config: CandidateViewGeneratorConfig) -> CandidateG
 
     azimuth = float(config.view_max_azimuth_deg)
     elevation = float(config.view_max_elevation_deg)
-    if azimuth > 0.0 or elevation > 0.0 or config.view_roll_jitter_deg > 0.0:
+    if azimuth > 0.0 or elevation > 0.0:
         jitter = BoxViewJitterConfig(
             yaw_half_width_deg=azimuth,
             pitch_half_width_deg=elevation,
@@ -426,6 +426,12 @@ def _gaze_config_from_legacy(config: CandidateViewGeneratorConfig) -> CandidateG
         jitter = SphericalViewJitterConfig(
             distribution=config.view_sampling_strategy,
             concentration=float(config.view_kappa),
+            roll_half_width_deg=config.view_roll_jitter_deg,
+        )
+    elif config.view_roll_jitter_deg > 0.0:
+        jitter = BoxViewJitterConfig(
+            yaw_half_width_deg=0.0,
+            pitch_half_width_deg=0.0,
             roll_half_width_deg=config.view_roll_jitter_deg,
         )
     else:
