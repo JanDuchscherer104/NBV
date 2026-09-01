@@ -7,6 +7,7 @@ import pytest
 from aria_nbv.oracle.pipelines.rollout_dataset import ExplicitRolloutTargetConfig
 from aria_nbv.targets.protocol import (
     ORACLE_GT_TARGET_SOURCE,
+    ActorVisibleTargetSource,
     TargetDescriptorProvenance,
     TargetInputProtocol,
     TargetLabelEvidence,
@@ -56,21 +57,12 @@ def test_canonical_rollout_fixture_lineage_is_training_admissible() -> None:
     assert admitted is TargetInputProtocol.V0_GT_INPUT
 
 
-@pytest.mark.parametrize(
-    "provenance",
-    [
-        TargetDescriptorProvenance.ACTOR_VISIBLE_DETECTOR,
-        TargetDescriptorProvenance.ACTOR_VISIBLE_PREDICTOR,
-    ],
-)
-def test_observed_descriptor_requires_matching_actor_visible_provenance(
-    provenance: TargetDescriptorProvenance,
-) -> None:
+def test_observed_descriptor_requires_registered_actor_visible_source() -> None:
     admitted = validate_target_protocol_admission(
         "v1_observed",
-        target_source="vin_detected_obbs",
-        descriptor_source="vin_detected_obbs",
-        descriptor_provenance=provenance,
+        target_source=ActorVisibleTargetSource.DETECTED_OBBS,
+        descriptor_source=ActorVisibleTargetSource.DETECTED_OBBS,
+        descriptor_provenance=TargetDescriptorProvenance.ACTOR_VISIBLE_DETECTOR,
     )
 
     assert admitted is TargetInputProtocol.V1_OBSERVED
@@ -81,8 +73,8 @@ def test_legacy_and_unknown_protocols_are_training_rejected_with_rebuild_guidanc
     with pytest.raises(ValueError, match="audit-readable.*rebuild"):
         validate_target_protocol_admission(
             protocol,
-            target_source="vin_detected_obbs",
-            descriptor_source="vin_detected_obbs",
+            target_source=ActorVisibleTargetSource.DETECTED_OBBS,
+            descriptor_source=ActorVisibleTargetSource.DETECTED_OBBS,
             descriptor_provenance=TargetDescriptorProvenance.ACTOR_VISIBLE_DETECTOR,
         )
 
@@ -92,8 +84,8 @@ def test_legacy_and_unknown_protocols_are_training_rejected_with_rebuild_guidanc
     [
         (None, TargetDescriptorProvenance.ACTOR_VISIBLE_DETECTOR),
         ("another_source", TargetDescriptorProvenance.ACTOR_VISIBLE_DETECTOR),
-        ("vin_detected_obbs", None),
-        ("vin_detected_obbs", TargetDescriptorProvenance.ORACLE_GT),
+        (ActorVisibleTargetSource.DETECTED_OBBS, None),
+        (ActorVisibleTargetSource.DETECTED_OBBS, TargetDescriptorProvenance.ORACLE_GT),
     ],
 )
 def test_v1_rejects_missing_or_mismatched_descriptor_provenance(
@@ -103,9 +95,27 @@ def test_v1_rejects_missing_or_mismatched_descriptor_provenance(
     with pytest.raises(ValueError, match="v1_observed.*rebuild"):
         validate_target_protocol_admission(
             TargetInputProtocol.V1_OBSERVED,
-            target_source="vin_detected_obbs",
+            target_source=ActorVisibleTargetSource.DETECTED_OBBS,
             descriptor_source=descriptor_source,
             descriptor_provenance=descriptor_provenance,
+        )
+
+
+def test_v1_rejects_unregistered_source_and_mismatched_predictor_provenance() -> None:
+    with pytest.raises(ValueError, match="not registered as actor-visible"):
+        validate_target_protocol_admission(
+            TargetInputProtocol.V1_OBSERVED,
+            target_source="unregistered_detector",
+            descriptor_source="unregistered_detector",
+            descriptor_provenance=TargetDescriptorProvenance.ACTOR_VISIBLE_DETECTOR,
+        )
+
+    with pytest.raises(ValueError, match="does not admit descriptor provenance"):
+        validate_target_protocol_admission(
+            TargetInputProtocol.V1_OBSERVED,
+            target_source=ActorVisibleTargetSource.DETECTED_OBBS,
+            descriptor_source=ActorVisibleTargetSource.DETECTED_OBBS,
+            descriptor_provenance=TargetDescriptorProvenance.ACTOR_VISIBLE_PREDICTOR,
         )
 
 
