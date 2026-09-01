@@ -1,0 +1,42 @@
+{
+  "schema": "pose-generation-runtime-cuda-parity-receipt-v1",
+  "evidence_class": "privileged_v0_gt_obb_generation_parity",
+  "baseline": {
+    "pull_request": 225,
+    "commit": "b823102bd4c3ada7a4dd95bb76d189add85beae3"
+  },
+  "candidate": {
+    "pull_request": 226,
+    "commit": "74ee26e31c7596a71b443e2c376e771850ff77f3"
+  },
+  "scene_id": "81283",
+  "snippet_id": "ASE_81283_Atek_000000",
+  "target_selection": "nearest valid real-scene GT OBB to the final reference pose",
+  "target_distance_m": 2.6926422119140625,
+  "config": ".configs/build_rollouts_v2_realistic.toml",
+  "seed": 73,
+  "attempted": 60,
+  "valid": 21,
+  "compute": {
+    "device": "cuda",
+    "gpu": "NVIDIA GeForce RTX 3080 Ti"
+  },
+  "comparison": {
+    "exact_tensor_equality": true,
+    "matching_nan_positions": true,
+    "fields": [
+      "shell_poses",
+      "poses_world_cam",
+      "mask_valid",
+      "strategy_id",
+      "position_id",
+      "mixture_id",
+      "sampler_probability",
+      "position_pair_id",
+      "gaze_variant_id",
+      "component_name",
+      "all tensor-valued extras"
+    ],
+    "note": "The only non-finite values were expected path_min_clearance_m NaNs at identical positions in both results. All finite values and provenance tensors were bit-exact."
+  }
+}
