@@ -52,12 +52,9 @@ from ...pose_generation import (
     ViewDirectionMode,
 )
 from ...pose_generation.config import (
-    BoxViewJitterConfig,
     CandidateGazeConfig,
-    NoViewJitterConfig,
     SampledCenterConfig,
     SampledCenterMode,
-    SphericalViewJitterConfig,
 )
 from ...pose_generation.plotting import CounterfactualPlotBuilder, plot_counterfactual_paths_simple
 from ...rendering import CandidateDepthRendererConfig
@@ -513,21 +510,14 @@ def _target_mixture_config(
         assert yaw_half_width_deg is not None
         assert pitch_half_width_deg is not None
         assert concentration is not None
-        if yaw_half_width_deg > 0.0 or pitch_half_width_deg > 0.0 or base.view_roll_jitter_deg > 0.0:
-            jitter = BoxViewJitterConfig(
-                yaw_half_width_deg=yaw_half_width_deg,
-                pitch_half_width_deg=pitch_half_width_deg,
-                roll_half_width_deg=base.view_roll_jitter_deg,
-            )
-        elif base.view_sampling_strategy is not None:
-            jitter = SphericalViewJitterConfig(
-                distribution=base.view_sampling_strategy,
-                concentration=concentration,
-                roll_half_width_deg=base.view_roll_jitter_deg,
-            )
-        else:
-            jitter = NoViewJitterConfig()
-        return CandidateGazeConfig(name="primary", mode=mode, jitter=jitter)
+        return CandidateGazeConfig.from_legacy(
+            mode=mode,
+            sampling_strategy=base.view_sampling_strategy,
+            concentration=concentration,
+            yaw_half_width_deg=yaw_half_width_deg,
+            pitch_half_width_deg=pitch_half_width_deg,
+            roll_half_width_deg=base.view_roll_jitter_deg,
+        )
 
     components = [
         CandidateMixtureComponentConfig(

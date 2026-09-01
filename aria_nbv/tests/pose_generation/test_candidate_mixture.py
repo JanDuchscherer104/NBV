@@ -818,6 +818,59 @@ def test_component_validation_and_three_gaze_expansion() -> None:
         CandidateMixtureViewGeneratorConfig(components=(component, colliding))
 
 
+def test_nested_config_defaults_and_identity_propagation_are_owned_once() -> None:
+    center = SampledCenterConfig(mode=CandidatePositionMode.FORWARD_LOCAL)
+    gaze = CandidateGazeConfig(mode=ViewDirectionMode.FORWARD_RIG)
+    component = CandidateMixtureComponentConfig(name="component", count=2, center=center, gazes=(gaze,))
+
+    assert center.model_dump() == {
+        "kind": "sampled",
+        "mode": CandidatePositionMode.FORWARD_LOCAL,
+        "sampling_strategy": SamplingStrategy.FORWARD_POWERSPHERICAL,
+        "min_radius_m": 0.25,
+        "max_radius_m": 1.25,
+        "min_elevation_deg": -12.0,
+        "max_elevation_deg": 18.0,
+        "azimuth_width_deg": 120.0,
+        "concentration": 8.0,
+    }
+    assert gaze.name == "primary"
+    assert isinstance(gaze.jitter, BoxViewJitterConfig)
+    assert component.gazes[0].name == "primary"
+    assert "name" not in component.gazes[0].propagated_fields
+
+
+@pytest.mark.parametrize(
+    "field,value",
+    [
+        ("min_radius_m", float("nan")),
+        ("max_radius_m", float("inf")),
+        ("concentration", float("-inf")),
+        ("azimuth_width_deg", float("inf")),
+    ],
+)
+def test_sampled_center_rejects_non_finite_support(field: str, value: float) -> None:
+    with pytest.raises(ValueError):
+        SampledCenterConfig(mode=CandidatePositionMode.FORWARD_LOCAL, **{field: value})
+
+
+def test_component_count_replacement_revalidates_scalar_and_orbit_invariants() -> None:
+    component = _component(name="forward", count=2, view_mode=ViewDirectionMode.FORWARD_RIG)
+    with pytest.raises(ValueError, match="greater than 0"):
+        component.with_count(0)
+    with pytest.raises(ValueError, match="greater than 0"):
+        component.with_count(-1)
+
+    orbit = CandidateMixtureComponentConfig(
+        name="orbit",
+        count=2,
+        center=TargetOrbitCenterConfig(angles_deg=(-6.0, 6.0)),
+        gazes=(CandidateGazeConfig(mode=ViewDirectionMode.TARGET_POINT),),
+    )
+    with pytest.raises(ValueError, match="at least two centers"):
+        CandidateMixtureViewGeneratorConfig(components=(orbit.with_count(1),))
+
+
 def test_component_config_import_paths_remain_stable() -> None:
     import aria_nbv.pose_generation as pose_generation
     from aria_nbv.pose_generation import CandidateMixtureComponentConfig as PackageConfig
@@ -1010,6 +1063,15 @@ def test_reviewed_component_templates_preserve_rich_family_fields() -> None:
 
     with pytest.raises(ValueError, match="unsupported reviewed candidate component schedule"):
         CandidateMixtureViewGeneratorConfig.reviewed_component_templates((("new_family", 60),))
+    for invalid_count in (0, -1):
+        with pytest.raises(ValueError, match="greater than 0"):
+            CandidateMixtureViewGeneratorConfig.reviewed_component_templates(
+                (
+                    ("forward_local", invalid_count),
+                    ("target_bearing_local", 24),
+                    ("lateral_target_bypass", 12),
+                )
+            )
 
 
 def test_radial_target_backtrack_family_is_diverse_rollout_profile() -> None:

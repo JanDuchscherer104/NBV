@@ -50,6 +50,9 @@ class BaseConfig(BaseSettings):
     cache_exclude_extra_key: ClassVar[str] = "cache_exclude"
     """json_schema_extra key for marking fields excluded from cache snapshots."""
 
+    propagation_exclude_fields: ClassVar[set[str]] = set()
+    """Field names that must not propagate into nested config identities."""
+
     @property
     def target_type(self) -> type[Any] | None:
         """Callable target used by `setup_target`.
@@ -548,6 +551,8 @@ class BaseConfig(BaseSettings):
             for name, value in self
             if name in child_config.__class__.model_fields
             and name != parent_field
+            and name not in self.propagation_exclude_fields
+            and name not in child_config.propagation_exclude_fields
             and name not in ("propagated_fields", "target", "target_type")
         }
 

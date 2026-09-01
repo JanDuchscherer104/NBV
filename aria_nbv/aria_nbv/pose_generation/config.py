@@ -2,15 +2,14 @@
 
 from __future__ import annotations
 
-from math import isfinite
-from typing import Annotated, Literal, Self, TypeAlias
+from typing import Annotated, ClassVar, Literal, Self, TypeAlias
 
-from pydantic import Field, field_validator, model_validator
+from pydantic import Field, FiniteFloat, field_validator, model_validator
 
 from ..utils import BaseConfig
 from .types import CandidatePositionMode, SamplingStrategy, ViewDirectionMode
 
-SampledCenterMode: TypeAlias = Literal[  # type: ignore[valid-type]
+SampledCenterMode: TypeAlias = Literal[
     CandidatePositionMode.UPPER_BOUND_FREE_SHELL,
     CandidatePositionMode.FORWARD_LOCAL,
     CandidatePositionMode.TARGET_BEARING_LOCAL,
@@ -19,6 +18,15 @@ SampledCenterMode: TypeAlias = Literal[  # type: ignore[valid-type]
     CandidatePositionMode.REVISIT_BACKTRACK,
 ]
 """Center modes whose geometry is produced by the sampled-center kernel."""
+
+
+NonNegativeFiniteFloat = Annotated[FiniteFloat, Field(ge=0.0)]
+PositiveFiniteFloat = Annotated[FiniteFloat, Field(gt=0.0)]
+ElevationDeg = Annotated[FiniteFloat, Field(ge=-90.0, le=90.0)]
+AzimuthWidthDeg = Annotated[FiniteFloat, Field(gt=0.0, le=360.0)]
+YawHalfWidthDeg = Annotated[FiniteFloat, Field(ge=0.0, le=180.0)]
+PitchHalfWidthDeg = Annotated[FiniteFloat, Field(ge=0.0, le=90.0)]
+OrbitAngleDeg = Annotated[FiniteFloat, Field(gt=-180.0, lt=180.0)]
 
 
 class SampledCenterConfig(BaseConfig):
@@ -30,25 +38,25 @@ class SampledCenterConfig(BaseConfig):
     mode: SampledCenterMode
     """Semantic center family applied in the gravity-aligned proposal frame."""
 
-    sampling_strategy: SamplingStrategy
+    sampling_strategy: SamplingStrategy = SamplingStrategy.FORWARD_POWERSPHERICAL
     """Distribution used to draw proposal directions before family shaping."""
 
-    min_radius_m: float = Field(ge=0.0)
+    min_radius_m: NonNegativeFiniteFloat = 0.25
     """Minimum sampled displacement from the reference center, in metres."""
 
-    max_radius_m: float = Field(gt=0.0)
+    max_radius_m: PositiveFiniteFloat = 1.25
     """Maximum sampled displacement from the reference center, in metres."""
 
-    min_elevation_deg: float = Field(ge=-90.0, le=90.0)
+    min_elevation_deg: ElevationDeg = -12.0
     """Lower world-horizontal elevation bound in degrees, inclusive."""
 
-    max_elevation_deg: float = Field(ge=-90.0, le=90.0)
+    max_elevation_deg: ElevationDeg = 18.0
     """Upper world-horizontal elevation bound in degrees, inclusive."""
 
-    azimuth_width_deg: float = Field(gt=0.0, le=360.0)
+    azimuth_width_deg: AzimuthWidthDeg = 120.0
     """Full azimuth support width about proposal-frame forward, in degrees."""
 
-    concentration: float = Field(ge=0.0)
+    concentration: NonNegativeFiniteFloat = 8.0
     """Power-spherical concentration; ignored by uniform-sphere sampling."""
 
     @model_validator(mode="after")
@@ -66,7 +74,7 @@ class TargetOrbitCenterConfig(BaseConfig):
     kind: Literal["target_orbit"] = "target_orbit"
     """Discriminator for target-orbit authoring; provenance is target orbit."""
 
-    angles_deg: tuple[float, ...]
+    angles_deg: tuple[OrbitAngleDeg, ...]
     """Ordered signed orbit angles in degrees; both target sides are required."""
 
     standoff_mode: Literal["current_horizontal"] = "current_horizontal"
@@ -78,8 +86,8 @@ class TargetOrbitCenterConfig(BaseConfig):
         values = tuple(float(angle) for angle in angles)
         if not values:
             raise ValueError("angles_deg must not be empty")
-        if any(not isfinite(angle) or abs(angle) >= 180.0 or abs(angle) < 1e-6 for angle in values):
-            raise ValueError("angles_deg must contain finite nonzero angles with abs(angle) < 180")
+        if any(abs(angle) < 1e-6 for angle in values):
+            raise ValueError("angles_deg must contain nonzero angles")
         if not any(angle < 0.0 for angle in values) or not any(angle > 0.0 for angle in values):
             raise ValueError("angles_deg must cover both sides of the target")
         return values
@@ -105,13 +113,13 @@ class BoxViewJitterConfig(BaseConfig):
     kind: Literal["box"] = "box"
     """Discriminator for bounded local-camera angular support."""
 
-    yaw_half_width_deg: float = Field(default=60.0, ge=0.0, le=180.0)
+    yaw_half_width_deg: YawHalfWidthDeg = 60.0
     """Symmetric local-camera yaw half-width in degrees; seminar default is 60."""
 
-    pitch_half_width_deg: float = Field(default=30.0, ge=0.0, le=90.0)
+    pitch_half_width_deg: PitchHalfWidthDeg = 30.0
     """Symmetric local-camera pitch half-width in degrees; seminar default is 30."""
 
-    roll_half_width_deg: float = Field(default=0.0, ge=0.0, le=180.0)
+    roll_half_width_deg: YawHalfWidthDeg = 0.0
     """Symmetric roll half-width about the sampled forward axis, in degrees."""
 
     @model_validator(mode="after")
@@ -130,10 +138,10 @@ class SphericalViewJitterConfig(BaseConfig):
     distribution: SamplingStrategy
     """Sphere distribution used to sample the local-camera forward direction."""
 
-    concentration: float = Field(ge=0.0)
+    concentration: NonNegativeFiniteFloat
     """Power-spherical concentration; ignored by uniform-sphere sampling."""
 
-    roll_half_width_deg: float = Field(default=0.0, ge=0.0, le=180.0)
+    roll_half_width_deg: YawHalfWidthDeg = 0.0
     """Symmetric roll half-width about the sampled forward axis, in degrees."""
 
 
@@ -147,18 +155,56 @@ ViewJitterConfig = Annotated[
 class CandidateGazeConfig(BaseConfig):
     """Apply one named orientation family to every center in a component."""
 
-    name: str = Field(min_length=1)
+    name: str = Field(default="primary", min_length=1)
     """Variant name used only for later-gaze provenance and seed identity."""
 
     mode: ViewDirectionMode
     """Base camera orientation family applied before residual jitter."""
 
-    jitter: ViewJitterConfig
+    jitter: ViewJitterConfig = Field(default_factory=BoxViewJitterConfig)
     """Residual local-camera orientation support used during generation."""
+
+    @classmethod
+    def from_legacy(
+        cls,
+        *,
+        mode: ViewDirectionMode,
+        sampling_strategy: SamplingStrategy | None,
+        concentration: float,
+        yaw_half_width_deg: float,
+        pitch_half_width_deg: float,
+        roll_half_width_deg: float,
+        name: str = "primary",
+    ) -> "CandidateGazeConfig":
+        """Validate the retained flat gaze controls into one nested value."""
+
+        if yaw_half_width_deg > 0.0 or pitch_half_width_deg > 0.0:
+            jitter: ViewJitterConfig = BoxViewJitterConfig(
+                yaw_half_width_deg=yaw_half_width_deg,
+                pitch_half_width_deg=pitch_half_width_deg,
+                roll_half_width_deg=roll_half_width_deg,
+            )
+        elif sampling_strategy is not None:
+            jitter = SphericalViewJitterConfig(
+                distribution=sampling_strategy,
+                concentration=concentration,
+                roll_half_width_deg=roll_half_width_deg,
+            )
+        elif roll_half_width_deg > 0.0:
+            jitter = BoxViewJitterConfig(
+                yaw_half_width_deg=0.0,
+                pitch_half_width_deg=0.0,
+                roll_half_width_deg=roll_half_width_deg,
+            )
+        else:
+            jitter = NoViewJitterConfig()
+        return cls(name=name, mode=mode, jitter=jitter)
 
 
 class CandidateMixtureComponentConfig(BaseConfig):
     """Configure one center table and its ordered gaze variants."""
+
+    propagation_exclude_fields: ClassVar[set[str]] = {"name"}
 
     name: str = Field(min_length=1)
     """Stable component name retained as provenance for the first gaze."""
@@ -172,13 +218,6 @@ class CandidateMixtureComponentConfig(BaseConfig):
     gazes: tuple[CandidateGazeConfig, ...]
     """Ordered gaze variants; row order is gaze-major within this component."""
 
-    def _propagate_to_child(self, parent_field: str, child_config: BaseConfig) -> None:
-        """Keep component and gaze provenance names independently authored."""
-
-        if parent_field == "gazes" and isinstance(child_config, CandidateGazeConfig):
-            return
-        super()._propagate_to_child(parent_field, child_config)
-
     @model_validator(mode="after")
     def _validate_component(self) -> Self:
         if not self.gazes:
@@ -187,6 +226,11 @@ class CandidateMixtureComponentConfig(BaseConfig):
         if len(names) != len(set(names)):
             raise ValueError("candidate gaze names must be unique within a component")
         return self
+
+    def with_count(self, count: int) -> "CandidateMixtureComponentConfig":
+        """Return a fully revalidated component with a replacement count."""
+
+        return type(self).model_validate(self.model_dump() | {"count": count})
 
 
 __all__ = [

@@ -2120,11 +2120,15 @@ class CudaRolloutCampaign:
                     profile.components,
                     existing_components=list(mixture.components),
                 )
-                mixture.components = (
+                resolved_components = (
                     [component_type.model_validate(component.model_dump()) for component in typed_components]
                     if component_type
                     else typed_components
                 )
+                validated_mixture = CandidateMixtureViewGeneratorConfig.model_validate(
+                    mixture.model_dump() | {"components": [component.model_dump() for component in resolved_components]}
+                )
+                cfg.candidate_mixture = validated_mixture
             from ...rollouts.replay.policy import CounterfactualSelectionPolicy, RolloutPolicySpec
             from .rollout_dataset import RolloutRecipeConfig
 

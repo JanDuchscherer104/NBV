@@ -47,8 +47,10 @@ from aria_nbv.oracle.target_selection import OracleTargetTask, TargetTaskIdentit
 from aria_nbv.pose_generation import (
     CandidateMixtureViewGeneratorConfig,
     CandidateViewGeneratorConfig,
+    SamplingStrategy,
     ViewDirectionMode,
 )
+from aria_nbv.pose_generation.config import SphericalViewJitterConfig
 from aria_nbv.pose_generation.types import CandidateSamplingResult
 from aria_nbv.rollouts import (
     CounterfactualRolloutResult,
@@ -1389,6 +1391,37 @@ def test_target_rri_candidate_config_uses_target_aware_mixture() -> None:
     ]
     assert [component.count for component in cfg.components] == [5, 5, 3, 2, 1]
     assert cfg.components[0].strategy is ViewDirectionMode.TARGET_POINT
+
+
+def test_target_mixture_preserves_spherical_direction_sampling_with_roll() -> None:
+    base = CandidateViewGeneratorConfig(
+        num_samples=5,
+        ensure_collision_free=False,
+        ensure_free_space=False,
+        min_distance_to_mesh=0.0,
+        view_sampling_strategy=SamplingStrategy.UNIFORM_SPHERE,
+        view_max_azimuth_deg=0.0,
+        view_max_elevation_deg=0.0,
+        view_roll_jitter_deg=5.0,
+        device="cpu",
+    )
+
+    cfg = rollout_panel._target_mixture_config(
+        base,
+        counts={
+            "target_bearing_local": 1,
+            "forward_local": 1,
+            "lateral_target_bypass": 1,
+            "local_refinement": 1,
+            "revisit_backtrack": 1,
+        },
+    )
+
+    for component in cfg.components:
+        jitter = component.gazes[0].jitter
+        assert isinstance(jitter, SphericalViewJitterConfig)
+        assert jitter.distribution is SamplingStrategy.UNIFORM_SPHERE
+        assert jitter.roll_half_width_deg == pytest.approx(5.0)
 
 
 def test_geometry_candidate_config_has_requested_count_without_mixture() -> None:
