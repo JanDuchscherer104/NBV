@@ -57,6 +57,7 @@ def trusted_config_patterns() -> dict[str, tuple[str, ...]]:
             "build_rollouts_v1_lrz.template.toml",
             "build_rollouts_v1_microset.toml",
             "build_rollouts_v1_multihorizon_highgain.toml",
+            "build_rollouts_v2_cuda_campaign_writer.toml",
             "build_rollouts_v2_realistic.toml",
             "build_rollouts_v1_smoke.toml",
         ),

@@ -60,8 +60,10 @@ print('split_manifest_hash =', repr(m['split_manifest_hash']))
 PY
 ```
 
-Plan the corrected paired pilot, run its smoke, launch at most ten new units,
-and inspect status:
+The corrected-V11 pilot is historical evidence and is not runnable from the
+current nested-authoring implementation. Reproduce it only at its bound source
+revision. Plan, smoke, launch, and inspect the active nested-authoring campaign
+with the V2 entry point:
 
 The `smoke` command is a canonical **single-work-unit guard**. It proves the
 leaf contract for the deterministic first planned unit only; it does not prove
@@ -71,14 +73,14 @@ the later WP18 gate.
 
 ```bash
 uv run nbv-rollout-campaign plan \
-  --config-path ../.configs/build_rollouts_v1_cuda_campaign_pilot_corrected_v11.toml \
+  --config-path ../.configs/build_rollouts_v2_cuda_campaign.toml \
   --source-manifest ../.configs/rollout_campaign100_source_manifest.json
 uv run nbv-rollout-campaign smoke \
-  --config-path ../.configs/build_rollouts_v1_cuda_campaign_pilot_corrected_v11.toml
+  --config-path ../.configs/build_rollouts_v2_cuda_campaign.toml
 uv run nbv-rollout-campaign run \
-  --config-path ../.configs/build_rollouts_v1_cuda_campaign_pilot_corrected_v11.toml \
-  --plan-path .campaign/cuda-rollouts-v1-pilot-corrected-v11/plan.json \
+  --config-path ../.configs/build_rollouts_v2_cuda_campaign.toml \
+  --plan-path rollout_supervision/campaigns/cuda-rollouts-v2/plan.json \
   --max-new-units 10
 uv run nbv-rollout-campaign status \
-  --config-path ../.configs/build_rollouts_v1_cuda_campaign_pilot_corrected_v11.toml
+  --config-path ../.configs/build_rollouts_v2_cuda_campaign.toml
 ```

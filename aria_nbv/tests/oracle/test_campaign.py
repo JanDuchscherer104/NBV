@@ -311,13 +311,14 @@ def test_all_profiles_adapt_into_real_writer_candidate_mixture(tmp_path):
             )
             assert component_by_name[name].count == reviewed_count
         if "target_bearing_local" in component_by_name:
-            assert component_by_name["target_bearing_local"].min_radius == pytest.approx(0.4)
-            assert component_by_name["target_bearing_local"].max_radius == pytest.approx(1.1)
+            center = component_by_name["target_bearing_local"].center
+            assert center.min_radius_m == pytest.approx(0.4)
+            assert center.max_radius_m == pytest.approx(1.1)
         if "local_refinement" in component_by_name:
-            assert component_by_name["local_refinement"].view_mode.value == "target_point"
+            assert component_by_name["local_refinement"].gazes[0].mode.value == "target_point"
         if "revisit_backtrack" in component_by_name:
-            assert component_by_name["revisit_backtrack"].max_radius <= 0.25
-        assert [(c.name, c.count, c.view_mode.value, c.position_mode.value) for c in components] == [
+            assert component_by_name["revisit_backtrack"].center.max_radius_m <= 0.25
+        assert [(c.name, c.count, c.gazes[0].mode.value, c.center.mode.value) for c in components] == [
             (name, count, expected_modes[name], expected_positions[name]) for name, count in profile.components
         ]
         assert [r.name for r in adapted.recipes] == ["temperature_softmax_h8_t0.5"]
