@@ -29,27 +29,28 @@ Theory:
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
 import torch
 from efm3d.aria.pose import PoseTW
 from power_spherical import HypersphericalUniform, PowerSpherical  # type: ignore[import-untyped]
 
-from ..utils import Console
+from ..utils import Console, Verbosity
 from ..utils.frames import view_axes_from_poses, world_up_tensor
+from .config import (
+    BoxViewJitterConfig,
+    CandidateGazeConfig,
+    NoViewJitterConfig,
+    SphericalViewJitterConfig,
+)
 from .geometry import DEVICE_FWD
 from .types import SamplingStrategy, ViewDirectionMode
-
-if TYPE_CHECKING:
-    from .candidate_generation import CandidateViewGeneratorConfig
 
 
 class OrientationBuilder:
     """Construct candidate camera orientations from centers and view settings."""
 
-    def __init__(self, cfg: CandidateViewGeneratorConfig):
-        self.cfg = cfg
-        self.console = Console.with_prefix(self.__class__.__name__).set_verbose(cfg.verbosity)
+    def __init__(self, config: CandidateGazeConfig, *, verbosity: Verbosity):
+        self.config = config
+        self.console = Console.with_prefix(self.__class__.__name__).set_verbose(verbosity)
 
     def _sample_view_dirs_cam(self, num: int, device: torch.device, dtype: torch.dtype) -> torch.Tensor:
         """Sample camera-forward directions in the base camera frame without rejection.
@@ -61,19 +62,16 @@ class OrientationBuilder:
         3) Else if a sampling_strategy is set → draw from the chosen distribution (legacy path).
         """
 
-        cfg = self.cfg
-        az_limit = torch.deg2rad(torch.tensor(cfg.view_max_azimuth_deg, device=device, dtype=dtype))
-        el_limit = torch.deg2rad(torch.tensor(cfg.view_max_elevation_deg, device=device, dtype=dtype))
-
-        # 1) No jitter requested.
-        if az_limit <= 0 and el_limit <= 0 and cfg.view_sampling_strategy is None:
+        jitter = self.config.jitter
+        if isinstance(jitter, NoViewJitterConfig):
             v = torch.tensor(DEVICE_FWD, device=device, dtype=dtype)
             return v.view(1, 3).expand(num, 3)
 
-        # 2) Box-uniform jitter in yaw/pitch (preferred).
-        if az_limit > 0 or el_limit > 0:
+        if isinstance(jitter, BoxViewJitterConfig):
+            az_limit = torch.deg2rad(torch.tensor(jitter.yaw_half_width_deg, device=device, dtype=dtype))
+            el_limit = torch.deg2rad(torch.tensor(jitter.pitch_half_width_deg, device=device, dtype=dtype))
             self.console.dbg(
-                f"Sampling view deltas with daz={cfg.view_max_azimuth_deg}°, del={cfg.view_max_elevation_deg}°"
+                f"Sampling view deltas with daz={jitter.yaw_half_width_deg}°, del={jitter.pitch_half_width_deg}°"
             )
             yaw = (torch.rand(num, device=device, dtype=dtype) * 2.0 - 1.0) * az_limit
             pitch = (torch.rand(num, device=device, dtype=dtype) * 2.0 - 1.0) * el_limit
@@ -89,12 +87,13 @@ class OrientationBuilder:
             return _normalise(dirs)
 
         # 3) Legacy distributions when no caps are provided.
-        strat = cfg.view_sampling_strategy
+        assert isinstance(jitter, SphericalViewJitterConfig)
+        strat = jitter.distribution
         if strat == SamplingStrategy.UNIFORM_SPHERE:
             dist = HypersphericalUniform(dim=3, device=device, dtype=dtype)
         elif strat == SamplingStrategy.FORWARD_POWERSPHERICAL:
             mu = torch.tensor(DEVICE_FWD, device=device, dtype=dtype)
-            scale = torch.tensor(cfg.view_kappa, device=device, dtype=dtype)
+            scale = torch.tensor(jitter.concentration, device=device, dtype=dtype)
             dist = PowerSpherical(loc=mu, scale=scale)
         else:
             v = torch.tensor(DEVICE_FWD, device=device, dtype=dtype)
@@ -102,7 +101,13 @@ class OrientationBuilder:
 
         return _normalise(dist.rsample((num,)))
 
-    def build(self, reference_pose: PoseTW, centers_world: torch.Tensor) -> tuple[PoseTW, PoseTW | None]:
+    def build(
+        self,
+        reference_pose: PoseTW,
+        centers_world: torch.Tensor,
+        *,
+        target_center_world: torch.Tensor | None,
+    ) -> tuple[PoseTW, PoseTW | None]:
         """Construct cam2world candidate poses for given centers.
 
         Args:
@@ -135,14 +140,14 @@ class OrientationBuilder:
            * optionally apply roll jitter around the forward axis, and
            * compose the resulting rotations as right-multiplicative deltas with the base cam2world poses.
         """
-        cfg = self.cfg
+        cfg = self.config
         device = centers_world.device
         dtype = centers_world.dtype
         n = centers_world.shape[0]
 
         reference_pose_dev = reference_pose
 
-        match cfg.view_direction_mode:
+        match cfg.mode:
             case ViewDirectionMode.FORWARD_RIG:
                 r_last = reference_pose_dev.R
                 if r_last.ndim == 3:
@@ -155,13 +160,13 @@ class OrientationBuilder:
                 base_poses = view_axes_from_poses(
                     from_pose=reference_pose_dev,
                     to_pose=centers_pose,
-                    look_away=(cfg.view_direction_mode is ViewDirectionMode.RADIAL_AWAY),
+                    look_away=(cfg.mode is ViewDirectionMode.RADIAL_AWAY),
                 )
 
             case ViewDirectionMode.TARGET_POINT:
-                if cfg.view_target_point_world is None:
-                    raise ValueError("TARGET_POINT mode requires `view_target_point_world` to be set.")
-                target = cfg.view_target_point_world.to(device=device, dtype=dtype).view(1, 3)
+                if target_center_world is None:
+                    raise ValueError("TARGET_POINT mode requires target_center_world.")
+                target = target_center_world.to(device=device, dtype=dtype).view(1, 3)
                 wup = world_up_tensor(device=device, dtype=dtype)
                 v = target - centers_world
                 z_world = v / v.norm(dim=-1, keepdim=True).clamp_min(1e-6)
@@ -172,12 +177,7 @@ class OrientationBuilder:
                 r_base = torch.stack([x_world, y_world, z_world], dim=-1)
                 base_poses = PoseTW.from_Rt(r_base, centers_world)
 
-        if (
-            cfg.view_sampling_strategy is None
-            and cfg.view_roll_jitter_deg == 0.0
-            and cfg.view_max_azimuth_deg == 0.0
-            and cfg.view_max_elevation_deg == 0.0
-        ):
+        if isinstance(cfg.jitter, NoViewJitterConfig):
             return base_poses, None
 
         dirs_cam = self._sample_view_dirs_cam(n, device=device, dtype=dtype)
@@ -189,10 +189,15 @@ class OrientationBuilder:
 
         r_delta = _yaw_pitch_rotation(yaw, pitch)
 
-        if cfg.view_roll_jitter_deg > 0.0:
+        roll_half_width_deg = (
+            cfg.jitter.roll_half_width_deg
+            if isinstance(cfg.jitter, BoxViewJitterConfig | SphericalViewJitterConfig)
+            else 0.0
+        )
+        if roll_half_width_deg > 0.0:
             # Jitter is applied as a rotation matrix about the forward axis so the basis stays orthonormal. Adding Gaussian noise to direction vectors would skew/scale them unless you re‑orthogonalise anyway (which is what this code guarantees).
             roll = (2.0 * torch.rand(n, device=device, dtype=dtype) - 1.0) * torch.deg2rad(
-                torch.tensor(cfg.view_roll_jitter_deg, device=device, dtype=dtype)
+                torch.tensor(roll_half_width_deg, device=device, dtype=dtype)
             )
             r_roll = _roll_rotation(roll)
             r_delta = torch.matmul(r_delta, r_roll)

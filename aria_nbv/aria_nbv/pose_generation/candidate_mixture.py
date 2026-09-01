@@ -1,9 +1,9 @@
 r"""Mixed finite-candidate view generation with full-shell provenance.
 
-The mixture wrapper keeps `CandidateViewGeneratorConfig` backward-compatible by
-instantiating one normal generator per component, overriding only the component
-fields, and concatenating the full sampled shells. Component counts therefore
-define the fixed candidate budget exactly, while each output row retains
+The mixture wrapper keeps `CandidateViewGeneratorConfig` backward-compatible
+while prebuilding one private leaf runtime per center/gaze combination and
+concatenating their full sampled shells. Component counts therefore define the
+fixed candidate budget exactly, while each output row retains
 `strategy_id`, `mixture_id`, `sampler_probability`, and optional component name.
 
 Ordering is part of the data contract: invalid candidates remain in the
@@ -32,6 +32,7 @@ Theory:
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Any, Self
 
 import torch
@@ -43,18 +44,16 @@ from pydantic import Field, model_validator
 from ..data_handling import EfmSnippetView
 from ..geometry import PreparedMeshQuery
 from ..utils import TargetConfig
+from ..utils.seeding import derive_stable_seed
 from .candidate_generation import CandidateViewGenerator, CandidateViewGeneratorConfig
 from .config import (
     BoxViewJitterConfig,
     CandidateGazeConfig,
     CandidateMixtureComponentConfig,
     CenterConfig,
-    NoViewJitterConfig,
-    PowerSphericalConfig,
     SampledCenterConfig,
-    SphericalViewJitterConfig,
+    SampledCenterMode,
     TargetOrbitCenterConfig,
-    UniformSphereConfig,
 )
 from .types import (
     CandidateGenerationRuntimeContext,
@@ -79,6 +78,20 @@ _POSITION_IDS = {
     CandidatePositionMode.REVISIT_BACKTRACK: 5,
     CandidatePositionMode.TARGET_ORBIT: 6,
 }
+
+
+@dataclass(frozen=True)
+class _ComponentRuntime:
+    """Prebuilt immutable runtime bundle for one mixture component."""
+
+    component: CandidateMixtureComponentConfig
+    generators: tuple[CandidateViewGenerator, ...]
+
+
+def _derive_component_seed(node_seed: int, component_identity: str) -> int:
+    """Derive the established component-local seed without rollout imports."""
+
+    return derive_stable_seed("component", int(node_seed), str(component_identity))
 
 
 def candidate_strategy_id(strategy: ViewDirectionMode | str) -> int:
@@ -129,6 +142,37 @@ def _default_mixture_base() -> CandidateViewGeneratorConfig:
     )
 
 
+def _sampled_center(
+    mode: SampledCenterMode,
+    *,
+    sampling_strategy: SamplingStrategy = SamplingStrategy.FORWARD_POWERSPHERICAL,
+    min_radius_m: float = 0.25,
+    max_radius_m: float = 1.25,
+    min_elevation_deg: float = -12.0,
+    max_elevation_deg: float = 18.0,
+    azimuth_width_deg: float = 120.0,
+    concentration: float = 8.0,
+) -> SampledCenterConfig:
+    """Build a complete sampled-center value for an existing family."""
+
+    return SampledCenterConfig(
+        mode=mode,
+        sampling_strategy=sampling_strategy,
+        min_radius_m=min_radius_m,
+        max_radius_m=max_radius_m,
+        min_elevation_deg=min_elevation_deg,
+        max_elevation_deg=max_elevation_deg,
+        azimuth_width_deg=azimuth_width_deg,
+        concentration=concentration,
+    )
+
+
+def _boxed_gaze(mode: ViewDirectionMode, *, name: str = "primary") -> CandidateGazeConfig:
+    """Build one gaze with the nonzero seminar jitter envelope."""
+
+    return CandidateGazeConfig(name=name, mode=mode, jitter=BoxViewJitterConfig())
+
+
 def _default_mixture_components() -> tuple[CandidateMixtureComponentConfig, ...]:
     """Return the established resolved 24/24/12 mixture in nested form."""
 
@@ -136,20 +180,20 @@ def _default_mixture_components() -> tuple[CandidateMixtureComponentConfig, ...]
         CandidateMixtureComponentConfig(
             name="forward_local",
             count=24,
-            center=SampledCenterConfig(mode=CandidatePositionMode.FORWARD_LOCAL),
-            gazes=(CandidateGazeConfig(mode=ViewDirectionMode.FORWARD_RIG),),
+            center=_sampled_center(CandidatePositionMode.FORWARD_LOCAL),
+            gazes=(_boxed_gaze(ViewDirectionMode.FORWARD_RIG),),
         ),
         CandidateMixtureComponentConfig(
             name="target_bearing_local",
             count=24,
-            center=SampledCenterConfig(mode=CandidatePositionMode.TARGET_BEARING_LOCAL),
-            gazes=(CandidateGazeConfig(mode=ViewDirectionMode.TARGET_POINT),),
+            center=_sampled_center(CandidatePositionMode.TARGET_BEARING_LOCAL),
+            gazes=(_boxed_gaze(ViewDirectionMode.TARGET_POINT),),
         ),
         CandidateMixtureComponentConfig(
             name="lateral_target_bypass",
             count=12,
-            center=SampledCenterConfig(mode=CandidatePositionMode.LATERAL_TARGET_BYPASS),
-            gazes=(CandidateGazeConfig(mode=ViewDirectionMode.TARGET_POINT),),
+            center=_sampled_center(CandidatePositionMode.LATERAL_TARGET_BYPASS),
+            gazes=(_boxed_gaze(ViewDirectionMode.TARGET_POINT),),
         ),
     )
 
@@ -196,6 +240,49 @@ class CandidateMixtureViewGeneratorConfig(TargetConfig["CandidateMixtureViewGene
         return sum(component.count * len(component.gazes) for component in self.components)
 
     @classmethod
+    def reviewed_component_templates(
+        cls,
+        components: list[tuple[str, int]] | tuple[tuple[str, int], ...],
+        *,
+        existing_components: list[CandidateMixtureComponentConfig]
+        | tuple[CandidateMixtureComponentConfig, ...]
+        | None = None,
+    ) -> list[CandidateMixtureComponentConfig]:
+        """Return typed templates for a reviewed campaign component schedule.
+
+        Campaign orchestration supplies the reviewed names and counts; this
+        method reuses writer-owned components by name and supplies reviewed
+        presets only for absent families. Counts are the campaign allocation;
+        all other typed component fields remain owned by their source template.
+        """
+
+        names = tuple(name for name, _count in components)
+        templates = {
+            tuple(component.name for component in preset.components): preset.components
+            for preset in (
+                cls(),
+                cls.rich_local_five_family(),
+                cls.radial_target_backtrack_family(),
+                cls.upper_bound_free_shell(),
+            )
+        }
+        try:
+            preset_components = templates[names]
+        except KeyError as exc:
+            raise ValueError(f"unsupported reviewed candidate component schedule: {names}") from exc
+
+        existing_by_name: dict[str, CandidateMixtureComponentConfig] = {}
+        for component in existing_components or ():
+            if component.name in existing_by_name:
+                raise ValueError(f"duplicate existing candidate component: {component.name}")
+            existing_by_name[component.name] = component
+
+        return [
+            existing_by_name.get(name, preset).model_copy(update={"count": count})
+            for preset, (name, count) in zip(preset_components, components, strict=True)
+        ]
+
+    @classmethod
     def upper_bound_free_shell(cls, *, count: int = 60) -> "CandidateMixtureViewGeneratorConfig":
         """Build the explicit legacy free-shell upper-bound ablation config."""
 
@@ -205,16 +292,17 @@ class CandidateMixtureViewGeneratorConfig(TargetConfig["CandidateMixtureViewGene
                 CandidateMixtureComponentConfig(
                     name="upper_bound_free_shell",
                     count=count,
-                    center=SampledCenterConfig(
-                        mode=CandidatePositionMode.UPPER_BOUND_FREE_SHELL,
-                        distribution=UniformSphereConfig(),
+                    center=_sampled_center(
+                        CandidatePositionMode.UPPER_BOUND_FREE_SHELL,
+                        sampling_strategy=SamplingStrategy.UNIFORM_SPHERE,
                         min_radius_m=0.5,
                         max_radius_m=1.8,
                         min_elevation_deg=-20.0,
                         max_elevation_deg=25.0,
                         azimuth_width_deg=170.0,
+                        concentration=4.0,
                     ),
-                    gazes=(CandidateGazeConfig(mode=ViewDirectionMode.RADIAL_AWAY),),
+                    gazes=(_boxed_gaze(ViewDirectionMode.RADIAL_AWAY),),
                 ),
             ),
         )
@@ -236,40 +324,40 @@ class CandidateMixtureViewGeneratorConfig(TargetConfig["CandidateMixtureViewGene
                 CandidateMixtureComponentConfig(
                     name="target_bearing_local",
                     count=18,
-                    center=SampledCenterConfig(mode=CandidatePositionMode.TARGET_BEARING_LOCAL),
-                    gazes=(CandidateGazeConfig(mode=ViewDirectionMode.TARGET_POINT),),
+                    center=_sampled_center(CandidatePositionMode.TARGET_BEARING_LOCAL),
+                    gazes=(_boxed_gaze(ViewDirectionMode.TARGET_POINT),),
                 ),
                 CandidateMixtureComponentConfig(
                     name="forward_local",
                     count=18,
-                    center=SampledCenterConfig(mode=CandidatePositionMode.FORWARD_LOCAL),
-                    gazes=(CandidateGazeConfig(mode=ViewDirectionMode.FORWARD_RIG),),
+                    center=_sampled_center(CandidatePositionMode.FORWARD_LOCAL),
+                    gazes=(_boxed_gaze(ViewDirectionMode.FORWARD_RIG),),
                 ),
                 CandidateMixtureComponentConfig(
                     name="lateral_target_bypass",
                     count=12,
-                    center=SampledCenterConfig(mode=CandidatePositionMode.LATERAL_TARGET_BYPASS),
-                    gazes=(CandidateGazeConfig(mode=ViewDirectionMode.TARGET_POINT),),
+                    center=_sampled_center(CandidatePositionMode.LATERAL_TARGET_BYPASS),
+                    gazes=(_boxed_gaze(ViewDirectionMode.TARGET_POINT),),
                 ),
                 CandidateMixtureComponentConfig(
                     name="local_refinement",
                     count=6,
-                    center=SampledCenterConfig(
-                        mode=CandidatePositionMode.LOCAL_REFINEMENT,
+                    center=_sampled_center(
+                        CandidatePositionMode.LOCAL_REFINEMENT,
                         min_radius_m=0.25,
                         max_radius_m=0.7,
                     ),
-                    gazes=(CandidateGazeConfig(mode=ViewDirectionMode.TARGET_POINT),),
+                    gazes=(_boxed_gaze(ViewDirectionMode.TARGET_POINT),),
                 ),
                 CandidateMixtureComponentConfig(
                     name="revisit_backtrack",
                     count=6,
-                    center=SampledCenterConfig(
-                        mode=CandidatePositionMode.REVISIT_BACKTRACK,
+                    center=_sampled_center(
+                        CandidatePositionMode.REVISIT_BACKTRACK,
                         min_radius_m=0.25,
                         max_radius_m=0.25,
                     ),
-                    gazes=(CandidateGazeConfig(mode=ViewDirectionMode.FORWARD_RIG),),
+                    gazes=(_boxed_gaze(ViewDirectionMode.FORWARD_RIG),),
                 ),
             ),
         )
@@ -284,43 +372,43 @@ class CandidateMixtureViewGeneratorConfig(TargetConfig["CandidateMixtureViewGene
                 CandidateMixtureComponentConfig(
                     name="target_forward_pair",
                     count=12,
-                    center=SampledCenterConfig(mode=CandidatePositionMode.TARGET_BEARING_LOCAL),
+                    center=_sampled_center(CandidatePositionMode.TARGET_BEARING_LOCAL),
                     gazes=(
-                        CandidateGazeConfig(mode=ViewDirectionMode.TARGET_POINT),
-                        CandidateGazeConfig(name="paired_forward_rig", mode=ViewDirectionMode.FORWARD_RIG),
+                        _boxed_gaze(ViewDirectionMode.TARGET_POINT),
+                        _boxed_gaze(ViewDirectionMode.FORWARD_RIG, name="paired_forward_rig"),
                     ),
                 ),
                 CandidateMixtureComponentConfig(
                     name="forward_local",
                     count=12,
-                    center=SampledCenterConfig(mode=CandidatePositionMode.FORWARD_LOCAL),
-                    gazes=(CandidateGazeConfig(mode=ViewDirectionMode.FORWARD_RIG),),
+                    center=_sampled_center(CandidatePositionMode.FORWARD_LOCAL),
+                    gazes=(_boxed_gaze(ViewDirectionMode.FORWARD_RIG),),
                 ),
                 CandidateMixtureComponentConfig(
                     name="lateral_target_bypass",
                     count=12,
-                    center=SampledCenterConfig(mode=CandidatePositionMode.LATERAL_TARGET_BYPASS),
-                    gazes=(CandidateGazeConfig(mode=ViewDirectionMode.TARGET_POINT),),
+                    center=_sampled_center(CandidatePositionMode.LATERAL_TARGET_BYPASS),
+                    gazes=(_boxed_gaze(ViewDirectionMode.TARGET_POINT),),
                 ),
                 CandidateMixtureComponentConfig(
                     name="local_refinement",
                     count=6,
-                    center=SampledCenterConfig(
-                        mode=CandidatePositionMode.LOCAL_REFINEMENT,
+                    center=_sampled_center(
+                        CandidatePositionMode.LOCAL_REFINEMENT,
                         min_radius_m=0.25,
                         max_radius_m=0.7,
                     ),
-                    gazes=(CandidateGazeConfig(mode=ViewDirectionMode.TARGET_POINT),),
+                    gazes=(_boxed_gaze(ViewDirectionMode.TARGET_POINT),),
                 ),
                 CandidateMixtureComponentConfig(
                     name="revisit_backtrack",
                     count=6,
-                    center=SampledCenterConfig(
-                        mode=CandidatePositionMode.REVISIT_BACKTRACK,
+                    center=_sampled_center(
+                        CandidatePositionMode.REVISIT_BACKTRACK,
                         min_radius_m=0.25,
                         max_radius_m=0.25,
                     ),
-                    gazes=(CandidateGazeConfig(mode=ViewDirectionMode.FORWARD_RIG),),
+                    gazes=(_boxed_gaze(ViewDirectionMode.FORWARD_RIG),),
                 ),
             ),
         )
@@ -376,46 +464,46 @@ class CandidateMixtureViewGeneratorConfig(TargetConfig["CandidateMixtureViewGene
                 CandidateMixtureComponentConfig(
                     name="radial_towards_target_bearing",
                     count=16,
-                    center=SampledCenterConfig(
-                        mode=CandidatePositionMode.TARGET_BEARING_LOCAL,
+                    center=_sampled_center(
+                        CandidatePositionMode.TARGET_BEARING_LOCAL,
                         min_radius_m=0.35,
                         max_radius_m=1.1,
                         azimuth_width_deg=110.0,
                     ),
-                    gazes=(CandidateGazeConfig(mode=ViewDirectionMode.RADIAL_TOWARDS),),
+                    gazes=(_boxed_gaze(ViewDirectionMode.RADIAL_TOWARDS),),
                 ),
                 CandidateMixtureComponentConfig(
                     name="radial_away_target_bearing",
                     count=16,
-                    center=SampledCenterConfig(
-                        mode=CandidatePositionMode.TARGET_BEARING_LOCAL,
+                    center=_sampled_center(
+                        CandidatePositionMode.TARGET_BEARING_LOCAL,
                         min_radius_m=0.35,
                         max_radius_m=1.1,
                         azimuth_width_deg=110.0,
                     ),
-                    gazes=(CandidateGazeConfig(mode=ViewDirectionMode.RADIAL_AWAY),),
+                    gazes=(_boxed_gaze(ViewDirectionMode.RADIAL_AWAY),),
                 ),
                 CandidateMixtureComponentConfig(
                     name="revisit_backtrack",
                     count=12,
-                    center=SampledCenterConfig(
-                        mode=CandidatePositionMode.REVISIT_BACKTRACK,
+                    center=_sampled_center(
+                        CandidatePositionMode.REVISIT_BACKTRACK,
                         min_radius_m=0.25,
                         max_radius_m=0.25,
                         azimuth_width_deg=110.0,
                     ),
-                    gazes=(CandidateGazeConfig(mode=ViewDirectionMode.FORWARD_RIG),),
+                    gazes=(_boxed_gaze(ViewDirectionMode.FORWARD_RIG),),
                 ),
                 CandidateMixtureComponentConfig(
                     name="target_point_anchor",
                     count=4,
-                    center=SampledCenterConfig(
-                        mode=CandidatePositionMode.TARGET_BEARING_LOCAL,
+                    center=_sampled_center(
+                        CandidatePositionMode.TARGET_BEARING_LOCAL,
                         min_radius_m=0.35,
                         max_radius_m=0.9,
                         azimuth_width_deg=110.0,
                     ),
-                    gazes=(CandidateGazeConfig(mode=ViewDirectionMode.TARGET_POINT),),
+                    gazes=(_boxed_gaze(ViewDirectionMode.TARGET_POINT),),
                 ),
             ),
         )
@@ -444,6 +532,21 @@ class CandidateMixtureViewGenerator:
     def __init__(self, config: CandidateMixtureViewGeneratorConfig) -> None:
         self.config = config
         self._mesh_query: PreparedMeshQuery | None = None
+        self._component_runtimes = tuple(
+            _ComponentRuntime(
+                component=component,
+                generators=tuple(
+                    CandidateViewGenerator._from_component(
+                        config.base,
+                        center_config=component.center,
+                        gaze_config=gaze,
+                        center_count=component.count,
+                    )
+                    for gaze in component.gazes
+                ),
+            )
+            for component in config.components
+        )
 
     def generate_from_typed_sample(
         self,
@@ -505,8 +608,6 @@ class CandidateMixtureViewGenerator:
 
         component_results: list[CandidateSamplingResult] = []
         component_names: list[str] = []
-        from ..rollouts.replay.policy import derive_component_seed
-
         mesh_query = None
         if self.config.base.requires_mesh_query:
             mesh_query = PreparedMeshQuery.acquire(
@@ -566,39 +667,36 @@ class CandidateMixtureViewGenerator:
             component_results.append(result)
             component_names.extend([name] * shell_count)
 
-        for component_index, component in enumerate(self.config.components):
-            component_seed = None if seed is None else derive_component_seed(seed, component.name)
+        target_center_world = None if runtime_context is None else runtime_context.target_center_world
+        for component_index, runtime in enumerate(self._component_runtimes):
+            component = runtime.component
+            component_seed = None if seed is None else _derive_component_seed(seed, component.name)
             resolved_component_seed = component_seed
             if resolved_component_seed is None and self.config.base.seed is not None:
                 resolved_component_seed = int(self.config.base.seed) + component_index
             primary_result: CandidateSamplingResult | None = None
             pair_ids: torch.Tensor | None = None
-            for gaze_index, gaze in enumerate(component.gazes):
+            for gaze_index, (gaze, generator) in enumerate(zip(component.gazes, runtime.generators, strict=True)):
                 emitted_name = component.name if gaze_index == 0 else f"{component.name}__{gaze.name}"
                 gaze_seed = component_seed
                 if gaze_index > 0:
                     gaze_seed = (
                         None
                         if resolved_component_seed is None
-                        else derive_component_seed(resolved_component_seed, emitted_name)
+                        else _derive_component_seed(resolved_component_seed, emitted_name)
                     )
-                component_cfg = self._legacy_leaf_config(
-                    component,
-                    gaze,
-                    component_index,
-                    runtime_context=runtime_context,
-                    component_seed=gaze_seed,
-                )
-                generator = CandidateViewGenerator(component_cfg, mesh_query=mesh_query)
                 if primary_result is None:
-                    result = generator.generate(
+                    result = generator._generate_impl(
                         reference_pose=reference_pose,
                         gt_mesh=gt_mesh,
                         mesh_verts=mesh_verts,
                         mesh_faces=mesh_faces,
                         camera_calib_template=camera_calib_template,
                         occupancy_extent=occupancy_extent,
-                        seed=gaze_seed,
+                        position_target_center_world=target_center_world,
+                        gaze_target_center_world=target_center_world,
+                        prepared_mesh_query=mesh_query,
+                        seed=gaze_seed if gaze_seed is not None else resolved_component_seed,
                     )
                     primary_result = result
                     if len(component.gazes) > 1:
@@ -611,7 +709,7 @@ class CandidateMixtureViewGenerator:
                         pair_base += component.count
                 else:
                     assert primary_result.shell_offsets_ref is not None
-                    result = generator.generate_from_centers(
+                    result = generator._generate_from_centers_impl(
                         reference_pose=reference_pose,
                         centers_world=primary_result.shell_poses.t.reshape(-1, 3),
                         offsets_ref=primary_result.shell_offsets_ref,
@@ -620,6 +718,9 @@ class CandidateMixtureViewGenerator:
                         mesh_faces=mesh_faces,
                         camera_calib_template=camera_calib_template,
                         occupancy_extent=occupancy_extent,
+                        position_target_center_world=target_center_world,
+                        gaze_target_center_world=target_center_world,
+                        prepared_mesh_query=mesh_query,
                         seed=gaze_seed,
                     )
                 append_component(
@@ -632,120 +733,6 @@ class CandidateMixtureViewGenerator:
                 )
 
         return _concat_results(component_results, component_name=tuple(component_names))
-
-    def _legacy_leaf_config(
-        self,
-        component: CandidateMixtureComponentConfig,
-        gaze: CandidateGazeConfig,
-        component_index: int,
-        *,
-        runtime_context: CandidateGenerationRuntimeContext | None,
-        component_seed: int | None = None,
-    ) -> CandidateViewGeneratorConfig:
-        target_point = self.config.base.view_target_point_world
-        position_target = self.config.base.position_target_point_world
-        if runtime_context is not None and runtime_context.target_center_world is not None:
-            # Retain the actor-visible target for diagnostics on every family.
-            # Position samplers ignore it unless their mode is target-aware.
-            position_target = torch.as_tensor(runtime_context.target_center_world, dtype=torch.float32).reshape(3)
-        if gaze.mode is ViewDirectionMode.TARGET_POINT:
-            if runtime_context is None or runtime_context.target_center_world is None:
-                raise ValueError("TARGET_POINT candidate components require runtime_context.target_center_world.")
-            target_point = torch.as_tensor(runtime_context.target_center_world, dtype=torch.float32).reshape(3)
-        center_mode = _center_position_mode(component.center)
-        if center_mode in {
-            CandidatePositionMode.TARGET_BEARING_LOCAL,
-            CandidatePositionMode.LATERAL_TARGET_BYPASS,
-            CandidatePositionMode.TARGET_ORBIT,
-        }:
-            if runtime_context is None or runtime_context.target_center_world is None:
-                raise ValueError(f"{center_mode.value} components require runtime_context.target_center_world.")
-            position_target = torch.as_tensor(runtime_context.target_center_world, dtype=torch.float32).reshape(3)
-
-        updates: dict[str, Any] = {
-            "num_samples": component.count,
-            "oversample_factor": 1.0,
-            "max_resamples": 2,
-            "view_direction_mode": gaze.mode,
-            "position_mode": center_mode,
-            "view_target_point_world": target_point,
-            "position_target_point_world": position_target,
-        }
-        if component_seed is not None:
-            updates["seed"] = int(component_seed)
-        elif self.config.base.seed is not None:
-            updates["seed"] = int(self.config.base.seed) + component_index
-
-        match component.center:
-            case SampledCenterConfig() as center:
-                sampling_strategy = (
-                    SamplingStrategy.UNIFORM_SPHERE
-                    if isinstance(center.distribution, UniformSphereConfig)
-                    else SamplingStrategy.FORWARD_POWERSPHERICAL
-                )
-                updates.update(
-                    sampling_strategy=sampling_strategy,
-                    min_radius=center.min_radius_m,
-                    max_radius=center.max_radius_m,
-                    min_elev_deg=center.min_elevation_deg,
-                    max_elev_deg=center.max_elevation_deg,
-                    delta_azimuth_deg=center.azimuth_width_deg,
-                    kappa=(
-                        center.distribution.concentration
-                        if isinstance(center.distribution, PowerSphericalConfig)
-                        else 0.0
-                    ),
-                )
-            case TargetOrbitCenterConfig() as center:
-                updates.update(
-                    sampling_strategy=SamplingStrategy.UNIFORM_SPHERE,
-                    min_radius=0.5,
-                    max_radius=1.8,
-                    min_elev_deg=-20.0,
-                    max_elev_deg=25.0,
-                    delta_azimuth_deg=170.0,
-                    kappa=4.0,
-                    target_orbit_angles_deg=center.angles_deg,
-                )
-
-        match gaze.jitter:
-            case NoViewJitterConfig():
-                updates.update(
-                    view_sampling_strategy=None,
-                    view_kappa=0.0,
-                    view_max_angle_deg=0.0,
-                    view_max_azimuth_deg=0.0,
-                    view_max_elevation_deg=0.0,
-                    view_roll_jitter_deg=0.0,
-                )
-            case BoxViewJitterConfig() as jitter:
-                updates.update(
-                    view_sampling_strategy=None,
-                    view_kappa=0.0,
-                    view_max_angle_deg=0.0,
-                    view_max_azimuth_deg=jitter.yaw_half_width_deg,
-                    view_max_elevation_deg=jitter.pitch_half_width_deg,
-                    view_roll_jitter_deg=jitter.roll_half_width_deg,
-                )
-            case SphericalViewJitterConfig() as jitter:
-                view_sampling_strategy = (
-                    SamplingStrategy.UNIFORM_SPHERE
-                    if isinstance(jitter.distribution, UniformSphereConfig)
-                    else SamplingStrategy.FORWARD_POWERSPHERICAL
-                )
-                updates.update(
-                    view_sampling_strategy=view_sampling_strategy,
-                    view_kappa=(
-                        jitter.distribution.concentration
-                        if isinstance(jitter.distribution, PowerSphericalConfig)
-                        else 0.0
-                    ),
-                    view_max_angle_deg=0.0,
-                    view_max_azimuth_deg=0.0,
-                    view_max_elevation_deg=0.0,
-                    view_roll_jitter_deg=jitter.roll_half_width_deg,
-                )
-        return self.config.base.model_copy(update=updates)
 
 
 def _concat_results(

@@ -22,6 +22,7 @@ from aria_nbv.pose_generation.candidate_generation_rules import (
     MotionRealismRule,
     PathCollisionRule,
 )
+from aria_nbv.pose_generation.config import SampledCenterConfig
 from aria_nbv.pose_generation.positional_sampling import PositionSampler
 from aria_nbv.pose_generation.types import CandidateContext
 from aria_nbv.utils.frames import world_up_tensor
@@ -186,7 +187,19 @@ def test_forward_power_spherical_sampling_failure_is_explicit(monkeypatch: pytes
         sampling_strategy=SamplingStrategy.FORWARD_POWERSPHERICAL,
         device="cpu",
     )
-    sampler = PositionSampler(cfg)
+    sampler = PositionSampler(
+        SampledCenterConfig(
+            mode=cfg.position_mode,
+            sampling_strategy=cfg.sampling_strategy,
+            min_radius_m=cfg.min_radius,
+            max_radius_m=cfg.max_radius,
+            min_elevation_deg=cfg.min_elev_deg,
+            max_elevation_deg=cfg.max_elev_deg,
+            azimuth_width_deg=cfg.delta_azimuth_deg,
+            concentration=cfg.kappa,
+        ),
+        device=cfg.device,
+    )
 
     class BrokenPowerSpherical:
         def __init__(self, *args: object, **kwargs: object) -> None:
@@ -203,7 +216,7 @@ def test_forward_power_spherical_sampling_failure_is_explicit(monkeypatch: pytes
     )
 
     with pytest.raises(RuntimeError, match="PowerSpherical position sampling failed") as exc_info:
-        sampler.sample(_identity_pose())
+        sampler.sample(_identity_pose(), count=cfg.num_samples, target_center_world=None)
 
     message = str(exc_info.value)
     assert "forward_powerspherical" in message

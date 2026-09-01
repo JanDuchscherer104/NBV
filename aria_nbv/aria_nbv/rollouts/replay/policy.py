@@ -8,14 +8,13 @@ pipeline recipes.
 
 from __future__ import annotations
 
-import hashlib
-import json
 from enum import StrEnum
 
 from pydantic import Field, model_validator
 from pydantic_settings import SettingsConfigDict
 
 from ...utils import BaseConfig
+from ...utils.seeding import derive_stable_seed
 
 SEED_DERIVATION_RULE = "sha256-json-v2-state-streams"
 
@@ -28,8 +27,7 @@ def derive_rollout_seed(*parts: object) -> int:
     branch, or component) in ``parts``.
     """
 
-    payload = json.dumps(parts, sort_keys=True, separators=(",", ":"), default=str).encode("utf-8")
-    return int.from_bytes(hashlib.sha256(payload).digest()[:4], "big")
+    return derive_stable_seed(*parts)
 
 
 def derive_recipe_seed(campaign_id: str, work_unit_hash: str, recipe_name: str, temperature: float) -> int:

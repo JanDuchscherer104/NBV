@@ -153,12 +153,13 @@ def _component(
 def _run_generate(
     cfg: CandidateMixtureViewGeneratorConfig,
     *,
+    generator: CandidateMixtureViewGenerator | None = None,
     seed: int | None = None,
     descriptor: TargetDescriptor | None = None,
     reference_pose: PoseTW | None = None,
 ):
     mesh, verts, faces = _mesh_triplet(cfg.device)
-    return CandidateMixtureViewGenerator(cfg).generate(
+    return (generator or CandidateMixtureViewGenerator(cfg)).generate(
         reference_pose=reference_pose or _identity_pose(device=cfg.device),
         gt_mesh=mesh,
         mesh_verts=verts,
@@ -292,10 +293,16 @@ def test_mixture_prepares_mesh_query_once_for_all_components(monkeypatch: pytest
         ],
     )
 
-    result = _run_generate(cfg)
+    generator = CandidateMixtureViewGenerator(cfg)
+    result = _run_generate(cfg, generator=generator)
 
     assert result.mask_valid.shape[0] == 4
     assert len(prepared) == 1
+    assert all(
+        child._mesh_query is None and child._request_mesh_query is None
+        for runtime in generator._component_runtimes
+        for child in runtime.generators
+    )
 
 
 def test_single_generator_rejects_request_query_from_another_mesh() -> None:
@@ -594,19 +601,19 @@ def test_paired_seed_is_derived_from_resolved_component_seed_for_direct_and_repl
         ],
     )
     observed: list[int | None] = []
-    original_generate = CandidateViewGenerator.generate
-    original_generate_from_centers = CandidateViewGenerator.generate_from_centers
+    original_generate = CandidateViewGenerator._generate_impl
+    original_generate_from_centers = CandidateViewGenerator._generate_from_centers_impl
 
     def record_generate(self, *args, **kwargs):
-        observed.append(self.config.seed)
+        observed.append(kwargs["seed"])
         return original_generate(self, *args, **kwargs)
 
     def record_generate_from_centers(self, *args, **kwargs):
-        observed.append(self.config.seed)
+        observed.append(kwargs["seed"])
         return original_generate_from_centers(self, *args, **kwargs)
 
-    monkeypatch.setattr(CandidateViewGenerator, "generate", record_generate)
-    monkeypatch.setattr(CandidateViewGenerator, "generate_from_centers", record_generate_from_centers)
+    monkeypatch.setattr(CandidateViewGenerator, "_generate_impl", record_generate)
+    monkeypatch.setattr(CandidateViewGenerator, "_generate_from_centers_impl", record_generate_from_centers)
 
     _run_generate(cfg)
     direct_primary, direct_paired = observed
@@ -618,6 +625,132 @@ def test_paired_seed_is_derived_from_resolved_component_seed_for_direct_and_repl
     replay_primary, replay_paired = observed
     assert replay_primary == derive_component_seed(41, "pair")
     assert replay_paired == derive_component_seed(replay_primary, "pair__paired_forward_rig")
+
+
+def test_mixture_generate_reuses_prebuilt_component_generators(monkeypatch: pytest.MonkeyPatch) -> None:
+    cfg = CandidateMixtureViewGeneratorConfig(
+        base=_base_cfg(),
+        components=[_component(name="forward", count=2, strategy=ViewDirectionMode.FORWARD_RIG)],
+    )
+    generator = CandidateMixtureViewGenerator(cfg)
+    runtime_ids = tuple(id(child) for runtime in generator._component_runtimes for child in runtime.generators)
+
+    monkeypatch.setattr(
+        CandidateViewGenerator,
+        "_from_component",
+        classmethod(lambda cls, *args, **kwargs: pytest.fail("generate must not construct child generators")),
+    )
+    _run_generate(cfg, generator=generator)
+    _run_generate(cfg, generator=generator)
+
+    assert tuple(id(child) for runtime in generator._component_runtimes for child in runtime.generators) == runtime_ids
+
+
+def test_single_family_runtime_context_does_not_override_config_target(monkeypatch: pytest.MonkeyPatch) -> None:
+    configured_position_target = torch.tensor([0.0, 0.0, 3.0])
+    configured_gaze_target = torch.tensor([2.0, 0.0, 0.0])
+    cfg = _base_cfg().model_copy(
+        update={
+            "num_samples": 1,
+            "oversample_factor": 1.0,
+            "position_mode": CandidatePositionMode.TARGET_BEARING_LOCAL,
+            "position_target_point_world": configured_position_target,
+            "view_direction_mode": ViewDirectionMode.TARGET_POINT,
+            "view_target_point_world": configured_gaze_target,
+            "view_max_azimuth_deg": 0.0,
+            "view_max_elevation_deg": 0.0,
+        }
+    )
+    generator = CandidateViewGenerator(cfg)
+    observed_positions: list[torch.Tensor | None] = []
+    observed_gazes: list[torch.Tensor | None] = []
+    original_sample = generator._position_sampler.sample
+    original_build = generator._orientation_builder.build
+
+    def record_sample(*args, **kwargs):
+        observed_positions.append(kwargs["target_center_world"])
+        return original_sample(*args, **kwargs)
+
+    def record_build(*args, **kwargs):
+        observed_gazes.append(kwargs["target_center_world"])
+        return original_build(*args, **kwargs)
+
+    monkeypatch.setattr(generator._position_sampler, "sample", record_sample)
+    monkeypatch.setattr(generator._orientation_builder, "build", record_build)
+    mesh, verts, faces = _mesh_triplet(cfg.device)
+    generator.generate(
+        reference_pose=_identity_pose(device=cfg.device),
+        gt_mesh=mesh,
+        mesh_verts=verts,
+        mesh_faces=faces,
+        camera_calib_template=_dummy_camera(cfg.device),
+        occupancy_extent=torch.tensor([-10.0, 10.0, -10.0, 10.0, -10.0, 10.0], dtype=torch.float32),
+        runtime_context=CandidateGenerationRuntimeContext(descriptor=_descriptor((3.0, 0.0, 0.0))),
+    )
+
+    assert len(observed_positions) == len(observed_gazes) == 1
+    assert torch.equal(observed_positions[0], configured_position_target)
+    assert torch.equal(observed_gazes[0], configured_gaze_target)
+
+
+def test_single_family_view_only_target_does_not_enable_position_diagnostics() -> None:
+    cfg = _base_cfg().model_copy(
+        update={
+            "num_samples": 1,
+            "oversample_factor": 1.0,
+            "position_target_point_world": None,
+            "view_direction_mode": ViewDirectionMode.TARGET_POINT,
+            "view_target_point_world": torch.tensor([2.0, 0.0, 0.0]),
+            "view_max_azimuth_deg": 0.0,
+            "view_max_elevation_deg": 0.0,
+        }
+    )
+
+    mesh, verts, faces = _mesh_triplet(cfg.device)
+    result = CandidateViewGenerator(cfg).generate(
+        reference_pose=_identity_pose(device=cfg.device),
+        gt_mesh=mesh,
+        mesh_verts=verts,
+        mesh_faces=faces,
+        camera_calib_template=_dummy_camera(cfg.device),
+        occupancy_extent=torch.tensor([-10.0, 10.0, -10.0, 10.0, -10.0, 10.0], dtype=torch.float32),
+    )
+
+    assert "target_bearing_yaw_rad" not in result.extras
+    assert "target_distance_m" not in result.extras
+    assert "target_in_fov_mask" not in result.extras
+
+
+def test_mixture_targets_are_request_local_and_not_retained(monkeypatch: pytest.MonkeyPatch) -> None:
+    cfg = CandidateMixtureViewGeneratorConfig(
+        base=_base_cfg(),
+        components=[_component(name="target", count=2, strategy=ViewDirectionMode.TARGET_POINT)],
+    )
+    generator = CandidateMixtureViewGenerator(cfg)
+    child = generator._component_runtimes[0].generators[0]
+    observed: list[torch.Tensor | None] = []
+    original_build = child._orientation_builder.build
+
+    def record_build(*args, **kwargs):
+        observed.append(kwargs["target_center_world"])
+        return original_build(*args, **kwargs)
+
+    monkeypatch.setattr(child._orientation_builder, "build", record_build)
+    _run_generate(cfg, generator=generator, descriptor=_descriptor((1.0, 0.0, 0.0)))
+    _run_generate(cfg, generator=generator, descriptor=_descriptor((0.0, 2.0, 0.0)))
+
+    assert observed[0] is not None and torch.equal(observed[0], torch.tensor([1.0, 0.0, 0.0]))
+    assert observed[1] is not None and torch.equal(observed[1], torch.tensor([0.0, 2.0, 0.0]))
+    assert child.config.position_target_point_world is None
+    assert child.config.view_target_point_world is None
+
+
+@pytest.mark.parametrize("node_seed, identity", [(0, "forward"), (41, "pair__paired_forward_rig")])
+def test_private_component_seed_matches_public_rollout_wrapper(node_seed: int, identity: str) -> None:
+    from aria_nbv.pose_generation.candidate_mixture import _derive_component_seed
+    from aria_nbv.rollouts.replay.policy import derive_component_seed
+
+    assert _derive_component_seed(node_seed, identity) == derive_component_seed(node_seed, identity)
 
 
 def test_target_point_component_requires_runtime_target_context() -> None:

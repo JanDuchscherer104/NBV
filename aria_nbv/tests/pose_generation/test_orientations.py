@@ -12,9 +12,10 @@ import torch
 from efm3d.aria.pose import PoseTW
 
 from aria_nbv.pose_generation import orientations as orientations_module
-from aria_nbv.pose_generation.candidate_generation import CandidateViewGeneratorConfig
+from aria_nbv.pose_generation.config import BoxViewJitterConfig, CandidateGazeConfig, NoViewJitterConfig
 from aria_nbv.pose_generation.orientations import OrientationBuilder
 from aria_nbv.pose_generation.types import ViewDirectionMode
+from aria_nbv.utils import Verbosity
 
 
 def _ref_pose() -> PoseTW:
@@ -56,16 +57,12 @@ def _legacy_roll_rotation(roll: torch.Tensor) -> torch.Tensor:
 
 
 def test_view_sampling_disabled_when_jitter_zero() -> None:
-    cfg = CandidateViewGeneratorConfig(
-        num_samples=1,
-        view_max_azimuth_deg=0.0,
-        view_max_elevation_deg=0.0,
-        view_roll_jitter_deg=0.0,
-        view_sampling_strategy=None,
-    )
+    cfg = CandidateGazeConfig(name="test", mode=ViewDirectionMode.RADIAL_AWAY, jitter=NoViewJitterConfig())
 
     centers = torch.tensor([[0.0, 0.0, 1.0]])
-    poses, delta = OrientationBuilder(cfg).build(_ref_pose(), centers)
+    poses, delta = OrientationBuilder(cfg, verbosity=Verbosity.QUIET).build(
+        _ref_pose(), centers, target_center_world=None
+    )
 
     assert delta is None
     assert torch.allclose(poses.R[0], torch.eye(3), atol=1e-6)
@@ -76,17 +73,11 @@ def test_target_point_gaze_is_exact_target_direction_even_outside_motion_envelop
         torch.tensor([[0.0, 0.0, 1.0], [0.0, 1.0, 0.0], [-1.0, 0.0, 0.0]]),
         torch.zeros(3),
     )
-    cfg = CandidateViewGeneratorConfig(
-        num_samples=1,
-        view_direction_mode=ViewDirectionMode.TARGET_POINT,
-        view_target_point_world=torch.tensor([10.0, 10.0, 0.0]),
-        max_yaw_delta_deg=30.0,
-        min_elev_deg=-12.0,
-        max_elev_deg=18.0,
-        view_max_azimuth_deg=0.0,
-        view_max_elevation_deg=0.0,
+    cfg = CandidateGazeConfig(name="test", mode=ViewDirectionMode.TARGET_POINT, jitter=NoViewJitterConfig())
+    target = torch.tensor([10.0, 10.0, 0.0])
+    poses, _ = OrientationBuilder(cfg, verbosity=Verbosity.QUIET).build(
+        reference, torch.tensor([[1.0, 0.0, 0.0]]), target_center_world=target
     )
-    poses, _ = OrientationBuilder(cfg).build(reference, torch.tensor([[1.0, 0.0, 0.0]]))
 
     forward = poses.R[:, :, 2]
     expected = torch.tensor([9.0, 10.0, 0.0])
@@ -96,15 +87,16 @@ def test_target_point_gaze_is_exact_target_direction_even_outside_motion_envelop
 
 def test_view_jitter_respects_az_el_limits() -> None:
     max_az, max_el = 10.0, 5.0
-    cfg = CandidateViewGeneratorConfig(
-        num_samples=64,
-        view_direction_mode=ViewDirectionMode.RADIAL_AWAY,
-        view_max_azimuth_deg=max_az,
-        view_max_elevation_deg=max_el,
+    cfg = CandidateGazeConfig(
+        name="test",
+        mode=ViewDirectionMode.RADIAL_AWAY,
+        jitter=BoxViewJitterConfig(yaw_half_width_deg=max_az, pitch_half_width_deg=max_el),
     )
 
-    centers = torch.tensor([[0.0, 0.0, 1.0]]).expand(cfg.num_samples, -1)
-    poses, delta = OrientationBuilder(cfg).build(_ref_pose(), centers)
+    centers = torch.tensor([[0.0, 0.0, 1.0]]).expand(64, -1)
+    poses, delta = OrientationBuilder(cfg, verbosity=Verbosity.QUIET).build(
+        _ref_pose(), centers, target_center_world=None
+    )
 
     fwd = poses.R[:, :, 2]
     az = torch.atan2(fwd[:, 0], fwd[:, 2])
@@ -123,17 +115,20 @@ def test_view_jitter_respects_az_el_limits() -> None:
 
 def test_roll_jitter_keeps_forward_fixed() -> None:
     max_roll = 20.0
-    cfg = CandidateViewGeneratorConfig(
-        num_samples=128,
-        view_direction_mode=ViewDirectionMode.RADIAL_AWAY,
-        view_sampling_strategy=None,
-        view_max_azimuth_deg=0.0,
-        view_max_elevation_deg=0.0,
-        view_roll_jitter_deg=max_roll,
+    cfg = CandidateGazeConfig(
+        name="test",
+        mode=ViewDirectionMode.RADIAL_AWAY,
+        jitter=BoxViewJitterConfig(
+            yaw_half_width_deg=0.0,
+            pitch_half_width_deg=0.0,
+            roll_half_width_deg=max_roll,
+        ),
     )
 
-    centers = torch.tensor([[0.0, 0.0, 1.0]]).expand(cfg.num_samples, -1)
-    poses, delta = OrientationBuilder(cfg).build(_ref_pose(), centers)
+    centers = torch.tensor([[0.0, 0.0, 1.0]]).expand(128, -1)
+    poses, delta = OrientationBuilder(cfg, verbosity=Verbosity.QUIET).build(
+        _ref_pose(), centers, target_center_world=None
+    )
 
     assert delta is not None
     fwd = poses.R[:, :, 2]
