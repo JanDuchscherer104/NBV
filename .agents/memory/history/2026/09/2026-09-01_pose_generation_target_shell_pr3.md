@@ -35,10 +35,11 @@ Added one discriminated center config and one private positional-sampling branch
 
 ## Commits
 - [3a9e046c66e21a1d1d53283d999f17382820856a](https://github.com/JanDuchscherer104/ARIA-NBV/commit/3a9e046c66e21a1d1d53283d999f17382820856a)
+- [a55573cdc389cc8c4eb0aa7160d79336964c4529](https://github.com/JanDuchscherer104/ARIA-NBV/commit/a55573cdc389cc8c4eb0aa7160d79336964c4529)
 
 ## Verification
 - Ruff format/check: pass.
-- Focused pose-generation, plotting, and read-model suite: 109 passed, 1 skipped.
+- Focused pose-generation, plotting, read-model, and campaign-projection suite: 114 passed, 1 skipped.
 - Real ASE/ATEK integration with explicit repository data root: 3 passed on CPU and CUDA.
 - Focused mypy for the new config and sampler owners: pass; broader touched-module mypy retains pre-existing errors outside the new target-shell branch.
 
