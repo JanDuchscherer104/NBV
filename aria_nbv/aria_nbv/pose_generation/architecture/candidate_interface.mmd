@@ -1,0 +1,47 @@
+classDiagram
+  direction LR
+
+  class CandidateGenerator {
+    <<interface>>
+    +generate(request: CandidateRequest) CandidateSet
+  }
+  class CandidateRequest {
+    <<immutable DTO>>
+    +conditioning
+    +scene
+    +actor_target
+    +program
+  }
+  class CandidateProgram {
+    <<immutable DTO>>
+    +families
+    +limits
+  }
+  class CandidateSet {
+    <<immutable DTO>>
+    +attempts: CandidateTable
+    +admission: AdmissionEvidence
+    +action_indices
+    +completion
+  }
+  class CandidateTable {
+    <<immutable DTO>>
+    +centers_world
+    +candidate_family_id
+    +view residuals
+  }
+  class AdmissionEvidence {
+    <<immutable DTO>>
+    +mask_valid
+    +criteria
+  }
+  class ProgramCandidateGenerator {
+    +generate(request: CandidateRequest) CandidateSet
+  }
+
+  CandidateGenerator <|.. ProgramCandidateGenerator
+  CandidateRequest *-- CandidateProgram
+  ProgramCandidateGenerator --> CandidateRequest : consumes
+  ProgramCandidateGenerator --> CandidateSet : creates
+  CandidateSet *-- CandidateTable
+  CandidateSet *-- AdmissionEvidence
