@@ -1,0 +1,23 @@
+flowchart LR
+  Request["CandidateRequest\nimmutable conditioning + program"]
+  Centers["Center sampler\nCandidateCenterBatch"]
+  Gaze["Gaze assignment\nCandidateGazeBatch"]
+  Pair["Paired-gaze expansion\nsame center, two gaze variants"]
+  Assemble["ProgramCandidateGenerator\nassemble attempted table"]
+  Set["CandidateSet\nfull shell + provenance"]
+
+  Request --> Centers
+  Request --> Gaze
+  Centers --> Gaze
+  Gaze --> Pair
+  Gaze --> Assemble
+  Pair --> Assemble
+  Assemble --> Set
+
+  classDef input fill:#D5E8D4,stroke:#82B366,color:#17202A,stroke-width:1.5px,rx:0,ry:0;
+  classDef compute fill:#E1D5E7,stroke:#9673A6,color:#17202A,stroke-width:1.5px,rx:8,ry:8;
+  classDef data fill:#F5F5F5,stroke:#9E9E9E,color:#17202A,stroke-width:1.2px,rx:0,ry:0;
+  classDef output fill:#F8CECC,stroke:#B85450,color:#17202A,stroke-width:1.5px,rx:0,ry:0;
+  class Request input;
+  class Centers,Gaze,Pair,Assemble compute;
+  class Set output;
