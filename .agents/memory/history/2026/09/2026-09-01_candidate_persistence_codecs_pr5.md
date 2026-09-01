@@ -33,6 +33,7 @@ Added versioned immutable trace and VIN DTOs, additive Zarr tables and dictionar
 
 ## Commits
 - [8590b7e2ea544f88cdbce39b6228b70cafe5ca16](https://github.com/JanDuchscherer104/ARIA-NBV/commit/8590b7e2ea544f88cdbce39b6228b70cafe5ca16) — additive candidate persistence codecs and consumer migration.
+- [4e0960ee4a3cd6cb716299914e4556b0431b554b](https://github.com/JanDuchscherer104/ARIA-NBV/commit/4e0960ee4a3cd6cb716299914e4556b0431b554b) — replay golden source receipt and Quartodoc discovery registration.
 
 ## Verification
 - Focused persistence/inspection matrix: 231 passed, 16 warnings.
