@@ -8,6 +8,7 @@
 #let factual = rgb("#16a34a")
 #let state = rgb("#2563eb")
 #let planned = rgb("#7c3aed")
+#let model = rgb("#0f766e")
 
 #let block(pos, title, body, tint: factual, width: 37mm) = node(
   pos,
@@ -75,43 +76,43 @@
     may carry oracle $r_t(i)$
   ], width: 42mm),
 
-  heading((1.5, 4.35), [B. Planned masked Double-Q computation], [
-    mathematical contract only; no implemented learner is claimed
-  ], tint: planned, width: 122mm),
+  heading((1.5, 4.35), [B. Implemented masked Double-Q computation], [
+    selected estimator; scientific value evidence remains pending
+  ], tint: model, width: 122mm),
   block((0, 5.7), [Valid successor rows], [
     restrict to $m_(t+1,j)=1$ \
     empty set terminates
-  ], tint: planned, width: 39mm),
+  ], tint: model, width: 39mm),
   block((1.5, 5.7), [Online selection], [
     $a^star = arg max_j Q_theta$ \
     over valid rows only
-  ], tint: planned, width: 39mm),
+  ], tint: model, width: 39mm),
   block((3.0, 5.7), [Target gather], [
     $Q_(bar(theta))(s_(t+1),a^star)$ \
     frozen target network
-  ], tint: planned, width: 39mm),
+  ], tint: model, width: 39mm),
   block((3.0, 7.3), [Masked TD target], [
     $y_t=r_t+gamma_t(1-d_t)Q_(bar(theta))$ \
     no bootstrap through invalid rows
-  ], tint: planned, width: 45mm),
+  ], tint: model, width: 45mm),
   block((0, 7.3), [Training admission], [
     $m_(t,a_t)^"train"=1$ \
     factual transition exists \
     successor link or terminal flag
-  ], tint: planned, width: 39mm),
+  ], tint: model, width: 39mm),
   block((1.5, 7.3), [Loss contribution], [
     $(Q_theta(s_t,a_t)-y_t)^2$ \
     admitted rows only
-  ], tint: planned, width: 46mm),
+  ], tint: model, width: 46mm),
 
   flow((0, 1.25), (1.5, 1.25), label: [choose]),
   flow((1.5, 1.25), (3.0, 1.25), label: [persist]),
   flow((3.0, 1.25), (3.0, 2.8), label: [resolve]),
   flow((0, 1.25), (.7, 2.75), label: [all eligible rows]),
 
-  flow((0, 5.7), (1.5, 5.7), tint: planned),
-  flow((1.5, 5.7), (3.0, 5.7), tint: planned),
-  flow((3.0, 5.7), (3.0, 7.3), tint: planned),
-  flow((0, 7.3), (1.5, 7.3), tint: planned),
-  flow((3.0, 7.3), (1.5, 7.3), tint: planned),
+  flow((0, 5.7), (1.5, 5.7), tint: model),
+  flow((1.5, 5.7), (3.0, 5.7), tint: model),
+  flow((3.0, 5.7), (3.0, 7.3), tint: model),
+  flow((0, 7.3), (1.5, 7.3), tint: model),
+  flow((3.0, 7.3), (1.5, 7.3), tint: model),
 )

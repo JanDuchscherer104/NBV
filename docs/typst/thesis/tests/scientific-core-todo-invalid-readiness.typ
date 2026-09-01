@@ -2,7 +2,7 @@
 
 #scientific_core_todo(
   domain: "architecture",
-  priority: "P2",
+  priority: "C2",
   readiness: "later",
   claim: [a diagnostic claim],
   source: [test],

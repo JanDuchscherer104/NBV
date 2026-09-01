@@ -160,11 +160,11 @@ promote an $h>2$ claim.
 
 === Double-Q and behavior-return controls
 
-Double Q changes how a noisy learned successor maximum is estimated; it does not define the scalar horizon interface. The online path selects
+Double Q changes how a noisy learned successor maximum is estimated; it does not define the scalar horizon interface. It is the implemented selected estimator. The online path selects
 
 #eqs.rl.qh_doubleq_index
 
-and the delayed path evaluates $Q_(bar(theta))(s_(t+1),e,j^star,h-1)$. This selector/evaluator split can reduce overestimation caused by maximizing noisy action values @DoubleDQN-vanHasselt2015. It remains an ablation against the simpler frozen lower-horizon maximum. It is relevant in an offline setting only because a learned maximum is present, not because online learning is planned.
+and the delayed path evaluates $Q_(bar(theta))(s_(t+1),e,j^star,h-1)$. This selector/evaluator split can reduce overestimation caused by maximizing noisy action values @DoubleDQN-vanHasselt2015. A simpler single-estimator frozen lower-horizon maximum remains a planned matched control until it has an executable configuration and receipt. Double Q is relevant in an offline setting because a learned maximum is present, not because online learning is planned.
 
 As distinguished from the greedy value objective in
 @ssec:thesis-horizon-recursive-offline-learning, a retained chain also yields

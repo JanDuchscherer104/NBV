@@ -76,11 +76,11 @@
 
   Architecture and data TODOs use one extension of the thesis draft-marker
   contract rather than a separate backlog. Priority is ordinal and
-  claim-centred: P0 protects a validity or information boundary shared by the
-  central claims; P1 blocks the next principal-RQ inference; P2 discriminates
-  a diagnosed alternative explanation; P3 is an exploratory extension outside
+  claim-centred: C0 protects a validity or information boundary shared by the
+  central claims; C1 blocks the next principal-RQ inference; C2 discriminates
+  a diagnosed alternative explanation; C3 is an exploratory extension outside
   the core claim. Readiness (`ready`, `blocked`, or `contingent`) is orthogonal,
-  so a blocked P0 remains scientifically more critical than a ready P2 even
+  so a blocked C0 remains scientifically more critical than a ready C2 even
   though only the latter may be immediately executable. Every marker must name
   its affected claim, source, promotion gate, and blocker when blocked. The
   policy deliberately avoids weighted scores whose apparent precision would
@@ -88,7 +88,7 @@
 
   #scientific_core_todo(
     domain: "data",
-    priority: "P0",
+    priority: "C0",
     readiness: "ready",
     claim: [actor/oracle separation and deployability of the target-conditioned value claim],
     source: [`v1_observed` target protocol and frozen corpus manifest],
@@ -97,7 +97,7 @@
 
   #scientific_core_todo(
     domain: "architecture",
-    priority: "P1",
+    priority: "C1",
     readiness: "blocked",
     claim: [whether actor-visible state retains information needed for target-specific bounded return],
     source: [#symb.rl.s_ray candidate realization and selected-observation replay contract],
@@ -107,7 +107,7 @@
 
   #scientific_core_todo(
     domain: "data",
-    priority: "P1",
+    priority: "C1",
     readiness: "blocked",
     claim: [learned lookahead and held-out endpoint recovery],
     source: [exact-$Q_2$ census, oracle-headroom table, and paired endpoint receipt],
@@ -117,7 +117,7 @@
 
   #scientific_core_todo(
     domain: "architecture",
-    priority: "P2",
+    priority: "C2",
     readiness: "contingent",
     claim: [alternative explanation for residual value error after state and support gates pass],
     source: [feature-integration ladder F2--F5, H1, CORAL, residual, and separate-head controls],
@@ -126,7 +126,7 @@
 
   #scientific_core_todo(
     domain: "architecture",
-    priority: "P3",
+    priority: "C3",
     readiness: "contingent",
     claim: [post-core generalization beyond the finite-candidate offline study],
     source: [3DGS memory, SceneScript context, continuous policy, and quantile-value ideas],

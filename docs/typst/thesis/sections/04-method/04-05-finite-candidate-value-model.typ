@@ -169,7 +169,10 @@ and Double Q separates row selection from delayed evaluation
 repair unsupported actions, aliased state, or missing selected observations.
 
 The recursion estimates greedy continuation over the generated, hard-valid
-finite support under the named state and target-source protocols. It is not the
+finite support under the named target-source, actor-state, generator,
+action-mask, reward, discount, and horizon protocols. Unlike an immediate
+per-row target, the $h>1$ continuation value changes when the successor-support
+protocol changes because that protocol changes the bootstrap maximum. It is not the
 Monte Carlo return of the behavior policy that produced the retained chain,
 unless that behavior policy selects the same continuation; nor is it an optimum
 over ungenerated continuous camera poses. This distinction fixes the meaning
@@ -205,10 +208,11 @@ Exact $Q_2$ is necessary but not sufficient: policy claims additionally require
 positive equal-budget oracle headroom and held-out endpoint recovery.
 
 The resulting evidence boundary is explicit. The current implementation
-supports the #symb.rl.s_pose scorer, direct objective, hard-masked recursion, and
+supports the #symb.rl.s_pose scorer, direct objective, `oracle_action_mask_v1`
+recursion, and
 exact-$Q_2$ evaluation path. The scientific target additionally requires an
 evaluated actor-visible `v1_observed` corpus, a causal observation-updated
-state, a frozen held-out exact-$Q_2$ receipt, positive oracle headroom, and
+state, actor-visible or calibrated action support, a frozen held-out exact-$Q_2$ receipt, positive oracle headroom, and
 endpoint recovery. The `v1_observed` admission and writer--reader path is implemented, but
 that intermediate has not passed these evidence gates. Until they pass, this
 chapter establishes an executable method and its falsification tests, not a

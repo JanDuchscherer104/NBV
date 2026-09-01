@@ -9,10 +9,10 @@
   implementation: "partial",
   evidence: "pending",
   source: "aria_nbv/aria_nbv/targets/protocol.py; aria_nbv/aria_nbv/rollouts/replay/engine.py; aria_nbv/aria_nbv/rollouts/zarr_store.py; aria_nbv/aria_nbv/rollouts/qh_reader.py; aria_nbv/tests/rollouts/test_qh_reader.py",
-  gate: [retain deterministic row identity, source roles, hard-mask isolation, and selected-transition validation; add selected-observation fusion and no-future-observation tests],
-)[Finite candidate tables, hard masks, and the #symb.rl.s_pose replay transition are implemented and tested. The scientific target additionally requires a causal actor-visible observation update, which remains pending.]
+  gate: [retain deterministic row identity, source roles, generator and action-support identities, hard-mask isolation, and selected-transition validation; add actor-visible action support, selected-observation fusion, and no-future-observation tests],
+)[Finite candidate tables, mesh-derived `oracle_action_mask_v1` support, and the #symb.rl.s_pose replay transition are implemented and tested. This is a privileged oracle-support control. The scientific target additionally requires actor-visible action support and a causal observation update, which remain pending.]
 
-At step $t$, the generator returns the full candidate table
+At step $t$, the named generator protocol returns the full candidate table
 #symb.rl.candidate_table, the hard @validity-mask:short
 #symb.rl.action_mask, and versioned failure
 reasons. The admissible action set is
@@ -34,7 +34,8 @@ Candidate orientations factor a component-specific base gaze from bounded
 yaw--pitch perturbations. Paired proposal components may reuse a camera centre
 across two base-gaze families, but both remain separate actions. This makes
 translation and viewing direction distinguishable without collapsing their
-values. Generator family, sampled support, hard rejection, and stable shell
+values. Generator family, resolved configuration, randomness derivation,
+sampled support, hard rejection, mask semantics, and stable shell
 identity remain attached to every row so proposal coverage can be audited
 before policy quality is interpreted.
 
@@ -118,17 +119,21 @@ the same target task and versioned generator. Proposal and action-selection
 randomness use separate streams keyed by the factual selected-action history,
 so reordering retained trajectories cannot change a previously defined state.
 
-This is the complete transition of the selected #symb.rl.s_pose method. It changes
+This is the complete transition of the selected #symb.rl.s_pose method under
+the current `oracle_action_mask_v1` protocol. It changes
 reference pose, selected-pose history, remaining budget, and finite action
 support. It does not claim that the actor received RGB, fused depth, or updated
-a spatial reconstruction. Selected mesh-rendered depth may be persisted as
+a spatial reconstruction, nor that the mesh-derived action mask is available
+to a deployable actor. Selected mesh-rendered depth may be persisted as
 privileged counterfactual evidence for a separate control, but unselected
 candidate renders never enter a successor state.
 
 === Scientific target transition
 
-The @minimal-counterfactual-state:short retains the same factual action, budget, and candidate-
-regeneration semantics, but its dynamic state must also update from the
+The @minimal-counterfactual-state:short retains the same factual action, budget, and finite-
+candidate interface, but it replaces privileged action support with an
+actor-observed mask or a separately calibrated learned-feasibility route. Its
+dynamic state must also update from the
 observation acquired at the selected pose. That update is strictly causal: it
 may use the previous actor-visible state, the selected action, and the selected
 observation, but neither a future observation nor any unselected candidate
@@ -150,9 +155,13 @@ does not create temporal communication. The factual selected action supplies
 the only successor link used by finite-horizon learning; no counterfactual
 transition is fabricated for unselected rows.
 
-Training, validation, and test populations must share reward, mask, target
-protocol, actor-state protocol, horizon, and label-support semantics. They may
-use different candidate generators or behavior policies because those fields
-describe population shift rather than alter the value definition. Each split
-therefore binds its own support provenance, and acquisition remains
-scene-disjoint and independent of oracle outcomes or model error.
+Training, validation, and test populations used for one claim must share the
+target, actor-state, generator-family and resolved-configuration, randomness-
+derivation, action-mask, reward, horizon, and label-support protocols. Different
+random seeds may realize new candidate tables under that frozen stochastic
+generator; changing the generator protocol or admissibility semantics instead
+changes the supported decision problem. Such a comparison is reported as an
+explicit support-transfer experiment, not absorbed into an ordinary split.
+Behavior-policy changes likewise remain identified because they alter replay
+coverage even when the greedy target continuation is unchanged. Acquisition
+remains scene-disjoint and independent of oracle outcomes or model error.

@@ -5,7 +5,7 @@
 #let implementation_states = ("implemented", "partial", "planned", "exploratory")
 #let evidence_states = ("validated", "pending", "conflicted", "not-applicable")
 #let scientific_core_domains = ("architecture", "data")
-#let scientific_core_priorities = ("P0", "P1", "P2", "P3")
+#let scientific_core_priorities = ("C0", "C1", "C2", "C3")
 #let scientific_core_readiness = ("ready", "blocked", "contingent")
 
 #if thesis_mode not in ("development", "submission") {
@@ -66,16 +66,16 @@
 #let archive_note(body, source: none) = todo_marker([Archived source note], body, stroke: gray, source: source)
 
 // Scientific-core priorities are ordinal, not additive scores:
-// P0 protects the validity or information boundary of every central claim;
-// P1 blocks the next principal-RQ inference or frozen evidence gate;
-// P2 discriminates a diagnosed alternative explanation after P0/P1 work;
-// P3 is an exploratory extension outside the core claim.
-// Readiness is deliberately orthogonal: a blocked P0 remains P0.
-#let scientific_core_priority_meaning(priority) = if priority == "P0" {
+// C0 protects the validity or information boundary of every central claim;
+// C1 blocks the next principal-RQ inference or frozen evidence gate;
+// C2 discriminates a diagnosed alternative explanation after C0/C1 work;
+// C3 is an exploratory extension outside the core claim.
+// Readiness is deliberately orthogonal: a blocked C0 remains C0.
+#let scientific_core_priority_meaning(priority) = if priority == "C0" {
   [validity boundary]
-} else if priority == "P1" {
+} else if priority == "C1" {
   [core inference]
-} else if priority == "P2" {
+} else if priority == "C2" {
   [diagnostic discriminator]
 } else {
   [exploratory extension]
@@ -136,7 +136,7 @@
         #text(size: 7.6pt)[Blocked by: #blocked-by]
       ]
     ],
-    stroke: if priority == "P0" { red } else if priority == "P1" { purple } else if priority == "P2" { blue } else { gray },
+    stroke: if priority == "C0" { red } else if priority == "C1" { purple } else if priority == "C2" { blue } else { gray },
     source: source,
     gate: gate,
   )

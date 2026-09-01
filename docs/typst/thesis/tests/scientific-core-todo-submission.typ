@@ -2,7 +2,7 @@
 
 #scientific_core_todo(
   domain: "data",
-  priority: "P0",
+  priority: "C0",
   readiness: "ready",
   claim: [actor/oracle separation],
   source: [target protocol],

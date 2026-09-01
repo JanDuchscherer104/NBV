@@ -2,7 +2,7 @@
 
 #scientific_core_todo(
   domain: "architecture",
-  priority: "P1",
+  priority: "C1",
   readiness: "blocked",
   claim: [a central claim],
   source: [test],
