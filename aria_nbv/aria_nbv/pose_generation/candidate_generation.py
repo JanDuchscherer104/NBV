@@ -77,6 +77,7 @@ from .config import (
     SampledCenterConfig,
     SphericalViewJitterConfig,
     TargetOrbitCenterConfig,
+    TargetShellCenterConfig,
     sphere_distribution_from_legacy,
 )
 from .orientations import OrientationBuilder
@@ -296,6 +297,8 @@ class CandidateViewGeneratorConfig(TargetConfig["CandidateViewGenerator"]):
         """
         if self.position_mode is CandidatePositionMode.TARGET_ORBIT and self.num_samples < 2:
             raise ValueError("TARGET_ORBIT requires num_samples >= 2 for bilateral proposals.")
+        if self.position_mode is CandidatePositionMode.TARGET_SHELL:
+            raise ValueError("TARGET_SHELL requires nested TargetShellCenterConfig authoring in a candidate mixture.")
         if self.is_debug:
             object.__setattr__(self, "verbosity", Verbosity.VERBOSE)
         if self.view_kappa is None:
@@ -833,8 +836,8 @@ class CandidateViewGenerator:
         if view_dirs_delta is not None:
             jitter_debug["view_dirs_delta"] = view_dirs_delta
 
-        if isinstance(self._center_config, TargetOrbitCenterConfig):
-            # Orbit centers are constructed in the world-horizontal plane. The
+        if isinstance(self._center_config, TargetOrbitCenterConfig | TargetShellCenterConfig):
+            # Target-relative centers are constructed in a world-aligned frame. The
             # motion contract, however, evaluates backward displacement in the
             # physical reference frame rather than the gravity-aligned sampling
             # frame used to construct positions.

@@ -1399,6 +1399,64 @@ def test_target_shell_crosses_one_center_table_with_multiple_gazes_and_stable_pr
     assert result.gaze_variant_id.tolist() == [0] * 12 + [1] * 12
 
 
+def test_target_shell_motion_offsets_use_physical_reference_when_gravity_aligned() -> None:
+    pitch_rad = torch.deg2rad(torch.tensor(25.0))
+    rotation = torch.tensor(
+        [
+            [1.0, 0.0, 0.0],
+            [0.0, torch.cos(pitch_rad), -torch.sin(pitch_rad)],
+            [0.0, torch.sin(pitch_rad), torch.cos(pitch_rad)],
+        ]
+    )
+    reference = PoseTW.from_Rt(rotation, torch.zeros(3))
+    center = TargetShellCenterConfig(
+        radius_min_m=2.5,
+        radius_max_m=3.5,
+        support_mode=TargetShellSupportMode.UPPER_ANGULAR_BOX,
+        azimuth_half_width_deg=80.0,
+        elevation_min_deg=0.0,
+        elevation_max_deg=30.0,
+    )
+    config = CandidateMixtureViewGeneratorConfig(
+        base=_base_cfg().model_copy(
+            update={
+                "align_to_gravity": True,
+                "enforce_motion_realism": True,
+                "max_backward_step_m": 10.0,
+                "collect_debug_stats": True,
+            }
+        ),
+        components=(
+            CandidateMixtureComponentConfig(
+                name="target_shell",
+                count=32,
+                center=center,
+                gazes=(
+                    CandidateGazeConfig(
+                        name="primary",
+                        mode=ViewDirectionMode.TARGET_POINT,
+                        jitter=BoxViewJitterConfig(),
+                    ),
+                ),
+            ),
+        ),
+    )
+
+    result = _run_generate(
+        config,
+        descriptor=_descriptor((0.0, 3.0, 0.0)),
+        reference_pose=reference.to(config.device),
+    )
+
+    expected_offsets = result.reference_pose.inverse().transform(result.shell_poses.t)
+    assert torch.allclose(result.shell_offsets_ref, expected_offsets, atol=1e-5)
+    assert torch.allclose(
+        result.extras["motion_backward_step_m"],
+        (-expected_offsets[:, 2]).clamp_min(0.0),
+        atol=1e-5,
+    )
+
+
 def test_target_orbit_interleaves_reordered_angle_bank_for_small_component() -> None:
     cfg = CandidateMixtureViewGeneratorConfig(
         base=_base_cfg().model_copy(update={"target_orbit_angles_deg": (-6.0, -10.0, 6.0, 10.0)}),
@@ -1444,7 +1502,6 @@ def test_target_orbit_single_family_requires_two_attempted_proposals() -> None:
             num_samples=1,
             position_mode=CandidatePositionMode.TARGET_ORBIT,
         )
-
     cfg = _base_cfg().model_copy(
         update={
             "num_samples": 1,
@@ -1467,6 +1524,11 @@ def test_target_orbit_single_family_requires_two_attempted_proposals() -> None:
                 device=cfg.device,
             ),
         )
+
+
+def test_target_shell_is_rejected_by_legacy_single_family_authoring() -> None:
+    with pytest.raises(ValueError, match="requires nested TargetShellCenterConfig"):
+        CandidateViewGeneratorConfig(position_mode=CandidatePositionMode.TARGET_SHELL)
 
 
 @pytest.mark.parametrize(
