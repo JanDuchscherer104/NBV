@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import subprocess
 from pathlib import Path
 
 import torch
@@ -30,6 +31,24 @@ from aria_nbv.rollouts.shard_manifest import (
 REPO = Path(__file__).resolve().parents[4]
 WRITER_CONFIG = REPO / ".configs/build_rollouts_v1_cuda_campaign_writer.toml"
 SOURCE_MANIFEST = REPO / ".configs/rollout_campaign100_source_manifest.json"
+HISTORICAL_IMPLEMENTATION_REVISION = "8fafa02fdb3441c9f9823f620728f413c6ecca91"
+
+
+def _require_historical_checkout() -> None:
+    """Fail closed unless the evidence script runs at its manifest-bound code."""
+
+    revision = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=REPO,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    if revision != HISTORICAL_IMPLEMENTATION_REVISION:
+        raise RuntimeError(
+            "this evidence generator uses historical flat candidate authoring; "
+            f"check out {HISTORICAL_IMPLEMENTATION_REVISION} to reproduce the bound stores"
+        )
 
 
 def _components(
@@ -120,6 +139,7 @@ def _resolved_config(
 
 
 def main() -> None:
+    _require_historical_checkout()
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--profile", choices=("realistic_core", "target_orbit_mvp"), required=True

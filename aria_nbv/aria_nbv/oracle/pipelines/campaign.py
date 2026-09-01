@@ -109,7 +109,7 @@ def _candidate_component_projection(
 ) -> tuple[dict[str, str], frozenset[str]]:
     """Project nested or persisted-flat components into campaign family roles."""
 
-    from ...pose_generation.config import SampledCenterConfig
+    from ...pose_generation.config import SampledCenterConfig, TargetOrbitCenterConfig
     from ...pose_generation.types import CandidatePositionMode
 
     component_positions: dict[str, str] = {}
@@ -123,10 +123,14 @@ def _candidate_component_projection(
         center = getattr(component, "center", None)
         if isinstance(center, SampledCenterConfig):
             position_mode = CandidatePositionMode(center.mode)
-        elif center is not None:
+        elif isinstance(center, TargetOrbitCenterConfig):
             position_mode = CandidatePositionMode.TARGET_ORBIT
-        else:
+        elif center is None:
             position_mode = CandidatePositionMode(component.position_mode)
+        else:
+            raise ValueError(
+                f"unsupported nested candidate center kind: {getattr(center, 'kind', type(center).__name__)}"
+            )
         family_names = [component.name]
         gazes = getattr(component, "gazes", ())
         if gazes:

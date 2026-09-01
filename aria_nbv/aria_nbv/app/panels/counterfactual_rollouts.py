@@ -44,19 +44,21 @@ from ...oracle.target_selection import (
     TargetTaskIdentityStatus,
 )
 from ...pose_generation import (
-    BoxViewJitterConfig,
-    CandidateGazeConfig,
     CandidateGenerationRuntimeContext,
     CandidateMixtureComponentConfig,
     CandidateMixtureViewGeneratorConfig,
     CandidatePositionMode,
     CandidateViewGeneratorConfig,
-    NoViewJitterConfig,
-    SampledCenterConfig,
-    SphericalViewJitterConfig,
     ViewDirectionMode,
 )
-from ...pose_generation.config import SampledCenterMode
+from ...pose_generation.config import (
+    BoxViewJitterConfig,
+    CandidateGazeConfig,
+    NoViewJitterConfig,
+    SampledCenterConfig,
+    SampledCenterMode,
+    SphericalViewJitterConfig,
+)
 from ...pose_generation.plotting import CounterfactualPlotBuilder, plot_counterfactual_paths_simple
 from ...rendering import CandidateDepthRendererConfig
 from ...rendering.plotting import (

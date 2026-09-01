@@ -25,8 +25,11 @@ The exact post-review candidate was evaluated on the first two real scenes in
 [`rollout_campaign100_source_manifest.json`](../../../../.configs/rollout_campaign100_source_manifest.json)
 with the CUDA campaign writer configuration and seed `20260728`.
 
-The committed [`generate_store.py`](generate_store.py) resolves both 60-row
-profiles and reproduces either raw CUDA store. The committed
+The committed [`generate_store.py`](generate_store.py) is a historical
+reproducer bound to implementation revision
+[`8fafa02fdb3441c9f9823f620728f413c6ecca91`](https://github.com/JanDuchscherer104/ARIA-NBV/commit/8fafa02fdb3441c9f9823f620728f413c6ecca91).
+It fails closed on newer checkouts because the active authoring schema has
+changed; check out that exact revision to reproduce either raw CUDA store. The committed
 [`candidate-rows.jsonl`](candidate-rows.jsonl) contains all 240 reduced fields
 consumed by [`build_evidence.py`](build_evidence.py), so the summary and plots
 can also be rebuilt without the private full-store paths:

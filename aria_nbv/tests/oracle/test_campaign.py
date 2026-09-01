@@ -78,6 +78,18 @@ def test_campaign_projects_legacy_and_nested_component_roles_identically() -> No
     assert _candidate_component_projection(legacy) == _candidate_component_projection(nested)
 
 
+def test_campaign_rejects_unknown_nested_center_kind() -> None:
+    component = SimpleNamespace(
+        name="future",
+        center=SimpleNamespace(kind="target_shell"),
+        gazes=(SimpleNamespace(name="primary"),),
+        paired_view_mode=None,
+    )
+
+    with pytest.raises(ValueError, match="unsupported nested candidate center kind: target_shell"):
+        _candidate_component_projection((component,))
+
+
 class _CampaignFixtureManifest(msgspec.Struct):
     version: int = 7
 

@@ -41,18 +41,16 @@ from aria_nbv.oracle.pipelines.evaluated_rollout import (
 from aria_nbv.oracle.target_rri import TargetRriInvalidity, TargetRriScorerConfig
 from aria_nbv.oracle.target_selection import OracleTargetTask, TargetTaskIdentityStatus
 from aria_nbv.pose_generation import (
-    BoxViewJitterConfig,
-    CandidateGazeConfig,
     CandidateGenerationRuntimeContext,
     CandidateMixtureComponentConfig,
     CandidateMixtureViewGeneratorConfig,
     CandidatePositionMode,
     CandidateSamplingResult,
     CandidateViewGeneratorConfig,
-    SampledCenterConfig,
     SamplingStrategy,
     ViewDirectionMode,
 )
+from aria_nbv.pose_generation.config import BoxViewJitterConfig, CandidateGazeConfig, SampledCenterConfig
 from aria_nbv.pose_generation.plotting import (
     CounterfactualPlotBuilder,
     plot_counterfactual_paths_simple,

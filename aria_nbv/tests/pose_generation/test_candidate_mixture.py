@@ -17,8 +17,6 @@ from efm3d.aria import CameraTW, PoseTW
 
 from aria_nbv.oracle.pipelines.rollout_dataset import RolloutDatasetWriterConfig
 from aria_nbv.pose_generation import (
-    BoxViewJitterConfig,
-    CandidateGazeConfig,
     CandidateGenerationRuntimeContext,
     CandidateMixtureComponentConfig,
     CandidateMixtureViewGenerator,
@@ -26,14 +24,18 @@ from aria_nbv.pose_generation import (
     CandidatePositionMode,
     CandidateViewGenerator,
     CandidateViewGeneratorConfig,
-    NoViewJitterConfig,
-    SampledCenterConfig,
     SamplingStrategy,
-    SphericalViewJitterConfig,
-    TargetOrbitCenterConfig,
     ViewDirectionMode,
     candidate_position_id,
     candidate_strategy_id,
+)
+from aria_nbv.pose_generation.config import (
+    BoxViewJitterConfig,
+    CandidateGazeConfig,
+    NoViewJitterConfig,
+    SampledCenterConfig,
+    SphericalViewJitterConfig,
+    TargetOrbitCenterConfig,
 )
 from aria_nbv.targets import TargetDescriptor
 from aria_nbv.utils.frames import world_up_tensor
@@ -817,11 +819,30 @@ def test_component_validation_and_three_gaze_expansion() -> None:
 
 
 def test_component_config_import_paths_remain_stable() -> None:
+    import aria_nbv.pose_generation as pose_generation
     from aria_nbv.pose_generation import CandidateMixtureComponentConfig as PackageConfig
     from aria_nbv.pose_generation.candidate_mixture import CandidateMixtureComponentConfig as ModuleConfig
 
     assert PackageConfig is CandidateMixtureComponentConfig
     assert ModuleConfig is CandidateMixtureComponentConfig
+    assert pose_generation.__all__ == [
+        "CandidateViewGenerator",
+        "CandidateViewGeneratorConfig",
+        "CandidateMixtureComponentConfig",
+        "CandidateMixtureViewGenerator",
+        "CandidateMixtureViewGeneratorConfig",
+        "CandidateGenerationRuntimeContext",
+        "CandidatePositionMode",
+        "ViewDirectionMode",
+        "candidate_position_id",
+        "candidate_strategy_id",
+        "CandidateSamplingResult",
+        "SamplingStrategy",
+        "CollisionBackend",
+        "summarise_offsets_ref",
+        "summarise_dirs_ref",
+        "stats_to_markdown_table",
+    ]
 
 
 def test_mixed_generation_ignores_obsolete_base_fields_but_retains_alignment() -> None:
