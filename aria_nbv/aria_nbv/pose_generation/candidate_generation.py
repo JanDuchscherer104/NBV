@@ -489,7 +489,9 @@ class CandidateViewGenerator:
             config,
             center_config=_center_config if _center_config is not None else _center_config_from_legacy(config),
             gaze_config=_gaze_config if _gaze_config is not None else _gaze_config_from_legacy(config),
-            center_count=_center_count if _center_count is not None else ceil(config.num_samples * config.oversample_factor),
+            center_count=_center_count
+            if _center_count is not None
+            else ceil(config.num_samples * config.oversample_factor),
             mesh_query=mesh_query,
         )
 
