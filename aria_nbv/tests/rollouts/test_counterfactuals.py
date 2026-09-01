@@ -41,12 +41,15 @@ from aria_nbv.oracle.pipelines.evaluated_rollout import (
 from aria_nbv.oracle.target_rri import TargetRriInvalidity, TargetRriScorerConfig
 from aria_nbv.oracle.target_selection import OracleTargetTask, TargetTaskIdentityStatus
 from aria_nbv.pose_generation import (
+    BoxViewJitterConfig,
+    CandidateGazeConfig,
     CandidateGenerationRuntimeContext,
     CandidateMixtureComponentConfig,
     CandidateMixtureViewGeneratorConfig,
     CandidatePositionMode,
     CandidateSamplingResult,
     CandidateViewGeneratorConfig,
+    SampledCenterConfig,
     SamplingStrategy,
     ViewDirectionMode,
 )
@@ -80,6 +83,32 @@ def _identity_pose(device: torch.device | str = "cpu") -> PoseTW:
             [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0],
             device=device,
         )
+    )
+
+
+def _test_component(
+    *,
+    name: str,
+    count: int,
+    view_mode: ViewDirectionMode,
+    position_mode: CandidatePositionMode = CandidatePositionMode.FORWARD_LOCAL,
+) -> CandidateMixtureComponentConfig:
+    """Build a complete nested component for rollout-policy tests."""
+
+    return CandidateMixtureComponentConfig(
+        name=name,
+        count=count,
+        center=SampledCenterConfig(
+            mode=position_mode,  # type: ignore[arg-type]
+            sampling_strategy=SamplingStrategy.FORWARD_POWERSPHERICAL,
+            min_radius_m=0.6,
+            max_radius_m=0.6,
+            min_elevation_deg=-12.0,
+            max_elevation_deg=18.0,
+            azimuth_width_deg=120.0,
+            concentration=8.0,
+        ),
+        gazes=(CandidateGazeConfig(name="primary", mode=view_mode, jitter=BoxViewJitterConfig()),),
     )
 
 
@@ -1070,19 +1099,19 @@ def test_greedy_branch_selection_can_require_strategy_diversity() -> None:
     mixture_cfg = CandidateMixtureViewGeneratorConfig(
         base=base_cfg,
         components=[
-            CandidateMixtureComponentConfig(
+            _test_component(
                 name="forward",
                 count=3,
                 view_mode=ViewDirectionMode.FORWARD_RIG,
                 position_mode=CandidatePositionMode.FORWARD_LOCAL,
             ),
-            CandidateMixtureComponentConfig(
+            _test_component(
                 name="towards",
                 count=3,
                 view_mode=ViewDirectionMode.RADIAL_TOWARDS,
                 position_mode=CandidatePositionMode.FORWARD_LOCAL,
             ),
-            CandidateMixtureComponentConfig(
+            _test_component(
                 name="away",
                 count=3,
                 view_mode=ViewDirectionMode.RADIAL_AWAY,
@@ -1342,9 +1371,7 @@ def test_counterfactual_rollout_passes_target_runtime_context_to_mixed_sampler()
     cfg = CounterfactualPoseGeneratorConfig(
         candidate_config=CandidateMixtureViewGeneratorConfig(
             base=base_cfg,
-            components=[
-                CandidateMixtureComponentConfig(name="target", count=4, strategy=ViewDirectionMode.TARGET_POINT)
-            ],
+            components=[_test_component(name="target", count=4, view_mode=ViewDirectionMode.TARGET_POINT)],
         ),
         policy=RolloutPolicySpec(
             horizon=1,
