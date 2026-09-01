@@ -268,6 +268,14 @@ class GraphifyWorktreeSeedTest(unittest.TestCase):
             "pending\n",
         )
 
+    def test_reuses_a_seed_after_generated_projection_is_pruned(self) -> None:
+        self.seed()
+        (self.destination / "graphify-input/owners.md").unlink()
+
+        result = self.seed()
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+
     def test_check_and_idempotent_seed_do_not_write_child_state(self) -> None:
         self.seed()
         owned = [

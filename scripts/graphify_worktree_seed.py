@@ -113,7 +113,9 @@ def validate_topology(
     return common
 
 
-def manifest_markdown(root: Path) -> list[Path]:
+def manifest_markdown(
+    root: Path, *, allow_missing_generated: bool = False
+) -> list[Path]:
     manifest = json_object(root / CORE[1], "source manifest")
     entries: Any = manifest.get("files", manifest)
     if not isinstance(entries, dict) or not entries:
@@ -124,8 +126,11 @@ def manifest_markdown(root: Path) -> list[Path]:
         if not isinstance(entry, dict):
             fail(f"invalid source manifest entry: {path}")
         if path.parts[0] == "graphify-input" and path.suffix.lower() == ".md":
+            candidate = root / path
+            if allow_missing_generated and not candidate.exists() and not candidate.is_symlink():
+                continue
             validate_parent_chain(root, path, "source", require_existing=True)
-            regular(root / path, "manifest source")
+            regular(candidate, "manifest source")
             result.append(path)
     index = Path("graphify-input/index.md")
     if index not in result:
@@ -308,7 +313,7 @@ def validate_owned(
     if root_marker not in {str(destination), f"{destination}\n"}:
         fail("child .graphify_root is not bound to this worktree")
     validate_graph(destination, destination_git_dir, "destination")
-    manifest_markdown(destination)
+    manifest_markdown(destination, allow_missing_generated=True)
     cache_targets = payload.get("source_cache_targets")
     if not isinstance(cache_targets, dict) or set(cache_targets) != set(CACHE_NAMES):
         fail("invalid worktree seed sentinel source cache targets")
