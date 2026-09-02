@@ -400,15 +400,9 @@ def _center_config_from_legacy(config: CandidateViewGeneratorConfig) -> CenterCo
 
     if config.position_mode is CandidatePositionMode.TARGET_ORBIT:
         return TargetOrbitCenterConfig(angles_deg=config.target_orbit_angles_deg)
-    return SampledCenterConfig(
+    return SampledCenterConfig.from_legacy(
+        config,
         mode=config.position_mode,  # type: ignore[arg-type]
-        sampling_strategy=config.sampling_strategy,
-        min_radius_m=config.min_radius,
-        max_radius_m=config.max_radius,
-        min_elevation_deg=config.min_elev_deg,
-        max_elevation_deg=config.max_elev_deg,
-        azimuth_width_deg=config.delta_azimuth_deg,
-        concentration=config.kappa,
     )
 
 
