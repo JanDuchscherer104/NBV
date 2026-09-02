@@ -53,8 +53,8 @@ from .config import (
     CenterConfig,
     SampledCenterConfig,
     TargetOrbitCenterConfig,
-    UniformSphereConfig,
     TargetShellCenterConfig,
+    UniformSphereConfig,
 )
 from .types import (
     CandidateGenerationRuntimeContext,
