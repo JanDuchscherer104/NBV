@@ -121,25 +121,13 @@ explicit exploratory tail remains necessary to expose occluded target surfaces
 // - mixed intervention support -> aria_nbv/aria_nbv/pose_generation/candidate_mixture.py
 
 The current implementation realizes a deliberately coarse instance of this
-factorization through a #gh-wip(
-  "aria_nbv/aria_nbv/targets/protocol.py",
-  body: [target-provenance boundary],
-), a #gh-wip(
-  "aria_nbv/aria_nbv/pose_generation/candidate_mixture.py",
-  body: [mixed candidate generator],
-), #gh-wip(
-  "aria_nbv/aria_nbv/data_handling/qh_data/views.py",
-  body: [causal actor and supervision views],
-), separate #gh-wip(
-  "aria_nbv/aria_nbv/vin/modules/qh_scene_encoders.py",
-  body: [scene carriers],
-) and #gh-wip(
-  "aria_nbv/aria_nbv/vin/modules/qh_history_encoders.py",
-  body: [history encoders],
-), and a #gh-wip(
-  "aria_nbv/aria_nbv/vin/models/target_finite_horizon.py",
-  body: [finite-horizon scorer],
-). The thesis need not identify a universally optimal representation. Its more
+factorization through a #gh-wip("aria_nbv/aria_nbv/targets/protocol.py", body: [target-provenance boundary]),
+a #gh-wip("aria_nbv/aria_nbv/pose_generation/candidate_mixture.py", body: [mixed candidate generator]),
+#gh-wip("aria_nbv/aria_nbv/data_handling/qh_data/views.py", body: [causal actor and supervision views]),
+separate #gh-wip("aria_nbv/aria_nbv/vin/modules/qh_scene_encoders.py", body: [scene carriers]) and
+#gh-wip("aria_nbv/aria_nbv/vin/modules/qh_history_encoders.py", body: [history encoders]), and a
+#gh-wip("aria_nbv/aria_nbv/vin/models/target_finite_horizon.py", body: [finite-horizon scorer]).
+The thesis need not identify a universally optimal representation. Its more
 durable contribution is controlled evidence about which geometric relations,
 temporal distinctions, and source boundaries must survive for non-myopic
 egocentric view selection.
