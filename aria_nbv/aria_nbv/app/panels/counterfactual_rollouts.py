@@ -90,7 +90,7 @@ from .common import (
     current_scientific_label,
     render_scientific_notation,
 )
-from .configuration import trusted_config_patterns
+from .configuration import select_toml_config, trusted_config_patterns
 from .target_audit import render_target_selection_audit, target_selection_audit_rows
 
 _SOURCE_TARGET_INFO = """
@@ -1322,36 +1322,19 @@ def _render_live_rollouts_tab() -> None:
                 format_func=lambda mode: mode.value,
                 key="cf_scoring_mode",
             )
-            profile_paths = _live_candidate_profile_paths()
-            profile_by_name = {path.name: path for path in profile_paths}
-            profile_options = ("(interactive legacy mixture)", *profile_by_name)
-            # A profile can disappear when the app switches worktrees or the
-            # config directory is refreshed.  Clear the stale widget value so
-            # Streamlit does not render an apparently selected profile with an
-            # empty search result list.
-            if st.session_state.get("cf_candidate_profile") not in profile_options:
-                st.session_state["cf_candidate_profile"] = profile_options[0]
-            selected_candidate_profile_name = st.selectbox(
-                "Candidate profile TOML",
-                options=profile_options,
-                key="cf_candidate_profile",
-                format_func=lambda name: (
-                    "Interactive legacy mixture" if name == "(interactive legacy mixture)" else _pretty_label(name)
-                ),
+            selected_profile = select_toml_config(
+                RolloutDatasetWriterConfig,
+                _live_candidate_profile_paths(),
+                ui=cfg_col1,
+                label="Candidate profile TOML",
+                key_prefix="cf_candidate_profile",
+                allow_none=True,
                 disabled=scoring_mode is not LiveRolloutScoringMode.TARGET_RRI,
-                help=(
-                    "Load a validated RolloutDatasetWriterConfig candidate mixture. "
-                    "Interactive mode retains the legacy five-family controls."
-                ),
             )
-            if (
-                selected_candidate_profile_name != "(interactive legacy mixture)"
-                and scoring_mode is LiveRolloutScoringMode.TARGET_RRI
-            ):
+            if selected_profile is not None and scoring_mode is LiveRolloutScoringMode.TARGET_RRI:
                 try:
-                    selected_candidate_profile = _load_live_candidate_profile(
-                        profile_by_name[selected_candidate_profile_name]
-                    )
+                    selected_candidate_profile = selected_profile.config.candidate_mixture
+                    selected_candidate_profile_name = selected_profile.path.name
                     st.caption(
                         f"Loaded {_pretty_label(selected_candidate_profile_name)} · "
                         f"{selected_candidate_profile.total_count} attempted candidates per step"
@@ -1371,7 +1354,7 @@ def _render_live_rollouts_tab() -> None:
                 except Exception as exc:  # pragma: no cover - UI guard
                     st.error(f"Candidate profile unavailable: {exc}")
                     selected_candidate_profile = None
-            elif selected_candidate_profile_name != "(interactive legacy mixture)":
+            elif selected_profile is not None:
                 st.info(
                     "Candidate TOML profiles are used for target-RRI generation; geometry/scene modes use the interactive generator."
                 )

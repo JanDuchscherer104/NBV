@@ -15,6 +15,7 @@ from ..pose_generation import CandidateViewGeneratorConfig
 from ..pose_generation.types import CollisionBackend, SamplingStrategy, ViewDirectionMode
 from ..rendering import CandidateDepthRendererConfig, Pytorch3DDepthRendererConfig
 from ..utils import Verbosity
+from .panels.configuration import render_typed_config_fields
 
 
 def dataset_config_ui(
@@ -84,6 +85,23 @@ def candidate_config_ui(
     """
 
     expander = ui.expander("Candidate Generator", expanded=False)
+    schema_driven = expander.checkbox(
+        "Schema-driven Pydantic controls",
+        value=True,
+        key="candidate_config_schema_driven",
+        help="Use field metadata from CandidateViewGeneratorConfig: enums and Literals use select boxes, bounds are enforced, and the result is revalidated.",
+    )
+    if schema_driven:
+        debug_flag = expander.checkbox("Debug (candidates)", value=is_debug, key="candidate_config_debug")
+        updated = render_typed_config_fields(
+            default,
+            ui=expander,
+            key_prefix="candidate_config",
+            excluded_paths=frozenset({"is_debug", "verbosity"}),
+            choices={"device": ("auto", "cpu", "cuda")},
+        )
+        return updated.model_copy(update={"is_debug": debug_flag, "verbosity": verbosity})
+
     num_samples_default = default.num_samples
     debug_flag = expander.checkbox("Debug (candidates)", value=is_debug)
 

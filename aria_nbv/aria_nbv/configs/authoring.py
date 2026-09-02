@@ -326,6 +326,12 @@ def _describe_model(model: type[BaseConfig], prefix: str = "") -> list[ConfigFie
     return output
 
 
+def describe_config_model(model: type[BaseConfig]) -> tuple[ConfigFieldDescriptor, ...]:
+    """Return schema/documentation descriptors for an in-memory config model."""
+
+    return tuple(_describe_model(model))
+
+
 def _theory_ids(policy: Mapping[str, Any]) -> tuple[str, ...]:
     value = policy.get("theory_ids", ())
     if not isinstance(value, list | tuple | set):
@@ -404,9 +410,13 @@ def _nested_model(annotation: Any) -> type[BaseConfig] | None:
 def _annotation_choices(annotation: Any) -> tuple[ConfigValue, ...]:
     origin = get_origin(annotation)
     if str(origin).endswith("Literal"):
-        return tuple(get_args(annotation))
+        return tuple(_jsonable(value) for value in get_args(annotation))
     if isinstance(annotation, type) and issubclass(annotation, Enum):
         return tuple(member.value for member in annotation)
+    for argument in get_args(annotation):
+        choices = _annotation_choices(argument)
+        if choices:
+            return choices
     return ()
 
 
@@ -477,4 +487,5 @@ __all__ = [
     "ConfigScalar",
     "ConfigValue",
     "ConfigWriteReceipt",
+    "describe_config_model",
 ]
