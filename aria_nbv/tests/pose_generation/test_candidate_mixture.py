@@ -838,6 +838,42 @@ def test_nested_config_defaults_and_identity_propagation_are_owned_once() -> Non
     assert "name" not in component.gazes[0].propagated_fields
 
 
+def test_sampled_center_legacy_projection_preserves_controls_and_revalidates_overrides() -> None:
+    base = CandidateViewGeneratorConfig(
+        sampling_strategy=SamplingStrategy.FORWARD_POWERSPHERICAL,
+        kappa=13.0,
+        min_radius=0.4,
+        max_radius=1.6,
+        min_elev_deg=-9.0,
+        max_elev_deg=17.0,
+        delta_azimuth_deg=155.0,
+    )
+
+    center = SampledCenterConfig.from_legacy(
+        base,
+        mode=CandidatePositionMode.LOCAL_REFINEMENT,
+        min_radius_m=0.2,
+        max_radius_m=0.7,
+    )
+
+    assert center == SampledCenterConfig(
+        mode=CandidatePositionMode.LOCAL_REFINEMENT,
+        distribution=PowerSphericalConfig(concentration=13.0),
+        min_radius_m=0.2,
+        max_radius_m=0.7,
+        min_elevation_deg=-9.0,
+        max_elevation_deg=17.0,
+        azimuth_width_deg=155.0,
+    )
+    with pytest.raises(ValueError, match="min_radius_m must not exceed max_radius_m"):
+        SampledCenterConfig.from_legacy(
+            base,
+            mode=CandidatePositionMode.FORWARD_LOCAL,
+            min_radius_m=2.0,
+            max_radius_m=1.0,
+        )
+
+
 @pytest.mark.parametrize(
     "field,value",
     [

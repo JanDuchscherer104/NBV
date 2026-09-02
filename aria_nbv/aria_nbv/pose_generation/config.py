@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import Annotated, Any, ClassVar, Literal, Self, TypeAlias
+from typing import TYPE_CHECKING, Annotated, Any, ClassVar, Literal, Self, TypeAlias
 
 from pydantic import Field, FiniteFloat, field_validator, model_validator
 
 from ..utils import BaseConfig
 from .types import CandidatePositionMode, SamplingStrategy, ViewDirectionMode
+
+if TYPE_CHECKING:
+    from .candidate_generation import CandidateViewGeneratorConfig
 
 SampledCenterMode: TypeAlias = Literal[
     CandidatePositionMode.UPPER_BOUND_FREE_SHELL,
@@ -92,6 +95,27 @@ class SampledCenterConfig(BaseConfig):
 
     azimuth_width_deg: AzimuthWidthDeg = 120.0
     """Full azimuth support width about proposal-frame forward, in degrees."""
+
+    @classmethod
+    def from_legacy(
+        cls,
+        base: "CandidateViewGeneratorConfig",
+        *,
+        mode: SampledCenterMode,
+        min_radius_m: float | None = None,
+        max_radius_m: float | None = None,
+    ) -> "SampledCenterConfig":
+        """Validate retained flat center controls into one nested value."""
+
+        return cls(
+            mode=mode,
+            distribution=sphere_distribution_from_legacy(base.sampling_strategy, base.kappa),
+            min_radius_m=base.min_radius if min_radius_m is None else min_radius_m,
+            max_radius_m=base.max_radius if max_radius_m is None else max_radius_m,
+            min_elevation_deg=base.min_elev_deg,
+            max_elevation_deg=base.max_elev_deg,
+            azimuth_width_deg=base.delta_azimuth_deg,
+        )
 
     @model_validator(mode="before")
     @classmethod

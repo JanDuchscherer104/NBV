@@ -46,11 +46,12 @@ from aria_nbv.oracle.target_rri import TargetRriScorerConfig
 from aria_nbv.oracle.target_selection import OracleTargetTask, TargetTaskIdentityStatus
 from aria_nbv.pose_generation import (
     CandidateMixtureViewGeneratorConfig,
+    CandidatePositionMode,
     CandidateViewGeneratorConfig,
     SamplingStrategy,
     ViewDirectionMode,
 )
-from aria_nbv.pose_generation.config import SphericalViewJitterConfig, UniformSphereConfig
+from aria_nbv.pose_generation.config import SampledCenterConfig, SphericalViewJitterConfig, UniformSphereConfig
 from aria_nbv.pose_generation.types import CandidateSamplingResult
 from aria_nbv.rollouts import (
     CounterfactualRolloutResult,
@@ -1422,6 +1423,62 @@ def test_target_mixture_preserves_spherical_direction_sampling_with_roll() -> No
         assert isinstance(jitter, SphericalViewJitterConfig)
         assert isinstance(jitter.distribution, UniformSphereConfig)
         assert jitter.roll_half_width_deg == pytest.approx(5.0)
+
+
+def test_target_mixture_delegates_legacy_center_projection_with_radius_overrides() -> None:
+    base = CandidateViewGeneratorConfig(
+        num_samples=5,
+        sampling_strategy=SamplingStrategy.FORWARD_POWERSPHERICAL,
+        kappa=11.0,
+        min_radius=0.45,
+        max_radius=1.55,
+        min_elev_deg=-8.0,
+        max_elev_deg=16.0,
+        delta_azimuth_deg=145.0,
+        ensure_collision_free=False,
+        ensure_free_space=False,
+        min_distance_to_mesh=0.0,
+        device="cpu",
+    )
+
+    cfg = rollout_panel._target_mixture_config(
+        base,
+        counts={
+            "target_bearing_local": 1,
+            "forward_local": 1,
+            "lateral_target_bypass": 1,
+            "local_refinement": 1,
+            "revisit_backtrack": 1,
+        },
+    )
+
+    expected = {
+        "target_bearing_local": SampledCenterConfig.from_legacy(
+            base,
+            mode=CandidatePositionMode.TARGET_BEARING_LOCAL,
+        ),
+        "forward_local": SampledCenterConfig.from_legacy(
+            base,
+            mode=CandidatePositionMode.FORWARD_LOCAL,
+        ),
+        "lateral_target_bypass": SampledCenterConfig.from_legacy(
+            base,
+            mode=CandidatePositionMode.LATERAL_TARGET_BYPASS,
+        ),
+        "local_refinement": SampledCenterConfig.from_legacy(
+            base,
+            mode=CandidatePositionMode.LOCAL_REFINEMENT,
+            min_radius_m=0.2,
+            max_radius_m=0.7,
+        ),
+        "revisit_backtrack": SampledCenterConfig.from_legacy(
+            base,
+            mode=CandidatePositionMode.REVISIT_BACKTRACK,
+            min_radius_m=0.25,
+            max_radius_m=0.9,
+        ),
+    }
+    assert {component.name: component.center for component in cfg.components} == expected
 
 
 def test_geometry_candidate_config_has_requested_count_without_mixture() -> None:
