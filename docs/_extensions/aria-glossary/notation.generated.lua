@@ -350,6 +350,12 @@ return {
       description = "Fixed continuous-Q representative used to decode one CORAL class.",
       thesis_list = true,
     },
+    ["rl.decision_protocol"] = {
+      tex = "\\Xi",
+      typst = "#symb.rl.decision_protocol",
+      description = "Frozen decision protocol comprising generator, target source, state map, action-support provenance, reward, discount, and horizon.",
+      thesis_list = true,
+    },
     ["rl.exact_q2_target"] = {
       tex = "y_t^{(2,\\mathrm{exact})}",
       typst = "#symb.rl.exact_q2_target",
@@ -374,10 +380,22 @@ return {
       description = "Return discount factor.",
       thesis_list = true,
     },
+    ["rl.history"] = {
+      tex = "\\mathcal{H}_t",
+      typst = "#symb.rl.history",
+      description = "Actor-visible observation and action history available before decision step t.",
+      thesis_list = true,
+    },
     ["rl.invalid_reason"] = {
       tex = "\\rho_{t,i}",
       typst = "#symb.rl.invalid_reason",
       description = "Invalid-action reason code for candidate i at rollout step t.",
+      thesis_list = true,
+    },
+    ["rl.learned_q"] = {
+      tex = "\\widehat{Q}_{\\theta,h}^{\\sigma,\\Xi}",
+      typst = "#symb.rl.learned_q",
+      description = "Learned representation- and protocol-conditioned finite-horizon value predictor.",
       thesis_list = true,
     },
     ["rl.mdp_nbv"] = {
@@ -408,6 +426,18 @@ return {
       tex = "r",
       typst = "#symb.rl.r",
       description = "Scalar reward or immediate gain.",
+      thesis_list = true,
+    },
+    ["rl.representation"] = {
+      tex = "z_t^{\\sigma}",
+      typst = "#symb.rl.representation",
+      description = "Representation produced from actor-visible history by state-construction protocol sigma.",
+      thesis_list = true,
+    },
+    ["rl.representation_map"] = {
+      tex = "\\phi_{\\sigma}",
+      typst = "#symb.rl.representation_map",
+      description = "State-construction map from actor-visible history to the scorer representation.",
       thesis_list = true,
     },
     ["rl.requested_horizon"] = {
@@ -516,6 +546,12 @@ return {
       tex = "m_t^{\\mathrm{succ}}",
       typst = "#symb.rl.successor_mask",
       description = "Availability of a factual successor backup for transition t.",
+      thesis_list = true,
+    },
+    ["rl.support_score"] = {
+      tex = "U_{\\theta,h}^{\\Xi}",
+      typst = "#symb.rl.support_score",
+      description = "Support-conditioned candidate-ranking score reserved for candidate-set interaction models.",
       thesis_list = true,
     },
     ["rl.target"] = {
@@ -1036,6 +1072,12 @@ return {
       description = "Running selected-chain diagnostic persisted as cumulative_target_rri.",
       thesis_list = true,
     },
+    ["rl.decision_protocol"] = {
+      tex = "\\Xi=(g,\\tau,\\sigma,\\nu_{\\mathrm{mask}},\\rho,\\gamma,H_{\\max})",
+      typst = "#eqs.rl.decision_protocol",
+      description = "Frozen decision-protocol identity for candidate generation, target source, state construction, action support, reward and execution, discount, and horizon.",
+      thesis_list = false,
+    },
     ["rl.evidence_chain"] = {
       tex = "\\mathcal{U}_{\\mathrm{cov/unc}}\\to\\hat r_t^e(i)\\to r_t^e\\to G_t^{(H)}\\to Q_{H,\\theta}",
       typst = "#eqs.rl.evidence_chain",
@@ -1091,9 +1133,9 @@ return {
       thesis_list = false,
     },
     ["rl.q_h"] = {
-      tex = "Q_{h,e}^{\\star}(s_t,i)=\\sup_{\\pi\\in\\Pi^{\\mathrm{act}}}\\mathbb{E}_{\\pi}\\left[G_{t,e}^{(h)}\\mid s_t,a_t=i\\right],\\quad i\\in\\mathcal{A}_t,\\quad 1\\le h\\le b_t\\le H_{\\max},\\quad Q_{0,e}^{\\star}(s,i)=0",
+      tex = "Q_{h,e}^{\\star,\\Xi}(\\mathcal{H}_t,i)=\\sup_{\\pi\\in\\Pi^{\\mathrm{act}}}\\mathbb{E}_{\\pi}\\left[G_{t,e}^{(h)}\\mid\\mathcal{H}_t,a_t=i\\right],\\quad i\\in\\mathcal{A}_t,\\quad 1\\le h\\le b_t\\le H_{\\max},\\quad Q_{0,e}^{\\star,\\Xi}(\\mathcal{H}_t,i)=0",
       typst = "#eqs.rl.q_h",
-      description = "Target-conditioned scalar-h candidate value over admissible continuation policies.",
+      description = "Ideal history-conditioned target value under one frozen decision protocol.",
       thesis_list = false,
     },
     ["rl.qh_candidate_token"] = {
@@ -1138,10 +1180,22 @@ return {
       description = "Factual dense-successor exact-Q2 control.",
       thesis_list = false,
     },
+    ["rl.qh_learned_predictor"] = {
+      tex = "\\widehat{Q}_{\\theta,h}^{\\sigma,\\Xi}(z_t^{\\sigma},e,q_{t,i})\\approx Q_{h,e}^{\\star,\\Xi}(\\mathcal{H}_t,i)\\quad\\text{if }z_t^{\\sigma}\\text{ is reward-and-transition sufficient}",
+      typst = "#eqs.rl.qh_learned_predictor",
+      description = "Pointwise ideal-value target available when the scorer representation is reward-and-transition sufficient.",
+      thesis_list = false,
+    },
     ["rl.qh_masked_argmax"] = {
       tex = "a_t^\\theta=\\operatorname*{argmax}_{i:m_{t,i}^{\\mathrm{act}}=1}Q_{H,\\theta,i}",
       typst = "#eqs.rl.qh_masked_argmax",
       description = "",
+      thesis_list = false,
+    },
+    ["rl.qh_representation_map"] = {
+      tex = "z_t^{\\sigma}=\\phi_{\\sigma}(\\mathcal{H}_t)",
+      typst = "#eqs.rl.qh_representation_map",
+      description = "State-construction map from actor-visible history to a scorer representation.",
       thesis_list = false,
     },
     ["rl.qh_residual_decomposition"] = {
@@ -1151,9 +1205,15 @@ return {
       thesis_list = false,
     },
     ["rl.qh_scorer_interface"] = {
-      tex = "(Q_{h,\\theta,e,i}^{\\mathrm{cond}},\\ell_{t,i}^{\\mathrm{feas}})=f_\\theta(s_t,e,q_{t,i},h),\\quad h=b_t\\ \\mathrm{if\\ omitted},\\quad 1\\le h\\le b_t\\le H_{\\mathrm{max}}",
+      tex = "(Q_{h,\\theta,e,i}^{\\mathrm{cond}},\\ell_{t,i}^{\\mathrm{feas}})=f_\\theta(z_t^{\\sigma},e,q_{t,i},h),\\quad h=b_t\\ \\mathrm{if\\ omitted},\\quad 1\\le h\\le b_t\\le H_{\\mathrm{max}}",
       typst = "#eqs.rl.qh_scorer_interface",
       description = "Mask-independent scorer output and scalar horizon contract.",
+      thesis_list = false,
+    },
+    ["rl.qh_sufficiency_factorization"] = {
+      tex = "Q_{h,e}^{\\star,\\Xi}(\\mathcal{H}_t,i)=Q_{h,e}^{\\star,\\sigma,\\Xi}(z_t^{\\sigma},i)\\quad\\text{if }z_t^{\\sigma}\\text{ is reward-and-transition sufficient}",
+      typst = "#eqs.rl.qh_sufficiency_factorization",
+      description = "Sufficient condition under which the ideal history value factors through a compressed representation.",
       thesis_list = false,
     },
     ["rl.qh_supported_successor_set"] = {
@@ -1221,6 +1281,12 @@ return {
       typst = "#eqs.rl.s_pose",
       description = "Implemented qh_cf0_v1 actor carrier.",
       thesis_list = true,
+    },
+    ["rl.support_conditioned_score"] = {
+      tex = "U_{\\theta,h}^{\\Xi}(z_t^{\\sigma},e,\\mathcal{C}_t^{\\mathrm{ctx}},q_{t,i})",
+      typst = "#eqs.rl.support_conditioned_score",
+      description = "Support-conditioned ranking score whose estimand includes a versioned context-row set.",
+      thesis_list = false,
     },
     ["rl.target_root_gain_reward"] = {
       tex = "r_t^e=(\\Delta_t^e-\\Delta_{t+1}^e)/\\max(\\Delta_0^e,\\varepsilon)",

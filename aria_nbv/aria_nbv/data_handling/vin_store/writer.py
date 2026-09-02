@@ -65,7 +65,7 @@ DEFAULT_BACKBONE_NUMERIC_KEEP_FIELDS: tuple[str, ...] = (
 REQUIRED_COMPACT_EVL_NUMERIC_FIELDS: tuple[str, ...] = tuple(
     f"backbone.{name}" for name in DEFAULT_BACKBONE_NUMERIC_KEEP_FIELDS
 )
-"""Exact actor-visible root-EVL blocks required by VIN format version 10."""
+"""Exact actor-visible root-EVL blocks required by VIN format version 11."""
 
 COMPACT_EVL_DTYPES: dict[str, np.dtype[Any]] = {
     **{name: np.dtype(np.float32) for name in REQUIRED_COMPACT_EVL_NUMERIC_FIELDS if name != "backbone.counts"},
@@ -522,7 +522,7 @@ def prepare_vin_offline_sample(
             target_len=max_candidates,
             fill_value=0.0,
         ),
-        "oracle.reference_pose_world_rig": reference_pose.astype(np.float32, copy=False),
+        "vin.reference_pose_world_rig": reference_pose.astype(np.float32, copy=False),
         "oracle.rri": _pad_first_axis(
             _to_numpy(rri.rri.reshape(-1), dtype=np.float32), target_len=max_candidates, fill_value=np.nan
         ),

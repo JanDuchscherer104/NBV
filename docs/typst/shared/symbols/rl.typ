@@ -10,6 +10,14 @@
   r: $r$,
   // Generic cumulative return.
   G: $G$,
+  // Actor-visible observation and action history available before decision step t.
+  history: $cal(H)_t$,
+  // Frozen decision protocol: generator, target source, state map, action support, reward, discount, and horizon.
+  decision_protocol: $Xi$,
+  // Representation produced from the admitted actor-visible history by state map sigma.
+  representation: $z_t^sigma$,
+  // State-construction map from actor-visible history to the scorer representation.
+  representation_map: $phi_sigma$,
   // Factual rollout-chain index used to preserve trajectory heritage.
   rollout_index: $j$,
   // Generic state-action value function.
@@ -72,6 +80,10 @@
   qh: $Q_H$,
   // Action-mask-independent conditional candidate value emitted by the scorer.
   conditional_q: $Q_(h,theta,e,i)^"cond"$,
+  // Learned representation- and protocol-conditioned value predictor.
+  learned_q: $hat(Q)_(theta,h)^(sigma,Xi)$,
+  // Support-conditioned ranking score reserved for candidate-set interaction models.
+  support_score: $U_(theta,h)^Xi$,
   // Physical or observed feasibility logit emitted by the scorer's feasibility head.
   feasibility_logits: $ell_(t,i)^"feas"$,
   // Fixed boundary assigning a continuous fitted-Q target to CORAL classes.

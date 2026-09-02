@@ -194,22 +194,48 @@
     sum_(k=0)^(h - 1) #symb.rl.gamma^k r_(t+k)^e,
     quad 1 <= h <= b_t <= #symb.rl.H_max
   $,
+  decision_protocol: $
+    #symb.rl.decision_protocol
+    =
+    (g, tau, sigma, nu_"mask", rho, #symb.rl.gamma, #symb.rl.H_max)
+  $,
   q_h: $
-    Q_(h,e)^star (s_t, i)
+    Q_(h,e)^(star,#symb.rl.decision_protocol) (#symb.rl.history, i)
     =
     op("sup", limits: #true)_(pi in cal(Pi)^"act")
-    bb(E)_pi [G_(t,e)^((h)) | s_t, a_t=i],
+    bb(E)_pi [G_(t,e)^((h)) | #symb.rl.history, a_t=i],
     quad
     i in cal(A)_t,
     quad
     1 <= h <= b_t <= #symb.rl.H_max,
     quad
-    Q_(0,e)^star (s, i) = 0
+    Q_(0,e)^(star,#symb.rl.decision_protocol) (#symb.rl.history, i) = 0
+  $,
+  qh_representation_map: $
+    #symb.rl.representation
+    =
+    #symb.rl.representation_map (#symb.rl.history)
+  $,
+  qh_learned_predictor: $
+    #symb.rl.learned_q (#symb.rl.representation, e, q_(t,i))
+    approx
+    Q_(h,e)^(star,#symb.rl.decision_protocol) (#symb.rl.history, i),
+    quad "if" #symb.rl.representation "is reward-and-transition sufficient"
+  $,
+  qh_sufficiency_factorization: $
+    Q_(h,e)^(star,#symb.rl.decision_protocol) (#symb.rl.history, i)
+    =
+    Q_(h,e)^(star,sigma,#symb.rl.decision_protocol) (#symb.rl.representation, i)
+    quad "if" #symb.rl.representation "is reward-and-transition sufficient"
+  $,
+  support_conditioned_score: $
+    #symb.rl.support_score
+      (#symb.rl.representation, e, cal(C)_t^"ctx", q_(t,i))
   $,
   qh_scorer_interface: $
     (#symb.rl.conditional_q, #symb.rl.feasibility_logits)
     =
-    f_theta (s_t, e, q_(t,i), h),
+    f_theta (#symb.rl.representation, e, q_(t,i), h),
     quad
     1 <= h <= #symb.rl.budget <= #symb.rl.H_max,
     quad

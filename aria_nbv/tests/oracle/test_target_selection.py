@@ -122,7 +122,6 @@ def _sample(
     )
     oracle = VinOfflineOracleBlock(
         candidate_poses_world_cam=_poses([[0.0, 0.0, 0.0]]),
-        reference_pose_world_rig=_poses([[0.0, 0.0, 0.0]]),
         candidate_count=1,
         rri=torch.zeros(1, dtype=torch.float32),
         pm_dist_before=torch.zeros(1, dtype=torch.float32),
@@ -138,6 +137,7 @@ def _sample(
         scene_id="scene",
         snippet_id="snippet",
         vin_snippet=vin_snippet,
+        reference_pose_world_rig=_poses([[0.0, 0.0, 0.0]]),
         oracle=oracle,
         detected_obbs=detected_obbs,
         gt_obbs=gt_obbs,
@@ -256,7 +256,7 @@ def test_observed_descriptor_transforms_snippet_obb_to_world_and_reference_frame
     sample = _sample(detected_obbs=_obb_block([[2.0, 0.0, 0.0]], sem_ids=[1]), gt_obbs=None)
     sample.vin_snippet.t_world_rig = _poses([[10.0, 0.0, 0.0]])
     sample.vin_snippet.t_world_snippet = _poses([[10.0, 0.0, 0.0]])
-    sample.oracle.reference_pose_world_rig = _poses([[11.0, 0.0, 0.0]])
+    sample.reference_pose_world_rig = _poses([[11.0, 0.0, 0.0]])
 
     observed = observed_target_descriptors(sample)[0]
 
@@ -277,7 +277,7 @@ def test_observed_descriptor_prefers_exact_efm_snippet_transform_over_trajectory
         scene_id=sample.scene_id,
         snippet_id=sample.snippet_id,
     )
-    sample.oracle.reference_pose_world_rig = _poses([[21.0, 0.0, 0.0]])
+    sample.reference_pose_world_rig = _poses([[21.0, 0.0, 0.0]])
 
     observed = observed_target_descriptors(sample)[0]
 

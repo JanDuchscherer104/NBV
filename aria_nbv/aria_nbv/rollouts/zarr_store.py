@@ -655,7 +655,8 @@ class RolloutZarrStoreReader:
 
         ``valid_action_mask`` is the hard actor-selectable mask.
         ``q_train_mask`` is stricter: it also requires a label-valid target/GT
-        state and finite explicit target-root-gain and target-RRI labels.
+        state and a finite explicit target-root-gain label. Finite target RRI
+        remains an independent diagnostic-availability predicate.
         Invalidity is represented by masks and versioned reason bitsets, never
         by a low score. TD reward/linkage describes the factual selected action
         only; unselected action labels remain one-step oracle supervision.
@@ -1114,7 +1115,6 @@ class _RolloutZarrValidator:
         q_candidate_row_id = q_h["candidate_row_id"]
         q_train_mask = q_h["q_train_mask"]
         valid_action_mask = q_h["valid_action_mask"]
-        one_step_target_rri = q_h["one_step_target_rri"]
         one_step_target_root_gain = q_h["one_step_target_root_gain"]
         td_terminal_mask = q_h["td_terminal_mask"]
         td_discount = q_h["td_discount"]
@@ -1132,8 +1132,6 @@ class _RolloutZarrValidator:
             self.errors.append("Q_H dense-valid q_train_mask must equal valid_action_mask on every realized state.")
         if np.any(q_train_mask & (~np.isfinite(one_step_target_root_gain))):
             self.errors.append("Q_H q_train_mask is true without a finite explicit target-root-gain reward.")
-        if np.any(q_train_mask & (~np.isfinite(one_step_target_rri))):
-            self.errors.append("Q_H q_train_mask is true without a finite diagnostic target-RRI label.")
         if np.any(td_terminal_mask & (td_discount != 0.0)):
             self.errors.append("Q_H td_discount must be zero for terminal selected transitions.")
 

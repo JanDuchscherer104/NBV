@@ -29,7 +29,7 @@ class TargetInputProtocol(StrEnum):
     """Actor-visible target input produced by an observed detector or predictor."""
 
     @property
-    def is_deployable(self) -> bool:
+    def is_actor_visible_target_protocol(self) -> bool:
         """Whether the protocol requires actor-visible target evidence."""
 
         return self is TargetInputProtocol.V1_OBSERVED

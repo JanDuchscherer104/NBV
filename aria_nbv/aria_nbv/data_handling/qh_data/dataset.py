@@ -447,7 +447,8 @@ def _require_named_profile_store(actor_reader: VinOfflineStoreReader) -> FreeInp
     manifest = actor_reader.manifest
     if manifest.version != OFFLINE_DATASET_VERSION:
         raise ValueError(
-            "Named Q_H profiles require VIN offline dataset version 10 with compact EVL semantics; "
+            f"Named Q_H profiles require VIN offline dataset version {OFFLINE_DATASET_VERSION} "
+            "with compact EVL semantics; "
             f"found version {manifest.version}. Rebuild the VIN offline store."
         )
     vin = manifest.vin

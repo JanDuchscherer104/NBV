@@ -229,9 +229,9 @@ def _target_sample_with_gt_obb(obb: ObbTW) -> VinOfflineSample:
         scene_id="scene",
         snippet_id="snippet",
         vin_snippet=None,
+        reference_pose_world_rig=_identity_pose(),
         oracle=VinOfflineOracleBlock(
             candidate_poses_world_cam=_identity_pose(),
-            reference_pose_world_rig=_identity_pose(),
             candidate_count=1,
             rri=zero,
             pm_dist_before=zero,
@@ -401,9 +401,9 @@ def test_target_scorer_computes_target_and_scene_rri_from_one_pointcloud_batch(m
         scene_id="scene",
         snippet_id="snippet",
         vin_snippet=None,
+        reference_pose_world_rig=_identity_pose(),
         oracle=VinOfflineOracleBlock(
             candidate_poses_world_cam=_identity_pose(),
-            reference_pose_world_rig=_identity_pose(),
             candidate_count=1,
             rri=zero,
             pm_dist_before=zero,

@@ -12,7 +12,7 @@
   citation: [@FittedQIteration-ernst2005 @FixedHorizonTD-deAsis2020 @DoubleDQN-vanHasselt2015 @UVFA-schaul2015 @CORAL-cao2019 @ReinforcementLearning-sutton2018],
   source: "aria_nbv/aria_nbv/vin/models/target_finite_horizon.py; aria_nbv/aria_nbv/lightning/qh_module.py; aria_nbv/aria_nbv/lightning/qh_q2_certification.py; aria_nbv/aria_nbv/oracle/pipelines/online_qh.py; aria_nbv/tests/lightning/test_qh_q2_certification.py",
   gate: [populate a frozen held-out exact-Q2 receipt; establish oracle headroom; evaluate endpoint recovery on untouched scenes],
-)[The selected method is A1--H0--#symb.rl.s_pose with a scalar requested horizon, direct continuous Huber regression, fitted-Q recursion, and hard-masked online selection. The implementation path is tested, but learned exact-Q2 accuracy and policy evidence remain absent.]
+)[The selected executable baseline is A1--H0--#symb.rl.s_pose with a scalar requested horizon, direct continuous Huber regression, fitted-Q training, and runtime selection under the configured hard action-support mask. Current experiments use oracle-derived support. The implementation path is tested, but learned exact-Q2 accuracy and policy evidence remain absent.]
 
 === Conditional scorer
 
@@ -42,28 +42,86 @@ therefore asks whether query-dependent state reading helps under a fixed state
 and objective; it does not isolate attention independently of parameter count
 or runtime.
 
-=== Scalar requested horizon
+=== Ideal value and learned representation
 
-Using the finite-horizon return and conditional value defined in
-@sec:thesis-sequential-decision-foundations, the return for target $e$ over
-exactly the requested residual horizon $h$ is
+The value estimand is meaningful only relative to one frozen decision protocol,
+
+$
+  #eqs.rl.decision_protocol
+$
+
+where $g$ fixes the candidate-generator family and resolved configuration;
+$tau$ fixes target-source admission; $sigma$ fixes state construction;
+$nu_"mask"$ fixes action-support provenance and semantics; $rho$ fixes reward,
+execution, and terminal conventions; and #symb.rl.gamma and #symb.rl.H_max fix
+discounting and the largest residual horizon. Altering one component changes the
+decision problem or its support and is therefore a protocol-transfer study, not
+an ordinary train--test comparison.
+
+Let #symb.rl.history denote the actor-visible observation and action history
+available before decision step $t$. For target $e$, the return over exactly the
+requested residual horizon $h$ is
 
 $
   #eqs.rl.finite_horizon_return
 $
 
-and the learned value is
+The corresponding ideal value is
 
 $
   #eqs.rl.q_h
 $
 
+Here $i$ indexes a candidate in the protocol-defined admissible set
+$cal(A)_t$, $pi$ ranges over admitted continuation policies, and the
+expectation includes the transition and observation randomness fixed by
+#symb.rl.decision_protocol. This is a history-conditioned object: it does not
+assume that the selected finite-dimensional model input is Markov-sufficient.
+
+The executable scorer instead receives the representation
+
+$
+  #eqs.rl.qh_representation_map
+$
+
+where #symb.rl.representation_map denotes the state-construction protocol and
+#symb.rl.representation is its output. Under the sufficient condition stated
+below, the pointwise training target can be written as
+
+$
+  #eqs.rl.qh_learned_predictor
+$
+
+from the frozen replay distribution. The hat distinguishes this learned
+predictor from the ideal value; the superscripts retain the representation and
+decision-protocol identities that determine what was fitted. Exact Bellman
+closure on the compressed representation is justified only under the empirical
+task-sufficiency condition
+
+$
+  #eqs.rl.qh_sufficiency_factorization
+$
+
+Reward-and-transition sufficiency means that histories mapped to the same
+#symb.rl.representation induce the same reward law and successor-representation
+law for every admitted action. This condition guarantees the displayed
+factorization and Bellman closure. If aliased histories induce different rewards
+or successor laws, that guarantee is lost, even though their optimal values
+could coincide accidentally.
+Fitted-Q training then yields a representation- and replay-conditioned
+projection that may still be useful for ranking candidates, but it is not
+silently reinterpreted as the Bellman-optimal value of a Markov state. This is
+the admitted status of #symb.rl.s_pose. Causal observation-updated state
+ablations test the sufficiency hypothesis rather than merely enlarging a token.
+
+=== Scalar requested horizon
+
 One model call follows the frozen interface
 
 #eqs.model.qh_frozen_interface
 
-The notation @finite-horizon-q-function:short #symb.rl.qh names the bounded
-family rather than a collection of separately configured models. Remaining
+The notation #symb.rl.qh names the bounded
+predictor family rather than a collection of separately configured models. Remaining
 budget #symb.rl.budget describes the factual state;
 #symb.rl.requested_horizon selects one return from the triangular domain
 ${(b_t,h): 1 <= h <= b_t <= H_"max"}$. Omitting
@@ -178,14 +236,14 @@ unless that behavior policy selects the same continuation; nor is it an optimum
 over ungenerated continuous camera poses. This distinction fixes the meaning
 of a successful fit before any policy comparison is attempted.
 
-=== Why exact horizon two is decisive
+=== Exact horizon two as the first non-myopic falsification test
 
 When the selected action has a successor table with dense one-step labels, its
 finite-support two-step target is computable exactly:
 
 #eqs.rl.qh_exact_q2_target
 
-This makes horizon two the first non-myopic falsification test. A unit test
+This makes horizon two the first model-level non-myopic falsification test. A unit test
 can inject exact $Q_1$ values and prove that the tensor path implements the
 equation. A frozen population test instead measures learned recursion error,
 
@@ -193,8 +251,10 @@ equation. A frozen population test instead measures learned recursion error,
 
 on held-out supported rows. The latter tests the learned $Q_1$ approximation,
 state encoding, masks, successor linkage, and recursive target construction
-together. It is therefore model evidence rather than another implementation
-test.
+together. The target is exact for the frozen factual successor table and reward
+contract; the learned #symb.rl.learned_q remains a representation-conditioned
+predictor. The comparison is therefore model evidence rather than another
+implementation test or a proof of Markov sufficiency.
 
 The held-out evaluation begins with the complete eligible chain population
 rather than only rows on which an exact target is available. Chains that
@@ -213,8 +273,8 @@ recursion, and
 exact-$Q_2$ evaluation path. The scientific target additionally requires an
 evaluated actor-visible `v1_observed` corpus, a causal observation-updated
 state, actor-visible or calibrated action support, a frozen held-out exact-$Q_2$ receipt, positive oracle headroom, and
-endpoint recovery. The `v1_observed` admission and writer--reader path is implemented, but
-that intermediate has not passed these evidence gates. Until they pass, this
+endpoint recovery. The `v1_observed` admission, actor-only construction, and writer--reader path are implemented, but
+that route has no frozen corpus or evaluation and has not passed these evidence gates. Until they pass, this
 chapter establishes an executable method and its falsification tests, not a
 successful non-myopic actor. The alternatives in
 @tab:thesis-value-design-space remain scientifically available, but promotion

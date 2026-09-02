@@ -62,7 +62,7 @@ The value query distinguishes factual remaining budget $b_t$ from requested
 residual horizon $h$. Current supervision supports dense one-step queries and
 recursive queries on the factual budget diagonal; wider executable inputs do
 not establish wider learned support. Exact horizon two is therefore the first
-epistemic test of learned lookahead: it can compare learned recursion with an
+model-level non-myopic falsification test of learned lookahead: it can compare learned recursion with an
 exact finite-support endpoint without trusting a learned longer-horizon
 continuation. Passing that test is necessary but not sufficient for a policy
 claim, which additionally requires positive oracle headroom and held-out

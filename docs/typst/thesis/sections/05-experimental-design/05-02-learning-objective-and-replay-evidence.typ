@@ -6,7 +6,7 @@
 
 == Replay Eligibility and Finite-Horizon Learning Gate
 
-The factual rollout tables determine which records may supervise each learning problem. The action-validity mask defines actions selectable under the admitted oracle geometry contract. The stricter Q-training eligibility additionally requires a valid target/ground-truth label state and finite target-root-gain and diagnostic target-RRI labels. Padding, actor validity, one-step training eligibility, transition eligibility, modality presence, source role, and horizon availability remain separate masks. Masked rows remain available for support and failure analysis but cannot enter action selection, supervised loss, or bootstrap maximization.
+The factual rollout tables determine which records may supervise each learning problem. The action-validity mask defines actions selectable under the admitted oracle geometry contract. The stricter Q-training eligibility additionally requires a valid target/ground-truth label state and a finite target-root-gain label. Diagnostic target RRI has its own finite-value audit predicate and does not silently remove an otherwise valid root-gain target from `q_train_mask`. Padding, actor validity, one-step training eligibility, RRI audit availability, transition eligibility, modality presence, source role, and horizon availability remain separate masks. The evidence report attributes every excluded row to its exact failed predicate, so auxiliary-metric missingness cannot redefine the learned population. Masked rows remain available for support and failure analysis but cannot enter action selection, supervised loss, or bootstrap maximization.
 
 All eligible candidate rows can support dense one-step supervision. Exact H=2 supervision is narrower: the factual first action must have a stored reward and either an explicit terminal outcome, whose continuation is exactly zero, or a valid successor step with finite one-step root-gain labels for every hard-valid successor candidate. This completeness condition makes the masked successor maximum exact over the stored action set; one finite label is insufficient because an unlabeled hard-valid action could have the true maximum. General recursive supervision is narrower again: it requires a factual selected action, reward, terminal flag, discount, a defined training horizon, and—when nonterminal—a reproducible successor state, hard mask, and lower-horizon factual support. The derived `q_h/` arrays align these fields on a padded state--candidate view; they do not create labels for unobserved transitions, make selected GT depth actor-visible, or turn sparse long-horizon action support into dense support.
 
@@ -141,10 +141,12 @@ replications.
 
 The `qh-exact-q2-certification-receipt-v2` receipt binds the scorer and module configuration, actor-state and learning
 contracts, ordered test-store manifests and paths, test provenance, selection seed
-and bounds, and absolute and relative tolerances. Its independent unit is the pair
+and bounds, and absolute and relative tolerances. Its scene-disjoint evidence unit is the pair
 of ordered-store-manifest digest and scene identity. Thesis-core promotion requires
-at least five selected independent units, at least one factual selected-action exact
-Q2 row in every selected unit, and the same error gate to pass in every unit. Pooled
+at least five selected scene-disjoint units as a minimum-support gate, at least one factual selected-action exact
+Q2 row in every selected unit, and the same error gate to pass in every unit. Five
+units do not establish statistical power or generality, and scenes from one dataset
+or physical environment may remain correlated. Pooled
 row-level error remains diagnostic and cannot compensate for a failing scene. The
 receipt exposes a denominator ladder from eligible census chains through materialized
 successors and complete hard-valid successor labels to factual selected-action exact

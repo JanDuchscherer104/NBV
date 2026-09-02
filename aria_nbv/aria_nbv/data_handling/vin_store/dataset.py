@@ -54,14 +54,11 @@ class VinOfflineOracleBlock:
     The leading candidate width ``N_store`` is the writer's persisted budget;
     only ``[:candidate_count]`` is valid. RRI and point-mesh fields are
     GT-mesh-derived supervision, never actor-visible policy inputs. Candidate
-    and reference poses preserve EFM's world-from-sensor convention.
+    poses preserve EFM's world-from-sensor convention.
     """
 
     candidate_poses_world_cam: PoseTW
     """``PoseTW["N_store 12"]`` candidate world←camera transforms; translation is metres."""
-
-    reference_pose_world_rig: PoseTW
-    """``PoseTW["12"]`` world←rig transform at the rollout/source reference time."""
 
     candidate_count: int
     """Valid prefix length inside every ``N_store`` candidate-aligned field."""
@@ -117,6 +114,9 @@ class VinOfflineSample:
 
     vin_snippet: VinSnippetView
     """Actor-visible MPS/EFM point and trajectory substrate decoded from numeric blocks."""
+
+    reference_pose_world_rig: PoseTW
+    """``PoseTW["12"]`` world←rig transform defining the actor-visible reference frame."""
 
     oracle: VinOfflineOracleBlock
     """GT-mesh-derived candidate labels kept outside the actor-visible state."""
@@ -474,15 +474,9 @@ class VinOfflineDataset(Dataset[VinOfflineDatasetItem]):
             candidate_count=candidate_count,
         )
         candidate_poses = PoseTW(candidate_poses_tensor)
-        reference_pose = PoseTW(
-            self._tensor(
-                self._store.read_numeric_block(record, "oracle.reference_pose_world_rig"), dtype=torch.float32
-            ),
-        )
         cameras = self._build_cameras(record, candidate_count)
         return VinOfflineOracleBlock(
             candidate_poses_world_cam=candidate_poses,
-            reference_pose_world_rig=reference_pose,
             candidate_count=candidate_count,
             rri=self._tensor(self._store.read_numeric_block(record, "oracle.rri"), dtype=torch.float32),
             pm_dist_before=self._tensor(
@@ -510,6 +504,19 @@ class VinOfflineDataset(Dataset[VinOfflineDatasetItem]):
                 dtype=torch.float32,
             ),
             p3d_cameras=cameras,
+        )
+
+    def _build_reference_pose(self, record: VinOfflineIndexRecord) -> PoseTW:
+        """Decode the actor-visible reference pose from the version-11 VIN block."""
+
+        return cast(
+            PoseTW,
+            PoseTW(
+                self._tensor(
+                    self._store.read_numeric_block(record, "vin.reference_pose_world_rig"),
+                    dtype=torch.float32,
+                )
+            ),
         )
 
     def _build_candidates(self, record: VinOfflineIndexRecord) -> CandidateSamplingResult | None:
@@ -600,7 +607,12 @@ class VinOfflineDataset(Dataset[VinOfflineDatasetItem]):
             pts_world=_tensor_or_none("backbone.pts_world", "pts_world", dtype=torch.float32),
         )
 
-    def _build_depths(self, record: VinOfflineIndexRecord, oracle: VinOfflineOracleBlock) -> CandidateDepths | None:
+    def _build_depths(
+        self,
+        record: VinOfflineIndexRecord,
+        oracle: VinOfflineOracleBlock,
+        reference_pose_world_rig: PoseTW,
+    ) -> CandidateDepths | None:
         """Decode cached candidate depth maps when requested.
 
         Args:
@@ -633,7 +645,7 @@ class VinOfflineDataset(Dataset[VinOfflineDatasetItem]):
             depths=depths,
             depths_valid_mask=mask,
             poses=oracle.candidate_poses_world_cam,
-            reference_pose=oracle.reference_pose_world_rig,
+            reference_pose=reference_pose_world_rig,
             candidate_indices=indices,
             camera=oracle.p3d_cameras,
             p3d_cameras=oracle.p3d_cameras,
@@ -790,6 +802,7 @@ class VinOfflineDataset(Dataset[VinOfflineDatasetItem]):
         """
 
         vin_snippet = self._build_vin_snippet(record)
+        reference_pose_world_rig = self._build_reference_pose(record)
         oracle = self._build_oracle(record)
         efm_snippet = self._attach_efm_snippet(record, vin_snippet)
         sample = VinOfflineSample(
@@ -797,6 +810,7 @@ class VinOfflineDataset(Dataset[VinOfflineDatasetItem]):
             scene_id=record.scene_id,
             snippet_id=record.snippet_id,
             vin_snippet=vin_snippet,
+            reference_pose_world_rig=reference_pose_world_rig,
             oracle=oracle,
             sample_index=int(record.sample_index),
             split=Stage.from_str(record.split),
@@ -804,7 +818,7 @@ class VinOfflineDataset(Dataset[VinOfflineDatasetItem]):
             source_shard_row=int(record.row),
             candidates=self._build_candidates(record),
             backbone_out=self._build_backbone(record),
-            depths=self._build_depths(record, oracle),
+            depths=self._build_depths(record, oracle, reference_pose_world_rig),
             candidate_pcs=self._build_candidate_pcs(record),
             efm_snippet_view=efm_snippet,
             gt_obbs=self._build_gt_obbs(record, efm_snippet),
@@ -817,12 +831,13 @@ class VinOfflineDataset(Dataset[VinOfflineDatasetItem]):
         """Decode only the training-critical blocks required for a VIN batch."""
 
         vin_snippet = self._build_vin_snippet(record)
+        reference_pose_world_rig = self._build_reference_pose(record)
         oracle = self._build_oracle(record)
         efm_snippet = self._attach_efm_snippet(record, vin_snippet)
         return VinOracleBatch(
             efm_snippet_view=vin_snippet if efm_snippet is None else efm_snippet,
             candidate_poses_world_cam=oracle.candidate_poses_world_cam,
-            reference_pose_world_rig=oracle.reference_pose_world_rig,
+            reference_pose_world_rig=reference_pose_world_rig,
             rri=oracle.rri,
             pm_dist_before=oracle.pm_dist_before,
             pm_dist_after=oracle.pm_dist_after,

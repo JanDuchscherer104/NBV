@@ -22,8 +22,13 @@ from aria_nbv.rri_metrics.returns import (
 )
 
 
-def test_selected_target_return_uses_target_rri_with_discount() -> None:
-    rows = [{"target_rri": 0.2}, {"target_rri": 0.3}, {"target_rri": float("nan")}, {"rri": 0.4}]
+def test_selected_target_return_uses_root_gain_with_discount() -> None:
+    rows = [
+        {"target_root_gain": 0.2},
+        {"target_root_gain": 0.3},
+        {"target_root_gain": float("nan")},
+        {"root_gain": 0.4},
+    ]
 
     assert finite_horizon_target_return(rows, gamma=0.5) == pytest.approx(0.2 + 0.5 * 0.3 + 0.5**3 * 0.4)
 
@@ -90,7 +95,7 @@ def test_endpoint_error_falls_back_to_accuracy_plus_completeness() -> None:
 
 
 def test_rollout_summary_reports_missing_endpoint_metrics_explicitly() -> None:
-    summary = summarize_target_rollout_metrics([{"target_rri": 0.1}, {"target_rri": 0.2}])
+    summary = summarize_target_rollout_metrics([{"target_root_gain": 0.1}, {"target_root_gain": 0.2}])
 
     assert summary.cumulative_return == pytest.approx(0.3)
     assert summary.endpoint_gain is None
@@ -103,3 +108,10 @@ def test_rollout_summary_reports_missing_endpoint_metrics_explicitly() -> None:
 def test_non_finite_selected_target_rri_is_ignored() -> None:
     assert selected_target_rri({"target_rri": float("inf"), "rri": 0.1}) == 0.1
     assert finite_horizon_target_return([{"target_rri": float("nan")}]) is None
+
+
+def test_diagnostic_rri_is_never_substituted_for_root_gain_reward() -> None:
+    rows = [{"target_rri": 0.2}, {"rri": 0.3}]
+
+    assert selected_target_reward(rows[0]) is None
+    assert finite_horizon_target_return(rows) is None

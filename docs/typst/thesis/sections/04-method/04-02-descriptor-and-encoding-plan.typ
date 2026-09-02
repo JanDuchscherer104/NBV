@@ -124,9 +124,15 @@ approach direction; neither H1 nor directional moments supply missing surface
 or free-space observations.
 
 The current encoder implements the #symb.rl.s_pose actor-state carrier described
-above. The implemented `v1_observed` protocol can supply its target token
-without adding selected-observation state; target provenance and dynamic state
-are separate axes. Reaching the scientific target therefore does not merely
+above. The implemented `v1_observed` selector constructs its target token from
+detected OBBs, the actor-visible snippet transform, sample identity, and the
+neutral reference-frame pose `vin.reference_pose_world_rig`; it does not require
+an oracle payload. VIN format version 11 makes this actor-owned block mandatory
+and rejects older stores with rebuild guidance. Focused tests establish
+numerical identity with the neutral carrier and invariance to oracle RRI and GT
+OBB payloads. The resulting actor-only construction is implemented, but no
+frozen observed-target-protocol corpus or held-out policy evaluation exists.
+Target provenance and dynamic state are separate axes. Reaching the scientific target therefore does not merely
 append a larger scene token: the encoder must preserve source and availability
 while letting each candidate query both the actor-visible target and the causal
 dynamic state in relative geometry. Whether points, voxels, rays, or another

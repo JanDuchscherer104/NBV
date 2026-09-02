@@ -278,12 +278,6 @@ def _validate_oracle(
     metadata: dict[str, Any],
 ) -> tuple[int | None, int | None, Tensor | None, Tensor | None, Tensor | None]:
     candidate_count = _candidate_count(oracle, errors)
-    _validate_pose(
-        _get_required(oracle, "reference_pose_world_rig", "sample.oracle.reference_pose_world_rig", errors),
-        "sample.oracle.reference_pose_world_rig",
-        errors,
-        metadata,
-    )
     candidate_poses = _validate_pose(
         _get_required(oracle, "candidate_poses_world_cam", "sample.oracle.candidate_poses_world_cam", errors),
         "sample.oracle.candidate_poses_world_cam",
@@ -521,6 +515,12 @@ def collect_offline_visual_inventory(sample: VinOfflineSample, *, strict: bool =
     vin_snippet = _get_required(sample, "vin_snippet", "sample.vin_snippet", errors)
     oracle = _get_required(sample, "oracle", "sample.oracle", errors)
     _validate_vin_snippet(vin_snippet, errors, metadata)
+    _validate_pose(
+        _get_required(sample, "reference_pose_world_rig", "sample.reference_pose_world_rig", errors),
+        "sample.reference_pose_world_rig",
+        errors,
+        metadata,
+    )
     candidate_count, candidate_width, candidate_valid_mask, accuracy_delta, completeness_delta = _validate_oracle(
         oracle,
         errors,

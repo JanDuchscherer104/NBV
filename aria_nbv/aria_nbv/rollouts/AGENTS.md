@@ -24,7 +24,8 @@ DTO.
 - Replay data is standalone and source-row linked: do not mutate the immutable
   VIN offline store for multi-step rollout data.
 - Invalid candidates and targets are hard mask/reason-code cases, never low-RRI
-  labels; `q_train_mask` requires explicit target-RRI supervision.
+  labels; `q_train_mask` requires a finite target-root-gain label, while
+  diagnostic target-RRI availability remains a separate audit predicate.
 - QH readers expose factual chains and supervision support. Lightning owns
   backup/loss masking, while online adapters return hard-masked
   `CandidateScores`; neither boundary fabricates invalid-row Q targets.

@@ -108,6 +108,7 @@ but their status is explicit.
       [Root moments + #symb.rl.selected_pose_prefix], [selected #symb.rl.s_pose], [Cheap root context and causal pose history.], [No selected-observation update or spatial correspondence; interface baseline only.],
       [Selected-surface point residual], [implemented privileged control #symb.rl.s_surface], [Causal selected surfaces in the current-camera frame.], [Conflates observed free with unknown and is density weighted; requires a frozen matched receipt.],
       [Sparse ray-aware memory #symb.scene.ray_memory_t], [planned candidate #symb.rl.s_ray], [Observed surface, free, unknown, support, uncertainty, source, and recency @EFM3D-straub2024.], [Requires deterministic actor-visible fusion, leakage tests, and candidate-relative query evidence.],
+      [Candidate-relative readout of persisted local EVL], [contingent readout ablation], [Pool target support, candidate-frustum support, and their intersection from #symb.scene.evl_local without rerunning EFM3D.], [Tests whether root moments discard spatial correspondence; does not add evidence outside the persisted local field.],
       [Target-centred EVL re-lifting], [contingent representation ablation], [Logged EFM3D evidence when target support lies outside the root field @EFM3D-straub2024.], [May shift the learned 3D-neck distribution; compare first with simpler logged-feature pooling.],
       [Appearance attached to observed points], [contingent representation ablation], [Logged semantics or texture beyond the local EVL extent @EFM3D-straub2024.], [Requires visibility, source lineage, compression, and explicit missingness.],
       [Sparse TSDF/SDF or point encoder], [contingent encoder ablation], [Metric spatial structure with fixed-width learned tokens @EFM3D-straub2024.], [Must preserve observation weight and unknown-space semantics rather than only occupied surfaces.],
@@ -118,11 +119,16 @@ but their status is explicit.
   caption: [Representation design space ordered by scientific role, not presumed performance. A carrier is promoted only when it tests a diagnosed information loss under the same task, action, replay, and evaluation contracts.],
 ) <tab:thesis-scene-representation-design-space>
 
-The first comparison is #symb.rl.s_pose against the matched privileged
-#symb.rl.s_surface control because it asks whether any selected-surface signal
-survives the current compression seam. A positive result would motivate an
-actor-visible version; a null result would remain ambiguous between absent
-signal and a lossy point summary. #symb.rl.s_ray is therefore the primary
+The first comparison is #symb.rl.s_pose against the source-matched privileged
+#symb.rl.s_surface control with identity-start initialization because it asks
+whether any selected-surface signal survives the current compression seam.
+This is not a parameter-, capacity-, runtime-, or optimization-matched contrast:
+it estimates the complete S1 package of geometry consumption, point encoding,
+initialization, and training. A positive result would motivate an actor-visible
+version; a null result would remain ambiguous between absent signal and a lossy
+point summary. Before re-lifting EFM3D or introducing a new carrier, a
+candidate-relative readout of #symb.scene.evl_local can separate missing evidence
+from correspondence lost by root pooling. #symb.rl.s_ray is therefore the primary
 planned realization of the complete state contract, but it is promoted only
 after actor-visible observations and deterministic fusion exist. The remaining
 carriers are conditional probes of specific failures, not parallel thesis

@@ -21,8 +21,8 @@ from tests.rollout_fixtures import build_rollout_records
 
 def test_canonical_target_protocol_values_are_closed() -> None:
     assert [protocol.value for protocol in TargetInputProtocol] == ["v0_gt_input", "v1_observed"]
-    assert TargetInputProtocol.V0_GT_INPUT.is_deployable is False
-    assert TargetInputProtocol.V1_OBSERVED.is_deployable is True
+    assert TargetInputProtocol.V0_GT_INPUT.is_actor_visible_target_protocol is False
+    assert TargetInputProtocol.V1_OBSERVED.is_actor_visible_target_protocol is True
 
 
 def test_oracle_gt_descriptor_is_admitted_only_for_v0() -> None:

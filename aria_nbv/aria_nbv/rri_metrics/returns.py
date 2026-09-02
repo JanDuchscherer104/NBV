@@ -83,9 +83,9 @@ def selected_target_rri(metrics: Mapping[str, Any]) -> float | None:
 
 
 def selected_target_reward(metrics: Mapping[str, Any]) -> float | None:
-    """Return the selected-step reward used for rollout/Q_H return."""
+    """Return the selected-step root-normalized reward used by rollout/Q_H."""
 
-    return _finite_metric(metrics, "target_root_gain", "root_gain", "target_rri", "rri")
+    return _finite_metric(metrics, "target_root_gain", "root_gain")
 
 
 def target_point_mesh_error_before(metrics: Mapping[str, Any]) -> float | None:

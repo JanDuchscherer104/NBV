@@ -4559,26 +4559,37 @@ def store_invariant_rows(
         )
     )
 
-    q_train_violations = q_train & (
-        (~actor) | (~oracle) | (~np.isfinite(target_rri)) | (~np.isfinite(target_root_gain))
-    )
+    q_train_violations = q_train & ((~actor) | (~oracle) | (~np.isfinite(target_root_gain)))
     rows.append(
         _invariant_row(
             invariant_id="q_train_supervision",
             category="mask",
             status="PASS" if not q_train_violations.any() else "FAIL",
-            summary="Training rows have actor-valid, finite oracle supervision.",
-            expected="q_train_mask implies actor_action_mask, oracle_label_mask, and finite target labels.",
+            summary="Training rows have actor-valid, finite root-gain supervision.",
+            expected="q_train_mask implies actor_action_mask, oracle_label_mask, and finite target_root_gain.",
             observed=f"{int(q_train_violations.sum())} of {int(q_train.sum())} q_train rows violate supervision.",
             source_fields=(
                 "candidates/q_train_mask",
                 "candidates/actor_action_mask",
                 "candidates/oracle_label_mask",
-                "candidates/target_rri",
                 "candidates/target_root_gain",
             ),
             data_role="derived training data",
             violation_count=int(q_train_violations.sum()),
+        )
+    )
+    missing_target_rri = q_train & (~np.isfinite(target_rri))
+    rows.append(
+        _invariant_row(
+            invariant_id="target_rri_availability",
+            category="diagnostic",
+            status="PASS" if not missing_target_rri.any() else "WARN",
+            summary="Diagnostic target RRI availability is reported separately from Q-training support.",
+            expected="Finite target_rri is optional for q_train rows and required only by RRI analyses.",
+            observed=f"{int(missing_target_rri.sum())} of {int(q_train.sum())} q_train rows lack diagnostic target RRI.",
+            source_fields=("candidates/q_train_mask", "candidates/target_rri"),
+            data_role="oracle/evaluation",
+            violation_count=int(missing_target_rri.sum()),
         )
     )
     rows.append(_selected_depth_invariant(reader, root_attrs))

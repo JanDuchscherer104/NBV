@@ -34,9 +34,10 @@ that an admitted state is informative but A0/A1 cannot recover its value.
   methods. It orders feature integration by the smallest additional dependency
   introduced after the current A0/A1 controls. “Implemented” means that the
   tensor path and acceptance properties exist; it does not mean that the
-  feature has demonstrated scientific value. “Planned” names the next frozen
-  one-factor comparison. “Possible extension” preserves a conditional test
-  whose promotion still depends on a diagnosed failure.
+  feature has demonstrated scientific value. “Eligible” names the first
+  one-factor comparison that may be frozen after its activation evidence is
+  present. “Possible extension” preserves a conditional test whose promotion
+  still depends on a diagnosed failure.
 
   #figure(
     publication-table(
@@ -46,17 +47,17 @@ that an admitted state is informative but A0/A1 cannot recover its value.
       rows: (
         ([F0 — implemented], [candidate-relative geometric query], [Complete candidate pose relative to root and current camera, plus target pose relative to the candidate.], [Already present; retain transform-direction and local-frame tests. It supplies geometry, not selected-observation state.]),
         ([F1 — implemented], [A0/A1 state fusion], [Compare identical-input independent-row fusion with candidate-to-state cross-attention.], [The controls are not parameter matched; report parameters and runtime and require a frozen held-out comparison.]),
-        ([F2 — planned], [candidate-relative relation embeddings], [Embed each candidate’s relative transform to the target and pose-bearing causal history or state elements before A1 reads them.], [May duplicate information already contained in F0. Freeze one relation map, causal and padding masks, and a one-factor A1 comparison before promotion.]),
-        ([F3 — possible extension], [permutation-invariant candidate-set summary @DeepSets-zaheer2017], [Test whether the sampled admissible set supplies context beyond the physical state and query-local relations.], [Changes conditioning from one physical action to the sampled support; require duplicate-row and absolute-value tests.]),
-        ([F4 — possible extension], [masked candidate self-attention @SetTransformer-lee2019], [Test whether pairwise candidate relations explain residual error beyond an invariant set summary.], [Adds quadratic candidate interaction and stronger mask sensitivity; promote only after F3 fails under matched support.]),
+        ([F2 — first eligible promotion], [candidate-relative relation embeddings], [Embed each candidate’s relative transform to the target and pose-bearing causal history or state elements before A1 reads them.], [Activate only after state, support, label, and optimization failures are ruled out and held-out residuals retain relation structure.]),
+        ([F3 — separate support-conditioned hypothesis], [permutation-invariant candidate-set summary @DeepSets-zaheer2017], [Test whether a versioned context-row set supplies ranking information beyond the physical state and query-local relations.], [Does not inherit A0/A1 mask independence or duplicate-row invariance; freeze context rows, masks, duplicate semantics, and the score estimand.]),
+        ([F4 — separate support-conditioned hypothesis], [candidate self-attention @SetTransformer-lee2019], [Test whether pairwise candidate relations explain residual ranking error beyond an invariant set summary.], [Adds quadratic interaction and support sensitivity; promote only after a frozen F3 profile fails under matched support.]),
         ([F5 — possible extension], [iterative or recurrent state reading], [Test whether one candidate query needs repeated access to an already adequate causal state.], [May hide missing state information behind capacity; promote only after the state, F2 relations, and simpler fusion controls pass.]),
       ),
     ),
     caption: [Development-only architectural feature-integration ladder. Status records implementation maturity, while promotion remains conditional on a named scientific failure and a one-factor comparison.],
   ) <tab:architecture-feature-integration-ladder>
 
-  Candidate-relative relation embeddings are the planned next architectural
-  addition because they preserve the current per-candidate value interface while
+  Candidate-relative relation embeddings are the first eligible architectural
+  promotion because they can preserve the current per-candidate value interface while
   making query-to-context geometry explicit. Query-centric models use local
   coordinate systems and relative positional embeddings so that the active query
   can read other elements through their relation to it @zhou2023query. In
@@ -72,9 +73,26 @@ that an admitted state is informative but A0/A1 cannot recover its value.
   pairs, or encode an inappropriate symmetry if gravity, metric scale, camera
   direction, or target orientation is suppressed. Geometric priors can reduce
   the hypothesis space, but only when the chosen symmetry matches the task
-  @GeometricDeepLearning-bronstein2021. F2 is therefore justified by a matched
-  failure analysis showing that A1 cannot recover relevant relations from F0,
-  not by the existence of relation-embedding architectures in another domain.
+  @GeometricDeepLearning-bronstein2021. F2 therefore activates only when
+  held-out residual error varies systematically with candidate--target or
+  candidate--history relations, a non-learned relation probe predicts that
+  residual structure, and the pattern survives matched seeds, capacity, state,
+  support, label, and optimization controls. The existence of relation-embedding
+  architectures in another domain is not activation evidence.
+
+  F3 and F4 are not contract-preserving extensions of A0/A1. Their natural
+  output is a support-conditioned ranking score
+
+  #eqs.rl.support_conditioned_score
+
+  rather than an action value that depends only on one state--action pair.
+  Here $cal(C)_t^"ctx"$ is a separately versioned context-row set. Its profile
+  must state whether those rows are materialized, action-valid, or
+  label-supported; which mask enters the model; whether duplicate poses are one
+  semantic action or distinct proposals; and which A0/A1 invariants are retained
+  or intentionally replaced. Until corresponding permutation, invalid-row,
+  duplicate, and mask-sensitivity tests exist, F3/F4 remain development
+  hypotheses and cannot be reported as ordinary #symb.rl.learned_q models.
 
   Full SE(3)-Transformer and geometric-algebra Transformer variants are out of
   scope for the core study. The current local frames already remove arbitrary

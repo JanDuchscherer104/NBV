@@ -392,9 +392,11 @@ Use these masks consistently:
 - `target_valid_mask`: target record is usable under the protocol.
 
 For the first Q_H dataset, `q_train_mask` should require actor-selectability,
-valid oracle target-root gain, finite diagnostic target RRI, and valid target
-record. Dense `q_h/` padding is derived from `candidate_row_id == -1` plus
-false masks, not persisted in the candidate table.
+valid oracle target-root gain, and a valid target record. Finite diagnostic
+target RRI is reported through a separate audit predicate and does not define
+Q-label support. Dense `q_h/` padding is derived from
+`candidate_row_id == -1` plus false masks, not persisted in the candidate
+table.
 
 ## Q_H Tensor View
 
