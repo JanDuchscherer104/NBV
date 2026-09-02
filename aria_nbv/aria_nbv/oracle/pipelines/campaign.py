@@ -132,16 +132,31 @@ def _candidate_component_projection(
             raise ValueError(
                 f"unsupported nested candidate center kind: {getattr(center, 'kind', type(center).__name__)}"
             )
-        family_names = [component.name]
+        emitted = [(component.name, None)]
         gazes = getattr(component, "gazes", ())
         if gazes:
-            family_names.extend(f"{component.name}__{gaze.name}" for gaze in gazes[1:])
+            emitted = [(component.name, gazes[0].mode)]
+            emitted.extend((f"{component.name}__{gaze.name}", gaze.mode) for gaze in gazes[1:])
         elif component.paired_view_mode is not None:
-            family_names.append(f"{component.name}__paired_{component.paired_view_mode.value}")
+            emitted[0] = (
+                component.name,
+                getattr(component, "view_mode", getattr(component, "strategy", None)),
+            )
+            emitted.append((f"{component.name}__paired_{component.paired_view_mode.value}", component.paired_view_mode))
+        elif center is None:
+            emitted[0] = (
+                component.name,
+                getattr(component, "view_mode", getattr(component, "strategy", None)),
+            )
+        family_names = [family_name for family_name, _gaze_mode in emitted]
         for family_name in family_names:
             component_positions[family_name] = position_mode.value
-        if position_mode in target_modes:
-            target_families.update(family_names)
+        center_requires_target = position_mode in target_modes
+        target_families.update(
+            family_name
+            for family_name, gaze_mode in emitted
+            if center_requires_target or str(getattr(gaze_mode, "value", gaze_mode)) == "target_point"
+        )
     return component_positions, frozenset(target_families)
 
 

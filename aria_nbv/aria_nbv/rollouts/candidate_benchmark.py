@@ -412,18 +412,25 @@ def candidate_family_preflight_config_from_writer(
         position_value = str(getattr(position, "value", position or ""))
         if not name or not position_value:
             raise ValueError("rollout writer candidate components require names and position roles")
-        names = [name]
+        emitted = [(name, None)]
         gazes = getattr(component, "gazes", ())
         if gazes:
-            names.extend(f"{name}__{gaze.name}" for gaze in gazes[1:])
+            emitted = [(name, gazes[0].mode)]
+            emitted.extend((f"{name}__{gaze.name}", gaze.mode) for gaze in gazes[1:])
         else:
+            emitted[0] = (name, getattr(component, "view_mode", getattr(component, "strategy", None)))
             paired = getattr(component, "paired_view_mode", None)
             if paired is not None:
                 paired_value = str(getattr(paired, "value", paired))
-                names.append(f"{name}__paired_{paired_value}")
+                emitted.append((f"{name}__paired_{paired_value}", paired))
+        names = [family_name for family_name, _gaze_mode in emitted]
         configured.extend(names)
-        if position_value in target_positions:
-            target_aware.extend(names)
+        center_requires_target = position_value in target_positions
+        target_aware.extend(
+            family_name
+            for family_name, gaze_mode in emitted
+            if center_requires_target or str(getattr(gaze_mode, "value", gaze_mode)) == "target_point"
+        )
         if position_value == "forward_local":
             if forward_family is not None and forward_family != name:
                 raise ValueError("rollout writer has ambiguous forward-family provenance")

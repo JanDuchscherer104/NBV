@@ -8,6 +8,8 @@ from types import SimpleNamespace
 import pytest
 
 from aria_nbv.pose_generation import CandidateMixtureViewGeneratorConfig
+from aria_nbv.pose_generation.config import CandidateGazeConfig, SampledCenterConfig
+from aria_nbv.pose_generation.types import CandidatePositionMode, ViewDirectionMode
 from aria_nbv.rollouts.candidate_benchmark import (
     BINDING_KEYS,
     MULTI_STORE_BINDING_ALGORITHM,
@@ -61,6 +63,7 @@ def test_candidate_preflight_projects_legacy_and_nested_components_identically()
         SimpleNamespace(
             name=component.name,
             position_mode=component.center.mode,
+            view_mode=component.gazes[0].mode,
             paired_view_mode=(
                 SimpleNamespace(value=component.gazes[1].mode.value) if len(component.gazes) > 1 else None
             ),
@@ -75,6 +78,23 @@ def test_candidate_preflight_projects_legacy_and_nested_components_identically()
     assert candidate_family_preflight_config_from_writer(
         legacy_writer
     ) == candidate_family_preflight_config_from_writer(nested_writer)
+
+
+def test_candidate_preflight_marks_only_target_gaze_on_forward_center_target_aware() -> None:
+    component = SimpleNamespace(
+        name="forward_mixed_gaze",
+        center=SampledCenterConfig(mode=CandidatePositionMode.FORWARD_LOCAL),
+        gazes=(
+            CandidateGazeConfig(name="primary", mode=ViewDirectionMode.FORWARD_RIG),
+            CandidateGazeConfig(name="target", mode=ViewDirectionMode.TARGET_POINT),
+        ),
+    )
+    writer = SimpleNamespace(candidate_mixture=SimpleNamespace(components=(component,), total_count=8))
+
+    preflight = candidate_family_preflight_config_from_writer(writer)
+
+    assert preflight.configured_families == ("forward_mixed_gaze", "forward_mixed_gaze__target")
+    assert preflight.target_aware_families == ("forward_mixed_gaze__target",)
 
 
 def test_bundle_requires_parquet_engine_or_round_trips(tmp_path: Path) -> None:
