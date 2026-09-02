@@ -531,14 +531,14 @@ class CandidateMixtureViewGenerator:
     """
 
     def __init__(self, config: CandidateMixtureViewGeneratorConfig) -> None:
-        self.config = deepcopy(config)
+        self._config = deepcopy(config)
         self._mesh_query: PreparedMeshQuery | None = None
         self._component_runtimes = tuple(
             _ComponentRuntime(
                 component=component,
                 generators=tuple(
                     CandidateViewGenerator._from_component(
-                        self.config.base,
+                        self._config.base,
                         center_config=component.center,
                         gaze_config=gaze,
                         center_count=component.count,
@@ -546,8 +546,14 @@ class CandidateMixtureViewGenerator:
                     for gaze in component.gazes
                 ),
             )
-            for component in self.config.components
+            for component in self._config.components
         )
+
+    @property
+    def config(self) -> CandidateMixtureViewGeneratorConfig:
+        """Return a detached copy of the authoring snapshot used by this runtime."""
+
+        return deepcopy(self._config)
 
     def generate_from_typed_sample(
         self,
@@ -557,7 +563,7 @@ class CandidateMixtureViewGenerator:
     ) -> CandidateSamplingResult:
         """Generate mixed candidates from an EFM snippet."""
 
-        device = torch.device(self.config.base.device)
+        device = torch.device(self._config.base.device)
         occ = sample.get_occupancy_extend()
         occupancy_extent = occ.to(device=device, dtype=torch.float32)
         gt_mesh = sample.mesh
@@ -566,9 +572,9 @@ class CandidateMixtureViewGenerator:
         if mesh_verts is None or mesh_faces is None:
             raise ValueError("Candidate mixture generation requires sample.mesh_verts and sample.mesh_faces.")
 
-        cam_view = sample.get_camera(self.config.base.camera_label)
+        cam_view = sample.get_camera(self._config.base.camera_label)
         if frame_index is None:
-            frame_index = self.config.base.reference_frame_index
+            frame_index = self._config.base.reference_frame_index
         if frame_index is None:
             reference_pose = sample.trajectory.final_pose.to(device=device)
         else:
@@ -610,12 +616,12 @@ class CandidateMixtureViewGenerator:
         component_results: list[CandidateSamplingResult] = []
         component_names: list[str] = []
         mesh_query = None
-        if self.config.base.requires_mesh_query:
+        if self._config.base.requires_mesh_query:
             mesh_query = PreparedMeshQuery.acquire(
                 self._mesh_query,
                 mesh_verts,
                 mesh_faces,
-                device=self.config.device,
+                device=self._config.device,
                 dtype=reference_pose.t.dtype,
                 mesh=gt_mesh,
             )
@@ -650,7 +656,7 @@ class CandidateMixtureViewGenerator:
             result.mixture_id = torch.full((shell_count,), component_index, dtype=torch.int64, device=device)
             result.sampler_probability = torch.full(
                 (shell_count,),
-                1.0 / float(self.config.total_count),
+                1.0 / float(self._config.total_count),
                 dtype=torch.float32,
                 device=device,
             )
@@ -673,8 +679,8 @@ class CandidateMixtureViewGenerator:
             component = runtime.component
             component_seed = None if seed is None else _derive_component_seed(seed, component.name)
             resolved_component_seed = component_seed
-            if resolved_component_seed is None and self.config.base.seed is not None:
-                resolved_component_seed = int(self.config.base.seed) + component_index
+            if resolved_component_seed is None and self._config.base.seed is not None:
+                resolved_component_seed = int(self._config.base.seed) + component_index
             primary_result: CandidateSamplingResult | None = None
             pair_ids: torch.Tensor | None = None
             for gaze_index, (gaze, generator) in enumerate(zip(component.gazes, runtime.generators, strict=True)):

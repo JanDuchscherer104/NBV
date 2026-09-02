@@ -14,12 +14,12 @@ from pydantic import Field, model_validator
 from pydantic_settings import SettingsConfigDict
 
 from ...utils import BaseConfig
-from ...utils.seeding import derive_stable_seed
+from ...utils.seeding import SeedPart, derive_stable_seed
 
 SEED_DERIVATION_RULE = "sha256-json-v2-state-streams"
 
 
-def derive_rollout_seed(*parts: object) -> int:
+def derive_rollout_seed(*parts: SeedPart) -> int:
     """Derive one reproducible unsigned 32-bit seed from a lineage path.
 
     All stochastic rollout consumers use this pure helper instead of sharing

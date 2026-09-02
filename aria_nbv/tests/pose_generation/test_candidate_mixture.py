@@ -54,6 +54,10 @@ def test_stable_seed_rejects_unsupported_and_nonfinite_parts() -> None:
         derive_stable_seed(float("nan"))
 
 
+def test_stable_seed_preserves_legacy_bytes_encoding() -> None:
+    assert derive_stable_seed(b"legacy-seed") == 160719835
+
+
 def _identity_pose(device: torch.device | str = "cpu") -> PoseTW:
     return PoseTW(
         torch.tensor(
@@ -1431,6 +1435,9 @@ def test_mixture_runtime_snapshots_mutable_authoring_tree() -> None:
     original_name = runtime.config.components[0].name
     config.components[0].name = "mutated-after-setup"
     config.components[0].count = 1
+    exposed_snapshot = runtime.config
+    exposed_snapshot.components[0].name = "mutated-runtime-copy"
+    exposed_snapshot.components[0].count = 2
 
     result = _run_generate(runtime.config, generator=runtime, seed=17)
 
@@ -1438,3 +1445,4 @@ def test_mixture_runtime_snapshots_mutable_authoring_tree() -> None:
     assert runtime.config.components[0].count == 24
     assert result.component_name.count(original_name) == 24
     assert "mutated-after-setup" not in result.component_name
+    assert "mutated-runtime-copy" not in result.component_name
