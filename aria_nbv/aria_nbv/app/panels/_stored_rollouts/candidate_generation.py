@@ -22,10 +22,15 @@ from ....rollouts.inspection import (
 )
 from ....utils.data_plotting import add_pose_axes_to_figure, configure_3d_scene
 from ...scientific_labels import TheoryReferences
-from ..common import current_scientific_label, render_scientific_notation
-from .shared import EvidenceRole, ExplanationSection, ScientificExplanation
-from .shared import download_frame as _download_frame
-from .shared import render_plot as _render_plot
+from ..common import (
+    EvidenceRole,
+    ExplanationSection,
+    ScientificExplanation,
+    current_scientific_label,
+    render_scientific_notation,
+)
+from ..common import download_frame as _download_frame
+from ..common import render_plot as _render_plot
 
 _CANDIDATE_POPULATIONS = ("Selected step", "Selected rollout", "Explicit full store")
 _CORRELATION_REFERENCE = (
