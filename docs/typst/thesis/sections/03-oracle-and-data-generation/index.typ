@@ -19,6 +19,8 @@ factual transitions. These dependencies connect the chapter's information,
 action, measurement, and storage contracts to the learned scorer in the Method
 chapter.
 
+#include "03-00-dataset-ecosystem.typ"
+
 #include "03-01-state-and-visibility.typ"
 
 #include "03-02-target-task-and-rri-labels.typ"

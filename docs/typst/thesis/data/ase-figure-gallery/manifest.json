@@ -1,0 +1,776 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-08-31T20:59:23.624811+00:00",
+  "generator": {
+    "path": "docs/typst/thesis/figures/scripts/generate_ase_figure_gallery.py",
+    "sha256": "86b7812ea3141f58764476d0668e1903685ed4861bbd8d3b2389cc05e4a693c4",
+    "git_head": "971acfb53e71e98abde23bb1eb4fbc53c56bd706"
+  },
+  "source_inventory": {
+    "mesh_statistics_sha256": "81fdbd2ccbcf2a0aad9f5f55e7b2f000e9311c655af4fbf19d201ab469a3c105",
+    "atek_scene_ids": [
+      "81022",
+      "81048",
+      "81056",
+      "81128",
+      "81161",
+      "81180",
+      "81181",
+      "81184",
+      "81188",
+      "81226",
+      "81272",
+      "81283",
+      "81286",
+      "81366",
+      "81387",
+      "81426",
+      "81477",
+      "81483",
+      "81625",
+      "81693",
+      "81772",
+      "81807",
+      "81964",
+      "82004",
+      "82254",
+      "82257",
+      "82258",
+      "82271",
+      "82294",
+      "82309",
+      "82311",
+      "82342",
+      "82448",
+      "82517",
+      "82545",
+      "82555",
+      "82620",
+      "82630",
+      "82647",
+      "82658",
+      "82700",
+      "82832",
+      "82889",
+      "82902",
+      "82953",
+      "83036",
+      "83078",
+      "83086",
+      "83098",
+      "83121",
+      "83269",
+      "83307",
+      "83317",
+      "83379",
+      "83393",
+      "83397",
+      "83400",
+      "83448",
+      "83467",
+      "83506",
+      "83515",
+      "83522",
+      "83550",
+      "83560",
+      "83577",
+      "83598",
+      "83678",
+      "83692",
+      "83713",
+      "83730",
+      "83746",
+      "83780",
+      "83803",
+      "83833",
+      "83836",
+      "83998",
+      "84001",
+      "84003",
+      "84009",
+      "84052",
+      "84074",
+      "84080",
+      "84171",
+      "84185",
+      "84186",
+      "84230",
+      "84271",
+      "84309",
+      "84320",
+      "8517",
+      "8559",
+      "8671",
+      "8694",
+      "8715",
+      "8777",
+      "8822",
+      "8857",
+      "8860",
+      "889",
+      "8938"
+    ]
+  },
+  "statistics": {
+    "scene_count": 100,
+    "shard_count": 576,
+    "faces_median": 2357464.0,
+    "faces_p10": 744000.2000000001,
+    "faces_p90": 4500430.600000001,
+    "source_size_mb_median": 61.519426499999994,
+    "source_size_mb_p10": 21.2645028,
+    "source_size_mb_p90": 116.33269980000007,
+    "vertices_median": 2438694.5
+  },
+  "mesh_statistics": [
+    {
+      "scene_id": "81022",
+      "vertices": 4868418,
+      "faces": 3564796,
+      "source_bytes": 104763603
+    },
+    {
+      "scene_id": "81048",
+      "vertices": 2626417,
+      "faces": 2854107,
+      "source_bytes": 68620634
+    },
+    {
+      "scene_id": "81056",
+      "vertices": 1527063,
+      "faces": 1601445,
+      "source_bytes": 39143780
+    },
+    {
+      "scene_id": "81128",
+      "vertices": 2668031,
+      "faces": 2401989,
+      "source_bytes": 63242468
+    },
+    {
+      "scene_id": "81161",
+      "vertices": 2079175,
+      "faces": 1934048,
+      "source_bytes": 50092963
+    },
+    {
+      "scene_id": "81180",
+      "vertices": 2826967,
+      "faces": 3154576,
+      "source_bytes": 74933331
+    },
+    {
+      "scene_id": "81181",
+      "vertices": 1049234,
+      "faces": 1410820,
+      "source_bytes": 30931707
+    },
+    {
+      "scene_id": "81184",
+      "vertices": 3195600,
+      "faces": 2094599,
+      "source_bytes": 65577226
+    },
+    {
+      "scene_id": "81188",
+      "vertices": 2701165,
+      "faces": 2758866,
+      "source_bytes": 68279477
+    },
+    {
+      "scene_id": "81226",
+      "vertices": 1219196,
+      "faces": 1316836,
+      "source_bytes": 31749459
+    },
+    {
+      "scene_id": "81272",
+      "vertices": 4087935,
+      "faces": 3393465,
+      "source_bytes": 93170504
+    },
+    {
+      "scene_id": "81283",
+      "vertices": 5512522,
+      "faces": 4599814,
+      "source_bytes": 125948085
+    },
+    {
+      "scene_id": "81286",
+      "vertices": 3437271,
+      "faces": 3251340,
+      "source_bytes": 83514911
+    },
+    {
+      "scene_id": "81366",
+      "vertices": 675995,
+      "faces": 1273243,
+      "source_bytes": 24664337
+    },
+    {
+      "scene_id": "81387",
+      "vertices": 2400087,
+      "faces": 1860387,
+      "source_bytes": 52986314
+    },
+    {
+      "scene_id": "81426",
+      "vertices": 970258,
+      "faces": 1903839,
+      "source_bytes": 36393241
+    },
+    {
+      "scene_id": "81477",
+      "vertices": 3657466,
+      "faces": 3211010,
+      "source_bytes": 85632961
+    },
+    {
+      "scene_id": "81483",
+      "vertices": 2445885,
+      "faces": 2766556,
+      "source_bytes": 65316087
+    },
+    {
+      "scene_id": "81625",
+      "vertices": 3159681,
+      "faces": 2976594,
+      "source_bytes": 76612133
+    },
+    {
+      "scene_id": "81693",
+      "vertices": 1610169,
+      "faces": 1929119,
+      "source_bytes": 44400814
+    },
+    {
+      "scene_id": "81772",
+      "vertices": 1878361,
+      "faces": 2174935,
+      "source_bytes": 50814726
+    },
+    {
+      "scene_id": "81807",
+      "vertices": 2939282,
+      "faces": 2753289,
+      "source_bytes": 71064380
+    },
+    {
+      "scene_id": "81964",
+      "vertices": 6355538,
+      "faces": 7501962,
+      "source_bytes": 173792201
+    },
+    {
+      "scene_id": "82004",
+      "vertices": 4554338,
+      "faces": 3989008,
+      "source_bytes": 106509399
+    },
+    {
+      "scene_id": "82254",
+      "vertices": 610932,
+      "faces": 1156525,
+      "source_bytes": 22366247
+    },
+    {
+      "scene_id": "82257",
+      "vertices": 1776288,
+      "faces": 1911788,
+      "source_bytes": 46168939
+    },
+    {
+      "scene_id": "82258",
+      "vertices": 1571152,
+      "faces": 1405509,
+      "source_bytes": 37125680
+    },
+    {
+      "scene_id": "82271",
+      "vertices": 1647371,
+      "faces": 1693516,
+      "source_bytes": 41784399
+    },
+    {
+      "scene_id": "82294",
+      "vertices": 2170142,
+      "faces": 3073741,
+      "source_bytes": 66000576
+    },
+    {
+      "scene_id": "82309",
+      "vertices": 6589282,
+      "faces": 5844796,
+      "source_bytes": 155053971
+    },
+    {
+      "scene_id": "82311",
+      "vertices": 1411186,
+      "faces": 1631209,
+      "source_bytes": 38140188
+    },
+    {
+      "scene_id": "82342",
+      "vertices": 2469672,
+      "faces": 2118470,
+      "source_bytes": 57176413
+    },
+    {
+      "scene_id": "82448",
+      "vertices": 4145690,
+      "faces": 3139348,
+      "source_bytes": 90560043
+    },
+    {
+      "scene_id": "82517",
+      "vertices": 617511,
+      "faces": 291716,
+      "source_bytes": 11202677
+    },
+    {
+      "scene_id": "82545",
+      "vertices": 3229276,
+      "faces": 2650588,
+      "source_bytes": 73209195
+    },
+    {
+      "scene_id": "82555",
+      "vertices": 1262140,
+      "faces": 791067,
+      "source_bytes": 25429789
+    },
+    {
+      "scene_id": "82620",
+      "vertices": 830918,
+      "faces": 549308,
+      "source_bytes": 17112257
+    },
+    {
+      "scene_id": "82630",
+      "vertices": 2143105,
+      "faces": 1595619,
+      "source_bytes": 46460546
+    },
+    {
+      "scene_id": "82647",
+      "vertices": 5701249,
+      "faces": 5291930,
+      "source_bytes": 137210317
+    },
+    {
+      "scene_id": "82658",
+      "vertices": 1730433,
+      "faces": 1222929,
+      "source_bytes": 36663512
+    },
+    {
+      "scene_id": "82700",
+      "vertices": 4696970,
+      "faces": 4271413,
+      "source_bytes": 111892248
+    },
+    {
+      "scene_id": "82832",
+      "vertices": 5670291,
+      "faces": 6619451,
+      "source_bytes": 154096594
+    },
+    {
+      "scene_id": "82889",
+      "vertices": 6265308,
+      "faces": 5565832,
+      "source_bytes": 147539751
+    },
+    {
+      "scene_id": "82902",
+      "vertices": 5176050,
+      "faces": 3827279,
+      "source_bytes": 111867466
+    },
+    {
+      "scene_id": "82953",
+      "vertices": 316997,
+      "faces": 544923,
+      "source_bytes": 10888200
+    },
+    {
+      "scene_id": "83036",
+      "vertices": 4060928,
+      "faces": 3252583,
+      "source_bytes": 91014954
+    },
+    {
+      "scene_id": "83078",
+      "vertices": 2155350,
+      "faces": 1409654,
+      "source_bytes": 44189941
+    },
+    {
+      "scene_id": "83086",
+      "vertices": 1548301,
+      "faces": 2086585,
+      "source_bytes": 45705456
+    },
+    {
+      "scene_id": "83098",
+      "vertices": 1225840,
+      "faces": 813340,
+      "source_bytes": 25283738
+    },
+    {
+      "scene_id": "83121",
+      "vertices": 2943441,
+      "faces": 2646567,
+      "source_bytes": 69726902
+    },
+    {
+      "scene_id": "83269",
+      "vertices": 4438004,
+      "faces": 3581798,
+      "source_bytes": 99819661
+    },
+    {
+      "scene_id": "83307",
+      "vertices": 3501657,
+      "faces": 3225681,
+      "source_bytes": 83953976
+    },
+    {
+      "scene_id": "83317",
+      "vertices": 3738723,
+      "faces": 2801660,
+      "source_bytes": 81286495
+    },
+    {
+      "scene_id": "83379",
+      "vertices": 688277,
+      "faces": 889095,
+      "source_bytes": 19817796
+    },
+    {
+      "scene_id": "83393",
+      "vertices": 2785282,
+      "faces": 2042997,
+      "source_bytes": 59982584
+    },
+    {
+      "scene_id": "83397",
+      "vertices": 2431504,
+      "faces": 1659777,
+      "source_bytes": 50755388
+    },
+    {
+      "scene_id": "83400",
+      "vertices": 3659007,
+      "faces": 3106221,
+      "source_bytes": 84289196
+    },
+    {
+      "scene_id": "83448",
+      "vertices": 1207617,
+      "faces": 832931,
+      "source_bytes": 25319745
+    },
+    {
+      "scene_id": "83467",
+      "vertices": 781140,
+      "faces": 482153,
+      "source_bytes": 15641906
+    },
+    {
+      "scene_id": "83506",
+      "vertices": 2000724,
+      "faces": 2842552,
+      "source_bytes": 60962103
+    },
+    {
+      "scene_id": "83515",
+      "vertices": 5250392,
+      "faces": 4643278,
+      "source_bytes": 123367557
+    },
+    {
+      "scene_id": "83522",
+      "vertices": 1888511,
+      "faces": 1936565,
+      "source_bytes": 47837716
+    },
+    {
+      "scene_id": "83550",
+      "vertices": 6110247,
+      "faces": 7800254,
+      "source_bytes": 174726505
+    },
+    {
+      "scene_id": "83560",
+      "vertices": 2089493,
+      "faces": 3000444,
+      "source_bytes": 64079927
+    },
+    {
+      "scene_id": "83577",
+      "vertices": 4355626,
+      "faces": 4867946,
+      "source_bytes": 115551049
+    },
+    {
+      "scene_id": "83598",
+      "vertices": 787621,
+      "faces": 921043,
+      "source_bytes": 21425248
+    },
+    {
+      "scene_id": "83678",
+      "vertices": 3158513,
+      "faces": 2431607,
+      "source_bytes": 69513286
+    },
+    {
+      "scene_id": "83692",
+      "vertices": 476008,
+      "faces": 412950,
+      "source_bytes": 11080683
+    },
+    {
+      "scene_id": "83713",
+      "vertices": 3822412,
+      "faces": 3244702,
+      "source_bytes": 88050309
+    },
+    {
+      "scene_id": "83730",
+      "vertices": 2905121,
+      "faces": 3082064,
+      "source_bytes": 74928523
+    },
+    {
+      "scene_id": "83746",
+      "vertices": 4889800,
+      "faces": 3675996,
+      "source_bytes": 106465787
+    },
+    {
+      "scene_id": "83780",
+      "vertices": 1578701,
+      "faces": 1414275,
+      "source_bytes": 37330226
+    },
+    {
+      "scene_id": "83803",
+      "vertices": 484707,
+      "faces": 485710,
+      "source_bytes": 12130951
+    },
+    {
+      "scene_id": "83833",
+      "vertices": 6290278,
+      "faces": 4261569,
+      "source_bytes": 130883972
+    },
+    {
+      "scene_id": "83836",
+      "vertices": 2080722,
+      "faces": 2597439,
+      "source_bytes": 58735610
+    },
+    {
+      "scene_id": "83998",
+      "vertices": 7276669,
+      "faces": 13231375,
+      "source_bytes": 259328143
+    },
+    {
+      "scene_id": "84001",
+      "vertices": 1547546,
+      "faces": 1513038,
+      "source_bytes": 38240285
+    },
+    {
+      "scene_id": "84003",
+      "vertices": 1301501,
+      "faces": 751832,
+      "source_bytes": 25392066
+    },
+    {
+      "scene_id": "84009",
+      "vertices": 2187594,
+      "faces": 2401045,
+      "source_bytes": 57464952
+    },
+    {
+      "scene_id": "84052",
+      "vertices": 1606122,
+      "faces": 1003538,
+      "source_bytes": 32319697
+    },
+    {
+      "scene_id": "84074",
+      "vertices": 5304889,
+      "faces": 3501597,
+      "source_bytes": 109179668
+    },
+    {
+      "scene_id": "84080",
+      "vertices": 2212789,
+      "faces": 1839607,
+      "source_bytes": 50468598
+    },
+    {
+      "scene_id": "84171",
+      "vertices": 2666336,
+      "faces": 2313883,
+      "source_bytes": 62076750
+    },
+    {
+      "scene_id": "84185",
+      "vertices": 452663,
+      "faces": 292864,
+      "source_bytes": 9239425
+    },
+    {
+      "scene_id": "84186",
+      "vertices": 1539559,
+      "faces": 917305,
+      "source_bytes": 30399911
+    },
+    {
+      "scene_id": "84230",
+      "vertices": 1323135,
+      "faces": 920332,
+      "source_bytes": 27842174
+    },
+    {
+      "scene_id": "84271",
+      "vertices": 948616,
+      "faces": 1163005,
+      "source_bytes": 26502695
+    },
+    {
+      "scene_id": "84309",
+      "vertices": 205877,
+      "faces": 391092,
+      "source_bytes": 7554957
+    },
+    {
+      "scene_id": "84320",
+      "vertices": 4507154,
+      "faces": 3249142,
+      "source_bytes": 96324933
+    },
+    {
+      "scene_id": "8517",
+      "vertices": 103944,
+      "faces": 191667,
+      "source_bytes": 3739236
+    },
+    {
+      "scene_id": "8559",
+      "vertices": 2082985,
+      "faces": 1653614,
+      "source_bytes": 46493041
+    },
+    {
+      "scene_id": "8671",
+      "vertices": 4486146,
+      "faces": 3651780,
+      "source_bytes": 101307131
+    },
+    {
+      "scene_id": "8694",
+      "vertices": 2986833,
+      "faces": 2955318,
+      "source_bytes": 74261369
+    },
+    {
+      "scene_id": "8715",
+      "vertices": 3365645,
+      "faces": 4489388,
+      "source_bytes": 98750023
+    },
+    {
+      "scene_id": "8777",
+      "vertices": 1288281,
+      "faces": 673514,
+      "source_bytes": 24215292
+    },
+    {
+      "scene_id": "8822",
+      "vertices": 4142090,
+      "faces": 4214915,
+      "source_bytes": 104499214
+    },
+    {
+      "scene_id": "8857",
+      "vertices": 1665603,
+      "faces": 1702394,
+      "source_bytes": 42118597
+    },
+    {
+      "scene_id": "8860",
+      "vertices": 3101495,
+      "faces": 2018499,
+      "source_bytes": 63458666
+    },
+    {
+      "scene_id": "889",
+      "vertices": 4196806,
+      "faces": 3321094,
+      "source_bytes": 93536133
+    },
+    {
+      "scene_id": "8938",
+      "vertices": 2591869,
+      "faces": 4104655,
+      "source_bytes": 84463182
+    }
+  ],
+  "candidates": [
+    {
+      "identifier": "scene-evidence",
+      "title": "Scene-level geometric evidence",
+      "filename": "scene-evidence.png",
+      "purpose": "Show the actual GT mesh, a recorded trajectory, and semi-dense points in one fixed illustrative local scene.",
+      "source_evidence": "Fixed ASE scene 81286 and its first shard snippet, loaded through AseEfmDatasetConfig and SnippetPlotBuilder.",
+      "typst_caption": "A fixed illustrative local ASE snippet (scene 81286): GT mesh (grey), recorded rig trajectory (black), and MPS-style semi-dense points (height-coloured). This panel does not claim scene representativeness; it visualizes the evidence layers used by the offline protocol, with the mesh retained as privileged evaluation evidence."
+    },
+    {
+      "identifier": "mesh-atlas",
+      "title": "GT-mesh subset atlas",
+      "filename": "mesh-atlas.png",
+      "purpose": "Show that the 100-scene local GT subset contains varied indoor geometry without implying corpus-wide representativeness.",
+      "source_evidence": "Six deterministic inner face-count quantiles from the 100 local EFM3D GT meshes.",
+      "typst_caption": "Six deterministic inner face-count-quantile examples from the local 100-scene GT-mesh subset. Panels are top-down, log-scaled vertex-density projections of GT meshes, not rendered RGB observations and not evidence of corpus-wide representativeness."
+    },
+    {
+      "identifier": "subset-statistics",
+      "title": "100-scene GT subset statistics",
+      "filename": "subset-statistics.png",
+      "purpose": "Quantify the scope and geometric spread of the exact local mesh-evaluation subset.",
+      "source_evidence": "All 100 local PLY meshes under .data/ase_meshes and ATEK shard inventory under .data/ase_efm.",
+      "typst_caption": "Geometry-header and storage statistics for the exact local 100-scene GT-mesh subset. Face and vertex counts are read from PLY headers; GT-mesh asset size is serialized-file size in MB, not physical scene extent. Shard counts are a local ATEK inventory rather than a property of the full ASE release."
+    }
+  ],
+  "atlas_scene_ids": [
+    "83467",
+    "81366",
+    "81693",
+    "81483",
+    "889",
+    "82889"
+  ],
+  "outputs": {
+    "scene-evidence": {
+      "filename": "scene-evidence.png",
+      "sha256": "ef1f0d023b4d905987c40581b19fd0a7a84664dbb799569518172f781dc40516"
+    },
+    "mesh-atlas": {
+      "filename": "mesh-atlas.png",
+      "sha256": "7ad50de2d155649a205a19fbd033d949dc9dfb84cea6edc8caba66e9d0d4f995"
+    },
+    "subset-statistics": {
+      "filename": "subset-statistics.png",
+      "sha256": "3f36c81850ee3abe78a38873497fb1b9ebd8aa09848931df0b2fba1a0ead81e5"
+    }
+  },
+  "selected": []
+}

@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1180" height="530" viewBox="0 0 1180 530" role="img" aria-labelledby="title desc">
+  <title id="title">Roles of Project Aria, ASE, EFM3D, and ATEK in the thesis dataset ecosystem</title>
+  <desc id="desc">Four connected panels show Project Aria as the calibrated observation contract, ASE as the synthetic scene substrate, EFM3D as the local 3D representation and mesh-evaluation release, and ATEK as the standardized data and evaluation interface. A lower band distinguishes actor-visible observation evidence from oracle-only supervision and evaluation assets.</desc>
+  <rect width="1180" height="530" fill="#ffffff"/>
+  <text x="70" y="51" fill="#172033" font-family="Arial, Helvetica, sans-serif" font-size="25" font-weight="700">Project Aria ecosystem roles in the offline experiment</text>
+  <text x="70" y="79" fill="#4b5563" font-family="Arial, Helvetica, sans-serif" font-size="16">Each layer contributes a distinct contract; none is itself an NBV policy.</text>
+  <g font-family="Arial, Helvetica, sans-serif">
+    <rect x="70" y="120" width="242" height="190" rx="12" fill="#eaf2fb" stroke="#315c8d" stroke-width="2"/>
+    <rect x="336" y="120" width="242" height="190" rx="12" fill="#f2edfb" stroke="#7451a7" stroke-width="2"/>
+    <rect x="602" y="120" width="242" height="190" rx="12" fill="#fff3e7" stroke="#b86c23" stroke-width="2"/>
+    <rect x="868" y="120" width="242" height="190" rx="12" fill="#e6f6f2" stroke="#0f766e" stroke-width="2"/>
+    <g fill="#172033">
+      <text x="94" y="155" font-size="20" font-weight="700">Project Aria</text>
+      <text x="360" y="155" font-size="20" font-weight="700">ASE</text>
+      <text x="626" y="155" font-size="20" font-weight="700">ATEK</text>
+      <text x="892" y="155" font-size="20" font-weight="700">EFM3D</text>
+    </g>
+    <g fill="#334155" font-size="15">
+      <text x="94" y="188">calibration &amp; time alignment</text><text x="94" y="215">poses &amp; semi-dense evidence</text><text x="94" y="242">observation contract</text>
+      <text x="360" y="188">100,000 synthetic indoor scenes</text><text x="360" y="215">sensor-like streams + GT</text><text x="360" y="242">controlled data substrate</text>
+      <text x="626" y="188">preprocessing &amp; data stores</text><text x="626" y="215">standard task evaluators</text><text x="626" y="242">interface, not scientific truth</text>
+      <text x="892" y="188">posed local 3D lifting</text><text x="892" y="215">OBB metadata + mesh evaluation</text><text x="892" y="242">representation / evaluation path</text>
+    </g>
+    <g stroke="#64748b" stroke-width="2" fill="#64748b"><path d="M314 215 H330 L322 209 M330 215 L322 221"/><path d="M580 215 H596 L588 209 M596 215 L588 221"/><path d="M846 215 H862 L854 209 M862 215 L854 221"/></g>
+    <rect x="70" y="357" width="1040" height="104" rx="12" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1.5"/>
+    <line x1="590" y1="357" x2="590" y2="461" stroke="#cbd5e1" stroke-width="1.5"/>
+    <text x="96" y="394" fill="#0f766e" font-size="18" font-weight="700">Actor-visible evidence</text>
+    <text x="96" y="418" fill="#334155" font-size="13">calibrated logged streams, poses, and semi-dense geometry</text>
+    <text x="96" y="440" fill="#334155" font-size="13">derived local representations</text>
+    <text x="618" y="394" fill="#b45309" font-size="18" font-weight="700">Oracle-only assets</text>
+    <text x="618" y="418" fill="#334155" font-size="13">GT depth, instances, boxes, meshes, and counterfactual renders</text>
+    <text x="618" y="440" fill="#334155" font-size="13">labels and endpoint evaluation</text>
+  </g>
+</svg>
