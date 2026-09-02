@@ -169,6 +169,19 @@ def test_target_shell_config_rejects_reversed_radius_and_elevation_bounds() -> N
         AngularBoxSupportConfig(elevation_min_deg=20.0, elevation_max_deg=10.0)
 
 
+@pytest.mark.parametrize("invalid", [float("nan"), float("inf"), float("-inf")])
+@pytest.mark.parametrize("field", ["radius_min_m", "radius_max_m"])
+def test_target_shell_config_rejects_nonfinite_radius(field: str, invalid: float) -> None:
+    values = {
+        "radius_min_m": 1.0,
+        "radius_max_m": 1.5,
+        "support": AngularBoxSupportConfig(),
+    }
+    values[field] = invalid
+    with pytest.raises(ValueError, match=field):
+        TargetShellCenterConfig.model_validate(values)
+
+
 @pytest.mark.parametrize("elevation_min", (-90.0, 0.0))
 def test_vertical_baseline_accepts_rotationally_symmetric_angular_support(elevation_min: float) -> None:
     cfg = TargetShellCenterConfig(

@@ -209,10 +209,10 @@ class TargetShellCenterConfig(BaseConfig):
     kind: Literal["target_shell"] = "target_shell"
     """Discriminator for target-shell authoring; provenance is target shell."""
 
-    radius_min_m: float = Field(gt=0.0)
+    radius_min_m: PositiveFiniteFloat
     """Minimum target-to-candidate radius in metres; equal bounds are valid."""
 
-    radius_max_m: float = Field(gt=0.0)
+    radius_max_m: PositiveFiniteFloat
     """Maximum target-to-candidate radius in metres; equal bounds are valid."""
 
     support: TargetShellSupportConfig
