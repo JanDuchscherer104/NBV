@@ -35,3 +35,21 @@ Refer to Context7 queries in this file before editing.
 - **Two-column page**: `#set page(columns: 2, ...)`
 - **Figure grids**: `#grid(columns: (1fr, 1fr), gutter: 12pt, ...)`
 - **Measured layout**: `#layout(size => [ ... #measure(width: size.width, ...) ... ])`
+
+## Rendered Column Contract
+
+The thesis body has 30 mm left/right margins. `make thesis-pdf` verifies the
+compiled PDF with `scripts/check_typst_pdf_column_bounds.py`; do not treat a
+successful Typst compile as proof that a display fits. When the checker reports
+`typst-column-overflow`, prefer one of these semantic repairs:
+
+- split a compound display into independently readable shared equations;
+- move definitions into a short preceding display and retain only the needed
+  relation at the point of use;
+- use a vertical `cases` or `mat` layout for conditional clauses;
+- give a table an explicit column allocation and shorten/restructure cells.
+
+Scaling, negative horizontal spacing, `move`, or clipping can hide a warning
+while making the printed document harder to read, so they are not repairs.
+The default Make target reports the current manuscript baseline in warning-only
+mode; `THESIS_COLUMN_CHECK_ARGS=` promotes it to a strict rendered-layout gate.
