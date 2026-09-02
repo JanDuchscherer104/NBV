@@ -9,8 +9,9 @@ from typing import Any
 import pytest
 import streamlit as st
 
-from aria_nbv.app.panels._stored_rollouts import candidate_generation, overview_topology, reconstruction_return, shared
-from aria_nbv.app.panels._stored_rollouts.shared import ExplanationSection, ScientificExplanation
+from aria_nbv.app.panels import common
+from aria_nbv.app.panels._stored_rollouts import candidate_generation, overview_topology, reconstruction_return
+from aria_nbv.app.panels.common import ExplanationSection, ScientificExplanation
 from aria_nbv.app.scientific_labels import TheoryReferences, TheoryResolutionError, resolve_theory
 
 
@@ -94,7 +95,7 @@ def test_gain_and_geometry_theory_references_resolve_from_current_registry() -> 
 def test_invalid_theory_warns_and_allows_remaining_guide(monkeypatch: pytest.MonkeyPatch) -> None:
     warnings: list[str] = []
     rendered: list[str] = []
-    monkeypatch.setattr(shared, "resolve_theory", lambda _theory: (_ for _ in ()).throw(TheoryResolutionError("bad")))
+    monkeypatch.setattr(common, "resolve_theory", lambda _theory: (_ for _ in ()).throw(TheoryResolutionError("bad")))
     monkeypatch.setattr(st, "warning", warnings.append)
     monkeypatch.setattr(st, "markdown", lambda value, **_kwargs: rendered.append(str(value)))
     explanation = _explanation(
@@ -102,7 +103,7 @@ def test_invalid_theory_warns_and_allows_remaining_guide(monkeypatch: pytest.Mon
         theory=TheoryReferences(symbol_ids=("missing.symbol",)),
         external_references=(("Reference", "https://example.com/reference"),),
     )
-    shared._render_scientific_guide(explanation, log_y_key=None)
+    common._render_scientific_guide(explanation, log_y_key=None)
     assert warnings and "Canonical theory unavailable" in warnings[0]
     rendered_text = "\n".join(rendered)
     assert "Metric" in rendered_text
@@ -111,7 +112,7 @@ def test_invalid_theory_warns_and_allows_remaining_guide(monkeypatch: pytest.Mon
 
 
 def test_render_plot_delegates_answer_to_one_guide_owner() -> None:
-    source = Path(shared.__file__).read_text(encoding="utf-8")
+    source = Path(common.__file__).read_text(encoding="utf-8")
     assert 'st.markdown(f"**Answer:** {explanation.answer}")' not in source
     assert source.count('explanation_item("Answer", explanation.answer)') == 1
     assert "render_explanation_popover(" in source
@@ -121,7 +122,7 @@ def test_render_plot_delegates_answer_to_one_guide_owner() -> None:
 
 def test_stored_rollout_plot_answers_are_not_generic() -> None:
     generic = "This plot answers the question using the persisted evidence rows"
-    for module in (candidate_generation, overview_topology, reconstruction_return, shared):
+    for module in (candidate_generation, overview_topology, reconstruction_return, common):
         module_path = module.__file__
         assert module_path is not None
         assert generic not in Path(module_path).read_text(encoding="utf-8")
@@ -146,7 +147,7 @@ def test_candidate_population_literal_questions_have_authored_answers() -> None:
 def test_scientific_guide_has_one_ordered_narrative_answer(monkeypatch: pytest.MonkeyPatch) -> None:
     rendered: list[str] = []
     monkeypatch.setattr(st, "markdown", lambda value, **_kwargs: rendered.append(str(value)))
-    shared._render_scientific_guide(_explanation(), log_y_key=None)
+    common._render_scientific_guide(_explanation(), log_y_key=None)
     text = "\n".join(rendered)
     assert text.index("### Core idea") < text.index("**Question**") < text.index("**Answer**")
     assert text.count("**Answer**") == 1

@@ -112,7 +112,7 @@ def test_invalid_utf8_theory_registry_fails_closed(tmp_path: Path) -> None:
 
 
 def test_narrative_explanation_requires_ordered_content() -> None:
-    from aria_nbv.app.panels._stored_rollouts.shared import ExplanationSection, ScientificExplanation
+    from aria_nbv.app.panels.common import ExplanationSection, ScientificExplanation
 
     empty = ScientificExplanation(
         question="q", answer="a", sections=(), evidence_role="provenance", source_fields=("x",)

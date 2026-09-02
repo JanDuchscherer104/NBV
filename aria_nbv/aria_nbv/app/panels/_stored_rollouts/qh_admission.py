@@ -12,8 +12,8 @@ import pandas as pd
 import streamlit as st
 
 from ....reporting import ScientificReportConfig
+from ..common import download_frame as _download_frame
 from .s2_directions import render_s2_report_preview
-from .shared import download_frame as _download_frame
 
 
 def _s2_widget_prefix(session_handle: Any) -> str:

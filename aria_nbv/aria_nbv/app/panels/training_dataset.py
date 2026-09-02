@@ -40,10 +40,9 @@ from ...dataset_bundle import (
     prepare_dataset_bundle_export,
 )
 from ...utils import Stage
-from ._stored_rollouts.shared import ExplanationSection, ScientificExplanation
-from ._stored_rollouts.shared import plot_control_key as _plot_control_key
-from ._stored_rollouts.shared import render_plot as _render_plot
-from .common import current_scientific_label
+from .common import ExplanationSection, ScientificExplanation, current_scientific_label
+from .common import plot_control_key as _plot_control_key
+from .common import render_plot as _render_plot
 
 _VALIDATED_STATE_KEY = "training_dataset_validated_evidence"
 _DEEP_STATE_KEY = "training_dataset_deep_statistics"

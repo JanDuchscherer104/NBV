@@ -15,12 +15,17 @@ from ....configs import PathConfig
 from ....dataset_topology import discover_vin_store_dirs
 from ....rollouts.reporting import RolloutCorpusSummary
 from ...scientific_labels import TheoryReferences
-from ..common import current_scientific_label, render_scientific_notation
+from ..common import (
+    _ROLE_COLORS,
+    ExplanationSection,
+    ScientificExplanation,
+    current_scientific_label,
+    render_scientific_notation,
+)
+from ..common import download_frame as _download_frame
+from ..common import download_json as _download_json
+from ..common import render_plot as _render_plot
 from .session import _clear_stored_rollout_caches
-from .shared import _ROLE_COLORS, ExplanationSection, ScientificExplanation
-from .shared import download_frame as _download_frame
-from .shared import download_json as _download_json
-from .shared import render_plot as _render_plot
 
 _INSPECTION_REFERENCE = (
     "Inspection projection owner",

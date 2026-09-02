@@ -17,6 +17,9 @@ from ....rollouts.candidate_benchmark import (
 from ....rollouts.candidate_support_plotting import candidate_benchmark_figures as _candidate_benchmark_figures
 from ....rollouts.candidate_support_plotting import candidate_family_preflight_figures, candidate_support_figures
 from ...scientific_labels import TheoryReferences
+from ..common import ExplanationSection, ScientificExplanation
+from ..common import download_frame as _download_frame
+from ..common import render_plot as _render_plot
 from .candidate_generation import (
     _render_candidate_aggregate_breakdowns,
     _render_candidate_geometry_diagnostics,
@@ -25,9 +28,6 @@ from .candidate_generation import (
     _render_target_score_diagnostics,
 )
 from .session import CANDIDATE_BENCHMARK_STATE_KEY, CandidateBenchmarkBuildResult
-from .shared import ExplanationSection, ScientificExplanation
-from .shared import download_frame as _download_frame
-from .shared import render_plot as _render_plot
 
 _CANDIDATE_FAMILY_SHELL_STATE_KEY = "stored-rollouts:candidate-family-shell"
 
