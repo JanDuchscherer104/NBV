@@ -18,8 +18,9 @@ repository owners remain authoritative for behavior and scientific claims.
    parent's graph is query-admissible. It then copies that generation locally,
    links the canonical primary's content-addressed `semantic` and
    `semantic-deep` namespaces, rebuilds the deterministic child projection only
-   when its owners changed, then runs setup-owned upstream incremental maintenance
-   before reporting readiness.
+   when its owners changed, and verifies the child is query-admissible before
+   reporting readiness. Semantic extraction is deferred to the active Codex
+   task, which can perform the upstream-approved agent workflow.
 2. Mutable projection, graph, manifest, stat, interpreter, root, run, and
    provenance state are worktree-local regular-file copies. Only the two
    content-addressed cache namespaces are shared; neither cache identity nor a
@@ -39,10 +40,11 @@ The public states are exhaustive. `fresh` has intact artifacts, valid owner and
 detector checks, and a mandatory detector-proven zero-delta corpus. Matching
 recorded or locally derived Git trees establishes non-ancestor identity but
 never bypasses that detector requirement. `usable-stale` has an exact bounded
-`stale_sources` list or owner reasons; full-tree equality may retain this state
-for a bounded worktree delta. Every other incomplete, corrupt, wrong-root, true
-corpus mismatch, missing-object, or unscoped result is `unusable`. These states
-govern navigation only; Graphify never owns the located fact.
+`stale_sources` list, owner reasons, or a declared pending semantic refresh;
+full-tree equality may retain this state for a bounded worktree delta. Every
+other incomplete, corrupt, wrong-root, true AST/code corpus mismatch,
+missing-object, or unscoped result is `unusable`. These states govern
+navigation only; Graphify never owns the located fact.
 
 The checker records and accepts only canonical full hexadecimal commit OIDs and
 derives trees from objects independently verified as commits. It always scans
@@ -56,19 +58,20 @@ delta is `unusable`; an ancestor committed delta or bounded overlay delta is
 
 ## Freshness And Refresh
 
-Setup owns the ordinary session reconciliation: it rebuilds the deterministic
-child projection only for owner changes and invokes upstream's incremental
-extractor for every declared active mode. A
+Setup owns deterministic bootstrap reconciliation: it rebuilds the deterministic
+child projection only for owner changes, then runs upstream `graphify update
+<worktree> --no-cluster` to reconcile the local no-LLM code/AST layer. It never invokes upstream semantic extraction during worktree creation. A
 receipt, matching semantic counts, or matching Git commit never substitutes for
 the pinned upstream detector and ancestry checks. A parent whose detector result
-is unbounded or otherwise unusable requires a factual semantic refresh before a
-new session can start. Strict state diagnostics are internal CI and pre-push
-owners, not ordinary model actions. A Git HEAD mismatch alone is not staleness when the
+has unbounded AST/code drift or is otherwise unusable requires repair before a
+new session can start. Pending semantic or semantic-deep refresh—whether its
+affected source set is bounded or not—is `usable-stale`: setup may start the
+task with the last valid graph, and the task must verify affected sources
+directly until it completes an upstream-accounted refresh. A Git HEAD mismatch alone is not staleness when the
 recorded graph and projection revisions are ancestors and indexed bytes still
 match. Semantic refreshes use `fork_turns="none"` and account for every
-dispatched file. Incomplete or unreconciled semantic refreshes remain strict-gate
-stale, retain the last valid snapshot for navigation, and require direct
-verification of affected sources.
+dispatched file. Strict diagnostics remain internal CI and pre-push owner
+checks, not a worktree-creation gate for pending semantic state.
 
 ## Upstream Lifecycle And Hooks
 
@@ -81,7 +84,8 @@ verification of affected sources.
   AST-quick-scan changed Markdown headings. It does not semantically refresh
   documents or images or prove their freshness. ARIA's automatic
   `graphify-maintain` completion and pre-commit ownership handles declared-mode
-  semantic maintenance; ordinary models do not refresh semantic inputs manually.
+  semantic maintenance; an active Codex task uses the approved host-agent route
+  when semantic inputs need refreshing.
 - The vendored `../../graphify/references/hooks.md` still says document and image changes are
   ignored. Preserve that upstream byte, but follow verified `0.9.48` executable
   behavior and treat either outcome as non-semantic navigation only.
@@ -111,15 +115,18 @@ verification of affected sources.
   callable together.
 - Accept a refresh only when upstream Graphify accounts for every dispatched
   file and excludes existing-file nodes outside the dispatched set. An
-  incomplete refresh remains strict-gate stale, but the last valid graph stays
-  queryable; verify any `stale_sources` result directly at `source_location`.
+  incomplete refresh remains `usable-stale` when its bounded affected sources
+  are known, but the last valid graph stays queryable; verify any
+  `stale_sources` result directly at `source_location`.
 
 ## Marker And Worktree Rules
 
 - Graphify 0.9.48 writes `graphify-out/needs_update`, while the host-agent
-  runbook also clears the historical `.needs_update` spelling. Remove
-  `graphify-out/needs_update` only after refresh, coverage, and reconciliation
-  all pass; leave it after partial, failed, or unverified work.
+  runbook also clears the historical `.needs_update` spelling. During setup,
+  preserve `graphify-out/needs_update` as a bounded `usable-stale` signal.
+  Remove `graphify-out/needs_update` only after refresh, coverage, and
+  reconciliation all pass. Leave
+  it after partial, failed, or unverified work.
 - Every linked worktree runs `scripts/setup_worktree_env.sh`. Only the shared
   `semantic` and `semantic-deep` content-addressed caches are linked. Mutable
   graphs, projections, manifests, AST state, and semantic run state are local

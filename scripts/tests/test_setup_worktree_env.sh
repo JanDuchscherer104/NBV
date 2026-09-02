@@ -59,7 +59,7 @@ from pathlib import Path
 import sys
 Path("${SANDBOX}/freshness.log").open("a", encoding="utf-8").write(" ".join(sys.argv[1:]) + "\\n")
 root = Path.cwd()
-admitted = root == Path("${WORKTREE_ROOT}")
+admitted = root in {Path("${WORKTREE_ROOT}"), Path("${TRACKED_PDF_ROOT}")}
 admitted = admitted or (
     root == Path("${SHARED_ROOT}")
     and os.environ.get("ARIA_TEST_PRIMARY_UNUSABLE") != "1"
@@ -70,6 +70,10 @@ admitted = admitted or (
 )
 admitted = admitted or (
     root == Path("${EXPLICIT_CHILD_ROOT}")
+    and os.environ.get("ARIA_TEST_ADMIT_EXPLICIT") == "1"
+)
+admitted = admitted or (
+    root == Path("${AMBIGUOUS_CHILD_ROOT}")
     and os.environ.get("ARIA_TEST_ADMIT_EXPLICIT") == "1"
 )
 raise SystemExit(0 if admitted else 1)
@@ -325,7 +329,7 @@ rmdir "${SHARED_ROOT}/.data/graphify-semantic-cache/semantic" \
 run_setup "${WORKTREE_ROOT}"
 [[ -d "${SHARED_ROOT}/.data/graphify-semantic-cache/semantic" ]]
 [[ -d "${SHARED_ROOT}/.data/graphify-semantic-cache/semantic-deep" ]]
-grep -Fqx -- "--root ${WORKTREE_ROOT}" "${SANDBOX}/reconcile.log"
+grep -Fqx -- "--root ${WORKTREE_ROOT} --prepare-only" "${SANDBOX}/reconcile.log"
 [[ -d "${WORKTREE_ROOT}/.data" ]]
 [[ -L "${WORKTREE_ROOT}/.data/ase_efm" ]]
 [[ -L "${WORKTREE_ROOT}/.data/offline_cache" ]]
@@ -366,11 +370,16 @@ CODEX_WORKTREE_PATH="${SHARED_ROOT}" \
 
 # Execute the exact Codex environment bridge with the source variable empty.
 # When the canonical primary is unusable, it must choose the nearest admitted
-# ancestor sibling rather than worktree-list order. Advance the destination by
-# one empty commit so the seeded worktree is its only admitted ancestor.
+# ancestor sibling rather than worktree-list order. Give the admissible sibling
+# the shared runtime required of a future Graphify seed parent without seeding
+# it first, so the sentinel below proves which parent was selected.
+ln -s "${SHARED_ROOT}/aria_nbv/.venv" "${SECOND_WORKTREE_ROOT}/aria_nbv/.venv"
+# Advance the destination by one empty commit so the seeded worktree is its
+# only admitted ancestor.
 git --git-dir="$(git -C "${SECOND_WORKTREE_ROOT}" rev-parse --absolute-git-dir)" \
   --work-tree="${SECOND_WORKTREE_ROOT}" commit --allow-empty -qm "destination ahead"
-ARIA_TEST_PRIMARY_UNUSABLE=1 run_codex_setup "${SECOND_WORKTREE_ROOT}" "" \
+ARIA_TEST_PRIMARY_UNUSABLE=1 ARIA_TEST_ADMIT_SECOND=1 \
+  run_codex_setup "${SECOND_WORKTREE_ROOT}" "" \
   >"${SANDBOX}/second-codex.out" 2>"${SANDBOX}/second-codex.err"
 [[ ! -s "${SANDBOX}/second-codex.out" && ! -s "${SANDBOX}/second-codex.err" ]]
 python3 - "${SECOND_WORKTREE_ROOT}/graphify-out/.aria-worktree-seed.json" "${WORKTREE_ROOT}" <<'PY'
@@ -390,7 +399,8 @@ PY
 # primary checkout and an admitted sibling are also available. Set this child
 # up before the tie-break fixture so each admitted candidate is a valid shared
 # runtime as well as a query-admissible Graphify source.
-ARIA_TEST_ADMIT_SECOND=1 run_codex_setup "${EXPLICIT_CHILD_ROOT}" "${SECOND_WORKTREE_ROOT}" \
+ARIA_TEST_ADMIT_SECOND=1 ARIA_TEST_ADMIT_EXPLICIT=1 \
+  run_codex_setup "${EXPLICIT_CHILD_ROOT}" "${SECOND_WORKTREE_ROOT}" \
   >"${SANDBOX}/explicit-codex.out" 2>"${SANDBOX}/explicit-codex.err"
 [[ ! -s "${SANDBOX}/explicit-codex.out" && ! -s "${SANDBOX}/explicit-codex.err" ]]
 
@@ -416,7 +426,7 @@ PY
 # Git hooks export destination bindings. The top-level bridge must discard
 # those bindings before it validates independent sibling and primary paths.
 GIT_DIR="$(git -C "${EXPLICIT_CHILD_ROOT}" rev-parse --absolute-git-dir)" \
-GIT_WORK_TREE="${EXPLICIT_CHILD_ROOT}" ARIA_TEST_ADMIT_SECOND=1 \
+GIT_WORK_TREE="${EXPLICIT_CHILD_ROOT}" ARIA_TEST_ADMIT_SECOND=1 ARIA_TEST_ADMIT_EXPLICIT=1 \
   run_codex_setup "${EXPLICIT_CHILD_ROOT}" "${SECOND_WORKTREE_ROOT}" \
   >"${SANDBOX}/hook-bound-codex.out" 2>"${SANDBOX}/hook-bound-codex.err"
 [[ ! -s "${SANDBOX}/hook-bound-codex.out" && ! -s "${SANDBOX}/hook-bound-codex.err" ]]
