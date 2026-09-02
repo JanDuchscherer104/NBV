@@ -1222,7 +1222,7 @@ def test_stored_rollout_plots_have_one_contextual_rendering_owner() -> None:
     source = Path(panel_common.__file__).read_text(encoding="utf-8")
 
     assert source.count("st.plotly_chart(") == 1
-    assert "        rendered,\n" in source
+    assert "st.plotly_chart(rendered" in source
     assert panel_common.plot_control_key("summary", "a") != panel_common.plot_control_key("summary", "b")
 
 
