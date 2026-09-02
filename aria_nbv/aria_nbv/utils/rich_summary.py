@@ -1,4 +1,4 @@
-"""Compact tensor summaries and Rich trees for diagnostics.
+"""Compact tensor summaries and rendering-neutral diagnostic products.
 
 This module owns both the structured summary dictionaries used by model and
 dataset diagnostics and their optional Rich rendering. It inspects
@@ -6,7 +6,9 @@ EFM3D tensor wrappers without mutating or moving their underlying tensors;
 callers retain device and lifetime ownership.
 """
 
-from typing import Any
+from collections.abc import Mapping
+from dataclasses import dataclass
+from typing import Any, Literal
 
 import torch
 from efm3d.aria.camera import CameraTW
@@ -16,6 +18,54 @@ from efm3d.aria.tensor_wrapper import TensorWrapper
 from rich.text import Text
 from rich.tree import Tree
 from torch import Tensor
+
+SummaryKind = Literal["tensor", "mapping", "sequence", "scalar"]
+
+
+@dataclass(frozen=True, slots=True)
+class SummaryRow:
+    """One flattened inspection value consumable by CLI or Streamlit."""
+
+    path: tuple[str, ...]
+    value: str
+    kind: SummaryKind
+
+
+def summary_rows(summary: Mapping[str, Any]) -> tuple[SummaryRow, ...]:
+    """Flatten a structured summary into deterministic, rendering-neutral rows.
+
+    The function accepts the existing summary dictionaries without acquiring or
+    copying their source tensors. Rich, Streamlit, and export adapters can render
+    the same rows while retaining the original field path and value kind.
+    """
+
+    rows: list[SummaryRow] = []
+
+    def visit(path: tuple[str, ...], value: Any) -> None:
+        if isinstance(value, dict) and _is_tensor_summary(value):
+            rows.append(SummaryRow(path, _format_tensor_summary(value), "tensor"))
+            return
+        if isinstance(value, Mapping):
+            if not value:
+                rows.append(SummaryRow(path, "{}", "mapping"))
+                return
+            for key, child in value.items():
+                visit(path + (str(key),), child)
+            return
+        if isinstance(value, (list, tuple)):
+            rows.append(SummaryRow(path, f"len={len(value)}", "sequence"))
+            return
+        rows.append(SummaryRow(path, str(value), "scalar"))
+
+    for key, value in summary.items():
+        visit((str(key),), value)
+    return tuple(rows)
+
+
+def summary_markdown(summary: Mapping[str, Any]) -> str:
+    """Render the shared summary rows as compact Markdown for text UIs."""
+
+    return "\n".join(f"- `{'/'.join(row.path)}` ({row.kind}): {row.value}" for row in summary_rows(summary))
 
 
 def summarize(val: Any, *, include_stats: bool = False) -> Any:
@@ -43,7 +93,7 @@ def _extract_tensor(val: Any) -> Tensor | None:
     if isinstance(val, PoseTW):
         return val.matrix
     if isinstance(val, (TensorWrapper, CameraTW, ObbTW)):
-        data = val.tensor() if callable(getattr(val, "tensor", None)) else val.tensor  # type: ignore[operator]
+        data = val.tensor() if callable(getattr(val, "tensor", None)) else val.tensor
         return data
     return None
 
@@ -235,7 +285,7 @@ def capture_tree(tree: Tree) -> str:
             markup=True,
             emoji=False,
         )
-    return capture.get().rstrip()
+    return str(capture.get()).rstrip()
 
 
 def build_nested(

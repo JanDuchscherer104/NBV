@@ -5,7 +5,7 @@ from __future__ import annotations
 import torch
 
 from aria_nbv.utils import rich_summary, summarize, summarize_shape
-from aria_nbv.utils.rich_summary import capture_tree
+from aria_nbv.utils.rich_summary import capture_tree, summary_markdown, summary_rows
 
 
 def test_summarize_preserves_public_tensor_contract() -> None:
@@ -40,3 +40,20 @@ def test_capture_tree_is_ansi_free_for_web_and_log_renderers() -> None:
 
     assert "sample" in rendered
     assert "\x1b[" not in rendered
+
+
+def test_summary_rows_are_shared_between_text_and_streamlit_adapters() -> None:
+    summary = {
+        "tensor": {"shape": (2, 3), "dtype": "torch.float32", "device": "cpu"},
+        "nested": {"count": 3},
+        "items": ["a", "b"],
+    }
+    rows = summary_rows(summary)
+    assert [(row.path, row.kind) for row in rows] == [
+        (("tensor",), "tensor"),
+        (("nested", "count"), "scalar"),
+        (("items",), "sequence"),
+    ]
+    markdown = summary_markdown(summary)
+    assert "`tensor` (tensor)" in markdown
+    assert "`nested/count` (scalar): 3" in markdown
