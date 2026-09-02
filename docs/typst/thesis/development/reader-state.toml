@@ -1,0 +1,242 @@
+[meta]
+schema = "aria-nbv.reader-state.v1"
+owner = "docs/typst/thesis/development/reader-state.toml"
+purpose = "Development-only editorial contract for what a technically competent reader should know before and after each thesis chapter."
+maintenance = "Authored by humans and agents when a chapter's conceptual job, prerequisite knowledge, durable takeaways, or outgoing dependency changes; never inferred automatically from prose."
+chapter_order = [
+  "introduction",
+  "foundations",
+  "oracle-data",
+  "method",
+  "experimental-design",
+  "results",
+  "discussion",
+  "conclusion",
+]
+
+[[chapters]]
+id = "introduction"
+title = "Introduction"
+source = "docs/typst/thesis/sections/01-introduction.typ"
+reader_question = "Why does target-conditioned egocentric reconstruction require planning beyond the locally best next view?"
+enters_knowing = [
+  "Active perception couples sensing actions to the evidence available for reconstruction.",
+  "A limited acquisition budget turns observation choice into a decision problem.",
+]
+must_not_assume = [
+  "Knowledge of ARIA-NBV repository, protocol, or implementation names.",
+  "That useful non-myopic structure, oracle headroom, or learned recovery has already been established.",
+]
+resolves = "Frames the thesis as a test of whether target-specific reconstruction quality has useful bounded multi-step structure and whether an actor-visible model can recover it."
+leaves_knowing = [
+  "The scientific target is the geometry of a requested object under a fixed view budget.",
+  "Oracle lookahead headroom and learned recovery are distinct questions.",
+  "Action support, causal information, representation, and leakage are validity conditions that support the central planning question.",
+]
+enables = "The Foundations chapter can derive the objective, action support, temporal value, and representation requirements without exposing implementation structure."
+teaching_device = "Use one occluded-object example in which a small preparatory motion enables a later view that improves the target more than the immediately strongest candidate."
+theory_threads = [
+  "target-conditioned utility",
+  "bounded lookahead",
+  "actor-oracle separation",
+]
+next_chapter = "foundations"
+
+[[chapters]]
+id = "foundations"
+title = "Foundations and Related Work"
+source = "docs/typst/thesis/sections/02-foundations/index.typ"
+reader_question = "What objective, action, state, temporal, and geometric structure must a target-conditioned finite-horizon view planner respect?"
+enters_knowing = [
+  "The thesis asks whether bounded lookahead helps target-specific reconstruction.",
+  "The reader can distinguish the requested object from scene-wide reconstruction.",
+]
+must_not_assume = [
+  "Prior fluency in finite-horizon value learning, group actions, or equivariant geometric learning.",
+  "That a candidate pose is useful merely because it is geometrically valid or covers new scene surface.",
+]
+resolves = "Builds the decision problem from target utility and feasible candidate support to causal state, delayed value, and the geometric properties required of a candidate scorer."
+leaves_knowing = [
+  "A view value is defined relative to a target, a feasible action set, a causal state, and a remaining horizon.",
+  "Rigid-coordinate changes should not alter the underlying decision, while geometric quantities may transform predictably; candidate order should not change candidate semantics.",
+  "Discrete voxel fields provide structured local support but introduce resolution, sparsity, boundary, and observability tradeoffs that alternative or derived representations may address.",
+]
+enables = "The Oracle and Data Generation chapter can operationalize the decision problem while preserving the actor-oracle information boundary."
+teaching_device = "Follow one two-step candidate sequence and show separately what changes under a global rigid-frame transformation, a candidate permutation, and a coarser voxel discretization."
+theory_threads = [
+  "SE(3) invariance and equivariance",
+  "set and candidate permutation structure",
+  "partial observability and finite-horizon value",
+  "voxel, point, field, graph, and target-centric representations",
+]
+next_chapter = "oracle-data"
+
+[[chapters]]
+id = "oracle-data"
+title = "Oracle and Data Generation"
+source = "docs/typst/thesis/sections/03-oracle-and-data-generation/index.typ"
+reader_question = "How can privileged simulation or rendering supervise hypothetical actions without leaking their outcomes into the actor's causal state?"
+enters_knowing = [
+  "Candidate value depends on target utility, feasibility, causal state, and horizon.",
+  "The actor and the offline oracle have different information roles.",
+]
+must_not_assume = [
+  "That factual and counterfactual states contain the same modalities or carry the same evidential status.",
+  "That overlapping snippets or a smaller download stride create new independent scenes.",
+]
+resolves = "Defines target tasks, feasible candidate support, privileged outcome evaluation, selected factual successors, and replay relationships as distinct parts of one causal data-generation process."
+leaves_knowing = [
+  "The oracle may score many hypothetical candidates, but only the selected observation may extend the next actor state.",
+  "Dense immediate counterfactual labels and sparse selected factual transitions support different learning targets.",
+  "Ground-truth rendering, missing modalities, overlapping windows, and simulator outputs require explicit provenance and leakage controls.",
+]
+enables = "The Method chapter can consume a well-defined actor state and supervision relation instead of reintroducing storage schemas or oracle internals."
+teaching_device = "Use a single state with many feasible candidate views: score all candidates offline, select one, and trace exactly which observation and modalities may enter the successor state."
+theory_threads = [
+  "causal prefixes and privileged supervision",
+  "factual-counterfactual asymmetry",
+  "stride-based factual window generation",
+  "naturalistic synthetic data and simulator interfaces",
+]
+next_chapter = "method"
+
+[[chapters]]
+id = "method"
+title = "Method"
+source = "docs/typst/thesis/sections/04-method/index.typ"
+reader_question = "How should scene evidence, target identity, action history, candidate geometry, and horizon interact to predict finite-horizon target value?"
+enters_knowing = [
+  "The actor-visible state and oracle supervision have already been separated.",
+  "The reader understands why geometry, time, hierarchy, and finite candidate support matter.",
+]
+must_not_assume = [
+  "Knowledge of data-transfer objects, configuration discriminators, model class names, or internal variant codes.",
+  "That more architectural complexity is valuable without a diagnosed representational failure.",
+]
+resolves = "Explains one selected finite-candidate value model conceptually, then formalizes its inputs, geometric relations, temporal conditioning, learning targets, and only the scientifically relevant alternatives."
+leaves_knowing = [
+  "Scene, target, history, candidate, budget, and horizon have distinct semantic roles.",
+  "Candidate-relative geometry, shared-state conditioning, causal temporal summaries, and permutation-consistent candidate scoring express useful structural priors.",
+  "Voxel-field evidence can be pooled, re-centered, sparsified, lifted to points or relations, or combined with target-centric memory when the local discrete carrier loses relevant structure.",
+]
+enables = "The Experimental Design chapter can test specific representation, temporal, and data hypotheses against matched controls."
+teaching_device = "Start from one candidate query and trace information from the scene and target through geometric relations to a scalar value; only then show the batched or coded realization."
+theory_threads = [
+  "geometric invariance, equivariance, and relational isomorphisms",
+  "spatio-temporal causal state",
+  "hierarchical scene-target-candidate-sequence structure",
+  "discrete fields and derived continuous or relational representations",
+]
+next_chapter = "experimental-design"
+
+[[chapters]]
+id = "experimental-design"
+title = "Experimental Design"
+source = "docs/typst/thesis/sections/05-experimental-design/index.typ"
+reader_question = "Which comparisons can distinguish planning value from representation failure, data scarcity, leakage, or simulator mismatch?"
+enters_knowing = [
+  "The selected method, oracle, actor-visible state, and candidate support are conceptually defined.",
+  "The reader can distinguish immediate counterfactual labels from selected factual transitions.",
+]
+must_not_assume = [
+  "That roughly 4,800 overlapping snippets from about 100 scenes are independent samples.",
+  "That synthetic counterfactual renders and factual sensor observations are interchangeable.",
+]
+resolves = "Defines scene-level splits, matched budgets and modalities, limited-data strategies, representation and temporal ablations, simulator validity checks, and endpoint comparisons aligned with the research questions."
+leaves_knowing = [
+  "Independent evidence is counted at the scene level even when stride changes yield more factual windows or transitions.",
+  "Augmentation, self-supervision, pretraining, repeated factual rollouts, and simulation address different aspects of data scarcity.",
+  "Actor modalities, oracle-only assets, factual-counterfactual asymmetry, and simulator realism must be controlled before policy differences are interpreted.",
+]
+enables = "The Results chapter can report answers in research-question order with denominators, uncertainty, and first-failure attribution."
+teaching_device = "Use the limited-data regime as a worked design case: separate the number of scenes, overlapping snippets, factual transitions, counterfactual labels, and simulator-generated trajectories."
+theory_threads = [
+  "effective sample size and scene-level generalization",
+  "data augmentation versus new causal experience",
+  "matched modality and leakage controls",
+  "external simulator validity and domain randomization",
+]
+next_chapter = "results"
+
+[[chapters]]
+id = "results"
+title = "Results"
+source = "docs/typst/thesis/sections/06-results.typ"
+reader_question = "What does the evidence establish about oracle headroom, learned recovery, representation choice, and the principal failure modes?"
+enters_knowing = [
+  "The reader knows the estimands, comparisons, population, and validity conditions.",
+  "The reader does not need to know report keys or artifact schema names.",
+]
+must_not_assume = [
+  "That pipeline reachability, a successful fixture, or a training loss is a policy result.",
+  "That an absent downstream result is equivalent to a zero effect.",
+]
+resolves = "Reports factual outcomes in research-question order and separates unavailable evidence, failed validity conditions, measured effects, uncertainty, and admitted conclusions."
+leaves_knowing = [
+  "Whether stable non-myopic oracle headroom exists on the evaluated support.",
+  "Whether the actor-visible model recovers any of that advantage under matched evaluation.",
+  "Which representation, temporal, data, or simulator limitations are supported by diagnostics rather than conjecture.",
+]
+enables = "The Discussion chapter can explain mechanisms and limitations without re-litigating the reporting protocol."
+teaching_device = "Give each research question one result block with population, comparison, estimate, uncertainty, interpretation, and the earliest condition that limits the claim."
+theory_threads = [
+  "effect size and uncertainty",
+  "headroom versus learned recovery",
+  "first-failure attribution",
+]
+next_chapter = "discussion"
+
+[[chapters]]
+id = "discussion"
+title = "Discussion"
+source = "docs/typst/thesis/sections/07-discussion.typ"
+reader_question = "Why did the observed planning behavior occur, how far does it generalize, and which representation or data change is justified next?"
+enters_knowing = [
+  "The principal empirical answers and unresolved outcomes are explicit.",
+  "Diagnostics have been separated from speculative architecture explanations.",
+]
+must_not_assume = [
+  "That model complexity, voxel discretization, temporal memory, or simulator fidelity caused a result without matched evidence.",
+  "That a setup-specific negative result settles the general scientific question.",
+]
+resolves = "Interprets results through geometry, temporal dependence, hierarchy, representation support, data regime, and factual-counterfactual asymmetry while distinguishing evidence from hypotheses."
+leaves_knowing = [
+  "Which conclusions are specific to the evaluated scenes, targets, candidates, horizons, and modalities.",
+  "Which mechanisms are supported, which remain plausible alternatives, and what experiment would discriminate them.",
+  "Why any proposed representation, factual-data, or simulator extension follows from a measured limitation.",
+]
+enables = "The Conclusion can answer the research questions directly and state a bounded contribution without introducing new machinery."
+teaching_device = "Organize each interpretation as observation, candidate mechanism, competing explanation, discriminating test, and bounded implication."
+theory_threads = [
+  "mechanistic interpretation",
+  "scope and generalization",
+  "evidence-conditioned representation and simulator extensions",
+]
+next_chapter = "conclusion"
+
+[[chapters]]
+id = "conclusion"
+title = "Conclusion"
+source = "docs/typst/thesis/sections/08-conclusion.typ"
+reader_question = "What has the thesis taught about target-conditioned finite-horizon view planning, and what remains unresolved?"
+enters_knowing = [
+  "The reader knows the results, their mechanisms, and their limitations.",
+  "No new protocol, architecture, symbol, or evidence source should be required.",
+]
+must_not_assume = [
+  "That future continuous control, online reinforcement learning, or real-device deployment has been validated.",
+  "That unresolved evidence can be replaced by a conditional outcome tree.",
+]
+resolves = "Answers the principal research questions in plain language, states the conceptual and empirical contribution, and bounds the most defensible next step."
+leaves_knowing = [
+  "Whether bounded lookahead is useful for the evaluated target-conditioned reconstruction setting.",
+  "Whether actor-visible finite-horizon learning recovered that opportunity.",
+  "Which geometric, temporal, hierarchical, representation, and data lessons transfer beyond the exact implementation.",
+]
+enables = "The reader can assess the contribution without consulting repository internals and can identify the next experiment that would most reduce uncertainty."
+teaching_device = "Use one concise answer per research question, followed by a synthesis paragraph that reconnects geometry, time, hierarchy, representation, and data."
+theory_threads = [
+  "direct research-question answers",
+  "transferable conceptual lessons",
+  "bounded future work",
+]
