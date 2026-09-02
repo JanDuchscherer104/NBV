@@ -13,6 +13,12 @@ when owners conflict.
   rendered strategic snapshot, milestone dates, states, blockers, evidence
   pointers, and review cadence.
   Seminar and archived proposal material is historical evidence, not priority.
+- The chapter-level learning journey is owned by
+  `typst/thesis/development/reader-state.toml`; `reader-state.typ` is its
+  development-only projection and validator. The ledger records editorial
+  prerequisites, teaching goals, takeaways, and outgoing dependencies. It is
+  authored rather than inferred and never replaces active chapter prose as the
+  owner of scientific claims.
 - `typst/shared/glossary.typ` owns durable terms; `typst/shared/symbols.typ` and
   `equations.typ` own reusable Typst bodies and their cross-format registry;
   `notation.yml` is generated from those facades. `references.bib` owns citation
@@ -38,6 +44,12 @@ when owners conflict.
   `scientific-review` owns independent non-mutating validity review; and
   `typst-authoring` realizes accepted content, notation, citations, and rendered
   pages. `aria-nbv-mermaid` owns Mermaid procedure and local rendering.
+- Before changing a chapter's conceptual order or prose flow, read its
+  `reader-state.toml` record. Update that record in the same change only when
+  the chapter's central reader question, prerequisites, durable takeaways,
+  teaching device, or outgoing dependency changes. Copy editing, citation
+  repair, and layout-only work leave the ledger unchanged unless they alter the
+  learning journey.
 - Role-disjoint setup and documentation verification commands route through
   [`docs/README.md`](README.md); executable behavior remains owned by the
   Makefile, CI workflow, and exact source/test owners.
@@ -45,8 +57,10 @@ when owners conflict.
   `make thesis-roadmap-contract`; do not copy internal tracker state into the
   public thesis projection.
 - For thesis claims, inspect the cited primary source and the local evidence.
-  Compile the touched Typst surface; for final-link review use the documented
-  `aria-wip-links=false` and pinned `aria-code-ref` inputs in `style.typ`.
+  Compile the touched Typst surface; development compilation validates and
+  renders the reader-state ledger, while submission mode omits it. For
+  final-link review use the documented `aria-wip-links=false` and pinned
+  `aria-code-ref` inputs in `style.typ`.
 - For broader Quarto changes, run the relevant frontmatter/render/check command;
   do not generate API, agent, or site artifacts unless that is the task.
 - For README changes, verify every command and relative link against the exact
