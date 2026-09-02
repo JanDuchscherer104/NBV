@@ -15,7 +15,7 @@ from collections.abc import Mapping, MutableMapping
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import Generic, TypeVar, get_args, get_origin
+from typing import Any, Generic, TypeAlias, TypeVar, cast, get_args, get_origin
 
 import tomlkit
 from pydantic import ValidationError
@@ -27,6 +27,12 @@ from ..utils.base_config import BaseConfig
 from .field_docs import inherited_field_docstring
 
 ConfigT = TypeVar("ConfigT", bound=BaseConfig)
+
+ConfigScalar: TypeAlias = None | bool | int | float | str
+"""JSON/TOML scalar retained by the metadata-only authoring seam."""
+
+ConfigValue: TypeAlias = ConfigScalar | list["ConfigValue"] | dict[str, "ConfigValue"]
+"""JSON/TOML-compatible value used by config descriptors and patches."""
 
 
 class ConfigAuthoringError(ValueError):
@@ -72,10 +78,10 @@ class ConfigFieldDescriptor:
     required: bool
     """Whether the validated model requires the field."""
 
-    default: object | None
+    default: ConfigValue
     """JSON-compatible default value, or ``None`` when no default exists."""
 
-    choices: tuple[object, ...]
+    choices: tuple[ConfigValue, ...]
     """Closed enum or ``Literal`` choices, if any."""
 
     allows_none: bool
@@ -104,10 +110,10 @@ class ConfigDiffEntry:
     path: str
     """Dotted field path."""
 
-    before: object
+    before: ConfigValue
     """Original JSON-compatible value."""
 
-    after: object
+    after: ConfigValue
     """Validated draft value."""
 
 
@@ -188,7 +194,7 @@ class ConfigDocument(Generic[ConfigT]):
 
         return tuple(_describe_model(self.model))
 
-    def validate_patch(self, patch: Mapping[str, object]) -> ConfigT:
+    def validate_patch(self, patch: Mapping[str, ConfigValue]) -> ConfigT:
         """Apply a partial mapping to the TOML tree and validate the complete config.
 
         The validated draft becomes the value subsequently reported by
@@ -201,7 +207,7 @@ class ConfigDocument(Generic[ConfigT]):
         draft = self._document.copy()
         _merge_mapping(draft, patch)
         try:
-            config = self.model.model_validate(draft.unwrap())
+            config = cast(ConfigT, self.model.model_validate(draft.unwrap()))
         except ValidationError as exc:
             raise ConfigAuthoringError(str(exc)) from exc
         self._draft_document = draft
@@ -320,14 +326,14 @@ def _describe_model(model: type[BaseConfig], prefix: str = "") -> list[ConfigFie
     return output
 
 
-def _theory_ids(policy: Mapping[str, object]) -> tuple[str, ...]:
+def _theory_ids(policy: Mapping[str, Any]) -> tuple[str, ...]:
     value = policy.get("theory_ids", ())
     if not isinstance(value, list | tuple | set):
         return ()
     return tuple(str(identifier) for identifier in value)
 
 
-def _reject_locked_patch(model: type[BaseConfig], patch: Mapping[str, object], prefix: str = "") -> None:
+def _reject_locked_patch(model: type[BaseConfig], patch: Mapping[str, ConfigValue], prefix: str = "") -> None:
     for name, value in patch.items():
         field = model.model_fields.get(name)
         path = f"{prefix}.{name}" if prefix else name
@@ -341,7 +347,7 @@ def _reject_locked_patch(model: type[BaseConfig], patch: Mapping[str, object], p
             _reject_locked_patch(nested, value, path)
 
 
-def _merge_mapping(container: MutableMapping[str, object], patch: Mapping[str, object]) -> None:
+def _merge_mapping(container: MutableMapping[str, Any], patch: Mapping[str, ConfigValue]) -> None:
     for key, value in patch.items():
         if value is None:
             container.pop(key, None)
@@ -353,38 +359,40 @@ def _merge_mapping(container: MutableMapping[str, object], patch: Mapping[str, o
             container[key] = tomlkit.item(_jsonable(value))
 
 
-def _jsonable(value: object) -> object:
+def _jsonable(value: Any) -> ConfigValue:
     if isinstance(value, BaseConfig):
-        return value.model_dump(mode="json", exclude_none=True)
+        return _jsonable(value.model_dump(mode="json", exclude_none=True))
     if isinstance(value, Path):
         return value.as_posix()
     if isinstance(value, Enum):
-        return value.value
+        return _jsonable(value.value)
     if isinstance(value, Mapping):
         return {str(key): _jsonable(item) for key, item in value.items()}
     if isinstance(value, tuple | list | set):
         return [_jsonable(item) for item in value]
-    return value
+    if value is None or isinstance(value, (str, int, float, bool)):
+        return value
+    raise TypeError(f"Unsupported config value type: {type(value).__name__}")
 
 
-def _flatten(value: object, prefix: str = "") -> dict[str, object]:
+def _flatten(value: Any, prefix: str = "") -> dict[str, ConfigValue]:
     if isinstance(value, Mapping):
-        output: dict[str, object] = {}
+        output: dict[str, ConfigValue] = {}
         for key, item in value.items():
             child = f"{prefix}.{key}" if prefix else str(key)
             output.update(_flatten(item, child))
         return output
-    return {prefix: value}
+    return {prefix: _jsonable(value)}
 
 
-def _aria_policy(extra: object) -> Mapping[str, object]:
+def _aria_policy(extra: Any) -> Mapping[str, Any]:
     if not isinstance(extra, Mapping):
         return {}
     aria = extra.get("aria", {})
     return aria if isinstance(aria, Mapping) else {}
 
 
-def _nested_model(annotation: object) -> type[BaseConfig] | None:
+def _nested_model(annotation: Any) -> type[BaseConfig] | None:
     if isinstance(annotation, type) and issubclass(annotation, BaseConfig):
         return annotation
     for argument in get_args(annotation):
@@ -393,7 +401,7 @@ def _nested_model(annotation: object) -> type[BaseConfig] | None:
     return None
 
 
-def _annotation_choices(annotation: object) -> tuple[object, ...]:
+def _annotation_choices(annotation: Any) -> tuple[ConfigValue, ...]:
     origin = get_origin(annotation)
     if str(origin).endswith("Literal"):
         return tuple(get_args(annotation))
@@ -402,11 +410,11 @@ def _annotation_choices(annotation: object) -> tuple[object, ...]:
     return ()
 
 
-def _schema_choices(schema: Mapping[str, object]) -> tuple[object, ...]:
+def _schema_choices(schema: Mapping[str, Any]) -> tuple[ConfigValue, ...]:
     direct = schema.get("enum")
     if isinstance(direct, list):
         return tuple(value for value in direct if value is not None)
-    choices: list[object] = []
+    choices: list[ConfigValue] = []
     branches = schema.get("anyOf", ())
     for branch in branches if isinstance(branches, list) else ():
         if isinstance(branch, Mapping):
@@ -414,7 +422,7 @@ def _schema_choices(schema: Mapping[str, object]) -> tuple[object, ...]:
     return tuple(dict.fromkeys(choices))
 
 
-def _schema_bound(schema: Mapping[str, object], inclusive: str, exclusive: str) -> float | int | None:
+def _schema_bound(schema: Mapping[str, Any], inclusive: str, exclusive: str) -> float | int | None:
     value = schema.get(inclusive, schema.get(exclusive))
     if isinstance(value, int | float) and not isinstance(value, bool):
         return value
@@ -426,20 +434,20 @@ def _schema_bound(schema: Mapping[str, object], inclusive: str, exclusive: str) 
     return None
 
 
-def _allows_none(annotation: object) -> bool:
+def _allows_none(annotation: Any) -> bool:
     if annotation is type(None):
         return True
     return any(_allows_none(argument) for argument in get_args(annotation))
 
 
-def _field_default(field: object) -> object | None:
+def _field_default(field: Any) -> ConfigValue:
     value = getattr(field, "default", PydanticUndefined)
     if value is PydanticUndefined:
         return None
     return _jsonable(value) if not isinstance(value, type) else f"{value.__module__}.{value.__qualname__}"
 
 
-def _metadata_bound(metadata: list[object], inclusive: str, exclusive: str) -> float | int | None:
+def _metadata_bound(metadata: list[Any], inclusive: str, exclusive: str) -> float | int | None:
     for constraint in metadata:
         value = getattr(constraint, inclusive, getattr(constraint, exclusive, None))
         if isinstance(value, int | float) and not isinstance(value, bool):
@@ -451,7 +459,7 @@ def _coalesce_bound(first: float | int | None, second: float | int | None) -> fl
     return second if first is None else first
 
 
-def _annotation_name(annotation: object) -> str:
+def _annotation_name(annotation: Any) -> str:
     return getattr(annotation, "__name__", str(annotation).replace("typing.", ""))
 
 
@@ -466,5 +474,7 @@ __all__ = [
     "ConfigDiffEntry",
     "ConfigDocument",
     "ConfigFieldDescriptor",
+    "ConfigScalar",
+    "ConfigValue",
     "ConfigWriteReceipt",
 ]
