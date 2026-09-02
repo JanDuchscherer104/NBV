@@ -90,3 +90,29 @@ def test_toml_variant_selector_returns_validated_path_and_model(tmp_path: Path) 
     assert selected.path == path.resolve()
     assert selected.config.count == 3
     assert selected.config.mode == "fast"
+
+
+def test_typed_config_fields_keep_last_valid_config_on_validation_error() -> None:
+    from aria_nbv.app.panels.configuration import render_typed_config_fields
+
+    class _Ui:
+        errors: list[str]
+
+        def __init__(self) -> None:
+            self.errors = []
+
+        def number_input(self, _label, **_kwargs):
+            return 0
+
+        def selectbox(self, _label, options, **_kwargs):
+            return options[0]
+
+        def error(self, message, **_kwargs):
+            self.errors.append(str(message))
+
+    ui = _Ui()
+    config = _PanelConfig()
+    result = render_typed_config_fields(config, ui=ui, key_prefix="test")
+
+    assert result == config
+    assert ui.errors and "Invalid configuration draft" in ui.errors[0]

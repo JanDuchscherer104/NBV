@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any, Generic, TypeVar, cast
 
 import streamlit as st
+from pydantic import ValidationError
 
 from ...configs import (
     ConfigAuthoringError,
@@ -300,6 +301,7 @@ def render_typed_config_fields(
     key_prefix: str,
     excluded_paths: frozenset[str] = frozenset(),
     choices: Mapping[str, Sequence[ConfigValue]] | None = None,
+    bounds: Mapping[str, tuple[float | int | None, float | int | None]] | None = None,
 ) -> ConfigT:
     """Render schema-driven controls and return a revalidated config copy.
 
@@ -309,6 +311,8 @@ def render_typed_config_fields(
     leaving the adapter and no runtime target is created. ``choices`` supplies
     explicit finite alternatives for fields whose domain type is runtime-only
     (for example ``torch.device``) and therefore has no JSON-schema enum.
+    ``bounds`` supplies presentation bounds for operationally constrained fields
+    whose Pydantic model intentionally remains broad for programmatic callers.
     """
 
     current = _config_widget_values(config.model_dump(mode="python"))
@@ -321,12 +325,15 @@ def render_typed_config_fields(
         if isinstance(value, dict) and any(item.path.startswith(f"{descriptor.path}.") for item in descriptors):
             continue
         choice_override = tuple((choices or {}).get(descriptor.path, ()))
+        minimum_override, maximum_override = (bounds or {}).get(descriptor.path, (None, None))
         updated = _field_widget(
             descriptor,
             value,
             key_prefix=key_prefix,
             ui=ui,
             choice_override=choice_override,
+            minimum_override=minimum_override,
+            maximum_override=maximum_override,
         )
         if updated != value:
             _set_patch(patch, descriptor.path, updated)
@@ -334,7 +341,12 @@ def render_typed_config_fields(
         return config
     merged = dict(current)
     _merge_value_patch(merged, patch)
-    return cast(ConfigT, type(config).model_validate(merged))
+    try:
+        validated = type(config).model_validate(merged)
+    except (ValidationError, TypeError, ValueError) as exc:
+        ui.error(f"Invalid configuration draft: {exc}")
+        return config
+    return cast(ConfigT, validated)
 
 
 def _config_widget_values(value: Any) -> dict[str, ConfigValue]:
@@ -384,6 +396,8 @@ def _field_widget(
     key_prefix: str,
     ui: Any = st,
     choice_override: Sequence[ConfigValue] = (),
+    minimum_override: float | int | None = None,
+    maximum_override: float | int | None = None,
 ) -> ConfigValue:
     label = descriptor.path
     help_text = descriptor.documentation
@@ -416,17 +430,21 @@ def _field_widget(
         )
     if isinstance(value, int) and not isinstance(value, bool):
         kwargs: dict[str, Any] = {"value": value, "step": 1, "disabled": disabled, "help": help_text, "key": key}
-        if descriptor.minimum is not None:
-            kwargs["min_value"] = int(descriptor.minimum)
-        if descriptor.maximum is not None:
-            kwargs["max_value"] = int(descriptor.maximum)
+        minimum = minimum_override if minimum_override is not None else descriptor.minimum
+        maximum = maximum_override if maximum_override is not None else descriptor.maximum
+        if minimum is not None:
+            kwargs["min_value"] = int(minimum)
+        if maximum is not None:
+            kwargs["max_value"] = int(maximum)
         return int(ui.number_input(label, **kwargs))
     if isinstance(value, float):
         kwargs = {"value": value, "disabled": disabled, "help": help_text, "key": key}
-        if descriptor.minimum is not None:
-            kwargs["min_value"] = float(descriptor.minimum)
-        if descriptor.maximum is not None:
-            kwargs["max_value"] = float(descriptor.maximum)
+        minimum = minimum_override if minimum_override is not None else descriptor.minimum
+        maximum = maximum_override if maximum_override is not None else descriptor.maximum
+        if minimum is not None:
+            kwargs["min_value"] = float(minimum)
+        if maximum is not None:
+            kwargs["max_value"] = float(maximum)
         return float(ui.number_input(label, **kwargs))
     if isinstance(value, list | dict):
         raw = ui.text_area(
