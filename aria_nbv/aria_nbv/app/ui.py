@@ -11,7 +11,8 @@ import torch
 
 from ..data_handling import AseEfmDatasetConfig
 from ..oracle._scoring import PreparedRriScorerConfig
-from ..pose_generation import CandidateViewGeneratorConfig, candidate_config_ui_bounds
+from ..pose_generation import CandidateViewGeneratorConfig
+from ..pose_generation.candidate_generation import candidate_config_ui_bounds
 from ..pose_generation.types import CollisionBackend, SamplingStrategy, ViewDirectionMode
 from ..rendering import CandidateDepthRendererConfig, Pytorch3DDepthRendererConfig
 from ..utils import Verbosity

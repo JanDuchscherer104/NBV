@@ -13,7 +13,7 @@ observed/predicted target center, not GT geometry. Counterfactual transitions
 and oracle rollout scorers live in `aria_nbv.rollouts`.
 """
 
-from .candidate_generation import CandidateViewGenerator, CandidateViewGeneratorConfig, candidate_config_ui_bounds
+from .candidate_generation import CandidateViewGenerator, CandidateViewGeneratorConfig
 from .candidate_mixture import (
     CandidateMixtureComponentConfig,
     CandidateMixtureViewGenerator,
@@ -38,7 +38,6 @@ from .utils import (
 __all__ = [
     "CandidateViewGenerator",
     "CandidateViewGeneratorConfig",
-    "candidate_config_ui_bounds",
     "CandidateMixtureComponentConfig",
     "CandidateMixtureViewGenerator",
     "CandidateMixtureViewGeneratorConfig",

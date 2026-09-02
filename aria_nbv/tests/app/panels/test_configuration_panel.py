@@ -124,7 +124,7 @@ def test_toml_variant_selector_preserves_reviewed_order(tmp_path: Path) -> None:
 
 
 def test_candidate_interactive_bounds_are_domain_owned() -> None:
-    from aria_nbv.pose_generation import candidate_config_ui_bounds
+    from aria_nbv.pose_generation.candidate_generation import candidate_config_ui_bounds
 
     bounds = candidate_config_ui_bounds()
 
@@ -134,7 +134,8 @@ def test_candidate_interactive_bounds_are_domain_owned() -> None:
 
 def _candidate_config_app() -> None:
     from aria_nbv.app.panels.configuration import render_typed_config_fields
-    from aria_nbv.pose_generation import CandidateViewGeneratorConfig, candidate_config_ui_bounds
+    from aria_nbv.pose_generation import CandidateViewGeneratorConfig
+    from aria_nbv.pose_generation.candidate_generation import candidate_config_ui_bounds
 
     render_typed_config_fields(
         CandidateViewGeneratorConfig(),
