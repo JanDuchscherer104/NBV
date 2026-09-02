@@ -128,12 +128,12 @@ remains necessary to expose occluded target surfaces @ProjectAria-ASE-2025
 // - @projectaria-engel2023 -> docs/literature/tex-src/arXiv-project-aria/applications_new.tex:46-61 (curated scanning versus natural egocentric activity)
 
 The current implementation exposes these ideas through a
-#gh-wip("aria_nbv/aria_nbv/targets/protocol.py", body: [target-provenance boundary], ref: "main", line: 1),
-#gh-wip("aria_nbv/aria_nbv/pose_generation/candidate_mixture.py", body: [mixed candidate generator], ref: "main", line: 1),
-#gh-wip("aria_nbv/aria_nbv/data_handling/qh_data/views.py", body: [causal actor and supervision view], ref: "main", line: 1),
-#gh-wip("aria_nbv/aria_nbv/vin/modules/qh_scene_encoders.py", body: [scene-carrier seam], ref: "main", line: 1),
-#gh-wip("aria_nbv/aria_nbv/vin/modules/qh_history_encoders.py", body: [temporal-history seam], ref: "main", line: 1), and
-#gh-wip("aria_nbv/aria_nbv/vin/models/target_finite_horizon.py", body: [finite-horizon scorer], ref: "main", line: 1).
+#gh-wip("aria_nbv/aria_nbv/targets/protocol.py", body: [target-provenance boundary], ref: "f3016f0f66db7d0e77fe9832279cdc4a6e0af6f2", line: 1),
+#gh-wip("aria_nbv/aria_nbv/pose_generation/candidate_mixture.py", body: [mixed candidate generator], ref: "f3016f0f66db7d0e77fe9832279cdc4a6e0af6f2", line: 1),
+#gh-wip("aria_nbv/aria_nbv/data_handling/qh_data/views.py", body: [causal actor and supervision view], ref: "f3016f0f66db7d0e77fe9832279cdc4a6e0af6f2", line: 1),
+#gh-wip("aria_nbv/aria_nbv/vin/modules/qh_scene_encoders.py", body: [scene-carrier seam], ref: "f3016f0f66db7d0e77fe9832279cdc4a6e0af6f2", line: 1),
+#gh-wip("aria_nbv/aria_nbv/vin/modules/qh_history_encoders.py", body: [temporal-history seam], ref: "f3016f0f66db7d0e77fe9832279cdc4a6e0af6f2", line: 1), and
+#gh-wip("aria_nbv/aria_nbv/vin/models/target_finite_horizon.py", body: [finite-horizon scorer], ref: "f3016f0f66db7d0e77fe9832279cdc4a6e0af6f2", line: 1).
 The intended contribution is to determine, through controlled comparisons,
 which geometric relations, temporal distinctions, and source boundaries are
 necessary, useful, or redundant for recovering non-myopic value in this bounded
