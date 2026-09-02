@@ -12,9 +12,14 @@ Before asking, resolve discoverable facts from the
 and the exact decision owner. Use `docs/typst/shared/glossary.typ` for overloaded
 terms and the nearest `AGENTS.md` for touched code or docs.
 
-For thesis-scope decisions, read the active thesis, roadmap, and research-question
-owners; non-thesis branches skip them. Theory-rich or elaborate modifiers
-additionally load [`references/plan-mode-theory-patterns.md`](references/plan-mode-theory-patterns.md).
+For thesis-scope decisions, read the active thesis, roadmap, research-question
+owners, and the applicable record in
+`docs/typst/thesis/development/reader-state.toml`; non-thesis branches skip
+them. Theory-rich, deep-theory, or elaborate modifiers additionally load
+[`references/plan-mode-theory-patterns.md`](references/plan-mode-theory-patterns.md).
+For a conceptual, elaborate, theory-rich, or deep-theory thesis decision,
+also load
+[`references/thesis-teaching-packet.md`](references/thesis-teaching-packet.md).
 
 For optional upstream questioning patterns, see
 [`references/upstream-mattpocock.md`](references/upstream-mattpocock.md); keep
@@ -47,10 +52,11 @@ Keep the default path concise unless one of these modifiers applies.
   the practical meaning, pros, cons, and recommended default for each material
   answer option before asking the next question. Do not perform a literature
   sweep unless a claim is research-facing or high impact.
-- `theory-rich`: when the user explicitly asks for theory, rich context,
-  external-evidence grounding, diagrams, equations, or research rationale,
-  read [`references/plan-mode-theory-patterns.md`](references/plan-mode-theory-patterns.md). Ground theory in the source
-  ladder, state claim strength, and include option tradeoffs before questions.
+- `theory-rich` / `deep-theory`: when the user explicitly asks for theory,
+  rich context, external-evidence grounding, diagrams, equations, or research rationale,
+  read [`references/plan-mode-theory-patterns.md`](references/plan-mode-theory-patterns.md).
+  Ground theory in the source ladder, state claim strength, and include option
+  tradeoffs before questions.
 - `conceptual`: when the user asks for `--conceptual`, conceptual planning,
   systems thinking, or architectural explanation, start with the system
   boundary and source-owner model before implementation detail. Name vertical
@@ -58,8 +64,8 @@ Keep the default path concise unless one of these modifiers applies.
   non-trivial plans, link implementation-facing Python plans to
   `python-standards` and the nearest `aria_nbv/**/AGENTS.md`,
   use local literature owners before web search for thesis claims, and use the
-  `aria-nbv-context` external-evidence branch only for library/API
-  behavior after local owner inspection.
+  `aria-nbv-context` external-evidence branch only for library/API behavior
+  after local owner inspection.
   Keep `$plan`, `$ralplan`, and `$prometheus-strict` as workflow owners; this
   skill is the ARIA sidecar that teaches why the routing matters.
 - Use Codex-app-safe Markdown/KaTeX equations when they clarify the decision:
@@ -72,6 +78,31 @@ Keep the default path concise unless one of these modifiers applies.
 - Treat Wikipedia as orientation only; ground proposal and thesis evidence in
   cited primary sources.
 
+## Thesis teaching handoff
+
+For a conceptual, elaborate, theory-rich, or deep-theory thesis branch,
+produce the task-local teaching
+packet before the implementation plan. Its purpose is to preserve the
+explanatory value of the discussion when work moves into `academic-writing`.
+
+The packet must:
+
+- begin from the ledger's incoming reader state and active question;
+- teach one motivating geometric or empirical case before architecture names;
+- separate definitions, implementation facts, literature claims, project
+  decisions, hypotheses, and inferences;
+- explain relevant geometry, temporal causality, hierarchy, representation, and
+  data assumptions at the level the reader needs;
+- introduce equations only after their objects and desired behavior are clear;
+- compare options through preserved information, symmetries, failure modes, and
+  evidence rather than novelty;
+- end with a recommended explanation order, durable takeaways, open decisions,
+  exact owner pointers, and whether the ledger would change.
+
+The packet is not committed as a parallel thesis or architecture owner.
+`academic-writing` consumes accepted conclusions, rechecks them against exact
+sources, and realizes only the evidence-calibrated reader-facing argument.
+
 ## Interview Rules
 
 - Until shared understanding is reached and the user accepts a decision-
@@ -79,7 +110,8 @@ Keep the default path concise unless one of these modifiers applies.
   implement or write durable glossary, decision, roadmap, or guidance changes.
 - Ask one material decision at a time.
 - State the recommended answer with the tradeoff.
-- Under `elaborate` or `theory-rich`, explain answer-option tradeoffs before
+- Under `elaborate`, `theory-rich`, or `deep-theory`, explain answer-option
+  tradeoffs before
   calling `request_user_input`.
 - Challenge overloaded terms against `docs/typst/shared/glossary.typ`.
 - For fuzzy thesis or planning terms, test the plan with three concrete
@@ -96,5 +128,7 @@ Keep the default path concise unless one of these modifiers applies.
 
 ## Output
 
-End with a decision-complete plan naming the goal, success criteria, scope,
-affected owners, verification, assumptions, and deferred decisions.
+For a thesis theory branch, return the teaching packet and then a
+decision-complete plan. Other branches return the plan directly. Name the goal,
+success criteria, scope, affected owners, verification, assumptions, and
+deferred decisions.

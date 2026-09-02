@@ -1,7 +1,10 @@
 # Plan-Mode Theory Patterns
 
-Use this reference only when `aria-grill` is running in `theory-rich` mode or
-when the user asks for the lighter `elaborate` modifier.
+Use this reference only when `aria-grill` is running in `theory-rich` or
+`deep-theory` mode, or when the user asks for the lighter `elaborate`
+modifier. For a conceptual, elaborate, theory-rich, or deep-theory thesis
+branch, additionally read
+[`thesis-teaching-packet.md`](thesis-teaching-packet.md).
 
 ## Activation
 
@@ -9,7 +12,8 @@ when the user asks for the lighter `elaborate` modifier.
   question at a time.
 - `elaborate`: explain options before asking. Use local context and practical
   tradeoffs, but keep the answer short.
-- `theory-rich`: provide comprehensive theory, source-backed context,
+- `theory-rich` / `deep-theory`: provide comprehensive theory, source-backed
+  context,
   equations, diagrams, and option analysis when they materially improve the
   decision.
 
@@ -18,8 +22,9 @@ when the user asks for the lighter `elaborate` modifier.
 Prefer sources in this order, and state when a conclusion is an inference:
 
 1. ARIA-NBV hierarchy owner:
-   `.agents/skills/aria-nbv-context/SKILL.md#owner-hierarchy`, thesis roadmap/questions, canonical
-   memory, shared glossary/notation, and nearest `AGENTS.md`.
+   `.agents/skills/aria-nbv-context/SKILL.md#owner-hierarchy`, thesis
+   roadmap/questions, reader-state ledger, shared glossary/notation, and nearest
+   `AGENTS.md`.
 2. Repo-local theory and literature: `docs/contents/theory/`,
    `docs/contents/literature/`, `docs/references.bib`, local paper notes, and
    `literature/tex-src/` when present.
@@ -53,7 +58,8 @@ seminar-paper evidence override current thesis direction.
 
 ## Option Answer Template
 
-For `elaborate`, use a compact version of this template. For `theory-rich`, use
+For `elaborate`, use a compact version of this template. For `theory-rich`
+or `deep-theory`, use
 the full template when it fits:
 
 1. State the decision and why it matters.
@@ -70,20 +76,18 @@ the full template when it fits:
 
 ## Equation Hygiene
 
-- Use Markdown math: `$...$` for inline math and `$$...$$` for display math.
-- Use KaTeX-compatible LaTeX. Avoid Typst syntax in chat answers.
+- In Codex chat, use `\(...\)` for inline math and `$$...$$` for display math
+  with blank lines around displays.
+- Use KaTeX-compatible LaTeX and avoid Typst syntax in chat answers.
 - Define every non-obvious symbol before using it.
 - Prefer shared ARIA-NBV notation from `docs/typst/shared` for project terms.
 - Keep code names outside math using backticks, for example `VinModelV3`, not
   `\texttt{VinModelV3}` inside a displayed equation.
 - Avoid unsupported local macros and fragile TeX shortcuts. Write
   `\mathcal{Q}_t`, `\mathrm{RRI}`, and `Q_{H,\theta}` explicitly.
-- Use equations to clarify tradeoffs, not to decorate answers.
-
-Past positive pattern: the glossary render fix showed that `$...$` math in
-Markdown/QMD survived where raw HTML spans with `\(...\)` were mangled before
-MathJax. Past Typst fixes also showed that attachment parsing is fragile in
-Typst; do not copy Typst-specific math syntax into chat Markdown.
+- Use equations to explain behavior or tradeoffs, not to decorate answers.
+- Repository Markdown, QMD, and Typst files follow their local renderer owners;
+  do not copy chat delimiters into them mechanically.
 
 ## Mermaid Hygiene
 
@@ -127,7 +131,7 @@ Positive patterns to reuse:
   durable Mermaid work belongs in templates, style references, symbol maps,
   lint, and local render checks.
 - `.agents/memory/history/2026/05/2026-05-06_core_math_lookup_render_fix.md`:
-  Markdown `$...$` math rendered correctly where earlier delimiter placement
+  repository Markdown math rendered correctly where earlier delimiter placement
   failed.
 - `.agents/memory/history/2026/05/2026-05-09_typst_attachment_shared_equation_fix.md`:
   rendered-page inspection caught math attachment issues that static checks
