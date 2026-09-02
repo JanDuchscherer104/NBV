@@ -29,9 +29,13 @@ from ._stored_rollouts.session import _store_projection_identity
 from .common import ExplanationSection, ScientificExplanation
 from .common import plot_control_key as _plot_control_key
 from .common import render_plot as _render_plot
+from .configuration import select_toml_config
 
 _DEFAULT_CONFIG = ".configs/build_rollouts_v2_cuda_campaign.toml"
-_REVIEWED_CONFIGS = (_DEFAULT_CONFIG,)
+_REVIEWED_CONFIGS = (
+    _DEFAULT_CONFIG,
+    ".configs/build_rollouts_v1_cuda_campaign_pilot_corrected_v10.toml",
+)
 _SAFE_SESSION = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$")
 _MAX_NEW_UNITS = 100
 _MAX_TIME_BUDGET_MINUTES = 24 * 60
@@ -450,13 +454,29 @@ def render_campaign_generation_page(
 ) -> None:  # pragma: no cover - Streamlit presentation
     """Render controls and typed status without owning campaign semantics."""
     st.header("Campaign Generation")
-    config_text = st.selectbox("Reviewed campaign config", _REVIEWED_CONFIGS, key="campaign_config_path")
-    try:
-        config_path = resolve_config_toml_path(config_text)
-        campaign = _campaign(config_path)
-    except Exception as exc:
-        st.error(str(exc))
-        return
+    config_paths = tuple(resolve_config_toml_path(config_text) for config_text in _REVIEWED_CONFIGS)
+    if all(path.is_file() for path in config_paths):
+        selected = select_toml_config(
+            CudaRolloutCampaignConfig,
+            config_paths,
+            ui=st,
+            label="Reviewed campaign config",
+            key_prefix="campaign_config",
+        )
+        if selected is None:
+            return
+        config_path = selected.path
+        campaign = selected.config.setup_target()
+    else:
+        # Keep the reviewed-name fallback usable for fixture/test roots where
+        # configs are intentionally supplied by the resolver at runtime.
+        config_text = st.selectbox("Reviewed campaign config", _REVIEWED_CONFIGS, key="campaign_config_path")
+        try:
+            config_path = resolve_config_toml_path(config_text)
+            campaign = _campaign(config_path)
+        except Exception as exc:
+            st.error(str(exc))
+            return
     cfg = campaign.config
     plan_path = cfg.output_root / "plan.json"
     number_input = getattr(st, "number_input", lambda _label, **_kwargs: 1)
