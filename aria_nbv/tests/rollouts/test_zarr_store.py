@@ -4,7 +4,10 @@
 
 from __future__ import annotations
 
+import inspect
 import json
+from dataclasses import replace
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -17,10 +20,30 @@ from efm3d.aria.pose import PoseTW
 
 from aria_nbv.oracle.target_rri import TARGET_CROP_POLICY_GT_OBB_ORIENTED_ANY_VERTEX_V1
 from aria_nbv.oracle.target_selection import TARGET_INVALID_REASON_VERSION
+from aria_nbv.pose_generation import candidate_set_to_legacy_result
+from aria_nbv.pose_generation.candidate_mixture import CandidateMixtureViewGeneratorConfig
+from aria_nbv.pose_generation.program_generator import ProgramCandidateGenerator
 from aria_nbv.rollouts import RolloutZarrStoreConfig, RolloutZarrStoreReader
+from aria_nbv.rollouts.candidate_evidence import (
+    CandidateFactAvailability,
+    candidate_evidence_snapshot_from_stored,
+)
 from aria_nbv.rollouts.info_cli import main as rollouts_info_main
+from aria_nbv.rollouts.inspection import (
+    candidate_audit_rows,
+    candidate_flow_rows,
+    rollout_statistics,
+    root_relative_candidate_rows,
+)
 from aria_nbv.rollouts.manifest import ROLLOUT_MANIFEST_FILENAME, RolloutStoreManifestContext
-from aria_nbv.rollouts.trace import INVALID_REASON_CODES, INVALID_REASON_VERSION
+from aria_nbv.rollouts.read_model import rollout_rows, rollout_steps, target_by_id
+from aria_nbv.rollouts.trace import (
+    CANDIDATE_TRACE_CODEC_VERSION,
+    INVALID_REASON_CODES,
+    INVALID_REASON_VERSION,
+    CandidateTraceFacts,
+    candidate_trace_facts,
+)
 from aria_nbv.rollouts.zarr_store import (
     ROLLOUT_ZARR_SCHEMA_VERSION,
     validate_rollout_zarr_store,
@@ -41,6 +64,617 @@ def _mask_target_eval_candidate_rows(step) -> None:
     valid_count = int(step.transition.candidates.mask_valid.detach().cpu().to(dtype=torch.bool).sum().item())
     step.evaluation.evidence.target_eval_candidate_points_world = torch.zeros((valid_count, 2, 3), dtype=torch.float32)
     step.evaluation.evidence.target_eval_candidate_point_lengths = torch.full((valid_count,), 2, dtype=torch.long)
+
+
+def _readonly_int64(values: list[int]) -> np.ndarray:
+    array = np.asarray(values, dtype=np.int64)
+    array.setflags(write=False)
+    return array
+
+
+def _attach_candidate_trace_facts(records) -> None:
+    """Attach deterministic current-codec facts without migrating replay composition."""
+
+    for record in records:
+        config_hash = record.lineage.policy.candidate_config_hash
+        for trajectory in record.evaluated.result.trajectories:
+            for step in trajectory.steps:
+                mask = step.candidates.mask_valid.detach().cpu().to(dtype=torch.bool).reshape(-1)
+                n = int(mask.numel())
+                valid = torch.nonzero(mask, as_tuple=False).reshape(-1).tolist()
+                lineage = _readonly_int64(list(range(n)))
+                inapplicable = _readonly_int64([-1] * n)
+                step.candidate_trace_facts = CandidateTraceFacts(
+                    codec_version=CANDIDATE_TRACE_CODEC_VERSION,
+                    semantic_group_id=tuple("fixture-group" for _ in range(n)),
+                    center_family_id=tuple("forward_local" for _ in range(n)),
+                    gaze_family_id=tuple("directional" for _ in range(n)),
+                    candidate_family_id=tuple("fixture-family" for _ in range(n)),
+                    center_id=lineage,
+                    position_pair_id=inapplicable,
+                    gaze_variant_id=_readonly_int64([-1] * n),
+                    attempt_round_id=_readonly_int64([0] * n),
+                    draw_id=_readonly_int64(list(range(n))),
+                    proposal_key=tuple(f"fixture:{index}" for index in range(n)),
+                    target_frame_identity=tuple("" for _ in range(n)),
+                    target_frame_availability=tuple("unavailable" for _ in range(n)),
+                    criteria=(),
+                    valid_indices=_readonly_int64(valid),
+                    action_indices=_readonly_int64(valid),
+                    candidate_program_hash="1" * 64,
+                    request_binding_hash="2" * 64,
+                    candidate_substream_revision="shipped_mixture_seed_paths_v1",
+                    action_order_revision="ordered_hard_valid_v1",
+                    completion_mode="fixed_attempts",
+                    attempted_count=n,
+                    valid_count=len(valid),
+                    action_count=len(valid),
+                    proposal_key_revision="rollout-proposal-v1",
+                    proposal_replica=0,
+                    legacy_candidate_config_hash=config_hash,
+                )
+
+
+def _array_paths(group: zarr.Group, prefix: str = "") -> tuple[str, ...]:
+    paths = [f"{prefix}{name}" for name in group.array_keys()]
+    for name in group.group_keys():
+        paths.extend(_array_paths(group[name], f"{prefix}{name}/"))
+    return tuple(sorted(paths))
+
+
+def _array_storage_bytes(store_path: Path, array_path: str) -> dict[str, bytes]:
+    directory = store_path / array_path
+    return {
+        str(path.relative_to(directory)): path.read_bytes() for path in sorted(directory.rglob("*")) if path.is_file()
+    }
+
+
+def test_candidate_codec_dual_write_preserves_legacy_tables_and_reads_semantics(tmp_path) -> None:
+    from aria_nbv.rerun_inspector._rollout_zarr import _stored_candidate_family_names
+
+    legacy_records = build_rollout_records(horizon=1, num_samples=4, seed=91)
+    current_records = build_rollout_records(horizon=1, num_samples=4, seed=91)
+    _attach_candidate_trace_facts(current_records)
+    legacy_path = tmp_path / "legacy.zarr"
+    current_path = tmp_path / "current.zarr"
+    write_rollout_zarr_store(legacy_path, legacy_records, split_manifest_hash="fixture-split-manifest")
+    write_rollout_zarr_store(current_path, current_records, split_manifest_hash="fixture-split-manifest")
+    legacy = RolloutZarrStoreReader(legacy_path)
+    current = RolloutZarrStoreReader(current_path)
+
+    legacy_array_paths = _array_paths(legacy.root)
+    additive_prefixes = (
+        "step_candidate_facts/",
+        "candidate_semantics/",
+        "candidate_criteria/",
+        "candidate_actions/",
+        "candidate_valids/",
+    )
+    current_legacy_paths = tuple(
+        path
+        for path in _array_paths(current.root)
+        if not path.startswith(additive_prefixes) and path != "dictionaries/candidate_fact"
+    )
+    assert current_legacy_paths == legacy_array_paths
+    for path in legacy_array_paths:
+        left = legacy.root[path]
+        right = current.root[path]
+        assert left.dtype == right.dtype
+        assert left.shape == right.shape
+        assert left.chunks == right.chunks
+        assert np.array_equal(np.asarray(left), np.asarray(right), equal_nan=True)
+        assert _array_storage_bytes(legacy_path, path) == _array_storage_bytes(current_path, path)
+    assert "candidate_fact" not in legacy.root["dictionaries"]
+    assert current.root.attrs["candidate_trace_codec_version"] == CANDIDATE_TRACE_CODEC_VERSION
+    assert current.root.attrs["q_h_source_tables"] == "steps,candidates,rollouts,targets"
+    assert validate_rollout_zarr_store(current_path).ok
+
+    rollout = rollout_rows(current)[0]
+    stored = rollout_steps(current, rollout)[0]
+    assert stored.candidate_codec is not None
+    assert stored.candidate_codec.candidate_family_ids.tolist() == ["fixture-family"] * stored.num_candidates
+    assert stored.candidate_codec.valid_indices.tolist() == np.flatnonzero(stored.actor_action_mask).tolist()
+    assert stored.candidate_codec.action_indices.tolist() == stored.candidate_codec.valid_indices.tolist()
+    assert _stored_candidate_family_names(stored).tolist() == ["fixture-family"] * stored.num_candidates
+    legacy_step = rollout_steps(legacy, rollout_rows(legacy)[0])[0]
+    assert _stored_candidate_family_names(legacy_step).tolist() == legacy_step.mixture_names.tolist()
+    assert not stored.candidate_codec.valid_indices.flags.writeable
+    assert current.candidate_codec_tables() is current.candidate_codec_tables()
+    audit = candidate_audit_rows(current, limit=stored.num_candidates)
+    assert {str(row["mixture"]) for row in audit} == {"fixture-family"}
+    flow = candidate_flow_rows(current)
+    assert any(str(row["target_id"]).startswith("proposal:fixture:") for row in flow)
+    geometry = root_relative_candidate_rows(current, rollout_row_id=rollout.rollout_row_id)
+    assert {str(row["mixture"]) for row in geometry} == {"fixture-family"}
+    statistics = rollout_statistics(current)
+    assert set(statistics["valid_candidates"]["component_counts"]) == {"fixture-family"}
+    assert set(statistics["selected"]["component_counts"]) == {"fixture-family"}
+
+
+def test_candidate_codec_reader_rejects_partial_bundle(tmp_path) -> None:
+    records = build_rollout_records(horizon=1, num_samples=4, seed=92)
+    _attach_candidate_trace_facts(records)
+    store_path = tmp_path / "partial.zarr"
+    write_rollout_zarr_store(store_path, records, split_manifest_hash="fixture-split-manifest")
+    root = zarr.open_group(str(store_path), mode="a")
+    del root["candidate_valids"]
+
+    with pytest.raises(ValueError, match="complete supported table/dictionary/version bundle"):
+        RolloutZarrStoreReader(store_path)
+    validation = validate_rollout_zarr_store(store_path)
+    assert not validation.ok
+    assert any("complete supported table/dictionary/version bundle" in error for error in validation.errors)
+
+
+def test_candidate_codec_writer_rejects_same_count_valid_order_drift(tmp_path) -> None:
+    records = build_rollout_records(horizon=1, num_samples=4, seed=93)[:1]
+    _attach_candidate_trace_facts(records)
+    step = _steps(records[0])[0].transition
+    facts = step.candidate_trace_facts
+    assert facts is not None and facts.valid_count >= 2
+    permuted = facts.valid_indices.copy()
+    permuted[:2] = permuted[1::-1]
+    permuted.setflags(write=False)
+    step.candidate_trace_facts = replace(facts, valid_indices=permuted)
+
+    with pytest.raises(ValueError, match="valid_indices must equal the legacy compact-valid order"):
+        write_rollout_zarr_store(tmp_path / "permuted.zarr", records)
+
+
+def test_candidate_codec_writer_requires_independent_legacy_config_hash(tmp_path) -> None:
+    records = build_rollout_records(horizon=1, num_samples=4, seed=930)[:1]
+    _attach_candidate_trace_facts(records)
+    record = records[0]
+    record.lineage.policy.candidate_config_hash = None
+    step = _steps(record)[0].transition
+    facts = step.candidate_trace_facts
+    assert facts is not None
+    step.candidate_trace_facts = replace(facts, legacy_candidate_config_hash=None)
+
+    with pytest.raises(ValueError, match="requires an independently persisted legacy candidate config hash"):
+        write_rollout_zarr_store(tmp_path / "missing-legacy-hash.zarr", records)
+
+
+def test_candidate_codec_validator_rejects_per_owner_config_hash_swap(tmp_path) -> None:
+    records = build_rollout_records(horizon=1, num_samples=4, seed=94)[:2]
+    records[1].lineage.policy.candidate_config_hash = "fixture-config-second"
+    _attach_candidate_trace_facts(records)
+    store_path = tmp_path / "swapped-hash.zarr"
+    write_rollout_zarr_store(store_path, records, split_manifest_hash="fixture-split-manifest")
+    root = zarr.open_group(str(store_path), mode="a")
+    hashes = root["step_candidate_facts/legacy_candidate_config_hash_id"]
+    values = np.asarray(hashes).copy()
+    assert values.shape == (2,) and values[0] != values[1]
+    hashes[:] = values[::-1]
+
+    validation = validate_rollout_zarr_store(store_path)
+    assert not validation.ok
+    assert any("owning rollout lineage" in error for error in validation.errors)
+
+
+def test_candidate_codec_reader_rejects_wrong_additive_dtype(tmp_path) -> None:
+    records = build_rollout_records(horizon=1, num_samples=4, seed=95)[:1]
+    _attach_candidate_trace_facts(records)
+    store_path = tmp_path / "wrong-dtype.zarr"
+    write_rollout_zarr_store(store_path, records, split_manifest_hash="fixture-split-manifest")
+    root = zarr.open_group(str(store_path), mode="a")
+    group = root["candidate_valids"]
+    array = group["valid_position"]
+    values = np.asarray(array, dtype=np.int64)
+    chunks = array.chunks
+    del group["valid_position"]
+    group.create_array("valid_position", data=values, chunks=chunks)
+
+    with pytest.raises(ValueError, match="must be 1-D int32"):
+        RolloutZarrStoreReader(store_path)
+    validation = validate_rollout_zarr_store(store_path)
+    assert not validation.ok
+    assert any("must be 1-D int32" in error for error in validation.errors)
+
+
+@pytest.mark.parametrize(
+    ("updates", "match"),
+    [
+        (("candidate_semantics/center_id", -1), "non-negative"),
+        (
+            (("candidate_semantics/position_pair_id", -2), ("candidate_semantics/gaze_variant_id", -2)),
+            "exactly -1",
+        ),
+        (
+            (
+                ("step_candidate_facts/proposal_key_revision_id", -2),
+                ("step_candidate_facts/proposal_replica", -2),
+            ),
+            "sentinel must be exactly -1",
+        ),
+        (("step_candidate_facts/legacy_candidate_config_hash_id", -2), "sentinel must be exactly -1"),
+    ],
+)
+def test_candidate_codec_reader_rejects_invalid_lineage_sentinels(tmp_path, updates, match: str) -> None:
+    records = build_rollout_records(horizon=1, num_samples=4, seed=97)[:1]
+    _attach_candidate_trace_facts(records)
+    store_path = tmp_path / "invalid-sentinel.zarr"
+    write_rollout_zarr_store(store_path, records, split_manifest_hash="fixture-split-manifest")
+    root = zarr.open_group(str(store_path), mode="a")
+    normalized = (updates,) if isinstance(updates[0], str) else updates
+    for path, value in normalized:
+        root[path][0] = value
+
+    validation = validate_rollout_zarr_store(store_path)
+    assert not validation.ok
+    reader = RolloutZarrStoreReader(store_path)
+    with pytest.raises(ValueError, match=match):
+        rollout_steps(reader, rollout_rows(reader)[0])
+
+
+def test_candidate_codec_validator_and_reader_reject_invalid_dictionary_references(tmp_path) -> None:
+    records = build_rollout_records(horizon=1, num_samples=4, seed=98)[:1]
+    _attach_candidate_trace_facts(records)
+    store_path = tmp_path / "invalid-dictionary-reference.zarr"
+    write_rollout_zarr_store(store_path, records, split_manifest_hash="fixture-split-manifest")
+    zarr.open_group(str(store_path), mode="a")["candidate_semantics/candidate_family_id"][0] = 999_999
+
+    validation = validate_rollout_zarr_store(store_path)
+    assert not validation.ok
+    assert any("contains an invalid reference" in error for error in validation.errors)
+    reader = RolloutZarrStoreReader(store_path)
+    with pytest.raises(ValueError, match="dictionary id is outside"):
+        rollout_steps(reader, rollout_rows(reader)[0])
+
+
+def test_current_codec_reducers_reject_empty_semantic_identity(tmp_path) -> None:
+    records = build_rollout_records(horizon=1, num_samples=4, seed=980)[:1]
+    _attach_candidate_trace_facts(records)
+    store_path = tmp_path / "empty-semantic-identity.zarr"
+    write_rollout_zarr_store(store_path, records, split_manifest_hash="fixture-split-manifest")
+    root = zarr.open_group(str(store_path), mode="a")
+    dictionary = _json_list(RolloutZarrStoreReader(store_path), "dictionaries/candidate_fact")
+    empty_identity_id = dictionary.index("")
+    root["candidate_semantics/proposal_key_id"][0] = empty_identity_id
+
+    validation = validate_rollout_zarr_store(store_path)
+    assert not validation.ok
+    reader = RolloutZarrStoreReader(store_path)
+    with pytest.raises(ValueError, match="semantic identities must be nonempty strings"):
+        candidate_flow_rows(reader)
+
+
+def test_candidate_codec_validator_and_reader_reject_attempted_count_drift(tmp_path) -> None:
+    records = build_rollout_records(horizon=1, num_samples=4, seed=101)[:1]
+    _attach_candidate_trace_facts(records)
+    store_path = tmp_path / "attempted-count-drift.zarr"
+    write_rollout_zarr_store(store_path, records, split_manifest_hash="fixture-split-manifest")
+    root = zarr.open_group(str(store_path), mode="a")
+    root["step_candidate_facts/attempted_count"][0] += 1
+
+    validation = validate_rollout_zarr_store(store_path)
+    assert not validation.ok
+    assert any("attempted count disagrees" in error for error in validation.errors)
+    reader = RolloutZarrStoreReader(store_path)
+    with pytest.raises(ValueError, match="attempted count does not match"):
+        rollout_steps(reader, rollout_rows(reader)[0])
+
+
+@pytest.mark.parametrize("group_name", ["candidate_valids", "candidate_actions"])
+def test_candidate_codec_validator_and_reader_reject_orphan_projection_rows(tmp_path, group_name: str) -> None:
+    records = build_rollout_records(horizon=1, num_samples=4, seed=102)[:1]
+    _attach_candidate_trace_facts(records)
+    store_path = tmp_path / f"orphan-{group_name}.zarr"
+    write_rollout_zarr_store(store_path, records, split_manifest_hash="fixture-split-manifest")
+    root = zarr.open_group(str(store_path), mode="a")
+    group = root[group_name]
+    for name in group.array_keys():
+        array = group[name]
+        old_size = int(array.shape[0])
+        array.resize((old_size + 1,))
+        array[old_size] = 999 if name == "step_row_id" else 0
+    count_attr = "candidate_trace_valid_rows" if group_name == "candidate_valids" else "candidate_trace_action_rows"
+    root.attrs[count_attr] = int(root.attrs[count_attr]) + 1
+
+    validation = validate_rollout_zarr_store(store_path)
+    assert not validation.ok
+    assert any("reference unknown stored steps" in error for error in validation.errors)
+    reader = RolloutZarrStoreReader(store_path)
+    with pytest.raises(ValueError, match="reference unknown stored steps"):
+        reader.candidate_codec_tables()
+
+
+def test_candidate_codec_validator_rejects_supported_reference_to_unknown_revision(tmp_path) -> None:
+    records = build_rollout_records(horizon=1, num_samples=4, seed=99)[:1]
+    _attach_candidate_trace_facts(records)
+    store_path = tmp_path / "unknown-revision.zarr"
+    write_rollout_zarr_store(store_path, records, split_manifest_hash="fixture-split-manifest")
+    root = zarr.open_group(str(store_path), mode="a")
+    values = _json_list(RolloutZarrStoreReader(store_path), "dictionaries/candidate_fact")
+    revision_id = int(root["step_candidate_facts/candidate_substream_revision_id"][0])
+    values[revision_id] = "future_v9"
+    payload = np.frombuffer(json.dumps(values, separators=(",", ":")).encode("utf-8"), dtype=np.uint8)
+    dictionaries = root["dictionaries"]
+    del dictionaries["candidate_fact"]
+    dictionaries.create_array("candidate_fact", data=payload, chunks=(max(1, payload.size),))
+
+    validation = validate_rollout_zarr_store(store_path)
+    assert not validation.ok
+    assert any("substream revision is unsupported" in error for error in validation.errors)
+    reader = RolloutZarrStoreReader(store_path)
+    with pytest.raises(ValueError, match="substream revision is unsupported"):
+        rollout_steps(reader, rollout_rows(reader)[0])
+
+
+def test_candidate_codec_lazy_grouping_stays_sort_linearithmic(monkeypatch: pytest.MonkeyPatch) -> None:
+    from aria_nbv.rollouts.zarr_store import _grouped_positions
+
+    source = inspect.getsource(_grouped_positions)
+    assert 'np.argsort(values, kind="stable")' in source
+    assert "np.flatnonzero(values ==" not in source
+    calls = 0
+    original = np.flatnonzero
+
+    def counted(values: np.ndarray) -> np.ndarray:
+        nonlocal calls
+        calls += 1
+        return original(values)
+
+    monkeypatch.setattr(np, "flatnonzero", counted)
+    grouped = _grouped_positions(np.arange(10_000, dtype=np.int64))
+    assert len(grouped) == 10_000
+    assert calls == 1
+
+
+def test_candidate_codec_writer_uses_constant_time_dictionary_lookup() -> None:
+    from aria_nbv.rollouts.zarr_store import _candidate_fact_id
+
+    identities = {f"proposal:{index}": index for index in range(10_000)}
+    assert [_candidate_fact_id(identities, key) for key in identities] == list(range(10_000))
+    assert ".index(" not in inspect.getsource(_candidate_fact_id)
+
+
+def test_candidate_codec_reader_decodes_large_dictionary_once(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import aria_nbv.rollouts.zarr_store as store_module
+
+    records = build_rollout_records(horizon=1, num_samples=4, seed=96)[:1]
+    _attach_candidate_trace_facts(records)
+    store_path = tmp_path / "dictionary-once.zarr"
+    write_rollout_zarr_store(store_path, records, split_manifest_hash="fixture-split-manifest")
+    calls = 0
+    original = store_module._candidate_fact_dictionary
+
+    def counted(root: object) -> tuple[str, ...]:
+        nonlocal calls
+        calls += 1
+        return original(root)
+
+    monkeypatch.setattr(store_module, "_candidate_fact_dictionary", counted)
+    reader = RolloutZarrStoreReader(store_path)
+    assert reader.candidate_codec_tables() is reader.candidate_codec_tables()
+    assert calls == 1
+
+
+def test_candidate_codec_validator_decodes_large_dictionary_once(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import aria_nbv.rollouts.zarr_store as store_module
+
+    records = build_rollout_records(horizon=1, num_samples=4, seed=100)[:1]
+    _attach_candidate_trace_facts(records)
+    store_path = tmp_path / "validation-dictionary-once.zarr"
+    write_rollout_zarr_store(store_path, records, split_manifest_hash="fixture-split-manifest")
+    calls = 0
+    original = store_module._candidate_fact_dictionary
+
+    def counted(root: object) -> tuple[str, ...]:
+        nonlocal calls
+        calls += 1
+        return original(root)
+
+    monkeypatch.setattr(store_module, "_candidate_fact_dictionary", counted)
+    validation = validate_rollout_zarr_store(store_path)
+    assert validation.ok, validation.errors
+    assert calls == 1
+
+
+def test_real_paired_candidate_set_survives_zarr_and_inspection_codecs(tmp_path) -> None:
+    from tests.pose_generation.test_candidate_interface import _query_free, _request
+
+    config = _query_free(CandidateMixtureViewGeneratorConfig.paired_center_gaze_family())
+    candidate_set = ProgramCandidateGenerator().generate(_request(config, seed=43))
+    projected = candidate_set_to_legacy_result(candidate_set)
+    assert candidate_set.completion.attempted_count == 60
+    assert 0 < candidate_set.completion.valid_count < 60
+    # The legacy rollout fixture emits two gaze variants per configured centre,
+    # so 30 configured centres produce the same 60-row attempted shell.
+    records = build_rollout_records(horizon=1, num_samples=30, seed=43)[:1]
+    lineage = records[0].lineage
+    lineage.source.scene_id = "scene-content-sha256"
+    lineage.source.mesh_version = "mesh-content-sha256"
+    lineage.target.target_protocol_version = "v1_observed"
+    lineage.target.target_source = "detected_obbs"
+    lineage.target.target_sem_id = 1
+    lineage.target.target_class_name = "chair"
+    lineage.target.target_center_world = (0.0, 0.0, 2.0)
+    lineage.target.target_pose_world_object = (
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        2.0,
+    )
+    lineage.target.target_relative_pose_reference_object = lineage.target.target_pose_world_object
+    for record in records:
+        for trajectory in record.evaluated.result.trajectories:
+            for step in trajectory.steps:
+                step.candidates = projected
+                step.candidate_trace_facts = candidate_trace_facts(
+                    candidate_set,
+                    proposal_key_revision="rollout-proposal-v1",
+                    proposal_replica=3,
+                    legacy_candidate_config_hash=record.lineage.policy.candidate_config_hash,
+                )
+    store_path = tmp_path / "paired.zarr"
+    write_rollout_zarr_store(store_path, records, split_manifest_hash="fixture-split-manifest")
+    reader = RolloutZarrStoreReader(store_path)
+    rollout = rollout_rows(reader)[0]
+    step = rollout_steps(reader, rollout)[0]
+    codec = step.candidate_codec
+    assert codec is not None
+    assert codec.semantic_group_ids.tolist() == list(candidate_set.attempts.semantic_group_id)
+    assert codec.center_family_ids.tolist() == list(candidate_set.attempts.center_family_id)
+    assert codec.gaze_family_ids.tolist() == list(candidate_set.attempts.gaze_family_id)
+    assert codec.candidate_family_ids.tolist() == list(candidate_set.attempts.candidate_family_id)
+    assert codec.position_pair_ids.tolist() == candidate_set.attempts.position_pair_id.tolist()
+    assert codec.gaze_variant_ids.tolist() == candidate_set.attempts.gaze_variant_id.tolist()
+    assert [criterion.criterion_id for criterion in codec.criteria] == [
+        criterion.criterion_id for criterion in candidate_set.admission.criteria
+    ]
+    assert codec.candidate_program_hash == candidate_set.candidate_program_hash
+    assert codec.request_binding_hash == candidate_set.request_binding_hash
+    target = target_by_id(reader, rollout.target_row_id)
+    assert target is not None
+    snapshot = candidate_evidence_snapshot_from_stored(rollout, step, target)
+    assert all(row.admission_availability is CandidateFactAvailability.AVAILABLE for row in snapshot.rows)
+    criterion_group = zarr.open_group(store_path, mode="a")["candidate_criteria"]
+    criterion_group["local_available"][:] = False
+    for name in ("applicable", "evaluated", "passed"):
+        criterion_group[name][:] = False
+    for name in ("reason_code", "source_role"):
+        criterion_group[name][:] = -1
+    criterion_group["margin"][:] = np.nan
+    unavailable_reader = RolloutZarrStoreReader(store_path)
+    unavailable_rollout = rollout_rows(unavailable_reader)[0]
+    unavailable_step = rollout_steps(unavailable_reader, unavailable_rollout)[0]
+    unavailable_target = target_by_id(unavailable_reader, unavailable_rollout.target_row_id)
+    assert unavailable_target is not None
+    unavailable_snapshot = candidate_evidence_snapshot_from_stored(
+        unavailable_rollout,
+        unavailable_step,
+        unavailable_target,
+    )
+    assert all(row.admission_availability is CandidateFactAvailability.PARTIAL for row in unavailable_snapshot.rows)
+    audit = candidate_audit_rows(reader, limit=60)
+    assert {row["mixture"] for row in audit} == set(candidate_set.attempts.candidate_family_id)
+    flow = candidate_flow_rows(reader)
+    proposal_nodes = {str(row["target_id"]) for row in flow if row["target_stage"] == "proposal"}
+    assert proposal_nodes == {f"proposal:{key}" for key in candidate_set.attempts.proposal_key}
+
+    criterion_indices = np.asarray(criterion_group["criterion_index"], dtype=np.int64)
+    criterion_ids = criterion_group["criterion_id"]
+    original_ids = np.asarray(criterion_ids, dtype=np.int64)
+    first_rows = np.flatnonzero(criterion_indices == 0)
+    second_rows = np.flatnonzero(criterion_indices == 1)
+    criterion_ids[second_rows[0]] = original_ids[first_rows[0]]
+    drift_validation = validate_rollout_zarr_store(store_path)
+    assert not drift_validation.ok
+    assert any("constant over N" in error for error in drift_validation.errors)
+    criterion_ids[:] = original_ids
+    criterion_ids[second_rows] = original_ids[first_rows[0]]
+    duplicate_validation = validate_rollout_zarr_store(store_path)
+    assert not duplicate_validation.ok
+    assert any("identities must be unique per step" in error for error in duplicate_validation.errors)
+    duplicate_reader = RolloutZarrStoreReader(store_path)
+    with pytest.raises(ValueError, match="criterion identities must be unique"):
+        rollout_steps(duplicate_reader, rollout_rows(duplicate_reader)[0])
+
+
+def test_mixed_admission_availability_round_trips_with_explicit_sentinels(tmp_path) -> None:
+    from aria_nbv.data_handling.vin_store.candidate_codec import vin_candidate_facts
+    from tests.pose_generation.test_candidate_interface import _typed_admission_fixture
+
+    _config, _scene, _request, candidate_set = _typed_admission_fixture()
+    path = next(
+        criterion for criterion in candidate_set.admission.criteria if criterion.criterion_id == "path_clearance"
+    )
+    assert path.local is not None
+    availability = path.local_availability.tolist()
+    assert any(availability) and not all(availability)
+
+    vin_facts = vin_candidate_facts(candidate_set, legacy_candidate_config_hash="fixture-config")
+    vin_path = next(criterion for criterion in vin_facts.criteria if criterion.criterion_id == "path_clearance")
+    assert vin_path.applicable is not None
+    assert vin_path.evaluated is not None
+    assert vin_path.passed is not None
+    assert vin_path.reason_code is not None
+    assert vin_path.margin is not None
+    assert vin_path.source_role is not None
+    for index, available in enumerate(availability):
+        if available:
+            assert vin_path.applicable[index] == bool(path.local.applicable[index])
+            assert vin_path.evaluated[index] == bool(path.local.evaluated[index])
+            assert vin_path.reason_code[index] == int(path.local.reason_code[index])
+            assert vin_path.source_role[index] == int(path.local.source_role[index])
+        else:
+            assert vin_path.applicable[index] is False
+            assert vin_path.evaluated[index] is False
+            assert vin_path.passed[index] is False
+            assert vin_path.reason_code[index] == -1
+            assert vin_path.source_role[index] == -1
+            assert np.isnan(vin_path.margin[index])
+
+    records = build_rollout_records(horizon=1, num_samples=4, seed=31)[:1]
+    lineage = records[0].lineage
+    lineage.source.scene_id = "scene-content-sha256"
+    lineage.source.mesh_version = "mesh-content-sha256"
+    lineage.target.target_protocol_version = "v1_observed"
+    lineage.target.target_source = "detected_obbs"
+    lineage.target.target_center_world = (0.0, 0.0, 2.0)
+    projected = candidate_set_to_legacy_result(candidate_set)
+    step = records[0].evaluated.result.trajectories[0].steps[0]
+    step.candidates = projected
+    selected_shell_index = int(candidate_set.action_indices[0])
+    step.selected_shell_index = selected_shell_index
+    step.selected_valid_index = candidate_set.valid_indices.tolist().index(selected_shell_index)
+    step.candidate_trace_facts = candidate_trace_facts(
+        candidate_set,
+        legacy_candidate_config_hash=lineage.policy.candidate_config_hash,
+    )
+    store_path = tmp_path / "mixed-admission.zarr"
+    write_rollout_zarr_store(store_path, records, split_manifest_hash="fixture-split-manifest")
+    reader = RolloutZarrStoreReader(store_path)
+    stored = rollout_steps(reader, rollout_rows(reader)[0])[0]
+    assert stored.candidate_codec is not None
+    stored_path = next(
+        criterion for criterion in stored.candidate_codec.criteria if criterion.criterion_id == "path_clearance"
+    )
+    assert stored_path.local_available.tolist() == availability
+    unavailable = ~stored_path.local_available
+    assert not stored_path.applicable[unavailable].any()
+    assert not stored_path.evaluated[unavailable].any()
+    assert not stored_path.passed[unavailable].any()
+    assert np.all(stored_path.reason_code[unavailable] == -1)
+    assert np.all(stored_path.source_role[unavailable] == -1)
+    assert np.isnan(stored_path.margin[unavailable]).all()
+    target = target_by_id(reader, rollout_rows(reader)[0].target_row_id)
+    assert target is not None
+    snapshot = candidate_evidence_snapshot_from_stored(
+        rollout_rows(reader)[0],
+        stored,
+        target,
+    )
+    assert any(row.admission_availability is CandidateFactAvailability.PARTIAL for row in snapshot.rows)
+    assert any(row.admission_availability is CandidateFactAvailability.AVAILABLE for row in snapshot.rows)
+
+    root = zarr.open_group(str(store_path), mode="a")
+    local_available = np.asarray(root["candidate_criteria/local_available"], dtype=np.bool_)
+    passed = np.asarray(root["candidate_criteria/passed"], dtype=np.bool_)
+    passed_row = int(np.flatnonzero(local_available & passed)[0])
+    root["candidate_criteria/passed"][passed_row] = False
+    root["candidate_criteria/reason_code"][passed_row] = 1
+    validation = validate_rollout_zarr_store(store_path)
+    assert not validation.ok
+    assert any("contradicts local criterion evidence" in error for error in validation.errors)
+    corrupted_reader = RolloutZarrStoreReader(store_path)
+    with pytest.raises(ValueError, match="contradicts local criterion evidence"):
+        rollout_steps(corrupted_reader, rollout_rows(corrupted_reader)[0])
 
 
 def test_rollout_zarr_store_writes_reads_and_validates_records(tmp_path) -> None:

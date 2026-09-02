@@ -40,6 +40,7 @@ from ..ase_efm.loader import EfmSnippetLoader
 from ..ase_efm.views import EfmSnippetView
 from ..identifiers import compact_ase_atek_sample_id, raw_ase_atek_sample_id
 from .batch import CompactObbBlock, CompactTrajectoryBlock, VinOracleBatch
+from .candidate_codec import VinCandidateFacts
 from .store import VinOfflineStoreConfig, VinOfflineStoreReader
 from .views import VinSnippetView
 
@@ -135,6 +136,9 @@ class VinOfflineSample:
 
     candidates: CandidateSamplingResult | None = None
     """Optional regenerated/stored candidate metadata; not required by VIN training."""
+
+    candidate_facts: VinCandidateFacts | None = None
+    """Optional canonical N/V/A audit facts; excluded from actor/training batches."""
 
     backbone_out: EvlBackboneOutput | None = None
     """Optional actor-visible EVL evidence tied to serialized backbone config.
@@ -529,6 +533,18 @@ class VinOfflineDataset(Dataset[VinOfflineDatasetItem]):
             return None
         return CandidateSamplingResult.from_serializable(payload, device=None)
 
+    def _build_candidate_facts(self, record: VinOfflineIndexRecord) -> VinCandidateFacts | None:
+        """Decode the independently versioned lazy candidate-facts record."""
+
+        if not self.config.load_candidates:
+            return None
+        payload = self._store.read_optional_record(record, "oracle.candidate_facts")
+        if payload is None:
+            return None
+        if not isinstance(payload, dict):
+            raise ValueError("oracle.candidate_facts must be a versioned record mapping")
+        return VinCandidateFacts.from_record(payload)
+
     def _has_block(self, block_name: str) -> bool:
         """Return whether the dataset contains one stored block.
 
@@ -803,6 +819,7 @@ class VinOfflineDataset(Dataset[VinOfflineDatasetItem]):
             source_shard_id=record.shard_id,
             source_shard_row=int(record.row),
             candidates=self._build_candidates(record),
+            candidate_facts=self._build_candidate_facts(record),
             backbone_out=self._build_backbone(record),
             depths=self._build_depths(record, oracle),
             candidate_pcs=self._build_candidate_pcs(record),

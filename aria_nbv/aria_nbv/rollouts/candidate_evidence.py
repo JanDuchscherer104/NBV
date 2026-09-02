@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, Literal, Protocol, cast
 
 import numpy as np
 import torch
+from numpy.typing import NDArray
 
 from .read_model import StoredRollout, StoredStep, StoredTarget
 
@@ -1138,13 +1139,22 @@ def _validate_stored_step_axes(step: StoredStep) -> None:
         )
     ):
         raise ValueError("stored candidate arrays must align exactly over N")
-    hard_valid = np.asarray(step.compact_valid_indices).reshape(-1) >= 0
-    actions = np.asarray(step.actor_action_mask, dtype=np.bool_).reshape(-1)
+    codec = step.candidate_codec
+    hard_valid: NDArray[np.bool_] = np.zeros(step.num_candidates, dtype=np.bool_)
+    if codec is None:
+        hard_valid = np.asarray(step.compact_valid_indices).reshape(-1) >= 0
+    else:
+        hard_valid[np.asarray(codec.valid_indices, dtype=np.int64)] = True
+    actions: NDArray[np.bool_] = np.zeros(step.num_candidates, dtype=np.bool_)
+    if codec is None:
+        actions = np.asarray(step.actor_action_mask, dtype=np.bool_).reshape(-1)
+    else:
+        actions[np.asarray(codec.action_indices, dtype=np.int64)] = True
     selected = np.asarray(step.selected_mask, dtype=np.bool_).reshape(-1)
     if not np.all(~actions | hard_valid) or not np.all(~selected | actions):
         raise ValueError("stored candidate action/selection masks violate subset invariants")
     compact = np.asarray(step.compact_valid_indices, dtype=np.int64).reshape(-1)
-    expected_compact = np.full(step.num_candidates, -1, dtype=np.int64)
+    expected_compact: NDArray[np.int64] = np.full(step.num_candidates, -1, dtype=np.int64)
     expected_compact[hard_valid] = np.arange(int(hard_valid.sum()), dtype=np.int64)
     if not np.array_equal(compact, expected_compact) or step.num_valid_candidates != int(hard_valid.sum()):
         raise ValueError("stored compact-valid projection must be dense and agree with V")
@@ -1167,11 +1177,11 @@ def candidate_evidence_snapshot_from_stored(
     """Freeze one already-acquired stored shell without reader or config access.
 
     The adapter derives the factual expansion frame from the rollout root at
-    ``t=0`` or the previous selected pose at later steps. Current stores carry
-    hard-valid/action/selection, raw poses, legacy admission diagnostics, and
-    view jitter. Canonical semantic lineage, criterion-local admission,
-    completion, and binding hashes remain explicitly ``LEGACY_MISSING`` until
-    the PR5 persistence migration.
+    ``t=0`` or the previous selected pose at later steps. Current-codec stores
+    carry canonical semantic lineage, criterion-local admission, completion,
+    binding hashes, and explicit ``N/V/A`` projections. Older stores retain
+    their available poses, masks, jitter, and legacy diagnostics while facts
+    absent from that schema remain explicitly ``LEGACY_MISSING``.
     """
 
     from aria_nbv.geometry import TargetRelativeFrame, TargetRelativeFrameDegeneracyError
@@ -1231,6 +1241,7 @@ def candidate_evidence_snapshot_from_stored(
         return float(row[0]), float(row[1]), float(row[2])
 
     def stored_row(index: int) -> CandidateEvidenceRow:
+        codec = step.candidate_codec
         probability = _finite_or_none(step.sampler_probabilities[index])
         jitter, jitter_availability = _stored_jitter_bundle(step, index)
         measurements = tuple(
@@ -1262,6 +1273,45 @@ def candidate_evidence_snapshot_from_stored(
             step.position_pair_ids_persisted and step.gaze_variant_ids_persisted
         ):
             raise ValueError("stored pair/gaze lineage must be jointly present or jointly inapplicable")
+        canonical_available = codec is not None
+        canonical_pair_id = None
+        canonical_variant_id = None
+        admission: tuple[CandidateCriterionSnapshot, ...] = ()
+        if canonical_available:
+            assert codec is not None
+            pair_value = int(codec.position_pair_ids[index])
+            variant_value = int(codec.gaze_variant_ids[index])
+            if (pair_value < 0) != (variant_value < 0):
+                raise ValueError("canonical stored pair/gaze identities must be jointly applicable")
+            if pair_value >= 0:
+                canonical_pair_id = pair_value
+                canonical_variant_id = variant_value
+            admission = tuple(
+                CandidateCriterionSnapshot(
+                    criterion_id=criterion.criterion_id,
+                    cumulative_valid=bool(criterion.legacy_cumulative_valid[index]),
+                    available=bool(criterion.local_available[index]),
+                    applicable=(bool(criterion.applicable[index]) if criterion.local_available[index] else None),
+                    evaluated=(bool(criterion.evaluated[index]) if criterion.local_available[index] else None),
+                    passed=(bool(criterion.passed[index]) if criterion.local_available[index] else None),
+                    reason_code=(int(criterion.reason_code[index]) if criterion.local_available[index] else None),
+                    margin=(float(criterion.margin[index]) if criterion.local_available[index] else None),
+                    source_role=(int(criterion.source_role[index]) if criterion.local_available[index] else None),
+                    reason_revision=criterion.reason_revision,
+                    source_role_revision=criterion.source_role_revision,
+                )
+                for criterion in codec.criteria
+            )
+        proposal_key = None if codec is None else str(codec.proposal_keys[index])
+        generation_frame_available = codec is not None and str(codec.target_frame_availability[index]) == "available"
+        admission_availability = CandidateFactAvailability.LEGACY_MISSING
+        if codec is not None:
+            local_availability = tuple(criterion.available for criterion in admission)
+            admission_availability = (
+                CandidateFactAvailability.AVAILABLE
+                if not local_availability or all(local_availability)
+                else CandidateFactAvailability.PARTIAL
+            )
         return CandidateEvidenceRow(
             attempted_index=index,
             candidate_id=int(step.candidate_row_ids[index]),
@@ -1297,47 +1347,65 @@ def candidate_evidence_snapshot_from_stored(
             hard_valid=bool(hard_valid[index]),
             action=bool(actions[index]),
             selected=bool(selected[index]),
-            semantic_group_id=None,
-            center_family_id=None,
-            gaze_family_id=None,
-            candidate_family_id=None,
-            legacy_family_label=str(step.mixture_names[index]),
+            semantic_group_id=(None if codec is None else str(codec.semantic_group_ids[index])),
+            center_family_id=(None if codec is None else str(codec.center_family_ids[index])),
+            gaze_family_id=(None if codec is None else str(codec.gaze_family_ids[index])),
+            candidate_family_id=(None if codec is None else str(codec.candidate_family_ids[index])),
+            legacy_family_label=(str(step.mixture_names[index]) or None),
             legacy_invalid_reason_bitset=int(step.invalid_reason_bitsets[index]),
             legacy_primary_invalid_reason=str(step.primary_invalid_reason_names[index]),
             legacy_admission_measurements=measurements,
-            center_id=None,
-            position_pair_id=None,
-            gaze_variant_id=None,
+            center_id=(None if codec is None else int(codec.center_ids[index])),
+            position_pair_id=canonical_pair_id,
+            gaze_variant_id=canonical_variant_id,
             legacy_position_pair_id=(
                 raw_pair_id if legacy_pair_availability is CandidateFactAvailability.AVAILABLE else None
             ),
             legacy_gaze_variant_id=(
                 raw_variant_id if legacy_pair_availability is CandidateFactAvailability.AVAILABLE else None
             ),
-            attempt_round_id=None,
-            draw_id=None,
-            proposal_key=None,
+            attempt_round_id=(None if codec is None else int(codec.attempt_round_ids[index])),
+            draw_id=(None if codec is None else int(codec.draw_ids[index])),
+            proposal_key=proposal_key,
             proposal_probability=probability,
             view_jitter_yaw_deg=(None if jitter is None else jitter[0]),
             view_jitter_pitch_deg=(None if jitter is None else jitter[1]),
             view_jitter_is_bounded=(None if jitter is None else jitter[2]),
             view_jitter_azimuth_limit_deg=(None if jitter is None else jitter[3]),
             view_jitter_elevation_limit_deg=(None if jitter is None else jitter[4]),
-            target_frame_identity=None,
-            admission=(),
-            semantic_lineage_availability=CandidateFactAvailability.LEGACY_MISSING,
+            target_frame_identity=(
+                str(codec.target_frame_identities[index]) if codec is not None and generation_frame_available else None
+            ),
+            admission=admission,
+            semantic_lineage_availability=(
+                CandidateFactAvailability.AVAILABLE if canonical_available else CandidateFactAvailability.LEGACY_MISSING
+            ),
             action_availability=CandidateFactAvailability.AVAILABLE,
             selection_availability=CandidateFactAvailability.AVAILABLE,
-            proposal_key_availability=CandidateFactAvailability.LEGACY_MISSING,
+            proposal_key_availability=(
+                CandidateFactAvailability.AVAILABLE
+                if proposal_key is not None
+                else CandidateFactAvailability.LEGACY_MISSING
+            ),
             proposal_probability_availability=(
                 CandidateFactAvailability.AVAILABLE
                 if probability is not None
                 else CandidateFactAvailability.UNAVAILABLE
             ),
             jitter_availability=jitter_availability,
-            admission_availability=CandidateFactAvailability.LEGACY_MISSING,
-            generation_frame_availability=CandidateFactAvailability.LEGACY_MISSING,
-            legacy_family_label_availability=CandidateFactAvailability.AVAILABLE,
+            admission_availability=admission_availability,
+            generation_frame_availability=(
+                CandidateFactAvailability.AVAILABLE
+                if generation_frame_available
+                else CandidateFactAvailability.UNAVAILABLE
+                if canonical_available
+                else CandidateFactAvailability.LEGACY_MISSING
+            ),
+            legacy_family_label_availability=(
+                CandidateFactAvailability.AVAILABLE
+                if str(step.mixture_names[index])
+                else CandidateFactAvailability.LEGACY_MISSING
+            ),
             legacy_admission_availability=(
                 CandidateFactAvailability.AVAILABLE if len(measurements) == 4 else CandidateFactAvailability.PARTIAL
             ),
@@ -1349,23 +1417,27 @@ def candidate_evidence_snapshot_from_stored(
         "candidate-evidence-snapshot-v1",
         f"rollout:{rollout.rollout_row_id}/step:{step.step_row_id}",
         evidence_rows,
-        None,
+        None if step.candidate_codec is None else step.candidate_codec.completion_mode,
         len(evidence_rows),
         sum(row.hard_valid for row in evidence_rows),
         sum(bool(row.action) for row in evidence_rows),
         sum(bool(row.selected) for row in evidence_rows),
         frame_identity if target_frame is not None else None,
         normalized_target,
-        None,
-        None,
-        None,
+        None if step.candidate_codec is None else step.candidate_codec.candidate_program_hash,
+        None if step.candidate_codec is None else step.candidate_codec.request_binding_hash,
+        None if step.candidate_codec is None else step.candidate_codec.legacy_candidate_config_hash,
         CandidateRolloutOverlay(
             horizon=rollout.horizon,
             factual_step=step.step_index,
             remaining_budget=rollout.horizon - step.step_index,
             history_coverage=step.step_index,
         ),
-        CandidateFactAvailability.PARTIAL,
+        (
+            CandidateFactAvailability.AVAILABLE
+            if step.candidate_codec is not None
+            else CandidateFactAvailability.PARTIAL
+        ),
         (
             CandidateFactAvailability.AVAILABLE
             if target_frame is not None and all(finite_pose_values)
@@ -1374,9 +1446,21 @@ def candidate_evidence_snapshot_from_stored(
             else CandidateFactAvailability.UNAVAILABLE
         ),
         projection_unavailable_reason,
-        CandidateFactAvailability.LEGACY_MISSING,
-        CandidateFactAvailability.LEGACY_MISSING,
-        CandidateFactAvailability.LEGACY_MISSING,
+        (
+            CandidateFactAvailability.AVAILABLE
+            if step.candidate_codec is not None
+            else CandidateFactAvailability.LEGACY_MISSING
+        ),
+        (
+            CandidateFactAvailability.AVAILABLE
+            if step.candidate_codec is not None
+            else CandidateFactAvailability.LEGACY_MISSING
+        ),
+        (
+            CandidateFactAvailability.AVAILABLE
+            if step.candidate_codec is not None and step.candidate_codec.legacy_candidate_config_hash is not None
+            else CandidateFactAvailability.LEGACY_MISSING
+        ),
     )
 
 

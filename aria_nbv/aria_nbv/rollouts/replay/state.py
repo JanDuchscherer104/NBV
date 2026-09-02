@@ -7,6 +7,7 @@ remain separate contracts in :mod:`aria_nbv.rollouts.zarr_store`.
 from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
+from typing import TYPE_CHECKING
 
 import torch
 from efm3d.aria import CameraTW
@@ -15,6 +16,9 @@ from efm3d.aria.pose import PoseTW
 from ...pose_generation.types import CandidateSamplingResult
 from ...pose_generation.utils import ensure_unbatched_pose
 from .policy import CounterfactualSelectionPolicy
+
+if TYPE_CHECKING:
+    from ..trace import CandidateTraceFacts
 
 
 def _pose_row(pose: PoseTW) -> torch.Tensor:
@@ -116,6 +120,9 @@ class CounterfactualStepResult:
 
     candidate_rng_seed: int | None = None
     """Deterministic per-node seed used for candidate generation."""
+
+    candidate_trace_facts: CandidateTraceFacts | None = None
+    """Optional canonical ``N``-row facts for the rollout persistence codec."""
 
     @property
     def selected_pose_world(self) -> PoseTW:

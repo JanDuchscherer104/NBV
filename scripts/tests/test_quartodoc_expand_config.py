@@ -36,6 +36,7 @@ def test_renamed_data_modules_are_discovered_for_api_generation() -> None:
         "data_handling.vin_store",
         "data_handling.vin_store.adapter",
         "data_handling.vin_store.batch",
+        "data_handling.vin_store.candidate_codec",
         "data_handling.vin_store.dataset",
         "data_handling.vin_store.diagnostics",
         "data_handling.vin_store.format",

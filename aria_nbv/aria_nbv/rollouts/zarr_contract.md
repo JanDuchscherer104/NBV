@@ -345,6 +345,30 @@ derived runtime object owned by `pytorch3d_depth_renderer.py`.
 Full-shell candidate rows remain present for invalid candidates. The masks
 define action/training eligibility.
 
+### Additive canonical candidate codec
+
+Current writers may dual-write `candidate_trace_codec_version =
+"candidate-trace-v1"` as one all-or-none audit bundle. Its root metadata and
+manifest bind the codec revision, audit-only role, and exact row counts. Pure
+legacy stores omit every item in this bundle and remain readable; partial,
+mixed-version, or cardinality-inconsistent bundles are invalid.
+
+| Group | Axis | Required facts |
+|---|---|---|
+| `step_candidate_facts` | one row per factual step | Independent program, request, and legacy config hashes; candidate substream, action-order, completion, proposal-key revision/replica; exact `N`, `V`, and `A` counts. |
+| `candidate_semantics` | one row per attempted candidate `N` | Semantic group, center/gaze/candidate families, center/pair/variant/round/draw identities, proposal key, and generation-frame availability/identity. |
+| `candidate_criteria` | criterion-major rows aligned to `N` | Cumulative legacy validity plus typed local availability, applicability, evaluation, pass, reason, margin, source role, and revisions. Margins are explicitly stored as `float32`; reason/source codes remain `int64`. |
+| `candidate_valids` | ordered `V` projection | Dense `valid_position` and attempted-shell index. |
+| `candidate_actions` | ordered `A` projection | Dense `action_position` and attempted-shell index. |
+| `dictionaries/candidate_fact` | codec-local strings | Unique JSON string dictionary used only by the additive groups. |
+
+`candidate_valids` and `candidate_actions` are independent projections; the
+current legacy dual-write requires `A = V`, but the canonical codec does not
+collapse their identities. The additive criteria are mixed-source-role audit
+evidence and are excluded from `q_h_source_tables` and model-facing VIN actor
+tensors. Existing arrays, dictionaries, dtypes, shapes, chunks, and encoded
+bytes do not change when the additive bundle is enabled.
+
 ## Invalidity Reason Codes
 
 Reason codes are bit positions stored as `uint32` bitsets. Bit 0 is reserved

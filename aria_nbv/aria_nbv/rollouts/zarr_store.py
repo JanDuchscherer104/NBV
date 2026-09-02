@@ -31,6 +31,7 @@ import numpy as np
 import torch
 import zarr
 from efm3d.aria.pose import PoseTW
+from numpy.typing import NDArray
 from pydantic import Field, field_validator, model_validator
 from zarr.codecs import BloscCname, BloscCodec, BloscShuffle
 from zarr.storage import LocalStore
@@ -59,8 +60,10 @@ from .manifest import (
 )
 from .shard_manifest import build_rollout_split_manifest_hash
 from .trace import (
+    CANDIDATE_TRACE_CODEC_VERSION,
     INVALID_REASON_CODES,
     INVALID_REASON_VERSION,
+    CandidateTraceFacts,
     RolloutLineage,
     _candidate_invalid_reasons,
     _full_shell_or_default,
@@ -356,6 +359,86 @@ present bundle is invalid because false boolean sentinels would otherwise be
 indistinguishable from measured values.
 """
 
+STEP_CANDIDATE_FACT_TABLE = _TableSchema(
+    "step_candidate_facts",
+    (
+        _TableField("step_row_id", np.int64),
+        _TableField("codec_version_id", np.int32),
+        _TableField("candidate_program_hash_id", np.int32),
+        _TableField("request_binding_hash_id", np.int32),
+        _TableField("legacy_candidate_config_hash_id", np.int32),
+        _TableField("candidate_substream_revision_id", np.int32),
+        _TableField("action_order_revision_id", np.int32),
+        _TableField("completion_mode_id", np.int32),
+        _TableField("attempted_count", np.int32),
+        _TableField("valid_count", np.int32),
+        _TableField("action_count", np.int32),
+        _TableField("proposal_key_revision_id", np.int32),
+        _TableField("proposal_replica", np.int64),
+    ),
+)
+"""Additive step-level candidate codec identity; absent in legacy stores."""
+
+CANDIDATE_SEMANTIC_TABLE = _TableSchema(
+    "candidate_semantics",
+    (
+        _TableField("candidate_row_id", np.int64),
+        _TableField("semantic_group_id", np.int32),
+        _TableField("center_family_id", np.int32),
+        _TableField("gaze_family_id", np.int32),
+        _TableField("candidate_family_id", np.int32),
+        _TableField("center_id", np.int64),
+        _TableField("position_pair_id", np.int64),
+        _TableField("gaze_variant_id", np.int64),
+        _TableField("attempt_round_id", np.int64),
+        _TableField("draw_id", np.int64),
+        _TableField("proposal_key_id", np.int32),
+        _TableField("target_frame_identity_id", np.int32),
+        _TableField("target_frame_availability_id", np.int32),
+    ),
+)
+"""Additive semantic candidate identities aligned one-to-one with ``candidates``."""
+
+CANDIDATE_CRITERION_TABLE = _TableSchema(
+    "candidate_criteria",
+    (
+        _TableField("candidate_row_id", np.int64),
+        _TableField("criterion_index", np.int16),
+        _TableField("criterion_id", np.int32),
+        _TableField("legacy_cumulative_valid", np.bool_),
+        _TableField("local_available", np.bool_),
+        _TableField("applicable", np.bool_),
+        _TableField("evaluated", np.bool_),
+        _TableField("passed", np.bool_),
+        _TableField("reason_code", np.int64),
+        _TableField("margin", np.float32),
+        _TableField("source_role", np.int64),
+        _TableField("reason_revision_id", np.int32),
+        _TableField("source_role_revision_id", np.int32),
+    ),
+)
+"""Additive normalized admission evidence with one row per criterion and candidate."""
+
+CANDIDATE_ACTION_TABLE = _TableSchema(
+    "candidate_actions",
+    (
+        _TableField("step_row_id", np.int64),
+        _TableField("action_position", np.int32),
+        _TableField("shell_index", np.int32),
+    ),
+)
+"""Ordered explicit ``A`` projection into each step's attempted ``N`` rows."""
+
+CANDIDATE_VALID_TABLE = _TableSchema(
+    "candidate_valids",
+    (
+        _TableField("step_row_id", np.int64),
+        _TableField("valid_position", np.int32),
+        _TableField("shell_index", np.int32),
+    ),
+)
+"""Ordered explicit ``V`` projection into each step's attempted ``N`` rows."""
+
 SELECTED_DEPTH_TABLE = _TableSchema(
     "selected_depth",
     (
@@ -484,6 +567,21 @@ class _RolloutTables:
     target_eval_crops: dict[str, np.ndarray]
     """Optional oracle/evaluation target point crops for sampled audits."""
 
+    step_candidate_facts: dict[str, np.ndarray]
+    """Optional step-level canonical candidate codec facts."""
+
+    candidate_semantics: dict[str, np.ndarray]
+    """Optional semantic identity columns aligned with candidates."""
+
+    candidate_criteria: dict[str, np.ndarray]
+    """Optional normalized admission rows."""
+
+    candidate_actions: dict[str, np.ndarray]
+    """Optional explicit ordered action-index rows."""
+
+    candidate_valids: dict[str, np.ndarray]
+    """Optional explicit ordered hard-valid indices."""
+
 
 class RolloutZarrStoreConfig(BaseConfig):
     """Filesystem, replay, and oracle-retention settings for one rollout store.
@@ -557,6 +655,48 @@ class _CandidateShellIndex:
     positions_by_step: Mapping[int, np.ndarray]
 
 
+@dataclass(frozen=True, slots=True)
+class _CandidateCodecTables:
+    """Reader-local immutable row indices for lazy additive codec reads."""
+
+    step_positions: Mapping[int, int]
+    semantic_positions: Mapping[int, int]
+    criterion_positions_by_candidate: Mapping[int, np.ndarray]
+    action_positions_by_step: Mapping[int, np.ndarray]
+    valid_positions_by_step: Mapping[int, np.ndarray]
+    dictionary: tuple[str, ...]
+
+
+def _candidate_fact_dictionary(root: Any) -> tuple[str, ...]:
+    """Decode the closed additive string dictionary without coercion."""
+
+    payload = json.loads(
+        np.asarray(root["dictionaries/candidate_fact"], dtype=np.uint8).reshape(-1).tobytes().decode("utf-8")
+    )
+    if not isinstance(payload, list) or any(type(value) is not str for value in payload):
+        raise ValueError("Candidate fact dictionary must be a JSON list of strings.")
+    if len(set(payload)) != len(payload):
+        raise ValueError("Candidate fact dictionary values must be unique.")
+    return tuple(payload)
+
+
+def _grouped_positions(values: np.ndarray) -> Mapping[int, np.ndarray]:
+    """Group one integer key axis with one stable sort and immutable slices."""
+
+    grouped: dict[int, np.ndarray] = {}
+    if values.size == 0:
+        return MappingProxyType(grouped)
+    order = np.argsort(values, kind="stable").astype(np.int64, copy=False)
+    ordered_values = values[order]
+    starts = np.r_[0, np.flatnonzero(ordered_values[1:] != ordered_values[:-1]) + 1]
+    stops = np.r_[starts[1:], values.size]
+    for start, stop in zip(starts.tolist(), stops.tolist(), strict=True):
+        positions = order[start:stop].copy()
+        positions.setflags(write=False)
+        grouped[int(ordered_values[start])] = positions
+    return MappingProxyType(grouped)
+
+
 class RolloutZarrStoreReader:
     """Open a completed standalone rollout replay store in read-only mode.
 
@@ -569,7 +709,77 @@ class RolloutZarrStoreReader:
         # Zarr's dynamic path lookup stubs return broad Array/Group unions even
         # though this reader validates the concrete store schema before use.
         self.root: Any = zarr.open_group(store=LocalStore(str(self.store_dir), read_only=True), mode="r")
+        self._candidate_fact_dictionary_values = _validate_candidate_codec_bundle(self.root)
         self._candidate_shell_index: _CandidateShellIndex | None = None
+        self._candidate_codec_tables: _CandidateCodecTables | None = None
+        self._candidate_row_ids: np.ndarray | None = None
+        self._step_row_ids: np.ndarray | None = None
+
+    def candidate_row_ids(self) -> np.ndarray:
+        """Return the reader-owned immutable attempted-row identity axis."""
+
+        if self._candidate_row_ids is None:
+            values = np.asarray(self.root["candidates/candidate_row_id"], dtype=np.int64).reshape(-1)
+            values.setflags(write=False)
+            self._candidate_row_ids = values
+        return self._candidate_row_ids
+
+    def step_row_ids(self) -> np.ndarray:
+        """Return the reader-owned immutable factual-step identity axis."""
+
+        if self._step_row_ids is None:
+            values = np.asarray(self.root["steps/step_row_id"], dtype=np.int64).reshape(-1)
+            values.setflags(write=False)
+            self._step_row_ids = values
+        return self._step_row_ids
+
+    def candidate_codec_tables(self) -> _CandidateCodecTables | None:
+        """Acquire only additive row indices; payload arrays remain lazy."""
+
+        if STEP_CANDIDATE_FACT_TABLE.name not in self.root:
+            return None
+        if self._candidate_codec_tables is None:
+            step_ids = np.asarray(self.root["step_candidate_facts/step_row_id"], dtype=np.int64).reshape(-1)
+            semantic_ids = np.asarray(self.root["candidate_semantics/candidate_row_id"], dtype=np.int64).reshape(-1)
+            criterion_ids = np.asarray(self.root["candidate_criteria/candidate_row_id"], dtype=np.int64).reshape(-1)
+            action_step_ids = np.asarray(self.root["candidate_actions/step_row_id"], dtype=np.int64).reshape(-1)
+            valid_step_ids = np.asarray(self.root["candidate_valids/step_row_id"], dtype=np.int64).reshape(-1)
+            stored_step_ids = self.step_row_ids()
+            stored_candidate_ids = self.candidate_row_ids()
+            if np.unique(step_ids).size != step_ids.size or set(step_ids.tolist()) != set(stored_step_ids.tolist()):
+                raise ValueError("Candidate codec requires exactly one fact row for every stored step.")
+            if np.unique(semantic_ids).size != semantic_ids.size or set(semantic_ids.tolist()) != set(
+                stored_candidate_ids.tolist()
+            ):
+                raise ValueError("Candidate codec requires exactly one semantic row for every attempted candidate.")
+            if criterion_ids.size and not set(criterion_ids.tolist()).issubset(stored_candidate_ids.tolist()):
+                raise ValueError("Candidate criterion rows reference unknown attempted candidates.")
+
+            action_groups = _grouped_positions(action_step_ids)
+            valid_groups = _grouped_positions(valid_step_ids)
+            known_step_ids = set(step_ids.tolist())
+            if not set(action_groups).issubset(known_step_ids) or not set(valid_groups).issubset(known_step_ids):
+                raise ValueError("Candidate codec action/valid rows reference unknown stored steps.")
+            valid_counts = np.asarray(self.root["step_candidate_facts/valid_count"], dtype=np.int64).reshape(-1)
+            action_counts = np.asarray(self.root["step_candidate_facts/action_count"], dtype=np.int64).reshape(-1)
+            for position, step_id in enumerate(step_ids.tolist()):
+                if len(valid_groups.get(int(step_id), ())) != int(valid_counts[position]):
+                    raise ValueError("Candidate codec valid-row cardinality disagrees with step facts.")
+                if len(action_groups.get(int(step_id), ())) != int(action_counts[position]):
+                    raise ValueError("Candidate codec action-row cardinality disagrees with step facts.")
+            self._candidate_codec_tables = _CandidateCodecTables(
+                step_positions=MappingProxyType({int(value): index for index, value in enumerate(step_ids.tolist())}),
+                semantic_positions=MappingProxyType(
+                    {int(value): index for index, value in enumerate(semantic_ids.tolist())}
+                ),
+                criterion_positions_by_candidate=_grouped_positions(criterion_ids),
+                action_positions_by_step=action_groups,
+                valid_positions_by_step=valid_groups,
+                dictionary=(
+                    self._candidate_fact_dictionary_values if self._candidate_fact_dictionary_values is not None else ()
+                ),
+            )
+        return self._candidate_codec_tables
 
     def candidate_shell_index(self) -> "_CandidateShellIndex":
         """Return the immutable shell-ordered candidate-row lookup for this reader.
@@ -580,9 +790,11 @@ class RolloutZarrStoreReader:
         """
 
         if self._candidate_shell_index is None:
-            candidate_ids = self.array("candidates/candidate_row_id").astype(np.int64, copy=False).reshape(-1)
-            step_ids = self.array("candidates/step_row_id").astype(np.int64, copy=False).reshape(-1)
-            shell_indices = self.array("candidates/shell_index").astype(np.int32, copy=False).reshape(-1)
+            candidate_ids = self.candidate_row_ids()
+            step_ids: NDArray[np.int64] = self.array("candidates/step_row_id").astype(np.int64, copy=False).reshape(-1)
+            shell_indices: NDArray[np.int32] = (
+                self.array("candidates/shell_index").astype(np.int32, copy=False).reshape(-1)
+            )
             if candidate_ids.size != step_ids.size or candidate_ids.size != shell_indices.size:
                 raise ValueError(
                     "Candidate shell index requires aligned candidate_row_id, step_row_id, and shell_index arrays."
@@ -601,7 +813,6 @@ class RolloutZarrStoreReader:
             positions = {
                 int(ordered_steps[start]): order[start:stop] for start, stop in zip(boundaries, stops, strict=True)
             }
-            candidate_ids.setflags(write=False)
             for position_array in positions.values():
                 position_array.setflags(write=False)
             self._candidate_shell_index = _CandidateShellIndex(
@@ -926,6 +1137,12 @@ class _RolloutZarrWriteSession:
         root = zarr.open_group(str(self.output_dir), mode="w")
         root.attrs.update(root_metadata)
         groups = {name: root.create_group(name, overwrite=True) for name in _required_groups()}
+        if table.step_candidate_facts:
+            groups[STEP_CANDIDATE_FACT_TABLE.name] = root.create_group(STEP_CANDIDATE_FACT_TABLE.name, overwrite=True)
+            groups[CANDIDATE_SEMANTIC_TABLE.name] = root.create_group(CANDIDATE_SEMANTIC_TABLE.name, overwrite=True)
+            groups[CANDIDATE_CRITERION_TABLE.name] = root.create_group(CANDIDATE_CRITERION_TABLE.name, overwrite=True)
+            groups[CANDIDATE_ACTION_TABLE.name] = root.create_group(CANDIDATE_ACTION_TABLE.name, overwrite=True)
+            groups[CANDIDATE_VALID_TABLE.name] = root.create_group(CANDIDATE_VALID_TABLE.name, overwrite=True)
 
         _write_dictionaries(groups["dictionaries"], dictionaries)
         _write_metadata_group(groups["metadata"], field_retention_policy=self.field_retention_policy)
@@ -1004,6 +1221,7 @@ class _RolloutZarrValidator:
         )
         self.errors: list[str] = []
         self.validate_selected_depth_payload = validate_selected_depth_payload
+        self._candidate_fact_dictionary_values: tuple[str, ...] | None = None
 
     def validate(self) -> RolloutZarrValidationResult:
         """Validate row linkage, masks, target validity, and lineage."""
@@ -1031,6 +1249,19 @@ class _RolloutZarrValidator:
         )
 
     def _validate_root_contract(self) -> None:
+        try:
+            self._candidate_fact_dictionary_values = _validate_candidate_codec_bundle(self.root)
+        except ValueError as exc:
+            self.errors.append(str(exc))
+        else:
+            if STEP_CANDIDATE_FACT_TABLE.name in self.root:
+                try:
+                    _validate_candidate_codec_cardinality(
+                        self.root,
+                        dictionary=self._candidate_fact_dictionary_values,
+                    )
+                except ValueError as exc:
+                    self.errors.append(str(exc))
         if self.root.attrs.get("schema_version") != ROLLOUT_ZARR_SCHEMA_VERSION:
             self.errors.append(
                 f"Unsupported rollout Zarr schema_version={self.root.attrs.get('schema_version')!r}; "
@@ -1080,6 +1311,50 @@ class _RolloutZarrValidator:
         manifest_attrs = payload.get("root_attrs", {})
         if manifest_attrs.get("campaign_split", "unknown") != self.root.attrs.get("campaign_split", "unknown"):
             self.errors.append("Rollout manifest campaign_split does not match root attrs.")
+        if manifest_attrs.get("candidate_trace_codec_version") != self.root.attrs.get("candidate_trace_codec_version"):
+            self.errors.append("Rollout manifest candidate codec version does not match root attrs.")
+        for name in (
+            "candidate_trace_codec_role",
+            "candidate_trace_step_rows",
+            "candidate_trace_semantic_rows",
+            "candidate_trace_criterion_rows",
+            "candidate_trace_action_rows",
+            "candidate_trace_valid_rows",
+        ):
+            if manifest_attrs.get(name) != self.root.attrs.get(name):
+                self.errors.append(f"Rollout manifest candidate codec field {name!r} does not match root attrs.")
+        if "step_candidate_facts" in self.root:
+            config_hashes = payload.get("config_hashes")
+            if not isinstance(config_hashes, dict):
+                self.errors.append("Rollout manifest config_hashes must be a mapping.")
+            else:
+                try:
+                    fact_dictionary = self._candidate_fact_dictionary_values
+                    if fact_dictionary is None:
+                        raise ValueError("candidate fact dictionary is unavailable")
+
+                    def fact_values(field: str, *, omit_negative: bool = False) -> set[str]:
+                        ids = np.asarray(self.root[f"step_candidate_facts/{field}"], dtype=np.int64).reshape(-1)
+                        if omit_negative:
+                            ids = ids[ids >= 0]
+                        if np.any(ids < 0) or np.any(ids >= len(fact_dictionary)):
+                            raise ValueError(f"candidate fact dictionary ids for {field!r} are invalid")
+                        return {str(fact_dictionary[int(value)]) for value in ids.tolist()}
+
+                    expected_sets = {
+                        "candidate_program": fact_values("candidate_program_hash_id"),
+                        "candidate_request": fact_values("request_binding_hash_id"),
+                        "candidate_proposal_revision": fact_values("proposal_key_revision_id", omit_negative=True),
+                        "candidate": fact_values("legacy_candidate_config_hash_id", omit_negative=True),
+                    }
+                    for name, expected in expected_sets.items():
+                        actual = config_hashes.get(name)
+                        if not isinstance(actual, list) or {str(value) for value in actual} != expected:
+                            self.errors.append(
+                                f"Rollout manifest config hash set {name!r} does not match candidate codec rows."
+                            )
+                except (KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
+                    self.errors.append(f"Failed to validate candidate codec manifest hash sets: {exc}.")
         shard_context = (payload.get("generation") or {}).get("shard") or {}
         campaign_binding = shard_context.get("campaign_binding") or {}
         bound_explicit_hash = campaign_binding.get("explicit_target_hash")
@@ -1763,6 +2038,369 @@ def _required_groups() -> tuple[str, ...]:
     )
 
 
+def _validate_candidate_codec_bundle(root: Any) -> tuple[str, ...] | None:
+    """Reject partial or unknown additive candidate persistence bundles."""
+
+    names = {
+        STEP_CANDIDATE_FACT_TABLE.name,
+        CANDIDATE_SEMANTIC_TABLE.name,
+        CANDIDATE_CRITERION_TABLE.name,
+        CANDIDATE_ACTION_TABLE.name,
+        CANDIDATE_VALID_TABLE.name,
+    }
+    present = {name for name in names if name in root}
+    version = root.attrs.get("candidate_trace_codec_version")
+    dictionary_present = "dictionaries" in root and "candidate_fact" in root["dictionaries"]
+    if not present and version is None and not dictionary_present:
+        return None
+    if present != names or version != CANDIDATE_TRACE_CODEC_VERSION or not dictionary_present:
+        raise ValueError(
+            "Candidate persistence codec must contain one complete supported table/dictionary/version bundle."
+        )
+    dictionary = _candidate_fact_dictionary(root)
+    for schema in (
+        STEP_CANDIDATE_FACT_TABLE,
+        CANDIDATE_SEMANTIC_TABLE,
+        CANDIDATE_CRITERION_TABLE,
+        CANDIDATE_ACTION_TABLE,
+        CANDIDATE_VALID_TABLE,
+    ):
+        group = root[schema.name]
+        if set(group.array_keys()) != set(schema.names):
+            raise ValueError(f"Candidate persistence table {schema.name!r} does not match its versioned schema.")
+        lengths: set[int] = set()
+        for schema_field in schema.fields:
+            array = group[schema_field.name]
+            if array.ndim != 1 or np.dtype(array.dtype) != np.dtype(schema_field.dtype):
+                raise ValueError(
+                    f"Candidate persistence field {schema.name}/{schema_field.name} "
+                    f"must be 1-D {np.dtype(schema_field.dtype)}."
+                )
+            lengths.add(int(array.shape[0]))
+            chunks = tuple(int(value) for value in array.chunks)
+            if len(chunks) != 1 or chunks[0] < 1:
+                raise ValueError(f"Candidate persistence field {schema.name}/{schema_field.name} has invalid chunks.")
+        if len(lengths) > 1:
+            raise ValueError(f"Candidate persistence table {schema.name!r} contains misaligned fields.")
+    return dictionary
+
+
+def _validate_candidate_codec_cardinality(
+    root: Any,
+    *,
+    dictionary: tuple[str, ...] | None = None,
+) -> None:
+    """Validate additive row ownership without interpreting scientific values."""
+
+    step_ids = np.asarray(root["steps/step_row_id"], dtype=np.int64).reshape(-1)
+    candidate_ids = np.asarray(root["candidates/candidate_row_id"], dtype=np.int64).reshape(-1)
+    fact_step_ids = np.asarray(root["step_candidate_facts/step_row_id"], dtype=np.int64).reshape(-1)
+    semantic_ids = np.asarray(root["candidate_semantics/candidate_row_id"], dtype=np.int64).reshape(-1)
+    if np.unique(fact_step_ids).size != step_ids.size or set(fact_step_ids.tolist()) != set(step_ids.tolist()):
+        raise ValueError("Candidate codec requires exactly one fact row for every stored step.")
+    if np.unique(semantic_ids).size != candidate_ids.size or set(semantic_ids.tolist()) != set(candidate_ids.tolist()):
+        raise ValueError("Candidate codec requires exactly one semantic row for every attempted candidate.")
+    candidate_step_ids = np.asarray(root["candidates/step_row_id"], dtype=np.int64).reshape(-1)
+    candidate_shell_indices = np.asarray(root["candidates/shell_index"], dtype=np.int64).reshape(-1)
+    compact_valid = np.asarray(root["candidates/compact_valid_index"], dtype=np.int64).reshape(-1)
+    legacy_action = np.asarray(root["candidates/actor_action_mask"], dtype=np.bool_).reshape(-1)
+    valid_step_ids = np.asarray(root["candidate_valids/step_row_id"], dtype=np.int64).reshape(-1)
+    valid_positions = np.asarray(root["candidate_valids/valid_position"], dtype=np.int64).reshape(-1)
+    valid_shell = np.asarray(root["candidate_valids/shell_index"], dtype=np.int64).reshape(-1)
+    action_step_ids = np.asarray(root["candidate_actions/step_row_id"], dtype=np.int64).reshape(-1)
+    action_positions = np.asarray(root["candidate_actions/action_position"], dtype=np.int64).reshape(-1)
+    action_shell = np.asarray(root["candidate_actions/shell_index"], dtype=np.int64).reshape(-1)
+    candidate_groups = _grouped_positions(candidate_step_ids)
+    valid_groups = _grouped_positions(valid_step_ids)
+    action_groups = _grouped_positions(action_step_ids)
+    known_step_ids = set(fact_step_ids.tolist())
+    if not set(valid_groups).issubset(known_step_ids) or not set(action_groups).issubset(known_step_ids):
+        raise ValueError("Candidate codec action/valid rows reference unknown stored steps.")
+    valid_counts = np.asarray(root["step_candidate_facts/valid_count"], dtype=np.int64).reshape(-1)
+    action_counts = np.asarray(root["step_candidate_facts/action_count"], dtype=np.int64).reshape(-1)
+    attempted_counts = np.asarray(root["step_candidate_facts/attempted_count"], dtype=np.int64).reshape(-1)
+    for fact_position, step_id in enumerate(fact_step_ids.tolist()):
+        legacy_rows = candidate_groups.get(int(step_id), np.empty(0, dtype=np.int64))
+        encoded_valid_rows = valid_groups.get(int(step_id), np.empty(0, dtype=np.int64))
+        encoded_action_rows = action_groups.get(int(step_id), np.empty(0, dtype=np.int64))
+        if legacy_rows.size != int(attempted_counts[fact_position]):
+            raise ValueError("Candidate codec attempted count disagrees with the legacy step shell.")
+        if encoded_valid_rows.size != int(valid_counts[fact_position]):
+            raise ValueError("Candidate codec candidate_valids cardinality disagrees with step facts.")
+        if encoded_action_rows.size != int(action_counts[fact_position]):
+            raise ValueError("Candidate codec candidate_actions cardinality disagrees with step facts.")
+        legacy_valid_rows = legacy_rows[compact_valid[legacy_rows] >= 0]
+        legacy_valid_order = np.argsort(compact_valid[legacy_valid_rows], kind="stable")
+        expected_valid = candidate_shell_indices[legacy_valid_rows][legacy_valid_order]
+        if not np.array_equal(
+            np.sort(valid_positions[encoded_valid_rows]), np.arange(encoded_valid_rows.size, dtype=np.int64)
+        ):
+            raise ValueError("Candidate codec valid positions must be unique and dense from zero.")
+        encoded_valid_order = np.argsort(valid_positions[encoded_valid_rows], kind="stable")
+        encoded_valid = valid_shell[encoded_valid_rows][encoded_valid_order]
+        if np.unique(encoded_valid).size != encoded_valid.size:
+            raise ValueError("Candidate codec valid shell indices must be unique.")
+        if not np.array_equal(encoded_valid, expected_valid):
+            raise ValueError("Candidate codec valid projection disagrees with legacy compact-valid order.")
+        expected_action = candidate_shell_indices[legacy_rows][legacy_action[legacy_rows]]
+        if not np.array_equal(
+            np.sort(action_positions[encoded_action_rows]), np.arange(encoded_action_rows.size, dtype=np.int64)
+        ):
+            raise ValueError("Candidate codec action positions must be unique and dense from zero.")
+        encoded_action_order = np.argsort(action_positions[encoded_action_rows], kind="stable")
+        encoded_action = action_shell[encoded_action_rows][encoded_action_order]
+        if np.unique(encoded_action).size != encoded_action.size:
+            raise ValueError("Candidate codec action shell indices must be unique.")
+        if not np.array_equal(encoded_action, expected_action):
+            raise ValueError("Candidate codec action projection disagrees with legacy actor-action order.")
+    criterion_candidate_ids = np.asarray(root["candidate_criteria/candidate_row_id"], dtype=np.int64).reshape(-1)
+    if criterion_candidate_ids.size and not set(criterion_candidate_ids.tolist()).issubset(candidate_ids.tolist()):
+        raise ValueError("Candidate criterion rows reference unknown attempted candidates.")
+    center_ids = np.asarray(root["candidate_semantics/center_id"], dtype=np.int64).reshape(-1)
+    pair_ids = np.asarray(root["candidate_semantics/position_pair_id"], dtype=np.int64).reshape(-1)
+    gaze_ids = np.asarray(root["candidate_semantics/gaze_variant_id"], dtype=np.int64).reshape(-1)
+    round_ids = np.asarray(root["candidate_semantics/attempt_round_id"], dtype=np.int64).reshape(-1)
+    draw_ids = np.asarray(root["candidate_semantics/draw_id"], dtype=np.int64).reshape(-1)
+    if np.any(center_ids < 0) or np.any(round_ids < 0) or np.any(draw_ids < 0):
+        raise ValueError("Candidate codec center, round, and draw identities must be non-negative.")
+    pair_inapplicable = (pair_ids == -1) & (gaze_ids == -1)
+    pair_available = (pair_ids >= 0) & (gaze_ids >= 0)
+    if np.any(~(pair_inapplicable | pair_available)):
+        raise ValueError("Candidate codec pair/gaze identities must be jointly non-negative or exactly -1.")
+
+    proposal_revision_ids = np.asarray(root["step_candidate_facts/proposal_key_revision_id"], dtype=np.int64).reshape(
+        -1
+    )
+    proposal_replicas = np.asarray(root["step_candidate_facts/proposal_replica"], dtype=np.int64).reshape(-1)
+    if np.any(proposal_revision_ids < -1) or np.any(proposal_replicas < -1):
+        raise ValueError("Candidate codec proposal missing-value sentinel must be exactly -1.")
+    if np.any((proposal_revision_ids == -1) != (proposal_replicas == -1)):
+        raise ValueError("Candidate codec proposal revision and replica must be available together.")
+
+    if criterion_candidate_ids.size:
+        criterion_indices = np.asarray(root["candidate_criteria/criterion_index"], dtype=np.int64).reshape(-1)
+        local_available = np.asarray(root["candidate_criteria/local_available"], dtype=np.bool_).reshape(-1)
+        applicable = np.asarray(root["candidate_criteria/applicable"], dtype=np.bool_).reshape(-1)
+        evaluated = np.asarray(root["candidate_criteria/evaluated"], dtype=np.bool_).reshape(-1)
+        passed = np.asarray(root["candidate_criteria/passed"], dtype=np.bool_).reshape(-1)
+        reason_code = np.asarray(root["candidate_criteria/reason_code"], dtype=np.int64).reshape(-1)
+        margin = np.asarray(root["candidate_criteria/margin"], dtype=np.float32).reshape(-1)
+        source_role = np.asarray(root["candidate_criteria/source_role"], dtype=np.int64).reshape(-1)
+        unavailable = ~local_available
+        if np.any(evaluated & ~applicable) or np.any(passed & ~evaluated):
+            raise ValueError("Candidate codec criterion subset invariants are invalid.")
+        if np.any(applicable[unavailable] | evaluated[unavailable] | passed[unavailable]):
+            raise ValueError("Candidate codec unavailable criterion rows must use false sentinels.")
+        if np.any(reason_code[unavailable] != -1) or np.any(source_role[unavailable] != -1):
+            raise ValueError("Candidate codec unavailable criterion rows must use integer sentinels.")
+        if np.any(np.isfinite(margin[unavailable])) or np.any(~np.isfinite(margin[local_available])):
+            raise ValueError("Candidate codec criterion margin availability is invalid.")
+        if np.any((reason_code[local_available] < -1) | (reason_code[local_available] > 7)) or np.any(
+            ~np.isin(source_role[local_available], np.asarray([1, 2], dtype=np.int64))
+        ):
+            raise ValueError("Candidate codec criterion reason/source codes are undeclared.")
+        if np.any(passed[local_available] != (reason_code[local_available] == 0)):
+            raise ValueError("Candidate codec passed rows must use the PASSED reason code exactly.")
+        if np.any((~evaluated[local_available]) != (reason_code[local_available] == -1)):
+            raise ValueError("Candidate codec unevaluated rows must use the UNAVAILABLE reason exactly.")
+
+        candidate_position_by_id = {int(value): index for index, value in enumerate(candidate_ids.tolist())}
+        criterion_step_ids = np.asarray(
+            [candidate_step_ids[candidate_position_by_id[int(value)]] for value in criterion_candidate_ids],
+            dtype=np.int64,
+        )
+        criterion_step_groups = _grouped_positions(criterion_step_ids)
+        cumulative = np.asarray(root["candidate_criteria/legacy_cumulative_valid"], dtype=np.bool_).reshape(-1)
+        for step_id, candidate_rows in candidate_groups.items():
+            expected_candidate_ids = candidate_ids[candidate_rows]
+            rows = criterion_step_groups.get(step_id, np.empty(0, dtype=np.int64))
+            step_criterion_indices = sorted(set(criterion_indices[rows].tolist()))
+            if step_criterion_indices != list(range(len(step_criterion_indices))):
+                raise ValueError("Candidate codec criterion indices must be dense from zero per step.")
+            previous: NDArray[np.bool_] = np.ones(candidate_rows.size, dtype=np.bool_)
+            for criterion_index in step_criterion_indices:
+                criterion_rows = rows[criterion_indices[rows] == criterion_index]
+                row_by_candidate = {
+                    int(criterion_candidate_ids[position]): int(position) for position in criterion_rows.tolist()
+                }
+                if len(row_by_candidate) != expected_candidate_ids.size or set(row_by_candidate) != set(
+                    expected_candidate_ids.tolist()
+                ):
+                    raise ValueError("Candidate codec criterion rows must align one-to-one with each step shell.")
+                ordered_rows = np.asarray(
+                    [row_by_candidate[int(candidate_id)] for candidate_id in expected_candidate_ids], dtype=np.int64
+                )
+                current = cumulative[ordered_rows]
+                if np.any(current & ~previous):
+                    raise ValueError("Candidate codec cumulative admission masks must be monotone.")
+                available_rows = local_available[ordered_rows]
+                expected = previous & (~evaluated[ordered_rows] | passed[ordered_rows])
+                if np.any(current[available_rows] != expected[available_rows]):
+                    raise ValueError("Candidate codec cumulative admission mask contradicts local criterion evidence.")
+                previous = current
+            expected_valid = compact_valid[candidate_rows] >= 0
+            if step_criterion_indices and not np.array_equal(previous, expected_valid):
+                raise ValueError("Candidate codec terminal cumulative admission mask must equal V.")
+    dictionary = _candidate_fact_dictionary(root) if dictionary is None else dictionary
+    required_dictionary_fields = {
+        "step_candidate_facts": (
+            "codec_version_id",
+            "candidate_program_hash_id",
+            "request_binding_hash_id",
+            "candidate_substream_revision_id",
+            "action_order_revision_id",
+            "completion_mode_id",
+        ),
+        "candidate_semantics": (
+            "semantic_group_id",
+            "center_family_id",
+            "gaze_family_id",
+            "candidate_family_id",
+            "proposal_key_id",
+            "target_frame_identity_id",
+            "target_frame_availability_id",
+        ),
+        "candidate_criteria": (
+            "criterion_id",
+            "reason_revision_id",
+            "source_role_revision_id",
+        ),
+    }
+    optional_dictionary_fields = {
+        "step_candidate_facts": (
+            "legacy_candidate_config_hash_id",
+            "proposal_key_revision_id",
+        ),
+    }
+    for group_name, field_names in required_dictionary_fields.items():
+        for field_name in field_names:
+            references = np.asarray(root[f"{group_name}/{field_name}"], dtype=np.int64).reshape(-1)
+            if np.any(references < 0) or np.any(references >= len(dictionary)):
+                raise ValueError(
+                    f"Candidate codec dictionary field {group_name}/{field_name} contains an invalid reference."
+                )
+    for group_name, field_names in optional_dictionary_fields.items():
+        for field_name in field_names:
+            references = np.asarray(root[f"{group_name}/{field_name}"], dtype=np.int64).reshape(-1)
+            if np.any(references < -1) or np.any(references >= len(dictionary)):
+                raise ValueError(
+                    f"Candidate codec optional dictionary field {group_name}/{field_name} "
+                    "must use exactly -1 or a valid reference."
+                )
+
+    def decoded(group_name: str, field_name: str) -> tuple[str, ...]:
+        references = np.asarray(root[f"{group_name}/{field_name}"], dtype=np.int64).reshape(-1)
+        return tuple(str(dictionary[int(reference)]) for reference in references if reference >= 0)
+
+    semantic_value_fields = (
+        "semantic_group_id",
+        "center_family_id",
+        "gaze_family_id",
+        "candidate_family_id",
+        "proposal_key_id",
+    )
+    if any(not value for field_name in semantic_value_fields for value in decoded("candidate_semantics", field_name)):
+        raise ValueError("Candidate codec semantic and proposal dictionary values must be nonempty.")
+    for field_name in ("criterion_id", "reason_revision_id", "source_role_revision_id"):
+        if any(not value for value in decoded("candidate_criteria", field_name)):
+            raise ValueError("Candidate codec criterion dictionary values must be nonempty.")
+    program_hashes = decoded("step_candidate_facts", "candidate_program_hash_id")
+    request_hashes = decoded("step_candidate_facts", "request_binding_hash_id")
+    if any(
+        len(digest) != 64 or any(char not in "0123456789abcdef" for char in digest)
+        for digest in (*program_hashes, *request_hashes)
+    ):
+        raise ValueError("Candidate codec program/request hashes must be lowercase SHA-256 digests.")
+    if set(decoded("step_candidate_facts", "candidate_substream_revision_id")) != {"shipped_mixture_seed_paths_v1"}:
+        raise ValueError("Candidate codec substream revision is unsupported.")
+    if set(decoded("step_candidate_facts", "action_order_revision_id")) != {"ordered_hard_valid_v1"}:
+        raise ValueError("Candidate codec action-order revision is unsupported.")
+    if set(decoded("step_candidate_facts", "completion_mode_id")) != {"fixed_attempts"}:
+        raise ValueError("Candidate codec completion mode is unsupported.")
+    allowed_criterion_revisions = {"unavailable_v1", "candidate_admission_v1"}
+    if not set(decoded("candidate_criteria", "reason_revision_id")).issubset(allowed_criterion_revisions) or not set(
+        decoded("candidate_criteria", "source_role_revision_id")
+    ).issubset(allowed_criterion_revisions):
+        raise ValueError("Candidate codec criterion revision is unsupported.")
+    if criterion_candidate_ids.size:
+        criterion_identity_refs = np.asarray(root["candidate_criteria/criterion_id"], dtype=np.int64).reshape(-1)
+        reason_revision_refs = np.asarray(root["candidate_criteria/reason_revision_id"], dtype=np.int64).reshape(-1)
+        source_revision_refs = np.asarray(root["candidate_criteria/source_role_revision_id"], dtype=np.int64).reshape(
+            -1
+        )
+        for step_id, rows in criterion_step_groups.items():
+            step_criterion_indices = sorted(set(criterion_indices[rows].tolist()))
+            step_identity_refs: list[int] = []
+            for criterion_index in step_criterion_indices:
+                criterion_rows = rows[criterion_indices[rows] == criterion_index]
+                identities = set(criterion_identity_refs[criterion_rows].tolist())
+                reason_revisions = set(reason_revision_refs[criterion_rows].tolist())
+                source_revisions = set(source_revision_refs[criterion_rows].tolist())
+                if len(identities) != 1 or len(reason_revisions) != 1 or len(source_revisions) != 1:
+                    raise ValueError(
+                        f"Candidate codec criterion identity/revisions must be constant over N for step {step_id}."
+                    )
+                step_identity_refs.append(int(next(iter(identities))))
+            if len(set(step_identity_refs)) != len(step_identity_refs):
+                raise ValueError("Candidate codec criterion identities must be unique per step.")
+    target_identity = decoded("candidate_semantics", "target_frame_identity_id")
+    target_availability = decoded("candidate_semantics", "target_frame_availability_id")
+    if any(value not in {"available", "unavailable"} for value in target_availability) or any(
+        (availability == "available") != bool(identity)
+        for identity, availability in zip(target_identity, target_availability, strict=True)
+    ):
+        raise ValueError("Candidate codec target-frame identity and availability disagree.")
+    if any(
+        not value
+        for field_name in ("legacy_candidate_config_hash_id", "proposal_key_revision_id")
+        for value in decoded("step_candidate_facts", field_name)
+    ):
+        raise ValueError("Candidate codec optional identity values must be nonempty when available.")
+    codec_ids = np.asarray(root["step_candidate_facts/codec_version_id"], dtype=np.int64).reshape(-1)
+    if any(index < 0 or index >= len(dictionary) for index in codec_ids.tolist()) or {
+        str(dictionary[index]) for index in codec_ids.tolist()
+    } != {CANDIDATE_TRACE_CODEC_VERSION}:
+        raise ValueError("Every candidate step row must bind the root candidate codec version.")
+    expected_counts = {
+        "candidate_trace_step_rows": int(fact_step_ids.size),
+        "candidate_trace_semantic_rows": int(semantic_ids.size),
+        "candidate_trace_criterion_rows": int(criterion_candidate_ids.size),
+        "candidate_trace_action_rows": int(np.asarray(root["candidate_actions/step_row_id"]).size),
+        "candidate_trace_valid_rows": int(np.asarray(root["candidate_valids/step_row_id"]).size),
+    }
+    for name, expected in expected_counts.items():
+        if root.attrs.get(name) != expected:
+            raise ValueError(f"Candidate codec root count {name!r} disagrees with the encoded tables.")
+    if root.attrs.get("candidate_trace_codec_role") != "audit_mixed_source_role_not_training_input":
+        raise ValueError("Candidate codec role must remain the declared audit-only boundary.")
+    step_rollout_ids = np.asarray(root["steps/rollout_row_id"], dtype=np.int64).reshape(-1)
+    step_rollout_by_id = {
+        int(step_id): int(rollout_id)
+        for step_id, rollout_id in zip(step_ids.tolist(), step_rollout_ids.tolist(), strict=True)
+    }
+    lineage_rollout_ids = np.asarray(root["lineage/rollout_row_id"], dtype=np.int64).reshape(-1)
+    lineage_config_ids = np.asarray(root["lineage/candidate_config_id"], dtype=np.int64).reshape(-1)
+    config_dictionary = json.loads(
+        np.asarray(root["dictionaries/config"], dtype=np.uint8).reshape(-1).tobytes().decode("utf-8")
+    )
+    if np.any(lineage_config_ids < 0) or np.any(lineage_config_ids >= len(config_dictionary)):
+        raise ValueError("Rollout lineage candidate config id is outside the config dictionary.")
+    config_by_rollout = {
+        int(rollout_id): str(config_dictionary[int(config_id)])
+        for rollout_id, config_id in zip(lineage_rollout_ids.tolist(), lineage_config_ids.tolist(), strict=True)
+    }
+    legacy_ids = np.asarray(root["step_candidate_facts/legacy_candidate_config_hash_id"], dtype=np.int64).reshape(-1)
+    for position, step_id in enumerate(fact_step_ids.tolist()):
+        rollout_id = step_rollout_by_id.get(int(step_id))
+        expected = None if rollout_id is None else config_by_rollout.get(rollout_id)
+        legacy_id = int(legacy_ids[position])
+        if legacy_id >= len(dictionary):
+            raise ValueError("Candidate codec legacy config hash id is outside the dictionary.")
+        actual = None if legacy_id < 0 else str(dictionary[legacy_id])
+        if actual != expected:
+            raise ValueError("Candidate codec legacy config hash does not match the owning rollout lineage.")
+
+
 def _effective_split_manifest_hash(
     sources: dict[str, np.ndarray], dictionaries: dict[str, list[str]], *, fallback: str
 ) -> str:
@@ -1906,6 +2544,19 @@ def _root_metadata_payload(
         "target_eval_crops_max_points": int(target_eval_crop_max_points),
         "target_eval_crops_num_rows": int(tables.target_eval_crops["crop_row_id"].shape[0]),
         "num_q_h_states": int(q_h_arrays["state_step_row_id"].shape[0]),
+        **(
+            {
+                "candidate_trace_codec_version": CANDIDATE_TRACE_CODEC_VERSION,
+                "candidate_trace_codec_role": "audit_mixed_source_role_not_training_input",
+                "candidate_trace_step_rows": int(tables.step_candidate_facts["step_row_id"].shape[0]),
+                "candidate_trace_semantic_rows": int(tables.candidate_semantics["candidate_row_id"].shape[0]),
+                "candidate_trace_criterion_rows": int(tables.candidate_criteria["candidate_row_id"].shape[0]),
+                "candidate_trace_action_rows": int(tables.candidate_actions["step_row_id"].shape[0]),
+                "candidate_trace_valid_rows": int(tables.candidate_valids["step_row_id"].shape[0]),
+            }
+            if tables.step_candidate_facts
+            else {}
+        ),
     }
 
 
@@ -1990,6 +2641,9 @@ def _manifest_config_hashes(records: list[_RolloutWriteRecord]) -> dict[str, lis
 
     values: dict[str, set[str]] = {
         "candidate": set(),
+        "candidate_program": set(),
+        "candidate_request": set(),
+        "candidate_proposal_revision": set(),
         "oracle": set(),
         "rollout": set(),
         "model_checkpoint": set(),
@@ -2008,6 +2662,14 @@ def _manifest_config_hashes(records: list[_RolloutWriteRecord]) -> dict[str, lis
         _add_manifest_hash(values["split_manifest"], lineage.source.split_manifest_hash)
         _add_manifest_hash(values["target_crop_policy"], lineage.target.target_crop_policy)
         _add_manifest_hash(values["target_protocol"], lineage.target.target_protocol_version)
+        for trajectory in record.evaluated.result.trajectories:
+            for step in trajectory.steps:
+                facts = step.candidate_trace_facts
+                if facts is None:
+                    continue
+                _add_manifest_hash(values["candidate_program"], facts.candidate_program_hash)
+                _add_manifest_hash(values["candidate_request"], facts.request_binding_hash)
+                _add_manifest_hash(values["candidate_proposal_revision"], facts.proposal_key_revision)
     return {name: sorted(items) for name, items in values.items()}
 
 
@@ -2136,6 +2798,42 @@ def _build_dictionaries(records: list[_RolloutWriteRecord]) -> dict[str, list[st
     }
     descriptor_hash_values = {lineage.target.descriptor_hash or "" for _record, _trajectory, lineage in items}
     explicit_target_hash_values = {lineage.target.explicit_target_hash or "" for _record, _trajectory, lineage in items}
+    candidate_fact_values: set[str] = set()
+    for record in records:
+        for trajectory in record.evaluated.result.trajectories:
+            for step in trajectory.steps:
+                facts = step.candidate_trace_facts
+                if facts is None:
+                    continue
+                candidate_fact_values.update(
+                    (
+                        facts.codec_version,
+                        facts.candidate_program_hash,
+                        facts.request_binding_hash,
+                        facts.candidate_substream_revision,
+                        facts.action_order_revision,
+                        facts.completion_mode,
+                        *facts.semantic_group_id,
+                        *facts.center_family_id,
+                        *facts.gaze_family_id,
+                        *facts.candidate_family_id,
+                        *facts.proposal_key,
+                        *facts.target_frame_identity,
+                        *facts.target_frame_availability,
+                    )
+                )
+                if facts.proposal_key_revision is not None:
+                    candidate_fact_values.add(facts.proposal_key_revision)
+                if facts.legacy_candidate_config_hash is not None:
+                    candidate_fact_values.add(facts.legacy_candidate_config_hash)
+                for criterion in facts.criteria:
+                    candidate_fact_values.update(
+                        (
+                            criterion.criterion_id,
+                            criterion.reason_revision,
+                            criterion.source_role_revision,
+                        )
+                    )
     return {
         "scene": sorted({lineage.source.scene_id or "" for _record, _trajectory, lineage in items}),
         "snippet": sorted(
@@ -2181,6 +2879,7 @@ def _build_dictionaries(records: list[_RolloutWriteRecord]) -> dict[str, list[st
         "descriptor_provenance": sorted(descriptor_provenance_values),
         "descriptor_hash": sorted(descriptor_hash_values),
         "explicit_target_hash": sorted(explicit_target_hash_values),
+        **({"candidate_fact": sorted(candidate_fact_values)} if candidate_fact_values else {}),
         "termination_reason": sorted(
             {
                 _termination_reason(record.evaluated.result, trajectory)
@@ -2639,6 +3338,24 @@ def _flatten_records(
     candidate_diagnostic_rows: dict[str, list[Any]] = _empty_candidate_diagnostic_rows()
     selected_depth_rows: dict[str, list[Any]] = _empty_selected_depth_rows()
     target_eval_crop_rows: dict[str, list[Any]] = _empty_target_eval_crop_rows()
+    step_candidate_fact_rows = _empty_rows(STEP_CANDIDATE_FACT_TABLE)
+    candidate_semantic_rows = _empty_rows(CANDIDATE_SEMANTIC_TABLE)
+    candidate_criterion_rows = _empty_rows(CANDIDATE_CRITERION_TABLE)
+    candidate_action_rows = _empty_rows(CANDIDATE_ACTION_TABLE)
+    candidate_valid_rows = _empty_rows(CANDIDATE_VALID_TABLE)
+
+    trace_presence = [
+        step.candidate_trace_facts is not None
+        for record in records
+        for trajectory in record.evaluated.result.trajectories
+        for step in trajectory.steps
+    ]
+    if any(trace_presence) and not all(trace_presence):
+        raise ValueError("Canonical candidate trace facts must be present for every persisted rollout step or none.")
+    persist_candidate_facts = bool(trace_presence and all(trace_presence))
+    candidate_fact_ids: Mapping[str, int] = MappingProxyType(
+        {value: index for index, value in enumerate(dictionaries.get("candidate_fact", ()))}
+    )
 
     candidate_row_id = 0
     step_row_id = 0
@@ -2773,6 +3490,41 @@ def _flatten_records(
             step_rows["cumulative_scene_rri"].append(_nan_if_none(running_scene_rri))
             step_rows["cumulative_target_root_gain"].append(_nan_if_none(running_target_root_gain))
             step_rows["cumulative_scene_root_gain"].append(_nan_if_none(running_scene_root_gain))
+            if persist_candidate_facts:
+                facts = step.candidate_trace_facts
+                if facts is None:  # pragma: no cover - guarded by homogeneous presence check.
+                    raise ValueError("Missing canonical candidate trace facts.")
+                if facts.attempted_count != int(candidate_valid.shape[0]):
+                    raise ValueError("Canonical candidate trace N does not match the legacy shell.")
+                if facts.valid_count != int(candidate_valid.sum().item()):
+                    raise ValueError("Canonical candidate trace V does not match the legacy validity mask.")
+                legacy_valid_indices = torch.nonzero(candidate_valid, as_tuple=False).reshape(-1).cpu().tolist()
+                if facts.valid_indices.tolist() != legacy_valid_indices:
+                    raise ValueError("Canonical valid_indices must equal the legacy compact-valid order.")
+                if facts.action_indices.tolist() != legacy_valid_indices:
+                    raise ValueError("Current dual-write requires canonical A to equal the legacy actor-action shell.")
+                if not facts.legacy_candidate_config_hash or not lineage.policy.candidate_config_hash:
+                    raise ValueError(
+                        "Current candidate codec requires an independently persisted legacy candidate config hash."
+                    )
+                if facts.legacy_candidate_config_hash != lineage.policy.candidate_config_hash:
+                    raise ValueError(
+                        "Canonical trace legacy candidate config hash must equal the independently persisted lineage hash."
+                    )
+                _append_step_candidate_facts(
+                    step_candidate_fact_rows,
+                    facts=facts,
+                    step_row_id=this_step_row_id,
+                    fact_ids=candidate_fact_ids,
+                )
+                for action_position, shell_index in enumerate(facts.action_indices.tolist()):
+                    candidate_action_rows["step_row_id"].append(this_step_row_id)
+                    candidate_action_rows["action_position"].append(action_position)
+                    candidate_action_rows["shell_index"].append(shell_index)
+                for valid_position, shell_index in enumerate(facts.valid_indices.tolist()):
+                    candidate_valid_rows["step_row_id"].append(this_step_row_id)
+                    candidate_valid_rows["valid_position"].append(valid_position)
+                    candidate_valid_rows["shell_index"].append(shell_index)
             _append_selected_depth_row(
                 selected_depth_rows,
                 evidence=evaluated_step.evaluation.evidence,
@@ -2812,6 +3564,21 @@ def _flatten_records(
                     candidate_row_id=candidate_row_id,
                     shell_index=shell_index,
                 )
+                if persist_candidate_facts:
+                    _append_candidate_semantic_row(
+                        candidate_semantic_rows,
+                        facts=facts,
+                        candidate_row_id=candidate_row_id,
+                        shell_index=shell_index,
+                        fact_ids=candidate_fact_ids,
+                    )
+                    _append_candidate_criterion_rows(
+                        candidate_criterion_rows,
+                        facts=facts,
+                        candidate_row_id=candidate_row_id,
+                        shell_index=shell_index,
+                        fact_ids=candidate_fact_ids,
+                    )
                 candidate_row_id += 1
         rollout_row_id += 1
 
@@ -2831,7 +3598,125 @@ def _flatten_records(
             target_eval_crop_rows,
             max_points=target_eval_crop_max_points,
         ),
+        step_candidate_facts=(
+            _rows_to_numpy_table(step_candidate_fact_rows, STEP_CANDIDATE_FACT_TABLE) if persist_candidate_facts else {}
+        ),
+        candidate_semantics=(
+            _rows_to_numpy_table(candidate_semantic_rows, CANDIDATE_SEMANTIC_TABLE) if persist_candidate_facts else {}
+        ),
+        candidate_criteria=(
+            _rows_to_numpy_table(candidate_criterion_rows, CANDIDATE_CRITERION_TABLE) if persist_candidate_facts else {}
+        ),
+        candidate_actions=(
+            _rows_to_numpy_table(candidate_action_rows, CANDIDATE_ACTION_TABLE) if persist_candidate_facts else {}
+        ),
+        candidate_valids=(
+            _rows_to_numpy_table(candidate_valid_rows, CANDIDATE_VALID_TABLE) if persist_candidate_facts else {}
+        ),
     )
+
+
+def _append_step_candidate_facts(
+    rows: dict[str, list[Any]],
+    *,
+    facts: CandidateTraceFacts,
+    step_row_id: int,
+    fact_ids: Mapping[str, int],
+) -> None:
+    """Append one versioned step-level candidate codec row."""
+
+    rows["step_row_id"].append(step_row_id)
+    for field_name in (
+        "codec_version",
+        "candidate_program_hash",
+        "request_binding_hash",
+        "candidate_substream_revision",
+        "action_order_revision",
+        "completion_mode",
+    ):
+        rows[f"{field_name}_id"].append(_candidate_fact_id(fact_ids, getattr(facts, field_name)))
+    rows["attempted_count"].append(facts.attempted_count)
+    rows["valid_count"].append(facts.valid_count)
+    rows["action_count"].append(facts.action_count)
+    rows["proposal_key_revision_id"].append(
+        -1 if facts.proposal_key_revision is None else _candidate_fact_id(fact_ids, facts.proposal_key_revision)
+    )
+    rows["proposal_replica"].append(-1 if facts.proposal_replica is None else facts.proposal_replica)
+    rows["legacy_candidate_config_hash_id"].append(
+        -1
+        if facts.legacy_candidate_config_hash is None
+        else _candidate_fact_id(fact_ids, facts.legacy_candidate_config_hash)
+    )
+
+
+def _append_candidate_semantic_row(
+    rows: dict[str, list[Any]],
+    *,
+    facts: CandidateTraceFacts,
+    candidate_row_id: int,
+    shell_index: int,
+    fact_ids: Mapping[str, int],
+) -> None:
+    """Append canonical semantic identity for one attempted row."""
+
+    rows["candidate_row_id"].append(candidate_row_id)
+    for field_name in (
+        "semantic_group_id",
+        "center_family_id",
+        "gaze_family_id",
+        "candidate_family_id",
+    ):
+        rows[field_name].append(_candidate_fact_id(fact_ids, getattr(facts, field_name)[shell_index]))
+    for field_name in ("proposal_key", "target_frame_identity", "target_frame_availability"):
+        rows[f"{field_name}_id"].append(_candidate_fact_id(fact_ids, getattr(facts, field_name)[shell_index]))
+    for field_name in ("center_id", "position_pair_id", "gaze_variant_id", "attempt_round_id", "draw_id"):
+        rows[field_name].append(int(getattr(facts, field_name)[shell_index]))
+
+
+def _append_candidate_criterion_rows(
+    rows: dict[str, list[Any]],
+    *,
+    facts: CandidateTraceFacts,
+    candidate_row_id: int,
+    shell_index: int,
+    fact_ids: Mapping[str, int],
+) -> None:
+    """Append all admission criteria for one attempted row."""
+
+    for criterion_index, criterion in enumerate(facts.criteria):
+        available = bool(criterion.local_availability[shell_index])
+        rows["candidate_row_id"].append(candidate_row_id)
+        rows["criterion_index"].append(criterion_index)
+        rows["criterion_id"].append(_candidate_fact_id(fact_ids, criterion.criterion_id))
+        rows["legacy_cumulative_valid"].append(bool(criterion.legacy_cumulative_valid[shell_index]))
+        rows["local_available"].append(available)
+        rows["applicable"].append(
+            available and criterion.applicable is not None and bool(criterion.applicable[shell_index])
+        )
+        rows["evaluated"].append(
+            available and criterion.evaluated is not None and bool(criterion.evaluated[shell_index])
+        )
+        rows["passed"].append(available and criterion.passed is not None and bool(criterion.passed[shell_index]))
+        rows["reason_code"].append(
+            int(criterion.reason_code[shell_index]) if available and criterion.reason_code is not None else -1
+        )
+        rows["margin"].append(
+            float(criterion.margin[shell_index]) if available and criterion.margin is not None else np.nan
+        )
+        rows["source_role"].append(
+            int(criterion.source_role[shell_index]) if available and criterion.source_role is not None else -1
+        )
+        rows["reason_revision_id"].append(_candidate_fact_id(fact_ids, criterion.reason_revision))
+        rows["source_role_revision_id"].append(_candidate_fact_id(fact_ids, criterion.source_role_revision))
+
+
+def _candidate_fact_id(values: Mapping[str, int], value: str) -> int:
+    """Resolve one additive dictionary id in constant expected time."""
+
+    try:
+        return values[value]
+    except KeyError as exc:  # pragma: no cover - dictionary collection owns completeness.
+        raise ValueError(f"Candidate fact {value!r} is missing from the frozen dictionary.") from exc
 
 
 def _append_source_row(
@@ -3267,6 +4152,16 @@ def _write_rollout_tables(groups: dict[str, zarr.Group], tables: _RolloutTables)
         _write_array(groups["candidates"], name, values)
     for name, values in tables.candidate_diagnostics.items():
         _write_array(groups["candidate_diagnostics"], name, values)
+    for schema, values in (
+        (STEP_CANDIDATE_FACT_TABLE, tables.step_candidate_facts),
+        (CANDIDATE_SEMANTIC_TABLE, tables.candidate_semantics),
+        (CANDIDATE_CRITERION_TABLE, tables.candidate_criteria),
+        (CANDIDATE_ACTION_TABLE, tables.candidate_actions),
+        (CANDIDATE_VALID_TABLE, tables.candidate_valids),
+    ):
+        if values:
+            for name, array in values.items():
+                _write_array(groups[schema.name], name, array)
 
 
 def _write_selected_depth_group(
@@ -3557,6 +4452,19 @@ def _read_tables_from_root(root: Any, *, include_selected_depth: bool = True) ->
         candidate_diagnostics=_read_candidate_diagnostic_table(root),
         selected_depth=_read_selected_depth_table(root) if include_selected_depth else {},
         target_eval_crops=_read_target_eval_crop_table(root),
+        step_candidate_facts=(
+            _read_group_table(root, STEP_CANDIDATE_FACT_TABLE) if STEP_CANDIDATE_FACT_TABLE.name in root else {}
+        ),
+        candidate_semantics=(
+            _read_group_table(root, CANDIDATE_SEMANTIC_TABLE) if CANDIDATE_SEMANTIC_TABLE.name in root else {}
+        ),
+        candidate_criteria=(
+            _read_group_table(root, CANDIDATE_CRITERION_TABLE) if CANDIDATE_CRITERION_TABLE.name in root else {}
+        ),
+        candidate_actions=(
+            _read_group_table(root, CANDIDATE_ACTION_TABLE) if CANDIDATE_ACTION_TABLE.name in root else {}
+        ),
+        candidate_valids=(_read_group_table(root, CANDIDATE_VALID_TABLE) if CANDIDATE_VALID_TABLE.name in root else {}),
     )
 
 

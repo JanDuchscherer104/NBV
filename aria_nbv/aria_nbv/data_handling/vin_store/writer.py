@@ -30,6 +30,7 @@ from ...utils.semantic_names import normalize_semantic_name_map
 from ...vin.types import validate_free_input_provenance
 from ..ase_efm.views import EfmSnippetView
 from ..identifiers import compact_ase_atek_sample_id
+from .candidate_codec import vin_candidate_facts
 from .format import (
     VinOfflineIndexRecord,
     VinOfflineShardSpec,
@@ -44,6 +45,7 @@ if TYPE_CHECKING:
     from efm3d.aria.pose import PoseTW
     from numpy.typing import DTypeLike, NDArray
 
+    from ...pose_generation import CandidateSet
     from ...pose_generation.types import CandidateSamplingResult
     from ...rendering.candidate_depth_renderer import CandidateDepths
     from ...rendering.candidate_pointclouds import CandidatePointClouds
@@ -388,6 +390,38 @@ def _keep_field(field_name: str, keep_fields: set[str] | None) -> bool:
     return keep_fields is None or field_name in keep_fields
 
 
+def _validate_canonical_candidate_alignment(
+    candidate_set: CandidateSet,
+    *,
+    candidates: CandidateSamplingResult | None,
+    depths: CandidateDepths,
+) -> None:
+    """Bind canonical N/V/A facts to rendered V rows and optional legacy shell."""
+
+    candidate_set.validate_semantics()
+    valid_indices = candidate_set.valid_indices.detach().cpu().to(dtype=torch.int64).reshape(-1)
+    rendered_indices = depths.candidate_indices.detach().cpu().to(dtype=torch.int64).reshape(-1)
+    if rendered_indices.numel() > valid_indices.numel() or not torch.equal(
+        valid_indices[: rendered_indices.numel()], rendered_indices
+    ):
+        raise ValueError("Rendered candidate indices must equal a prefix of canonical valid_indices[V].")
+    attempted = candidate_set.attempts.world_poses.tensor().detach().cpu().reshape(-1, 12)
+    rendered = depths.poses.tensor().detach().cpu().reshape(-1, 12)
+    expected_rendered = attempted[valid_indices[: rendered_indices.numel()]]
+    if rendered.shape != expected_rendered.shape or not torch.allclose(
+        rendered, expected_rendered, atol=1e-5, rtol=1e-5
+    ):
+        raise ValueError("Canonical valid poses must equal rendered candidate poses in V order.")
+    if candidates is None:
+        return
+    legacy_mask = candidates.mask_valid.detach().cpu().to(dtype=torch.bool).reshape(-1)
+    legacy_shell = candidates.shell_poses.tensor().detach().cpu().reshape(-1, 12)
+    if not torch.equal(legacy_mask, candidate_set.admission.mask_valid.detach().cpu().reshape(-1)):
+        raise ValueError("Legacy and canonical hard-valid masks must match during dual-write.")
+    if legacy_shell.shape != attempted.shape or not torch.equal(legacy_shell, attempted):
+        raise ValueError("Legacy and canonical attempted poses must be exact during dual-write.")
+
+
 @dataclass(slots=True)
 class PreparedVinOfflineSample:
     """Normalized offline row before shard materialization.
@@ -430,6 +464,10 @@ def prepare_vin_offline_sample(
     candidate_pcs: CandidatePointClouds | None,
     backbone_out: EvlBackboneOutput | None,
     max_candidates: int,
+    candidate_set: CandidateSet | None = None,
+    candidate_proposal_key_revision: str | None = None,
+    candidate_proposal_replica: int | None = None,
+    candidate_config_hash: str | None = None,
     source_sample: EfmSnippetView | None = None,
     include_depths: bool = True,
     include_candidate_pcs: bool = True,
@@ -449,6 +487,13 @@ def prepare_vin_offline_sample(
         snippet_id: ASE snippet identifier.
         vin_snippet: Canonical VIN snippet for the row.
         candidates: Optional candidate-sampling payload for diagnostics.
+        candidate_set: Optional canonical attempted-shell facts for the
+            versioned lazy audit codec; never copied into actor tensors.
+        candidate_proposal_key_revision: Composition-owned rollout proposal
+            revision, or ``None`` for direct/legacy sources.
+        candidate_proposal_replica: Composition-owned proposal replica paired
+            with ``candidate_proposal_key_revision``.
+        candidate_config_hash: Independent legacy config digest for dual-write.
         depths: Candidate-depth payload aligned with the oracle labels.
         rri: Oracle metrics aligned with the rendered candidates.
         candidate_pcs: Optional candidate point clouds for diagnostics.
@@ -477,6 +522,12 @@ def prepare_vin_offline_sample(
     Returns:
         Prepared row ready for shard materialization.
     """
+
+    if candidate_set is not None and not include_diagnostic_payloads:
+        raise ValueError(
+            "Canonical VIN candidate facts require include_diagnostic_payloads=True; "
+            "otherwise the versioned audit payload would be dropped."
+        )
 
     candidate_poses = _pose_to_numpy(depths.poses)
     if candidate_poses.ndim != 2 or candidate_poses.shape[-1] != 12:
@@ -509,6 +560,10 @@ def prepare_vin_offline_sample(
         rri=rri,
         candidate_pcs=candidate_pcs,
     )
+    if candidate_set is not None:
+        if type(candidate_config_hash) is not str or not candidate_config_hash:
+            raise ValueError("Canonical VIN candidate facts require an independently supplied candidate_config_hash.")
+        _validate_canonical_candidate_alignment(candidate_set, candidates=candidates, depths=depths)
 
     numeric_blocks: dict[str, NDArray[Any]] = {
         "vin.points_world": points_world,
@@ -655,6 +710,14 @@ def prepare_vin_offline_sample(
         record_blocks["oracle.depths_payload"] = depths.to_serializable()
     if include_diagnostic_payloads and candidates is not None:
         record_blocks["oracle.candidates"] = candidates.to_serializable()
+    if include_diagnostic_payloads and candidate_set is not None:
+        record_blocks["oracle.candidate_facts"] = vin_candidate_facts(
+            candidate_set,
+            proposal_key_revision=candidate_proposal_key_revision,
+            proposal_replica=candidate_proposal_replica,
+            legacy_candidate_config_hash=candidate_config_hash,
+            labeled_prefix_count=candidate_count,
+        ).to_record()
     if include_diagnostic_payloads and include_candidate_pcs and candidate_pcs is not None:
         record_blocks["oracle.candidate_pcs"] = candidate_pcs.to_serializable()
     if include_diagnostic_payloads and include_backbone and backbone_out is not None:
