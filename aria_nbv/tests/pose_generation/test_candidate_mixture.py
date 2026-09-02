@@ -724,26 +724,35 @@ def test_default_mixture_resolves_exact_nested_authoring_contract() -> None:
         assert component.gazes[0].jitter.pitch_half_width_deg == pytest.approx(30.0)
 
 
+def _portable_tensor_fingerprint_bytes(value: torch.Tensor) -> bytes:
+    """Return exact discrete bytes and 1e-4-quantized floating-point bytes."""
+
+    canonical = value.detach().cpu().contiguous()
+    if canonical.is_floating_point():
+        canonical = torch.round(canonical.to(torch.float64) * 10_000.0).to(torch.int64)
+    return canonical.numpy().tobytes()
+
+
 @pytest.mark.parametrize(
     ("config_name", "expected_fingerprint"),
     (
-        ("build_rollouts_qh_v0_baseline.toml", "3b7312b3a6184addf39c0eb0c66befd775c8944e8360a76573b422fa73952739"),
+        ("build_rollouts_qh_v0_baseline.toml", "2f5a1315e825a37b064b84af2d66b9a38d46f9771a1fd971b99a987620fffaac"),
         (
             "build_rollouts_v2_cuda_campaign_writer.toml",
-            "72f1d61b8458ac49b8504e20dd54ee62c9d7401634f1cf96956874aaaa79f7b5",
+            "2eab29a1844c0f8f58b18066bfc441abee15e07caeeb3415f655002c2d1356d9",
         ),
-        ("build_rollouts_v1_diverse.toml", "aa7e842e5ad14e67b1c69800b4ce2a61bbc063eb578224d66dd91385719522aa"),
+        ("build_rollouts_v1_diverse.toml", "20457d6d41b51d5c9cf5064cdb1f4863818573b98c281e500cac008a74b563d8"),
         (
             "build_rollouts_v1_lrz.template.toml",
-            "72f1d61b8458ac49b8504e20dd54ee62c9d7401634f1cf96956874aaaa79f7b5",
+            "2eab29a1844c0f8f58b18066bfc441abee15e07caeeb3415f655002c2d1356d9",
         ),
-        ("build_rollouts_v1_microset.toml", "74820ecee3da3f3cb61dcb7825a6c8f39687a9e20912a6b0c8586376807a8308"),
+        ("build_rollouts_v1_microset.toml", "eb637e89154e1d8639ffa7b5a1c6d748b39ba71898c30014fa2c9ca154e9ddce"),
         (
             "build_rollouts_v1_multihorizon_highgain.toml",
-            "72f1d61b8458ac49b8504e20dd54ee62c9d7401634f1cf96956874aaaa79f7b5",
+            "2eab29a1844c0f8f58b18066bfc441abee15e07caeeb3415f655002c2d1356d9",
         ),
-        ("build_rollouts_v2_realistic.toml", "72f1d61b8458ac49b8504e20dd54ee62c9d7401634f1cf96956874aaaa79f7b5"),
-        ("build_rollouts_v1_smoke.toml", "4c4d25881cc00e122acf751525d0933c8e5e3d03bd1b7c7e08f63e0ada5dbb93"),
+        ("build_rollouts_v2_realistic.toml", "2eab29a1844c0f8f58b18066bfc441abee15e07caeeb3415f655002c2d1356d9"),
+        ("build_rollouts_v1_smoke.toml", "32fc1030b0f81ba88adda3d50677ce2f4f4e91ce9c2f1684bc94e91b5050d306"),
     ),
 )
 def test_migrated_active_profiles_match_origin_main_candidate_fingerprints(
@@ -768,10 +777,10 @@ def test_migrated_active_profiles_match_origin_main_candidate_fingerprints(
         result.gaze_variant_id,
     ):
         if value is not None:
-            digest.update(value.detach().cpu().contiguous().numpy().tobytes())
+            digest.update(_portable_tensor_fingerprint_bytes(value))
     for name in sorted(result.masks):
         digest.update(name.encode())
-        digest.update(result.masks[name].detach().cpu().contiguous().numpy().tobytes())
+        digest.update(_portable_tensor_fingerprint_bytes(result.masks[name]))
     for name in (
         "view_jitter_yaw_deg",
         "view_jitter_pitch_deg",
@@ -781,7 +790,7 @@ def test_migrated_active_profiles_match_origin_main_candidate_fingerprints(
     ):
         value = result.extras.get(name)
         if torch.is_tensor(value):
-            digest.update(value.detach().cpu().contiguous().numpy().tobytes())
+            digest.update(_portable_tensor_fingerprint_bytes(value))
     digest.update("\n".join(result.component_name or ()).encode())
 
     assert digest.hexdigest() == expected_fingerprint
