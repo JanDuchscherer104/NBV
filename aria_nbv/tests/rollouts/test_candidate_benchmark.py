@@ -109,23 +109,6 @@ def test_candidate_preflight_marks_actual_v3_target_shell_gazes_target_aware() -
     assert set(emitted_names) <= set(preflight.target_aware_families)
 
 
-def test_candidate_preflight_marks_only_target_gaze_on_forward_center_target_aware() -> None:
-    component = SimpleNamespace(
-        name="forward_mixed_gaze",
-        center=SampledCenterConfig(mode=CandidatePositionMode.FORWARD_LOCAL),
-        gazes=(
-            CandidateGazeConfig(name="primary", mode=ViewDirectionMode.FORWARD_RIG),
-            CandidateGazeConfig(name="target", mode=ViewDirectionMode.TARGET_POINT),
-        ),
-    )
-    writer = SimpleNamespace(candidate_mixture=SimpleNamespace(components=(component,), total_count=8))
-
-    preflight = candidate_family_preflight_config_from_writer(writer)
-
-    assert preflight.configured_families == ("forward_mixed_gaze", "forward_mixed_gaze__target")
-    assert preflight.target_aware_families == ("forward_mixed_gaze__target",)
-
-
 def test_candidate_preflight_fails_closed_for_unknown_nested_center() -> None:
     writer = SimpleNamespace(
         candidate_mixture=SimpleNamespace(

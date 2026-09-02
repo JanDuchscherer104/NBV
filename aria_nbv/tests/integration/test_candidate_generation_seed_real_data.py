@@ -137,8 +137,35 @@ def test_target_shell_real_scene_matches_baseline_budget_admission_and_seed(devi
     assert baseline_result.shell_poses.t.shape == first.shell_poses.t.shape == (60, 3)
     assert 0 < int(baseline_result.mask_valid.sum().item()) < 60
     assert 0 < int(first.mask_valid.sum().item()) < 60
+    baseline_forward_mask = torch.tensor(
+        [name == "forward_local" for name in baseline_result.component_name],
+        device=baseline_result.mask_valid.device,
+    )
+    challenger_forward_mask = torch.tensor(
+        [name == "forward_local" for name in first.component_name],
+        device=first.mask_valid.device,
+    )
+    assert torch.equal(
+        baseline_result.shell_poses.tensor()[baseline_forward_mask],
+        first.shell_poses.tensor()[challenger_forward_mask],
+    )
+    assert torch.equal(
+        baseline_result.mask_valid[baseline_forward_mask],
+        first.mask_valid[challenger_forward_mask],
+    )
     shell_mask = first.position_id == candidate_position_id(CandidatePositionMode.TARGET_SHELL)
     assert int(shell_mask.sum().item()) == 24
+    primary_shell_mask = torch.tensor(
+        [name == "target_shell" for name in first.component_name],
+        device=first.mask_valid.device,
+    )
+    target_shell_mask = torch.tensor(
+        [name == "target_shell__target" for name in first.component_name],
+        device=first.mask_valid.device,
+    )
+    assert int(primary_shell_mask.sum().item()) == int(target_shell_mask.sum().item()) == 12
+    assert int((shell_mask & first.mask_valid).sum().item()) > 0
+    assert int((primary_shell_mask & first.mask_valid).sum().item()) > 0
     shell_component = next(component for component in challenger.components if component.name == "target_shell")
     assert isinstance(shell_component.center, TargetShellCenterConfig)
     target = runtime.target_center_world.to(first.shell_poses.t.device)

@@ -145,9 +145,7 @@ def _candidate_component_projection(
                 component.name,
                 getattr(component, "view_mode", getattr(component, "strategy", None)),
             )
-            emitted.append(
-                (f"{component.name}__paired_{component.paired_view_mode.value}", component.paired_view_mode)
-            )
+            emitted.append((f"{component.name}__paired_{component.paired_view_mode.value}", component.paired_view_mode))
         elif center is None:
             emitted[0] = (
                 component.name,

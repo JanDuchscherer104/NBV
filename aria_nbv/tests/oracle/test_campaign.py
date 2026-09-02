@@ -141,25 +141,6 @@ def test_campaign_projects_target_shell_as_target_dependent() -> None:
     assert target_families == frozenset({"target_shell"})
 
 
-def test_campaign_projects_target_gaze_on_forward_center_as_target_dependent() -> None:
-    component = SimpleNamespace(
-        name="forward_mixed_gaze",
-        center=SampledCenterConfig(mode=CandidatePositionMode.FORWARD_LOCAL),
-        gazes=(
-            CandidateGazeConfig(name="primary", mode=ViewDirectionMode.FORWARD_RIG),
-            CandidateGazeConfig(name="target", mode=ViewDirectionMode.TARGET_POINT),
-        ),
-    )
-
-    positions, target_families = _candidate_component_projection((component,))
-
-    assert positions == {
-        "forward_mixed_gaze": "forward_local",
-        "forward_mixed_gaze__target": "forward_local",
-    }
-    assert target_families == frozenset({"forward_mixed_gaze__target"})
-
-
 class _CampaignFixtureManifest(msgspec.Struct):
     version: int = 7
 

@@ -85,18 +85,24 @@ roll_half_width_deg = 0.0
 
 [[candidate_mixture.components]]
 name = "target_shell"
-count = 24
+count = 12
 [candidate_mixture.components.center]
 kind = "target_shell"
-radius_min_m = 0.6
-radius_max_m = 1.1
+radius_min_m = 2.25
+radius_max_m = 3.1
 [candidate_mixture.components.center.support]
-support_kind = "angular_box"
-azimuth_half_width_deg = 120.0
-elevation_min_deg = 0.0
-elevation_max_deg = 35.0
+support_kind = "actor_facing_cap"
+half_angle_deg = 15.0
 [[candidate_mixture.components.gazes]]
 name = "primary"
+mode = "forward_rig"
+[candidate_mixture.components.gazes.jitter]
+kind = "box"
+yaw_half_width_deg = 60.0
+pitch_half_width_deg = 30.0
+roll_half_width_deg = 0.0
+[[candidate_mixture.components.gazes]]
+name = "target"
 mode = "target_point"
 [candidate_mixture.components.gazes.jitter]
 kind = "box"
