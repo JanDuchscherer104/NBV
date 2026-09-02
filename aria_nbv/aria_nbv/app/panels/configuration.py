@@ -95,14 +95,14 @@ def trusted_config_patterns() -> dict[str, tuple[str, ...]]:
             "build_rollouts_v1_cuda_campaign_pilot_corrected_v*.toml",
         ),
         "Rollout writer": (
+            "build_rollouts_v2_cuda_campaign_writer.toml",
+            "build_rollouts_v2_realistic.toml",
+            "build_rollouts_v3_target_shell_experiment.toml",
             "build_rollouts_qh_v0_baseline.toml",
             "build_rollouts_v1_diverse.toml",
             "build_rollouts_v1_lrz.template.toml",
             "build_rollouts_v1_microset.toml",
             "build_rollouts_v1_multihorizon_highgain.toml",
-            "build_rollouts_v2_cuda_campaign_writer.toml",
-            "build_rollouts_v2_realistic.toml",
-            "build_rollouts_v3_target_shell_experiment.toml",
             "build_rollouts_v1_smoke.toml",
         ),
         "Offline VIN writer": ("build_vin_offline*.toml",),
@@ -134,12 +134,7 @@ def render_configuration_workspace(
     root = (configs_dir or PathConfig().configs_dir).expanduser().resolve()
     model_name = st.selectbox("Root config model", options=tuple(catalog), key="config_workspace_model")
     patterns = (path_patterns or {}).get(model_name, ("**/*.toml",))
-    paths = tuple(
-        sorted(
-            {path for pattern in patterns for path in root.glob(pattern)},
-            key=lambda path: path.as_posix(),
-        )
-    )
+    paths = ordered_config_paths(root, patterns)
     if not paths:
         st.info(f"No trusted {model_name} TOML configs found below {root}.")
         return
@@ -273,7 +268,9 @@ def select_toml_config(
     decide whether to call ``setup_target`` after selection.
     """
 
-    ordered_paths = tuple(sorted((path.expanduser().resolve() for path in paths), key=lambda path: path.as_posix()))
+    # Preserve caller order: it is the source-owned reviewed default order.
+    # Sorting here can silently select an older campaign/profile on first load.
+    ordered_paths = tuple(dict.fromkeys(path.expanduser().resolve() for path in paths))
     if not ordered_paths:
         ui.info(f"No validated {model.__name__} TOML variants are available.")
         return None
@@ -292,6 +289,20 @@ def select_toml_config(
     except (ConfigAuthoringError, OSError) as exc:
         ui.error(f"Invalid {selected.name}: {exc}")
         return None
+
+
+def ordered_config_paths(root: Path, patterns: Sequence[str]) -> tuple[Path, ...]:
+    """Expand trusted patterns deterministically without changing pattern order."""
+
+    paths: list[Path] = []
+    seen: set[Path] = set()
+    for pattern in patterns:
+        for path in sorted(root.glob(pattern), key=lambda candidate: candidate.as_posix()):
+            resolved = path.expanduser().resolve()
+            if resolved not in seen:
+                seen.add(resolved)
+                paths.append(resolved)
+    return tuple(paths)
 
 
 def render_typed_config_fields(
@@ -546,6 +557,7 @@ __all__ = [
     "render_config_document",
     "render_configuration_workspace",
     "render_typed_config_fields",
+    "ordered_config_paths",
     "select_toml_config",
     "trusted_config_catalog",
     "trusted_config_patterns",

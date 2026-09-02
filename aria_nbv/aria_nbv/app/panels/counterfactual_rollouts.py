@@ -90,7 +90,7 @@ from .common import (
     current_scientific_label,
     render_scientific_notation,
 )
-from .configuration import select_toml_config, trusted_config_patterns
+from .configuration import ordered_config_paths, select_toml_config, trusted_config_patterns
 from .target_audit import render_target_selection_audit, target_selection_audit_rows
 
 _SOURCE_TARGET_INFO = """
@@ -391,12 +391,7 @@ def _live_candidate_profile_paths() -> tuple[Path, ...]:
 
     root = PathConfig().configs_dir.expanduser().resolve()
     patterns = trusted_config_patterns().get("Rollout writer", ("build_rollouts*.toml",))
-    return tuple(
-        sorted(
-            {path for pattern in patterns for path in root.glob(pattern)},
-            key=lambda path: path.as_posix(),
-        )
-    )
+    return ordered_config_paths(root, patterns)
 
 
 def _load_live_candidate_profile(path: Path) -> CandidateMixtureViewGeneratorConfig:
@@ -1328,9 +1323,12 @@ def _render_live_rollouts_tab() -> None:
                 ui=cfg_col1,
                 label="Candidate profile TOML",
                 key_prefix="cf_candidate_profile",
-                allow_none=True,
+                allow_none=scoring_mode is not LiveRolloutScoringMode.TARGET_RRI,
                 disabled=scoring_mode is not LiveRolloutScoringMode.TARGET_RRI,
             )
+            if scoring_mode is LiveRolloutScoringMode.TARGET_RRI and selected_profile is None:
+                st.error("Target-RRI live rollouts require a validated candidate profile TOML.")
+                return
             if selected_profile is not None and scoring_mode is LiveRolloutScoringMode.TARGET_RRI:
                 try:
                     selected_candidate_profile = selected_profile.config.candidate_mixture

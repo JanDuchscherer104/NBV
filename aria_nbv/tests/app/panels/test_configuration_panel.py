@@ -92,6 +92,46 @@ def test_toml_variant_selector_returns_validated_path_and_model(tmp_path: Path) 
     assert selected.config.mode == "fast"
 
 
+def test_toml_variant_selector_preserves_reviewed_order(tmp_path: Path) -> None:
+    from aria_nbv.app.panels.configuration import select_toml_config
+
+    first = tmp_path / "reviewed-default.toml"
+    second = tmp_path / "older-pilot.toml"
+    first.write_text("count = 2\nmode = 'safe'\n", encoding="utf-8")
+    second.write_text("count = 3\nmode = 'fast'\n", encoding="utf-8")
+
+    class _Ui:
+        def selectbox(self, _label, options, **_kwargs):
+            assert options == (first.resolve(), second.resolve())
+            return options[0]
+
+        def info(self, *_args, **_kwargs):
+            pass
+
+        def error(self, *_args, **_kwargs):
+            raise AssertionError("valid fixture was rejected")
+
+    selected = select_toml_config(
+        _PanelConfig,
+        [first, second],
+        ui=_Ui(),
+        label="Config",
+        key_prefix="ordered",
+    )
+
+    assert selected is not None
+    assert selected.path == first.resolve()
+
+
+def test_candidate_interactive_bounds_are_domain_owned() -> None:
+    from aria_nbv.pose_generation import candidate_config_ui_bounds
+
+    bounds = candidate_config_ui_bounds()
+
+    assert bounds["num_samples"] == (2, 512)
+    assert bounds["max_step_distance_m"] == (1e-9, None)
+
+
 def test_typed_config_fields_keep_last_valid_config_on_validation_error() -> None:
     from aria_nbv.app.panels.configuration import render_typed_config_fields
 

@@ -104,6 +104,40 @@ LegacyCandidatePositionMode: TypeAlias = Literal[
 ]
 """Position modes constructible from the legacy flat generator fields."""
 
+CandidateUiBound = tuple[float | int | None, float | int | None]
+"""Inclusive presentation bounds for safe interactive candidate controls."""
+
+
+def candidate_config_ui_bounds() -> dict[str, CandidateUiBound]:
+    """Return domain-owned bounds for interactive flat candidate controls.
+
+    The bounds protect the interactive sampler from operationally invalid
+    values while leaving the broader programmatic model contract unchanged.
+    Widget defaults still come from the caller's validated config (typically a
+    TOML document); this function contains no user-facing default values.
+    """
+
+    return {
+        "num_samples": (2, 512),
+        "oversample_factor": (1.0, 4.0),
+        "min_radius": (0.1, 2.0),
+        "max_radius": (0.2, 3.0),
+        "min_elev_deg": (-90.0, 0.0),
+        "max_elev_deg": (0.0, 90.0),
+        "delta_azimuth_deg": (0.0, 360.0),
+        "kappa": (0.0, 16.0),
+        "view_kappa": (0.0, 16.0),
+        "view_max_angle_deg": (0.0, 90.0),
+        "view_max_azimuth_deg": (0.0, 90.0),
+        "view_max_elevation_deg": (0.0, 90.0),
+        "view_roll_jitter_deg": (0.0, 90.0),
+        "seed": (0, None),
+        "max_step_distance_m": (1e-9, None),
+        "max_height_delta_m": (0.0, None),
+        "max_backward_step_m": (0.0, None),
+        "max_yaw_delta_deg": (0.0, None),
+    }
+
 
 class CandidateViewGeneratorConfig(TargetConfig["CandidateViewGenerator"]):
     """Configuration for sampling and pruning candidate camera poses around a reference frame.

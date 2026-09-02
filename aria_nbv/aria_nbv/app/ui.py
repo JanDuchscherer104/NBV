@@ -11,7 +11,7 @@ import torch
 
 from ..data_handling import AseEfmDatasetConfig
 from ..oracle._scoring import PreparedRriScorerConfig
-from ..pose_generation import CandidateViewGeneratorConfig
+from ..pose_generation import CandidateViewGeneratorConfig, candidate_config_ui_bounds
 from ..pose_generation.types import CollisionBackend, SamplingStrategy, ViewDirectionMode
 from ..rendering import CandidateDepthRendererConfig, Pytorch3DDepthRendererConfig
 from ..utils import Verbosity
@@ -99,26 +99,7 @@ def candidate_config_ui(
             key_prefix="candidate_config",
             excluded_paths=frozenset({"is_debug", "verbosity"}),
             choices={"device": ("auto", "cpu", "cuda")},
-            bounds={
-                "num_samples": (2, 512),
-                "oversample_factor": (1.0, 4.0),
-                "min_radius": (0.1, 2.0),
-                "max_radius": (0.2, 3.0),
-                "min_elev_deg": (-90.0, 0.0),
-                "max_elev_deg": (0.0, 90.0),
-                "delta_azimuth_deg": (0.0, 360.0),
-                "kappa": (0.0, 16.0),
-                "view_kappa": (0.0, 16.0),
-                "view_max_angle_deg": (0.0, 90.0),
-                "view_max_azimuth_deg": (0.0, 90.0),
-                "view_max_elevation_deg": (0.0, 90.0),
-                "view_roll_jitter_deg": (0.0, 90.0),
-                "seed": (0, None),
-                "max_step_distance_m": (1e-9, None),
-                "max_height_delta_m": (0.0, None),
-                "max_backward_step_m": (0.0, None),
-                "max_yaw_delta_deg": (0.0, None),
-            },
+            bounds=candidate_config_ui_bounds(),
         )
         return updated.model_copy(update={"is_debug": debug_flag, "verbosity": verbosity})
 
