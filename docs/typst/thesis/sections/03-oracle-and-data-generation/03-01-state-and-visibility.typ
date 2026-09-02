@@ -4,16 +4,13 @@
 
 == State as an Information Contract
 
-The learned component emits raw finite-horizon predictions for materialized
-candidates; separate masks govern selection and value supervision. Pre-forward
-inputs are protocol-admitted, not automatically deployable: `v0_gt_input`
-supplies a ground-truth-derived target control, whereas `v1_observed` requires
-observation-derived provenance. The experiment thus separates logged evidence,
-selected-action evidence, privileged control input, and offline counterfactual
-labels. ASE contributes both sensor-like streams and ground truth; EFM3D
-transforms only the logged subset into local 3D evidence
-@ProjectAria-ASE-2025 @EFM3D-straub2024. Co-location in one replay row never
-makes those layers equally observable.
+The learned component predicts finite-horizon values for a hard-masked candidate
+table, but its inputs come from only one layer of a larger information lattice.
+The experiment distinguishes logged observations, evidence caused by selected
+actions, and privileged counterfactual quantities. ASE contributes both
+sensor-like streams and ground truth; EFM3D transforms only the logged subset
+into local 3D evidence @ProjectAria-ASE-2025 @EFM3D-straub2024. Co-location in
+one adapted sample or replay row never makes those layers equally observable.
 
 // evidence:
 // - @ProjectAria-ASE-2025 -> docs/contents/ase_dataset.qmd:216-225,257-260 (sensor-like streams and privileged GT products)
