@@ -241,49 +241,6 @@ class CandidateMixtureViewGeneratorConfig(TargetConfig["CandidateMixtureViewGene
         return sum(component.count * len(component.gazes) for component in self.components)
 
     @classmethod
-    def reviewed_component_templates(
-        cls,
-        components: list[tuple[str, int]] | tuple[tuple[str, int], ...],
-        *,
-        existing_components: list[CandidateMixtureComponentConfig]
-        | tuple[CandidateMixtureComponentConfig, ...]
-        | None = None,
-    ) -> list[CandidateMixtureComponentConfig]:
-        """Return typed templates for a reviewed campaign component schedule.
-
-        Campaign orchestration supplies the reviewed names and counts; this
-        method reuses writer-owned components by name and supplies reviewed
-        presets only for absent families. Counts are the campaign allocation;
-        all other typed component fields remain owned by their source template.
-        """
-
-        names = tuple(name for name, _count in components)
-        templates = {
-            tuple(component.name for component in preset.components): preset.components
-            for preset in (
-                cls(),
-                cls.rich_local_five_family(),
-                cls.radial_target_backtrack_family(),
-                cls.upper_bound_free_shell(),
-            )
-        }
-        try:
-            preset_components = templates[names]
-        except KeyError as exc:
-            raise ValueError(f"unsupported reviewed candidate component schedule: {names}") from exc
-
-        existing_by_name: dict[str, CandidateMixtureComponentConfig] = {}
-        for component in existing_components or ():
-            if component.name in existing_by_name:
-                raise ValueError(f"duplicate existing candidate component: {component.name}")
-            existing_by_name[component.name] = component
-
-        return [
-            existing_by_name.get(name, preset).model_copy(update={"count": count})
-            for preset, (name, count) in zip(preset_components, components, strict=True)
-        ]
-
-    @classmethod
     def upper_bound_free_shell(cls, *, count: int = 60) -> "CandidateMixtureViewGeneratorConfig":
         """Build the explicit legacy free-shell upper-bound ablation config."""
 
