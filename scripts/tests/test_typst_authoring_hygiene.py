@@ -571,7 +571,7 @@ class HygieneTests(unittest.TestCase):
         presentation = [
             call for call in calls if _table_surface(call.path) == "presentation"
         ]
-        self.assertEqual(len(publication), 32)
+        self.assertEqual(len(publication), 31)
         self.assertEqual(len(development), 1)
         self.assertEqual(len(presentation), 12)
         titlepage = ROOT / "docs/typst/thesis/template/layout/titlepage.typ"

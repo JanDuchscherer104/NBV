@@ -1,6 +1,21 @@
 = Experimental Design <sec:thesis-experimental-design>
 
-The experiments separate feasibility evidence from policy evidence. Feasibility requires a frozen scene-level population, reproducible target and candidate support, valid replay linkage, and measured oracle throughput. Policy inference additionally requires a held-out scene split, matched acquisition budgets, independent endpoint oracle evaluation, and an implemented actor-visible decision rule. The current train-only bandwidth pilots address only the first category: incomplete runs and resource failures characterize the generation system, but they cannot support comparisons between policies.
+The experiment is a graph of admissibility gates rather than one aggregate
+model score. Measurement and population/action support are prerequisites for
+policy comparison. After support is established, the actor-protocol audit is
+reported independently of oracle headroom; actor-visible one-step value and
+exact two-step recursion follow the protocol branch, while meaningful headroom
+follows the oracle branch. Both branches are required before fixed-budget
+endpoint gap closure is admitted. Each stage has its own population, estimate,
+uncertainty, and stopping rule.
+
+#figure(
+  align(center, image(
+    "../../figures/qh_learning_evidence_loop.pdf",
+    width: 100%,
+  )),
+  caption: [Evidence-gated claim graph. A failed stage retains its own measured outcome but blocks claims that depend on it; missing evidence remains unavailable rather than becoming zero.],
+) <fig:qh-learning-evidence-loop>
 
 #include "05-01-objectives-and-hypotheses.typ"
 

@@ -109,6 +109,13 @@
   matches.first()
 }
 
+#let report-store-gate-passed(report, store-id, key) = {
+  let matches = report.tables.facts.rows.filter(
+    row => row.store_id == store-id and row.key == key,
+  )
+  matches.len() == 1 and matches.first().value == true
+}
+
 #let report-store-facts-match-contract(report, store-id, contracts, expected-n) = {
   contracts.all(contract => {
     let matches = report.tables.facts.rows.filter(
@@ -117,6 +124,20 @@
     matches.len() == 1 and {
       let row = matches.first()
       row.value != none and row.n == expected-n and row.aggregation == contract.aggregation
+    }
+  })
+}
+
+#let report-store-sha256-facts-resolve(report, store-id, keys) = {
+  keys.all(key => {
+    let matches = report.tables.facts.rows.filter(
+      row => row.store_id == store-id and row.key == key,
+    )
+    matches.len() == 1 and {
+      let row = matches.first()
+      type(row.value) == str and row.value.match(regex("^[0-9a-f]{64}$")) != none and type(row.source) == str and report.tables.sidecars.rows.any(sidecar => (
+        sidecar.sha256 == row.value and type(sidecar.path) == str and sidecar.path.len() > 0 and row.source.ends-with("|sidecar:" + sidecar.sidecar_id)
+      ))
     }
   })
 }
