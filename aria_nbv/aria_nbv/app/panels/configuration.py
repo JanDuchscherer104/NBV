@@ -42,6 +42,9 @@ class ConfigEditorResult(Generic[ConfigT]):
     receipt: ConfigWriteReceipt | None
     """Atomic save receipt when the user requested a save copy."""
 
+    validation_succeeded: bool = False
+    """Whether the current submitted draft passed complete Pydantic validation."""
+
 
 def trusted_config_catalog() -> dict[str, type[BaseConfig]]:
     """Return explicitly imported root config models available to the workspace.
@@ -231,14 +234,14 @@ def render_config_document(
         )
         if not destination.is_relative_to(save_root):
             st.error(f"Saved config copies must remain below `{save_root}`.")
-            return ConfigEditorResult(config=updated, submitted=True, receipt=None)
+            return ConfigEditorResult(config=updated, submitted=True, receipt=None, validation_succeeded=True)
         try:
             receipt = document.save_copy(destination, expected_sha256=document.source_sha256)
         except ConfigAuthoringError as exc:
             st.error(str(exc))
-            return ConfigEditorResult(config=updated, submitted=True, receipt=None)
+            return ConfigEditorResult(config=updated, submitted=True, receipt=None, validation_succeeded=True)
         st.success(f"Saved `{receipt.path}` with SHA-256 `{receipt.sha256}`.")
-    return ConfigEditorResult(config=updated, submitted=True, receipt=receipt)
+    return ConfigEditorResult(config=updated, submitted=True, receipt=receipt, validation_succeeded=True)
 
 
 def _field_widget(
