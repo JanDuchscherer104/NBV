@@ -4,41 +4,52 @@ config:
   htmlLabels: true
   flowchart:
     htmlLabels: true
-    nodeSpacing: 28
-    rankSpacing: 40
+    nodeSpacing: 20
+    rankSpacing: 32
     curve: basis
   layout: elk
   themeVariables:
     background: "#ffffff"
     fontFamily: "Inter, DejaVu Sans, Arial, sans-serif"
-    fontSize: "20px"
-    primaryTextColor: "#17202a"
+    fontSize: "18px"
+    primaryTextColor: "#1f2937"
     lineColor: "#64748b"
   themeCSS: |
-    .nodeLabel { font-size: 20px; }
-    .edgeLabel { font-size: 17px; }
-    .cluster-label { font-size: 20px; font-weight: 700; }
+    .nodeLabel { font-size: 18px; }
+    .edgeLabel { font-size: 16px; }
+    .cluster-label { font-size: 18px; font-weight: 700; }
 ---
 flowchart TB
-  Selected["$$\begin{array}{c}\textbf{Selected factual observations}\\\\\text{view poses and supported surface evidence}\end{array}$$"]
-  Directions["$$\begin{array}{c}\textbf{Target-centred view directions}\\\\\text{retain approach-direction evidence}\end{array}$$"]
-  Summary["$$\begin{array}{c}\textbf{Directional summary hypothesis}\\\\\text{first and second moments first}\\\\\text{spherical harmonics only if needed}\end{array}$$"]
-  Candidate["$$\begin{array}{c}\textbf{Candidate query}\\\\q_{t,i},\ \boldsymbol{\phi}_{e}\end{array}$$"]
-  Feature["$$\begin{array}{c}\textbf{Prospective novelty feature}\\\\\text{compare candidate direction with history}\end{array}$$"]
-  Test["$$\begin{array}{c}\textbf{Required ablation}\\\\\text{mask audit and held-out comparison}\\\\\text{against pose distance and overlap}\end{array}$$"]
-  Exclusion["$$\begin{array}{c}\textbf{Current status}\\\\\text{not an implemented actor input}\\\\\text{not a predictive claim}\end{array}$$"]
+  Views["$$\begin{array}{c}\textbf{Observed view poses}\\\\ \{q_0,\ldots,q_{t-1}\}\end{array}$$"]
+  Points["$$\begin{array}{c}\textbf{Observed points or voxels}\\\\ v\in\mathcal{P}_{t}\end{array}$$"]
+  Directions["$$\begin{array}{c}\textbf{Observation directions}\\\\ d_o(v)\in S^2\end{array}$$"]
+  Harmonics["$$\begin{array}{c}\textbf{Low-order spherical harmonics}\\\\ Y_{\ell m}(d),\ \ell\le L\end{array}$$"]
+  Coeffs["$$\begin{array}{c}\textbf{Directional coefficients}\\\\ c_{\ell m}(v)=\sum_o w_oY_{\ell m}(d_o(v))\end{array}$$"]
+  DirVol["$$\begin{array}{c}\textbf{Directional memory volume}\\\\ \mathbf{V}_{\mathrm{dir}}(\mathcal{P}_{t})\end{array}$$"]
 
-  Selected --> Directions --> Summary
-  Candidate --> Feature
-  Summary --> Feature --> Test
-  Exclusion -. "development-only hypothesis" .-> Summary
+  Cand["$$\begin{array}{c}\textbf{Candidate view}\\\\ q_{t,i}\end{array}$$"]
+  CandDir["$$\begin{array}{c}\textbf{Candidate direction}\\\\ d_i(v)\in S^2\end{array}$$"]
+  Similarity["$$\begin{array}{c}\textbf{Seen-from-similar-direction}\\\\ \sum_{\ell,m}c_{\ell m}(v)Y_{\ell m}(d_i(v))\end{array}$$"]
+  Novelty["$$\begin{array}{c}\textbf{Novelty features}\\\\ \phi_{\mathrm{dir}}(\mathbf{V}_{\mathrm{dir}},q_{t,i},\boldsymbol{\phi}_e)\end{array}$$"]
+  Token["$$\begin{array}{c}\textbf{Candidate token feature}\\\\ \mathbf{C}_{t,i}\end{array}$$"]
 
-  classDef input fill:#D5E8D4,stroke:#82B366,color:#17202A,stroke-width:1.5px,rx:0,ry:0;
-  classDef output fill:#F8CECC,stroke:#B85450,color:#17202A,stroke-width:1.5px,rx:0,ry:0;
-  classDef compute fill:#E1D5E7,stroke:#9673A6,color:#17202A,stroke-width:1.5px,rx:8,ry:8;
-  classDef data fill:#F5F5F5,stroke:#9E9E9E,color:#17202A,stroke-width:1.2px,rx:0,ry:0;
+  Views --> Directions
+  Points --> Directions
+  Directions --> Harmonics
+  Harmonics --> Coeffs
+  Coeffs --> DirVol
+  Cand --> CandDir
+  DirVol --> Similarity
+  CandDir --> Similarity
+  Similarity --> Novelty
+  Novelty --> Token
 
-  class Selected,Candidate input;
-  class Directions,Summary,Feature compute;
-  class Test output;
-  class Exclusion data;
+  classDef input fill:#D5E8D4,stroke:#82B366,stroke-width:1.5px,rx:0,ry:0;
+  classDef output fill:#F8CECC,stroke:#B85450,stroke-width:1.5px,rx:0,ry:0;
+  classDef compute fill:#E1D5E7,stroke:#9673A6,stroke-width:1.5px,rx:8,ry:8;
+  classDef data fill:#F5F5F5,stroke:#9E9E9E,stroke-width:1.2px,rx:0,ry:0;
+
+  class Views,Points,Cand input;
+  class Directions,Harmonics,Coeffs,CandDir,Similarity,Novelty compute;
+  class DirVol data;
+  class Token output;
