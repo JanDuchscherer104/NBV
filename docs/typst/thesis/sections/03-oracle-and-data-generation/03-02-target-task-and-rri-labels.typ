@@ -77,7 +77,9 @@ not evidence of actor-visible matching.
 
 Candidate generation turns one oracle instruction into a finite action table. Every quantitative choice---source population, target cap, shell size, family weights, motion limits, pruning thresholds, rollout recipes, renderer settings, and retention policy---belongs to the resolved run manifest and report bundle. This chapter defines semantics only; it does not designate one mutable configuration profile as canonical.
 
-At rollout step $t$, candidate generation constructs a full shell
+At rollout step $t$, candidate generation constructs a full shell. Here
+$cal(K)_t$ is the resolved set of mixture components and $n_k$ is the row count
+allocated to component $k$:
 
 $
   #eqs.action.candidate_shell
@@ -101,14 +103,25 @@ $
   #eqs.action.capped_direction
 $
 
-The sampler draws a capped direction in the reference rig frame and reinterprets it as egocentric forward motion, target-bearing motion, lateral bypass, local refinement, or backtracking according to component provenance. Target-looking families orient their optical axis toward the oracle instruction. In this chapter that point is privileged; calling the generator target-conditioned does not make the point actor-visible.
+The sampler draws a capped direction in the reference rig frame and reinterprets it as egocentric forward motion, target-bearing motion, lateral bypass, local refinement, or backtracking according to component provenance. Position and view provenance remain distinct: a component first constructs a base camera frame, then applies bounded local yaw and pitch jitter. In the core mixture, forward-local rows use the reference-rig base frame, whereas target-bearing and lateral-bypass rows use a target-look-at base frame. The supplied point is privileged in this chapter; calling the generator target-conditioned does not make it actor-visible.
+
+The next figure separates two questions that become illegible when overlaid:
+where the decision is grounded in the 3D scene, and what support the complete
+finite table retains.
+
+#let candidate-scene-provenance = json(
+  "../../figures/data/candidate_scene_81286_000035.json",
+).at("provenance")
+#let candidate-family-display = candidate-scene-provenance.at("family_display")
+#let candidate-pose-display = candidate-scene-provenance.at("candidate_pose_display")
 
 #figure(
   align(center, image(
     "../../figures/candidate_generation_geometry.pdf",
     width: 100%,
+    alt: "A dominant oblique 3D view shows a neutral processed ground-truth room mesh, an orange selected task bounding box, a solid purple physical RGB trajectory with two teal dashed calibrated historical frusta, a separate sampling-root anchor, and the black-and-gold selected candidate frustum. A narrow bird's-eye audit shows all sixty candidate centers and validity decisions. " + candidate-pose-display + " " + candidate-family-display,
   )),
-  caption: [One pinned finite-candidate decision state from ASE scene 81286, sample `ASE_81286_Atek_000035`, rollout row 73, and step row 121. Panel A uses a 35-degree vertical-FOV perspective view to place logged camera history, root state, target OBB, selected path, and a deterministically thinned set of wire frusta in the real scene. Panel B uses a 7.8-metre-wide orthographic bird's-eye view and retains all 60 candidate centres: 25 rows are admissible, 35 are hard-rejected by the clearance rule, and oracle-greedy selects shell 47. Dense scene geometry is z-buffered; OBBs, paths, centres, and camera glyphs remain vector overlays. Full eye, look-at, up, clipping, and resolution parameters are recorded in the figure JSON. The example fixes action support and validity for inspection; it is not a policy-performance result.],
+  caption: [Scene grounding and support audit for one pinned ASE decision state. Panel A separates physical RGB history, the canonical sampling root, the selected oracle-task GT OBB, and the selected candidate view. #candidate-pose-display Panel B retains all 60 stored centers and validity decisions: 25 admissible, 35 hard-rejected, and shell 47 selected. #candidate-family-display Frusta approximate the calibrated Fisheye624 valid domain; the example fixes support and validity, not policy performance.],
 ) <fig:candidate-generation-geometry>
 
 The three core position families then reinterpret this capped direction. The
@@ -127,25 +140,37 @@ $
   #eqs.action.family_directions
 $
 
-Finally, the sampler draws a radius and transforms the reference-frame offset into world coordinates:
+Finally, the sampler draws a component-resolved radius and transforms the reference-frame offset into world coordinates:
 
 $
   #eqs.action.candidate_center_world
 $
 
-The forward-local family keeps the reference rig orientation. Target-looking families orient the camera toward the supplied target center $bold(p)_e$:
+The forward-local family uses the reference-rig rotation as its base frame. Target-looking families instead construct a base frame from the supplied target center $bold(p)_e$:
 
 $
   #eqs.action.target_lookat_frame
 $
 
-These equations describe the sampler, not an optimal proposal distribution. The
-forward-local family preserves egocentric continuity, the target-bearing-local
-family moves along the target ray, and the lateral-target-bypass family
-introduces side-step views; optional challenger families test smaller corrections
-and reversals. Candidate-profile utility must be judged after pruning. A store in
-which target-aware families rarely survive cannot support a target-conditioned
-planning claim.
+#figure(
+  align(center, image(
+    "../../figures/candidate_family_geometry.pdf",
+    width: 100%,
+    alt: "Three plan-view constructions start from the same reference rig frame. A dotted raw direction is transformed into a blue circular forward-local centre, an amber diamond target-bearing-local centre, or a teal triangular lateral-target-bypass centre. The target-conditioned panels also show the supplied target point and bearing. At every centre, a dashed arrow marks the component's base gaze and a solid arrow marks one bounded jitter realization.",
+  )),
+  caption: [Geometric roles of the three core proposal families. Each panel applies one position transform to the same fixed raw direction; it then separates the component's base gaze from one bounded local-jitter realization. The plan view omits the bounded vertical term retained by the adjacent family equation. The construction explains proposal semantics only: radius sampling, family counts, feasibility, and selection remain separate.],
+) <fig:candidate-family-geometry>
+
+These equations describe the sampler, not an optimal proposal distribution.
+@fig:candidate-family-geometry isolates the two decisions that prose otherwise
+conflates: where a row proposes to move, and how its camera is oriented there.
+The forward-local transform preserves egocentric continuity, the
+target-bearing-local transform biases the proposed direction around the supplied
+target bearing, and the
+lateral-target-bypass transform introduces side-step views. Optional challenger
+families test smaller corrections and reversals. Candidate-profile utility must
+still be judged after pruning. A store in which target-aware families rarely
+survive cannot support a target-conditioned planning claim.
 
 The optional `target_orbit` family is a bilateral partial-orbit endpoint proposal
 prior: it samples paired signed angular offsets around the supplied target while

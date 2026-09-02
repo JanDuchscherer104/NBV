@@ -10,7 +10,7 @@
     candidate_shell: $
       #symb.rl.candidate_table = {q_(t,i)}_(i=1)^(#symb.shape.Nq),
       quad
-      #symb.shape.Nq = 60
+      #symb.shape.Nq = sum_(k in cal(K)_t) n_k
     $,
     power_spherical_forward: $
       bold(u)_i ~ "PS"(bold(e)_z, kappa),
@@ -50,7 +50,7 @@
       )
     $,
     candidate_center_world: $
-      r_i ~ cal(U)(0.25, 1.1),
+      r_i ~ cal(U)(r_("min", k(i)), r_("max", k(i))),
       quad
       bold(c)_i^w = bold(T)_r^w (r_i bold(d)_i^(k(i)))
     $,

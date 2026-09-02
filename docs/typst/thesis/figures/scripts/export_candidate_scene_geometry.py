@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """Export a pinned ASE finite-candidate scene as raster bases plus vector geometry.
 
-The dense ASE mesh is rendered with Open3D's z-buffer. Camera trajectories,
-wire frusta, the target OBB, candidate centres, validity, and the selected path
-are exported as projected 2D coordinates for editable CeTZ overlays.
+The processed ASE ground-truth mesh is rendered with Open3D's z-buffer.
+Physical RGB history, calibrated valid-domain frusta, the target OBB, candidate
+centres, validity, family provenance, and the selected path are exported as
+projected 2D coordinates for editable CeTZ overlays.
 
 Run from the repository root with the package environment::
 
@@ -12,33 +13,35 @@ Run from the repository root with the package environment::
     aria_nbv/.venv/bin/python \
       docs/typst/thesis/figures/scripts/export_candidate_scene_geometry.py
 
-The camera-frustum primitive uses the conventional five-vertex wire topology
-(one optical centre, four image-plane corners, four perimeter edges, and four
-corner rays). Its topology is adapted from Viser's Apache-2.0 implementation:
-https://github.com/nerfstudio-project/viser/blob/main/src/viser/client/src/CameraFrustumVariants.tsx
-Open3D exposes the same scientific role through
-``LineSet.create_camera_visualization``. We deliberately retain wire geometry
-only: no opaque frustum faces hide the scene or imply evidence volume.
+For the Fisheye624 camera, raster corners fall outside the calibrated valid
+domain. The exporter therefore samples an ordered polygon just inside the
+valid-radius ellipse, asserts that ``CameraTW.unproject`` accepts every point,
+and draws four cardinal spokes. No opaque faces hide the scene or imply a
+rectilinear image plane.
 """
 
 from __future__ import annotations
 
 import argparse
+import hashlib
+import io
 import json
+import math
 import os
+import tarfile
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 import numpy as np
 import open3d as o3d
+import torch
+from efm3d.aria import CameraTW, PoseTW
 
-from aria_nbv.configs import PathConfig
-from aria_nbv.data_handling.vin_store.dataset import (
-    VinOfflineDataset,
-    VinOfflineDatasetConfig,
-)
-from aria_nbv.data_handling.vin_store.store import VinOfflineStoreConfig
+from aria_nbv.data_handling.identifiers import compact_ase_atek_sample_id
+from aria_nbv.rollouts.manifest import manifest_sha256
+from aria_nbv.rollouts.read_model import decode_position_id, rollout_by_id
 from aria_nbv.rollouts.zarr_store import RolloutZarrStoreReader
 
 
@@ -49,6 +52,7 @@ SELECTED_SHELL = 47
 SOURCE_SAMPLE_INDEX = 35
 SCENE_ID = "81286"
 SNIPPET_ID = "AriaSyntheticEnvironment_81286_AtekDataSample_000035"
+RAW_SHARD_RELATIVE = Path("ase_efm/81286/shards-0004.tar")
 RENDER_WIDTH_PX = 1500
 RENDER_HEIGHT_PX = 920
 OBLIQUE_VERTICAL_FOV_DEG = 35.0
@@ -62,18 +66,19 @@ TOP_HALF_WIDTH_M = 3.90
 TOP_HALF_HEIGHT_M = TOP_HALF_WIDTH_M / (RENDER_WIDTH_PX / RENDER_HEIGHT_PX)
 TOP_NEAR_M = 0.1
 TOP_FAR_M = 30.0
-
-FRUSTUM_LOCAL = np.asarray(
+OBLIQUE_CROP_PX = (245, 150, 1255, 750)
+VALID_SUPPORT_SAMPLES = 8
+VALID_SUPPORT_MARGIN_PX = 0.25
+HISTORY_ROWS = (0, 10)
+SAMPLING_BASIS = np.asarray(
     [
-        [0.0, 0.0, 0.0],
-        [-0.60, -0.45, 1.0],
-        [0.60, -0.45, 1.0],
-        [0.60, 0.45, 1.0],
-        [-0.60, 0.45, 1.0],
+        [0.0, -1.0, 0.0, 0.0],
+        [1.0, 0.0, 0.0, 0.0],
+        [0.0, 0.0, 1.0, 0.0],
+        [0.0, 0.0, 0.0, 1.0],
     ],
     dtype=np.float64,
 )
-FRUSTUM_EDGES = ((1, 2), (2, 3), (3, 4), (4, 1), (0, 1), (0, 2), (0, 3), (0, 4))
 BOX_EDGES = (
     (0, 1),
     (1, 3),
@@ -88,6 +93,21 @@ BOX_EDGES = (
     (2, 6),
     (3, 7),
 )
+
+
+def _sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for block in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def _require(condition: bool, message: str) -> None:
+    """Reject an external-input provenance mismatch in optimized Python too."""
+
+    if not condition:
+        raise ValueError(message)
 
 
 @dataclass(frozen=True)
@@ -127,11 +147,6 @@ def _matrix_pose(matrix: np.ndarray) -> np.ndarray:
     return np.concatenate([matrix[:3, :3].reshape(9), matrix[:3, 3]])
 
 
-def _frustum_points_world(pose12: np.ndarray, *, scale_m: float) -> np.ndarray:
-    rotation, translation = _pose_parts(pose12)
-    return (rotation @ (FRUSTUM_LOCAL * scale_m).T).T + translation
-
-
 def _segments(
     points: np.ndarray, edges: tuple[tuple[int, int], ...]
 ) -> list[np.ndarray]:
@@ -151,25 +166,6 @@ def _obb_corners(pose12: np.ndarray, extents: np.ndarray) -> np.ndarray:
         dtype=np.float64,
     )
     return (rotation @ local.T).T + translation
-
-
-def _farthest_shells(
-    centres: np.ndarray, mask: np.ndarray, *, count: int, exclude: set[int]
-) -> list[int]:
-    """Choose deterministic, spatially spread shell rows for the oblique overlay."""
-
-    eligible = [int(i) for i in np.flatnonzero(mask) if int(i) not in exclude]
-    if len(eligible) <= count:
-        return eligible
-    chosen = [eligible[0]]
-    while len(chosen) < count:
-        remaining = np.asarray([i for i in eligible if i not in chosen], dtype=np.int64)
-        distances = np.linalg.norm(
-            centres[remaining, None, :] - centres[np.asarray(chosen)][None, :, :],
-            axis=2,
-        )
-        chosen.append(int(remaining[np.argmax(distances.min(axis=1))]))
-    return sorted(chosen)
 
 
 def _crop_mesh(mesh_path: Path) -> o3d.geometry.TriangleMesh:
@@ -195,7 +191,7 @@ def _crop_mesh(mesh_path: Path) -> o3d.geometry.TriangleMesh:
         # ASE room envelopes contain a handful of metre-scale ceiling, floor,
         # and wall triangles that occlude every interior object from external
         # cameras. Removing only these large enclosing faces yields an explicit
-        # cutaway while preserving the dense reconstructed furniture surfaces.
+        # cutaway while preserving the processed ground-truth furniture surfaces.
         & (areas <= 0.08)
     )
     cropped = o3d.geometry.TriangleMesh(
@@ -231,6 +227,7 @@ def _scene_renderer(
 def _render_oblique(
     renderer: o3d.visualization.rendering.OffscreenRenderer,
     output: Path,
+    crop_output: Path,
 ) -> Projection:
     width_px, height_px = RENDER_WIDTH_PX, RENDER_HEIGHT_PX
     centre = np.asarray(OBLIQUE_CENTRE_WORLD, dtype=np.float32)
@@ -245,6 +242,7 @@ def _render_oblique(
     )
     image = renderer.render_to_image()
     o3d.io.write_image(str(output), image, quality=9)
+    _write_oblique_crop(image, crop_output)
     camera = renderer.scene.camera
     return Projection(
         view=np.asarray(camera.get_view_matrix()),
@@ -252,6 +250,25 @@ def _render_oblique(
         width_px=width_px,
         height_px=height_px,
     )
+
+
+def _write_oblique_crop(image: o3d.geometry.Image, output: Path) -> None:
+    """Write the fixed, subdued publication crop from the full oblique raster."""
+
+    xmin, ymin, xmax, ymax = OBLIQUE_CROP_PX
+    crop = np.asarray(image)[ymin:ymax, xmin:xmax].astype(np.float32)
+    # Subdue the mesh so vector geometry owns the explanatory hierarchy.
+    crop = np.clip(0.72 * crop + 67.0, 0.0, 255.0).astype(np.uint8)
+    o3d.io.write_image(str(output), o3d.geometry.Image(crop), quality=9)
+
+
+def _crop_oblique_raster(source: Path, output: Path) -> None:
+    """Regenerate the publication crop from a previously rendered full raster."""
+
+    image = o3d.io.read_image(str(source))
+    if np.asarray(image).shape[:2] != (RENDER_HEIGHT_PX, RENDER_WIDTH_PX):
+        raise ValueError(f"Unexpected oblique raster shape: {np.asarray(image).shape}")
+    _write_oblique_crop(image, output)
 
 
 def _render_top(
@@ -291,35 +308,125 @@ def _project_segments(
     return [projection.points(segment) for segment in segments]
 
 
-def _load_history(store_dir: Path, repo_root: Path, data_root: Path) -> np.ndarray:
-    paths = PathConfig(
-        root=repo_root,
-        data_root=data_root,
-        offline_cache_dir=data_root / "offline_cache",
-    )
-    dataset = VinOfflineDataset(
-        VinOfflineDatasetConfig(
-            paths=paths,
-            store=VinOfflineStoreConfig(store_dir=store_dir),
-            split="all",
-            load_backbone=False,
-            load_candidates=False,
-            load_depths=False,
-            load_candidate_pcs=False,
-            load_gt_obbs=False,
-            load_detected_obbs=False,
-            load_trajectory_metadata=False,
-            map_location="cpu",
+def _tar_tensor(archive: tarfile.TarFile, suffix: str) -> torch.Tensor:
+    member = archive.getmember(f"{SNIPPET_ID}.{suffix}")
+    stream = archive.extractfile(member)
+    if stream is None:
+        raise FileNotFoundError(member.name)
+    return torch.load(io.BytesIO(stream.read()), map_location="cpu", weights_only=True)
+
+
+def _load_camera_and_rgb_history(
+    raw_shard: Path,
+) -> tuple[CameraTW, np.ndarray, np.ndarray]:
+    """Load the pinned camera plus world-from-device and world-from-RGB histories."""
+
+    with tarfile.open(raw_shard) as archive:
+        params = _tar_tensor(archive, "mfcd#camera-rgb+projection_params.pth").float()
+        valid_radius = _tar_tensor(
+            archive, "mfcd#camera-rgb+camera_valid_radius.pth"
+        ).float()
+        device_from_camera = _tar_tensor(
+            archive, "mfcd#camera-rgb+t_device_camera.pth"
+        ).float()
+        world_from_device = _tar_tensor(archive, "mtd#ts_world_device.pth").float()
+
+    camera = CameraTW.from_surreal(
+        width=torch.tensor([240.0]),
+        height=torch.tensor([240.0]),
+        type_str="CameraModelType.FISHEYE624",
+        params=params.unsqueeze(0),
+        valid_radius=valid_radius,
+        T_camera_rig=PoseTW.from_matrix3x4(device_from_camera).inverse(),
+    ).float()
+
+    device_from_camera_matrix = np.eye(4, dtype=np.float64)
+    device_from_camera_matrix[:3] = device_from_camera.double().numpy()
+    device_history = []
+    rgb_history = []
+    for pose in world_from_device.double().numpy():
+        world_from_device_matrix = np.eye(4, dtype=np.float64)
+        world_from_device_matrix[:3] = pose
+        device_history.append(_matrix_pose(world_from_device_matrix))
+        rgb_history.append(
+            _matrix_pose(world_from_device_matrix @ device_from_camera_matrix)
         )
+    return camera, np.stack(device_history), np.stack(rgb_history)
+
+
+def _assert_sampling_root_matches_history(
+    device_history: np.ndarray, root_matrix: np.ndarray
+) -> np.ndarray:
+    """Assert that the raw shard and rollout share the canonical sampling root."""
+
+    expected_sampling_root = _pose_matrix(device_history[-1]) @ SAMPLING_BASIS
+    np.testing.assert_allclose(
+        expected_sampling_root,
+        root_matrix,
+        atol=2e-5,
+        rtol=2e-5,
+        err_msg="raw camera history and rollout root do not share a pinned sample",
     )
-    index = next(
-        i
-        for i, record in enumerate(dataset._records)
-        if int(record.sample_index) == SOURCE_SAMPLE_INDEX
+    return expected_sampling_root
+
+
+def _valid_support_outline_camera(camera: CameraTW, *, depth_m: float) -> np.ndarray:
+    """Unproject an all-valid polygon inside the fisheye calibration domain."""
+
+    center = camera.c.reshape(-1, 2)[0]
+    radii = camera.valid_radius.reshape(-1, 2)[0] - VALID_SUPPORT_MARGIN_PX
+    size = camera.size.reshape(-1, 2)[0]
+    angles = torch.arange(
+        VALID_SUPPORT_SAMPLES,
+        device=center.device,
+        dtype=center.dtype,
+    ) * (2.0 * math.pi / VALID_SUPPORT_SAMPLES)
+    pixels = torch.stack(
+        (
+            center[0] + radii[0] * torch.cos(angles),
+            center[1] + radii[1] * torch.sin(angles),
+        ),
+        dim=-1,
     )
-    sample = dataset[index]
-    assert sample.scene_id == SCENE_ID and sample.snippet_id == SNIPPET_ID
-    return sample.vin_snippet.t_world_rig.tensor().detach().cpu().numpy()
+    pixels = torch.minimum(
+        torch.maximum(pixels, torch.zeros_like(pixels)),
+        size.unsqueeze(0) - 1.0,
+    )
+    radial_fraction = torch.sqrt(
+        (((pixels - center) / camera.valid_radius.reshape(-1, 2)[0]) ** 2).sum(dim=-1)
+    )
+    rays, valid = camera.unproject(pixels.unsqueeze(0))
+    rays = rays.reshape(VALID_SUPPORT_SAMPLES, 3)
+    if not bool(valid.all()):
+        raise ValueError(
+            "Fisheye publication outline must unproject inside valid support"
+        )
+    if not bool((radial_fraction < 1.0).all()):
+        raise ValueError(
+            "Fisheye publication outline must stay inside valid-radius support"
+        )
+    if not bool((rays[:, 2] > 0.0).all()):
+        raise ValueError(
+            "Fisheye publication outline must remain in front of the camera"
+        )
+    return (rays * (float(depth_m) / rays[:, 2:3])).double().cpu().numpy()
+
+
+def _calibrated_frustum_segments(
+    pose12: np.ndarray, camera: CameraTW, *, depth_m: float
+) -> list[np.ndarray]:
+    rotation, translation = _pose_parts(pose12)
+    outline_camera = _valid_support_outline_camera(camera, depth_m=depth_m)
+    outline_world = (rotation @ outline_camera.T).T + translation
+    perimeter = [
+        outline_world[np.asarray((index, (index + 1) % len(outline_world)))]
+        for index in range(len(outline_world))
+    ]
+    spokes = [
+        np.vstack((translation, outline_world[index]))
+        for index in range(0, len(outline_world), 2)
+    ]
+    return [*perimeter, *spokes]
 
 
 def _panel_payload(
@@ -329,9 +436,10 @@ def _panel_payload(
     history_poses: np.ndarray,
     root_pose: np.ndarray,
     candidate_poses: np.ndarray,
+    candidate_families: np.ndarray,
+    camera: CameraTW,
     valid: np.ndarray,
     selected_shell: int,
-    oblique: bool,
 ) -> dict[str, Any]:
     history_centres = history_poses[:, 9:12]
     candidate_centres = candidate_poses[:, 9:12]
@@ -344,18 +452,14 @@ def _panel_payload(
         ],
         "history_path": projection.points(history_centres),
         "root_center": projection.points(root_pose[None, 9:12])[0],
-        "root_frustum": _project_segments(
-            projection,
-            _segments(_frustum_points_world(root_pose, scale_m=0.22), FRUSTUM_EDGES),
-        ),
+        "root_frustum": [],
         "selected_path": projection.points(
             np.vstack([root_pose[9:12], candidate_centres[selected_shell]])
         ),
         "selected_frustum": _project_segments(
             projection,
-            _segments(
-                _frustum_points_world(candidate_poses[selected_shell], scale_m=0.29),
-                FRUSTUM_EDGES,
+            _calibrated_frustum_segments(
+                candidate_poses[selected_shell], camera, depth_m=0.14
             ),
         ),
         "candidates": [
@@ -364,61 +468,20 @@ def _panel_payload(
                 "center": projection.points(candidate_centres[shell : shell + 1])[0],
                 "valid": bool(valid[shell]),
                 "selected": bool(shell == selected_shell),
-                "family": (
-                    "forward_local"
-                    if shell < 24
-                    else "target_bearing_local"
-                    if shell < 48
-                    else "lateral_target_bypass"
-                ),
+                "family": str(candidate_families[shell]),
             }
             for shell in range(candidate_centres.shape[0])
         ],
     }
-    if oblique:
-        history_rows = [0, 4, 8, 12, 16]
-        valid_shells = _farthest_shells(
-            candidate_centres, valid, count=5, exclude={selected_shell}
+    payload["history_frusta"] = [
+        _project_segments(
+            projection,
+            _calibrated_frustum_segments(history_poses[row], camera, depth_m=0.08),
         )
-        invalid_shells = _farthest_shells(
-            candidate_centres, ~valid, count=5, exclude=set()
-        )
-        payload["history_frusta"] = [
-            _project_segments(
-                projection,
-                _segments(
-                    _frustum_points_world(history_poses[row], scale_m=0.20),
-                    FRUSTUM_EDGES,
-                ),
-            )
-            for row in history_rows
-        ]
-        payload["valid_frusta"] = [
-            {
-                "shell": int(shell),
-                "segments": _project_segments(
-                    projection,
-                    _segments(
-                        _frustum_points_world(candidate_poses[shell], scale_m=0.18),
-                        FRUSTUM_EDGES,
-                    ),
-                ),
-            }
-            for shell in valid_shells
-        ]
-        payload["invalid_frusta"] = [
-            {
-                "shell": int(shell),
-                "segments": _project_segments(
-                    projection,
-                    _segments(
-                        _frustum_points_world(candidate_poses[shell], scale_m=0.18),
-                        FRUSTUM_EDGES,
-                    ),
-                ),
-            }
-            for shell in invalid_shells
-        ]
+        for row in HISTORY_ROWS
+    ]
+    payload["valid_frusta"] = []
+    payload["invalid_frusta"] = []
     return payload
 
 
@@ -426,18 +489,13 @@ def main() -> None:
     repo_root = Path(__file__).resolve().parents[5]
     data_root = Path(os.environ.get("ARIA_NBV_DATA_ROOT", repo_root / ".data"))
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--repo-root", type=Path, default=repo_root)
     parser.add_argument("--data-root", type=Path, default=data_root)
     parser.add_argument(
         "--rollout-store",
         type=Path,
         default=None,
     )
-    parser.add_argument(
-        "--vin-store",
-        type=Path,
-        default=None,
-    )
+    parser.add_argument("--raw-shard", type=Path, default=None)
     parser.add_argument(
         "--mesh",
         type=Path,
@@ -455,83 +513,177 @@ def main() -> None:
         args.rollout_store = (
             data_root / "offline_cache/rollouts_v1_realistic_35_train_20260621.zarr"
         )
-    if args.vin_store is None:
-        args.vin_store = data_root / "offline_cache/vin_offline"
+    if args.raw_shard is None:
+        args.raw_shard = data_root / RAW_SHARD_RELATIVE
     if args.mesh is None:
         args.mesh = (
             data_root / "ase_meshes_processed/scene_81286_0.1_nocrop_dbbf5c71a22f.ply"
         )
 
+    rollout_store = args.rollout_store.expanduser().resolve()
+    raw_shard = args.raw_shard.expanduser().resolve()
+    mesh_path = args.mesh.expanduser().resolve()
+
     os.environ.setdefault("EGL_PLATFORM", "surfaceless")
     output_dir = args.output_dir.expanduser().resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
     oblique_path = output_dir / "candidate_scene_81286_000035_oblique.png"
+    oblique_crop_path = output_dir / "candidate_scene_81286_000035_oblique_crop.png"
     top_path = output_dir / "candidate_scene_81286_000035_top.png"
     json_path = output_dir / "candidate_scene_81286_000035.json"
 
-    reader = RolloutZarrStoreReader(args.rollout_store)
-    rollout_pose = reader.array("rollouts/root_pose_world")[ROLLOUT_ROW].astype(
-        np.float64
+    reader = RolloutZarrStoreReader(rollout_store)
+    store_manifest = reader.manifest()
+    store_id_value = store_manifest["root_attrs"].get("manifest_sha256")
+    _require(
+        isinstance(store_id_value, str) and bool(store_id_value),
+        "rollout store has no canonical manifest SHA-256",
     )
-    assert int(reader.array("rollouts/target_row_id")[ROLLOUT_ROW]) == TARGET_ROW
-    assert int(reader.array("steps/rollout_row_id")[STEP_ROW]) == ROLLOUT_ROW
-    assert int(reader.array("steps/selected_shell_index")[STEP_ROW]) == SELECTED_SHELL
+    store_id = str(store_id_value)
+    _require(
+        manifest_sha256(store_manifest["manifest"]) == store_id,
+        "rollout store manifest digest does not match its root identity",
+    )
+    rollout = rollout_by_id(reader, ROLLOUT_ROW)
+    _require(rollout.rollout_row_id == ROLLOUT_ROW, "pinned rollout row is absent")
+    _require(
+        rollout.target_row_id == TARGET_ROW,
+        "pinned rollout does not reference the expected target row",
+    )
+    _require(rollout.scene == SCENE_ID, "pinned rollout scene does not match")
+    compact_snippet = compact_ase_atek_sample_id(SNIPPET_ID)
+    _require(
+        rollout.snippet == compact_snippet,
+        "pinned rollout snippet does not match",
+    )
+    source_records = store_manifest["manifest"]["source_coverage"]["sources"]
+    source_matches = [
+        record
+        for record in source_records
+        if int(record["source_row_id"]) == rollout.source_row_id
+    ]
+    _require(
+        len(source_matches) == 1,
+        "pinned rollout source row must occur exactly once in manifest coverage",
+    )
+    source_record = source_matches[0]
+    _require(
+        int(source_record["source_sample_index"]) == SOURCE_SAMPLE_INDEX,
+        "pinned source sample index does not match",
+    )
+    _require(
+        str(source_record["scene_id"]) == SCENE_ID,
+        "pinned source scene does not match",
+    )
+    _require(
+        str(source_record["snippet_id"]) == compact_snippet,
+        "pinned source snippet does not match",
+    )
+    _require(
+        str(source_record["source_sample_key"]) == compact_snippet,
+        "pinned source sample key does not match",
+    )
+    step_matches = np.flatnonzero(reader.array("steps/step_row_id") == STEP_ROW)
+    _require(step_matches.size == 1, "pinned step row must occur exactly once")
+    step_position = int(step_matches[0])
+    target_matches = np.flatnonzero(reader.array("targets/target_row_id") == TARGET_ROW)
+    _require(target_matches.size == 1, "pinned target row must occur exactly once")
+    target_position = int(target_matches[0])
+    rollout_pose = reader.array("rollouts/root_pose_world")[
+        rollout.row_position
+    ].astype(np.float64)
+    _require(
+        int(reader.array("steps/rollout_row_id")[step_position]) == ROLLOUT_ROW,
+        "pinned step does not belong to the pinned rollout",
+    )
+    _require(
+        int(reader.array("steps/selected_shell_index")[step_position])
+        == SELECTED_SHELL,
+        "pinned step does not select the documented shell",
+    )
 
     candidate_mask = reader.array("candidates/step_row_id") == STEP_ROW
-    shell_order = np.argsort(reader.array("candidates/shell_index")[candidate_mask])
+    shell_indices = reader.array("candidates/shell_index")[candidate_mask]
+    shell_order = np.argsort(shell_indices)
+    _require(
+        np.array_equal(shell_indices[shell_order], np.arange(60)),
+        "pinned step must contain each shell index from 0 through 59 exactly once",
+    )
     candidate_poses = reader.array("candidates/pose_world_cam")[candidate_mask][
         shell_order
     ].astype(np.float64)
     valid = reader.array("candidates/actor_action_mask")[candidate_mask][
         shell_order
     ].astype(bool)
+    position_ids = reader.array("candidates/position_id")[candidate_mask][
+        shell_order
+    ].astype(np.int64)
+    candidate_families = np.asarray(
+        [decode_position_id(position_id) for position_id in position_ids],
+        dtype=np.str_,
+    )
     primary_reason = reader.array("candidates/primary_invalid_reason")[candidate_mask][
         shell_order
     ]
-    assert candidate_poses.shape == (60, 12)
-    assert int(valid.sum()) == 25 and int((~valid).sum()) == 35
-    assert np.all(primary_reason[~valid] == 5)
-
-    target_pose = reader.array("targets/target_pose_world_object")[TARGET_ROW].astype(
-        np.float64
+    _require(
+        candidate_poses.shape == (60, 12),
+        "pinned step must expose sixty 12-parameter candidate poses",
     )
-    target_extents = reader.array("targets/target_extents")[TARGET_ROW].astype(
+    _require(
+        int(valid.sum()) == 25 and int((~valid).sum()) == 35,
+        "pinned step no longer has the documented 25/35 validity split",
+    )
+    _require(
+        bool(np.all(primary_reason[~valid] == 5)),
+        "pinned rejected candidates no longer share the documented clearance reason",
+    )
+    _require(bool(valid[SELECTED_SHELL]), "documented selected shell is not admissible")
+    family_counts = {
+        name: int((candidate_families == name).sum())
+        for name in (
+            "forward_local",
+            "target_bearing_local",
+            "lateral_target_bypass",
+        )
+    }
+    _require(
+        family_counts
+        == {
+            "forward_local": 24,
+            "target_bearing_local": 24,
+            "lateral_target_bypass": 12,
+        },
+        "pinned candidate families no longer have the documented 24/24/12 split",
+    )
+
+    target_pose = reader.array("targets/target_pose_world_object")[
+        target_position
+    ].astype(np.float64)
+    target_extents = reader.array("targets/target_extents")[target_position].astype(
         np.float64
     )
     target_corners = _obb_corners(target_pose, target_extents)
-    history_rig_poses = _load_history(
-        args.vin_store,
-        args.repo_root.expanduser().resolve(),
-        data_root,
-    )
-    # The VIN trajectory is world<-rig while the rollout root is world<-RGB
-    # camera. Recover the fixed rig<-camera extrinsic from the shared root
-    # timestamp, then apply it to every logged rig pose for display only.
-    rig_from_camera = np.linalg.inv(_pose_matrix(history_rig_poses[-1])) @ _pose_matrix(
-        rollout_pose
-    )
-    history_poses = np.stack(
-        [
-            _matrix_pose(_pose_matrix(pose) @ rig_from_camera)
-            for pose in history_rig_poses
-        ],
-        axis=0,
-    )
-    np.testing.assert_allclose(history_poses[-1], rollout_pose, atol=1e-5, rtol=1e-5)
-
-    mesh = _crop_mesh(args.mesh)
-    renderer = _scene_renderer(mesh, width_px=1500, height_px=920)
-    oblique = _render_oblique(renderer, oblique_path)
-    top = _render_top(renderer, top_path)
+    camera, device_history, history_poses = _load_camera_and_rgb_history(raw_shard)
+    _assert_sampling_root_matches_history(device_history, _pose_matrix(rollout_pose))
 
     selected_diagnostics: dict[str, float] = {}
     diagnostic_rows = reader.array("candidate_diagnostics/candidate_row_id")
     selected_candidate_row = int(
-        reader.array("steps/selected_candidate_row_id")[STEP_ROW]
+        reader.array("steps/selected_candidate_row_id")[step_position]
     )
-    selected_diag_row = int(
-        np.flatnonzero(diagnostic_rows == selected_candidate_row)[0]
+    candidate_row_ids = reader.array("candidates/candidate_row_id")[candidate_mask][
+        shell_order
+    ]
+    _require(
+        int(candidate_row_ids[SELECTED_SHELL]) == selected_candidate_row,
+        "selected candidate row does not match the documented shell",
     )
+    selected_diag_matches = np.flatnonzero(diagnostic_rows == selected_candidate_row)
+    _require(
+        selected_diag_matches.size == 1,
+        "selected candidate must have exactly one diagnostics row",
+    )
+    selected_diag_row = int(selected_diag_matches[0])
     for name in (
         "motion_step_length_m",
         "mesh_distance_m",
@@ -542,23 +694,62 @@ def main() -> None:
             reader.array(f"candidate_diagnostics/{name}")[selected_diag_row]
         )
 
+    raw_shard_sha256 = _sha256(raw_shard)
+    mesh_sha256 = _sha256(mesh_path)
+    mesh = _crop_mesh(mesh_path)
+    staging = tempfile.TemporaryDirectory(
+        dir=output_dir,
+        prefix=".candidate-scene-",
+    )
+    staging_dir = Path(staging.name)
+    staged_oblique_path = staging_dir / oblique_path.name
+    staged_oblique_crop_path = staging_dir / oblique_crop_path.name
+    staged_top_path = staging_dir / top_path.name
+    staged_json_path = staging_dir / json_path.name
+    renderer = _scene_renderer(mesh, width_px=1500, height_px=920)
+    oblique = _render_oblique(
+        renderer,
+        staged_oblique_path,
+        staged_oblique_crop_path,
+    )
+    top = _render_top(renderer, staged_top_path)
+
     payload = {
         "provenance": {
-            "scene_id": SCENE_ID,
-            "snippet_id": SNIPPET_ID,
-            "source_sample_index": SOURCE_SAMPLE_INDEX,
-            "rollout_store": args.rollout_store.name,
+            "scene_id": str(source_record["scene_id"]),
+            "snippet_id": str(source_record["snippet_id"]),
+            "source_sample_index": int(source_record["source_sample_index"]),
+            "source_row_id": int(source_record["source_row_id"]),
+            "source_sample_key": str(source_record["source_sample_key"]),
+            "source_shard_id": str(source_record["source_shard_id"]),
+            "source_shard_row": int(source_record["source_shard_row"]),
+            "rollout_store": rollout_store.name,
             "rollout_row": ROLLOUT_ROW,
             "step_row": STEP_ROW,
             "target_row": TARGET_ROW,
             "target_instance_id": int(
-                reader.array("targets/target_inst_id")[TARGET_ROW]
+                reader.array("targets/target_inst_id")[target_position]
             ),
-            "mesh": args.mesh.name,
-            "frame": "ASE world; PoseTW world-from-camera/rig; metres",
-            "construction": "measured logged trajectory and stored rollout geometry over reconstructed ASE mesh",
+            "mesh": mesh_path.name,
+            "frame": "ASE world; physical RGB history and canonical candidate-sampling cameras; metres",
+            "construction": "physical calibrated RGB history and stored rollout geometry over a processed ASE ground-truth mesh cutaway",
             "evidential_role": "auditable finite-candidate contract example, not a performance result",
-            "frustum_primitive": "Viser five-vertex wire topology, Apache-2.0; no filled faces",
+            "frustum_primitive": "CameraTW-valid eight-point fisheye support polygon with four cardinal spokes; no filled faces",
+            "camera_source": f"{raw_shard.name}::{SNIPPET_ID}",
+            "input_sha256": {
+                "rollout_store_manifest": store_id,
+                "raw_shard": raw_shard_sha256,
+                "mesh": mesh_sha256,
+            },
+            "family_source": "stored candidates/position_id decoded by rollouts.read_model.decode_position_id",
+            "family_display": (
+                "Shapes encode stored row-level family identities decoded from "
+                "position provenance (24/24/12 rows)."
+            ),
+            "candidate_pose_display": (
+                "The primary exporter reads this pose directly from the stored "
+                "candidates/pose_world_cam row."
+            ),
             "render_backend": f"Open3D {o3d.__version__} offscreen z-buffer; CeTZ overlays remain vector",
             "view_contracts": {
                 "oblique": {
@@ -570,6 +761,7 @@ def main() -> None:
                     "eye_world_m": OBLIQUE_EYE_WORLD,
                     "up_world": (0.0, 0.0, 1.0),
                     "resolution_px": (RENDER_WIDTH_PX, RENDER_HEIGHT_PX),
+                    "display_crop_px": OBLIQUE_CROP_PX,
                 },
                 "bird_eye": {
                     "projection": "orthographic",
@@ -588,9 +780,13 @@ def main() -> None:
             "candidates": int(valid.size),
             "valid": int(valid.sum()),
             "invalid_clearance": int((~valid).sum()),
-            "forward_local": 24,
-            "target_bearing_local": 24,
-            "lateral_target_bypass": 12,
+            "forward_local": int((candidate_families == "forward_local").sum()),
+            "target_bearing_local": int(
+                (candidate_families == "target_bearing_local").sum()
+            ),
+            "lateral_target_bypass": int(
+                (candidate_families == "lateral_target_bypass").sum()
+            ),
         },
         "selected": {
             "shell": SELECTED_SHELL,
@@ -603,16 +799,17 @@ def main() -> None:
             **selected_diagnostics,
         },
         "oblique": {
-            "background": oblique_path.name,
+            "background": oblique_crop_path.name,
             **_panel_payload(
                 oblique,
                 target_corners=target_corners,
                 history_poses=history_poses,
                 root_pose=rollout_pose,
                 candidate_poses=candidate_poses,
+                candidate_families=candidate_families,
+                camera=camera,
                 valid=valid,
                 selected_shell=SELECTED_SHELL,
-                oblique=True,
             ),
         },
         "top": {
@@ -623,9 +820,10 @@ def main() -> None:
                 history_poses=history_poses,
                 root_pose=rollout_pose,
                 candidate_poses=candidate_poses,
+                candidate_families=candidate_families,
+                camera=camera,
                 valid=valid,
                 selected_shell=SELECTED_SHELL,
-                oblique=False,
             ),
             "scale_bar": top.points(
                 np.asarray(
@@ -634,9 +832,21 @@ def main() -> None:
             ),
         },
     }
-    json_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+    staged_json_path.write_text(
+        json.dumps(payload, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    for staged_path, publication_path in (
+        (staged_oblique_path, oblique_path),
+        (staged_oblique_crop_path, oblique_crop_path),
+        (staged_top_path, top_path),
+        (staged_json_path, json_path),
+    ):
+        staged_path.replace(publication_path)
+    staging.cleanup()
     print(f"wrote {json_path}")
     print(f"wrote {oblique_path}")
+    print(f"wrote {oblique_crop_path}")
     print(f"wrote {top_path}")
 
 

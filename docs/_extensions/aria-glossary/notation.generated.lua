@@ -671,13 +671,13 @@ return {
       thesis_list = false,
     },
     ["action.candidate_center_world"] = {
-      tex = "r_i\\sim\\mathcal{U}(0.25,1.1),\\quad \\boldsymbol{c}_i^w=\\boldsymbol{T}_r^w(r_i\\boldsymbol{d}_i^{k(i)})",
+      tex = "r_i\\sim\\mathcal{U}(r_{\\min,k(i)},r_{\\max,k(i)}),\\quad \\boldsymbol{c}_i^w=\\boldsymbol{T}_r^w(r_i\\boldsymbol{d}_i^{k(i)})",
       typst = "#eqs.action.candidate_center_world",
       description = "",
       thesis_list = false,
     },
     ["action.candidate_shell"] = {
-      tex = "\\mathcal{Q}_t=\\{q_{t,i}\\}_{i=1}^{N_q},\\quad N_q=60",
+      tex = "\\mathcal{Q}_t=\\{q_{t,i}\\}_{i=1}^{N_q},\\quad N_q=\\sum_{k\\in\\mathcal{K}_t}n_k",
       typst = "#eqs.action.candidate_shell",
       description = "",
       thesis_list = false,

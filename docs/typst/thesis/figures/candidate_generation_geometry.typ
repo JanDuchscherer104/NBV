@@ -1,183 +1,272 @@
 #import "@preview/cetz:0.5.2"
-#import "candidate_scene_primitives.typ": panel-point, wire-segments, candidate-marker
 
-#set page(width: 160mm, height: auto, margin: 0mm, fill: white)
-#set text(font: "New Computer Modern", size: 9.2pt, fill: rgb("#17202a"))
+#set page(width: 160mm, height: 72.5mm, margin: 0mm, fill: white)
+#set text(font: "New Computer Modern", size: 8pt, fill: rgb("#17202a"))
 
 #let data = json("data/candidate_scene_81286_000035.json")
 #let ink = rgb("#17202a")
-#let muted = rgb("#5f6b78")
-#let rule = rgb("#c9d2dc")
-#let pale = rgb("#f5f7f9")
-#let history-color = rgb("#6b7280")
-#let root-color = rgb("#315f93")
-#let target-color = rgb("#b26a16")
-#let valid-color = rgb("#23856d")
-#let invalid-color = rgb("#b23a48")
+#let muted = rgb("#687380")
+#let hair = rgb("#cbd3dc")
+#let history-path-color = rgb("#66307c")
+#let history-frustum-color = rgb("#008c99")
+#let target-color = rgb("#a95f12")
+#let forward-color = rgb("#31689e")
+#let bearing-color = rgb("#c06b12")
+#let bypass-color = rgb("#18836d")
+#let invalid-color = rgb("#a93e4c")
 #let selected-color = rgb("#f2c14e")
-#let palette = (
-  ink: ink,
-  valid: valid-color,
-  invalid: invalid-color,
-  selected: selected-color,
+
+// The raster is a fixed crop of the original 1500 x 920 projection. Every
+// vector point remains in the original normalized panel coordinates and is
+// transformed by the identical crop before drawing.
+#let crop = (
+  xmin: 245 / 1500,
+  xmax: 1255 / 1500,
+  ymin: 1 - 750 / 920,
+  ymax: 1 - 150 / 920,
 )
 
-#let panel(title, subtitle, body, footer) = block(
-  width: 100%,
-  inset: 2.6mm,
-  radius: 1.2mm,
-  stroke: .55pt + rule,
-  fill: pale,
-  [
-    #text(size: 10.2pt, weight: "bold", title)
-    #linebreak()
-    #text(size: 8pt, fill: muted, subtitle)
-    #v(1.3mm)
-    #align(center, body)
-    #v(1.2mm)
-    #footer
-  ],
+#let crop-point(point, width, height) = (
+  (point.at(0) - crop.xmin) / (crop.xmax - crop.xmin) * width,
+  (point.at(1) - crop.ymin) / (crop.ymax - crop.ymin) * height,
 )
 
-#let scene-canvas(panel-data, mode: "oblique") = {
-  let width = 7.25
-  let height = 4.45
-  cetz.canvas(length: 9.6mm, padding: .05, {
+#let panel-point(point, width, height) = (
+  point.at(0) * width,
+  point.at(1) * height,
+)
+
+#let wire-segments(segment-list, point-map, pen) = {
+  import cetz.draw: *
+  for segment in segment-list {
+    line(..segment.map(point-map), stroke: pen)
+  }
+}
+
+#let family-color(candidate) = if candidate.at("family") == "forward_local" {
+  forward-color
+} else if candidate.at("family") == "target_bearing_local" {
+  bearing-color
+} else {
+  bypass-color
+}
+
+#let family-marker(candidate, map-point, selected: false, small: false) = {
+  import cetz.draw: *
+  let p = map-point(candidate.at("center"))
+  let color = family-color(candidate)
+  let radius = if small { .025 } else { .055 }
+  let fill-color = if selected { selected-color } else { color }
+  let border = if selected { .70pt + ink } else { .40pt + white }
+
+  if candidate.at("family") == "forward_local" {
+    circle(p, radius: radius, fill: fill-color, stroke: border)
+  } else if candidate.at("family") == "target_bearing_local" {
+    line(
+      (p.at(0), p.at(1) + radius),
+      (p.at(0) + radius, p.at(1)),
+      (p.at(0), p.at(1) - radius),
+      (p.at(0) - radius, p.at(1)),
+      close: true,
+      fill: fill-color,
+      stroke: border,
+    )
+  } else {
+    line(
+      (p.at(0), p.at(1) + radius),
+      (p.at(0) + radius, p.at(1) - radius),
+      (p.at(0) - radius, p.at(1) - radius),
+      close: true,
+      fill: fill-color,
+      stroke: border,
+    )
+  }
+}
+
+#let oblique-view(panel) = {
+  let width = 10.8
+  let height = 6.42
+  let map-point = point => crop-point(point, width, height)
+
+  cetz.canvas(length: 10mm, padding: 0, {
     import cetz.draw: *
 
+    // The processed GT mesh is neutral context; overlays own the explanation.
     content(
       (0, 0),
       (width, height),
       image(
-        "data/" + panel-data.at("background"),
+        "data/" + panel.at("background"),
         width: 100%,
         height: 100%,
         fit: "stretch",
       ),
     )
 
-    wire-segments(
-      panel-data.at("target_obb_segments"),
-      width,
-      height,
-      1.1pt + target-color,
-    )
+    // The selected task GT OBB has its own accent, independent of history.
+    wire-segments(panel.at("target_obb_segments"), map-point, 1.85pt + target-color)
+    wire-segments(panel.at("target_obb_segments"), map-point, .42pt + white)
 
-    if mode == "oblique" {
-      line(
-        ..panel-data.at("history_path").map(point => panel-point(point, width, height)),
-        stroke: (paint: history-color, thickness: .65pt, dash: "dashed"),
+    // Separate the logged path from its sparse historical camera footprints.
+    // Both remain distinct from the neutral mesh and the sampling root.
+    line(
+      ..panel.at("history_path").map(map-point),
+      stroke: 2.05pt + white.transparentize(18%),
+    )
+    line(
+      ..panel.at("history_path").map(map-point),
+      stroke: 1.18pt + history-path-color,
+    )
+    for pose in panel.at("history_frusta") {
+      wire-segments(
+        pose,
+        map-point,
+        (paint: white.transparentize(18%), thickness: 1.28pt, dash: "dashed"),
       )
-      for frustum in panel-data.at("history_frusta") {
-        wire-segments(frustum, width, height, .42pt + history-color)
-      }
-      for frustum in panel-data.at("valid_frusta") {
-        wire-segments(frustum.at("segments"), width, height, .55pt + valid-color)
-      }
-      for frustum in panel-data.at("invalid_frusta") {
-        wire-segments(
-          frustum.at("segments"),
-          width,
-          height,
-          (paint: invalid-color, thickness: .5pt, dash: "dashed"),
-        )
-      }
-    } else {
-      for candidate in panel-data.at("candidates") {
-        candidate-marker(
-          candidate.at("center"),
-          width,
-          height,
-          valid: candidate.at("valid"),
-          selected: candidate.at("selected"),
-          colors: palette,
-        )
-      }
-      line(
-        ..panel-data.at("scale_bar").map(point => panel-point(point, width, height)),
-        stroke: 1.15pt + ink,
-      )
-      let scale-mid = panel-point(panel-data.at("scale_bar").at(0), width, height)
-      content(
-        (scale-mid.at(0) + .57, scale-mid.at(1) + .08),
-        anchor: "south",
-        text(size: 6.8pt, fill: ink, [1 m]),
+      wire-segments(
+        pose,
+        map-point,
+        (paint: history-frustum-color, thickness: .64pt, dash: "dashed"),
       )
     }
 
+    // Expand only the selected hypothetical view. The full shell remains in B.
     line(
-      ..panel-data.at("selected_path").map(point => panel-point(point, width, height)),
-      stroke: 1.2pt + selected-color,
-      mark: (end: ">", scale: .7),
+      ..panel.at("selected_path").map(map-point),
+      stroke: 2.10pt + selected-color,
     )
-    wire-segments(
-      panel-data.at("root_frustum"),
-      width,
-      height,
-      1.0pt + root-color,
+    line(
+      ..panel.at("selected_path").map(map-point),
+      stroke: .58pt + ink,
+      mark: (end: ">", scale: .65),
     )
-    wire-segments(
-      panel-data.at("selected_frustum"),
-      width,
-      height,
-      1.0pt + ink,
+    wire-segments(panel.at("selected_frustum"), map-point, 1.18pt + ink)
+    family-marker(panel.at("candidates").at(47), map-point, selected: true)
+
+    // The canonical sampling root is an anchor, not a physical RGB frustum.
+    let root = map-point(panel.at("root_center"))
+    circle(root, radius: .05, fill: ink, stroke: .45pt + white)
+    content(
+      (root.at(0) + .18, root.at(1) - .16),
+      anchor: "north-west",
+      box(
+        inset: 1pt,
+        fill: white.transparentize(10%),
+        text(size: 7pt, weight: "bold")[$r_t$],
+      ),
     )
 
-    let target-label = panel-point(panel-data.at("target_center"), width, height)
     content(
-      (target-label.at(0), target-label.at(1) + .10),
-      anchor: "south",
-      text(size: 7.2pt, weight: "bold", fill: target-color, [$e=133$]),
+      (.14, height - .12),
+      anchor: "north-west",
+      box(
+        inset: 1.1pt,
+        fill: white.transparentize(8%),
+        text(size: 7.3pt, weight: "bold")[A  Scene-grounded selection],
+      ),
     )
-    let root-label = panel-point(panel-data.at("root_center"), width, height)
+  })
+}
+
+#let audit-view(panel) = {
+  let width = 4.8
+  let height = 2.95
+  let map-point = point => panel-point(point, width, height)
+
+  cetz.canvas(length: 10mm, padding: .01, {
+    import cetz.draw: *
     content(
-      (root-label.at(0), root-label.at(1) - .10),
-      anchor: "north",
-      text(size: 7.2pt, weight: "bold", fill: root-color, [$r_t$]),
+      (0, 0),
+      (width, height),
+      image(
+        "data/" + panel.at("background"),
+        width: 100%,
+        height: 100%,
+        fit: "stretch",
+      ),
+    )
+    wire-segments(panel.at("target_obb_segments"), map-point, 1.25pt + target-color)
+    wire-segments(panel.at("target_obb_segments"), map-point, .30pt + white)
+
+    for candidate in panel.at("candidates") {
+      let p = map-point(candidate.at("center"))
+      if candidate.at("selected") {
+        family-marker(candidate, map-point, selected: true, small: true)
+      } else if candidate.at("valid") {
+        family-marker(candidate, map-point, small: true)
+      } else {
+        line(
+          (p.at(0) - .021, p.at(1) - .021),
+          (p.at(0) + .021, p.at(1) + .021),
+          stroke: .40pt + invalid-color,
+        )
+        line(
+          (p.at(0) - .021, p.at(1) + .021),
+          (p.at(0) + .021, p.at(1) - .021),
+          stroke: .40pt + invalid-color,
+        )
+      }
+    }
+
+    line(
+      ..panel.at("selected_path").map(map-point),
+      stroke: 1.05pt + selected-color,
+    )
+    line(
+      ..panel.at("selected_path").map(map-point),
+      stroke: .38pt + ink,
+      mark: (end: ">", scale: .55),
+    )
+    let root = map-point(panel.at("root_center"))
+    circle(root, radius: .032, fill: ink, stroke: .30pt + white)
+    rect((0, 0), (width, height), fill: none, stroke: .45pt + hair)
+
+    line(..panel.at("scale_bar").map(map-point), stroke: .90pt + ink)
+    let scale-start = map-point(panel.at("scale_bar").at(0))
+    content(
+      (scale-start.at(0) + .28, scale-start.at(1) + .04),
+      anchor: "south",
+      text(size: 6.2pt)[1 m],
     )
   })
 }
 
 #let counts = data.at("counts")
-#let provenance = data.at("provenance")
-#let selected = data.at("selected")
 
 #grid(
-  columns: (1fr, 1fr),
-  gutter: 3.2mm,
-  panel(
-    [A. One decision state in its ASE scene],
-    [35° vertical-FOV perspective; logged history, target OBB, and thinned candidates],
-    scene-canvas(data.at("oblique"), mode: "oblique"),
-    [
-      #text(size: 7.2pt, fill: muted)[
-        Dashed grey: logged history · green: valid examples · dashed red:
-        clearance-rule rejections · black/gold: selected shell #selected.at("shell").
-      ]
-    ],
-  ),
-  panel(
-    [B. Full finite action set in bird's-eye view],
-    [orthographic 7.8 m-wide BEV; all centres retain shell identity and validity],
-    scene-canvas(data.at("top"), mode: "top"),
-    [
-      #grid(
-        columns: (auto, auto, auto),
-        column-gutter: 2.2mm,
-        align: (left, left, left),
-        text(size: 7.2pt, fill: valid-color)[● #counts.at("valid") valid],
-        text(size: 7.2pt, fill: invalid-color)[× #counts.at("invalid_clearance") clearance-invalid],
-        text(size: 7.2pt, fill: ink)[◆ shell #selected.at("shell") selected],
-      )
-    ],
-  ),
+  columns: (108mm, 1fr),
+  gutter: 3mm,
+  oblique-view(data.at("oblique")),
+  [
+    #text(size: 7.4pt, weight: "bold")[B  Complete-shell geometry audit]
+    #v(.4mm)
+    #audit-view(data.at("top"))
+    #v(.8mm)
+    #text(size: 6.9pt, fill: muted)[
+      #counts.at("candidates") proposed · #counts.at("valid") admitted ·
+      #counts.at("invalid_clearance") rejected
+    ]
+    #v(.9mm)
+    #text(size: 6.3pt, fill: muted)[Configured row blocks:]
+    #v(.3mm)
+    #grid(
+      columns: (auto, 1fr),
+      column-gutter: 1.0mm,
+      row-gutter: .35mm,
+      text(size: 7.5pt, fill: forward-color)[●], text(size: 6.6pt)[forward-local (0--23)],
+      text(size: 7.5pt, fill: bearing-color)[◆], text(size: 6.6pt)[target-bearing (24--47)],
+      text(size: 7.5pt, fill: bypass-color)[▲], text(size: 6.6pt)[lateral-bypass (48--59)],
+      text(size: 7.5pt, fill: invalid-color)[×], text(size: 6.6pt)[hard-rejected],
+    )
+    #v(.7mm)
+    #grid(
+      columns: (auto, 1fr),
+      column-gutter: 1.0mm,
+      row-gutter: .35mm,
+      text(size: 7.5pt, fill: ink)[━], text(size: 6.6pt)[selected (black/gold)],
+      text(size: 7.5pt, fill: history-path-color)[━], text(size: 6.6pt)[physical RGB trajectory],
+      text(size: 7.5pt, fill: history-frustum-color)[┄], text(size: 6.6pt)[historical RGB frusta],
+      text(size: 7.5pt, fill: target-color)[▣], text(size: 6.6pt)[task GT OBB],
+    )
+  ],
 )
-
-#v(1.4mm)
-#align(center, text(size: 7.2pt, fill: muted)[
-  Scene #provenance.at("scene_id"), sample `ASE_81286_Atek_000035`, rollout row
-  #provenance.at("rollout_row"), step row #provenance.at("step_row");
-  #counts.at("forward_local") forward-local + #counts.at("target_bearing_local") target-bearing
-  + #counts.at("lateral_target_bypass") lateral-bypass candidates. Dense mesh layers are
-  z-buffered raster; OBBs, paths, centres, and wire frusta remain vector geometry.
-])
