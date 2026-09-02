@@ -34,7 +34,6 @@ from aria_nbv.app.panels._stored_rollouts import (
     overview_topology,
     reconstruction_return,
     session,
-    shared,
     validity_support,
 )
 from aria_nbv.configs import PathConfig
@@ -698,7 +697,7 @@ def test_stored_rollout_evidence_roles_are_explicit() -> None:
 def test_branching_probability_entropy_plot_is_actor_visible(monkeypatch: pytest.MonkeyPatch) -> None:
     """The restored branching plot must use the same actor-visible role owner."""
 
-    captured: list[shared.ScientificExplanation] = []
+    captured: list[panel_common.ScientificExplanation] = []
     steps = pd.DataFrame(
         [
             {
@@ -724,7 +723,7 @@ def test_branching_probability_entropy_plot_is_actor_visible(monkeypatch: pytest
 def test_selected_rank_regret_explanation_is_oracle_evaluation(monkeypatch: pytest.MonkeyPatch) -> None:
     """Rank/regret derives from privileged target gain, not a training cache."""
 
-    captured: list[shared.ScientificExplanation] = []
+    captured: list[panel_common.ScientificExplanation] = []
 
     class Handle:
         def ranks(self, **_kwargs: Any) -> Any:
@@ -1220,11 +1219,11 @@ def test_live_quality_plot_unifies_context_axis_control_and_chart(monkeypatch: p
 def test_stored_rollout_plots_have_one_contextual_rendering_owner() -> None:
     """No stored-rollout plot may bypass its scientific explanation popover."""
 
-    source = Path(shared.__file__).read_text(encoding="utf-8")
+    source = Path(panel_common.__file__).read_text(encoding="utf-8")
 
     assert source.count("st.plotly_chart(") == 1
-    assert "st.plotly_chart(rendered" in source
-    assert shared.plot_control_key("summary", "a") != shared.plot_control_key("summary", "b")
+    assert "        rendered,\n" in source
+    assert panel_common.plot_control_key("summary", "a") != panel_common.plot_control_key("summary", "b")
 
 
 def test_candidate_flow_figure_preserves_stage_specific_nodes_and_counts() -> None:
@@ -1315,8 +1314,8 @@ def test_stored_rollout_download_helpers_are_lazy_complete_and_deterministic(
     captions: list[str] = []
     csv_calls = 0
     json_calls = 0
-    serialize_csv = shared.serialize_frame_csv
-    serialize_json = shared.serialize_json
+    serialize_csv = panel_common.serialize_frame_csv
+    serialize_json = panel_common.serialize_json
 
     def count_csv(frame: pd.DataFrame) -> bytes:
         nonlocal csv_calls
@@ -1328,8 +1327,8 @@ def test_stored_rollout_download_helpers_are_lazy_complete_and_deterministic(
         json_calls += 1
         return serialize_json(payload)
 
-    monkeypatch.setattr(shared, "serialize_frame_csv", count_csv)
-    monkeypatch.setattr(shared, "serialize_json", count_json)
+    monkeypatch.setattr(panel_common, "serialize_frame_csv", count_csv)
+    monkeypatch.setattr(panel_common, "serialize_json", count_json)
     monkeypatch.setattr(
         st,
         "download_button",
@@ -1339,8 +1338,8 @@ def test_stored_rollout_download_helpers_are_lazy_complete_and_deterministic(
     frame = pd.DataFrame({"rollout_row_id": [2, 3, 5], "note": ["a,b", "line\nbreak", "plain"]})
     payload = {"z": np.int64(2), "a": ["first"]}
 
-    shared.download_frame("CSV", "rows.csv", frame)
-    shared.download_json("JSON", "rows.json", payload)
+    panel_common.download_frame("CSV", "rows.csv", frame)
+    panel_common.download_json("JSON", "rows.json", payload)
 
     assert csv_calls == 0
     assert json_calls == 0
