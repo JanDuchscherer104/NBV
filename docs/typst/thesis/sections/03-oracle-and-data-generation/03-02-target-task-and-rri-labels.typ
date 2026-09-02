@@ -374,28 +374,15 @@ distribution from which replay is collected. They serve as data-generation
 policies and reference strategies. Chapter 5 evaluates the learned policy on
 held-out tasks.
 
-Lookahead can select a different first action from one-step greedy because an
-action changes both the causal state and the next candidate shell
-(@fig:oracle-lookahead-tree). It ranks the return of retained chains, so future
-rewards can outweigh the first reward. This is decision-time planning: computation
-expands possible consequences to improve the current decision
-@ReinforcementLearning-sutton2018[Sec. 8.8, pp. 180–181]. The store preserves
-selected and beam-retained chains with their per-state shells. Search expands
-the other counterfactual branches transiently.
-
-// evidence:
-// - @ReinforcementLearning-sutton2018 -> docs/literature/pdf/RLbook2020.pdf#page=202-203 (Ch. 8, Sec. 8.8, printed pp. 180-181; planning at decision time)
+The first action of the highest-ranked bounded-lookahead chain can differ from the action preferred by one-step greedy because lookahead ranks retained finite-horizon chains rather than immediate gain alone (@fig:oracle-lookahead-tree). The persisted artifact contains the beam-retained chains and their full per-step candidate shells; it is not an exhaustive materialization of the counterfactual action tree.
 
 #figure(
   align(center, image(
     "../../figures/oracle_lookahead_tree.pdf",
     width: 100%,
   )),
-  caption: [Conceptual topology of bounded oracle lookahead. Nodes are
-  counterfactual states; edges are feasible actions labelled by immediate
-  reward. The beam retains only a bounded set of prefixes. The symbolic
-  inequalities show how a lower immediate reward can lead to a larger
-  finite-horizon return.],
+  alt: "A short factual prefix reaches root state s t. Two complete beam-retained paths then cross time planes t, t plus 1, and t plus 2. The thinner path begins with action i1, whose immediate target-root gain exceeds that of i2. The thicker path begins with i2 and ends in a ringed highest-ranked endpoint because its two-step return exceeds the return of the i1 path; both solid paths persist. A red dotted invalid-row stub ends at a cross before t plus 1 and has no child. A gray dashed root stub ends at one bar to denote a legal row outside branch factor two that remains in the full shell; a later dashed trajectory reaches t plus 2 and ends at two bars to denote removal by beam width two after expansion.",
+  caption: [Constructed depth-two ordering reversal for target-root gain. Both solid paths are beam-retained from one factual prefix: $i_1$ has the larger immediate gain, while $tau_2$ ranks first at $h=2$ and $gamma=1$; $tau_1$ also persists. The dotted stub is invalid. The single-bar stub is a legal shell row outside branch factor $2$; the double-bar stub is an expanded path removed by beam width $2$. Inequalities encode ordering only, not measured rewards or learned-policy performance.],
 ) <fig:oracle-lookahead-tree>
 
 For stochastic collection, the temperature-softmax recipe converts each finite
