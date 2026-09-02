@@ -72,8 +72,9 @@ $
   #eqs.rl.q_h
 $
 
-Here $i$ indexes a candidate in the protocol-defined admissible set
-$cal(A)_t$, $pi$ ranges over admitted continuation policies, and the
+Here #symb.oracle.candidate_qti is the physical candidate pose being
+conditioned on; $i$ is only its table-local handle in the protocol-defined
+admissible set $cal(A)_t$. The policy $pi$ ranges over admitted continuation policies, and the
 expectation includes the transition and observation randomness fixed by
 #symb.rl.decision_protocol. This is a history-conditioned object: it does not
 assume that the selected finite-dimensional model input is Markov-sufficient.
@@ -102,12 +103,13 @@ $
   #eqs.rl.qh_sufficiency_factorization
 $
 
-Reward-and-transition sufficiency means that histories mapped to the same
-#symb.rl.representation induce the same reward law and successor-representation
-law for every admitted action. This condition guarantees the displayed
-factorization and Bellman closure. If aliased histories induce different rewards
-or successor laws, that guarantee is lost, even though their optimal values
-could coincide accidentally.
+Decision-context sufficiency means that histories mapped to the same
+#symb.rl.representation induce the same joint conditional law of reward,
+successor representation, residual budget, regenerated candidate table,
+hard action-support mask, and termination for every physical candidate pose.
+This condition guarantees the displayed factorization and Bellman closure;
+successor-representation equality alone is insufficient because continuation
+support can change across splits.
 Fitted-Q training then yields a representation- and replay-conditioned
 projection that may still be useful for ranking candidates, but it is not
 silently reinterpreted as the Bellman-optimal value of a Markov state. This is

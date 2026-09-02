@@ -200,16 +200,16 @@
     (g, tau, sigma, nu_"mask", rho, #symb.rl.gamma, #symb.rl.H_max)
   $,
   q_h: $
-    Q_(h,e)^(star,#symb.rl.decision_protocol) (#symb.rl.history, i)
+    Q_(h,e)^(star,#symb.rl.decision_protocol) (#symb.rl.history, q_(t,i))
     =
     op("sup", limits: #true)_(pi in cal(Pi)^"act")
-    bb(E)_pi [G_(t,e)^((h)) | #symb.rl.history, a_t=i],
+    bb(E)_pi [G_(t,e)^((h)) | #symb.rl.history, a_t=q_(t,i)],
     quad
     i in cal(A)_t,
     quad
     1 <= h <= b_t <= #symb.rl.H_max,
     quad
-    Q_(0,e)^(star,#symb.rl.decision_protocol) (#symb.rl.history, i) = 0
+    Q_(0,e)^(star,#symb.rl.decision_protocol) (#symb.rl.history, q_(t,i)) = 0
   $,
   qh_representation_map: $
     #symb.rl.representation
@@ -219,14 +219,14 @@
   qh_learned_predictor: $
     #symb.rl.learned_q (#symb.rl.representation, e, q_(t,i))
     approx
-    Q_(h,e)^(star,#symb.rl.decision_protocol) (#symb.rl.history, i),
-    quad "if" #symb.rl.representation "is reward-and-transition sufficient"
+    Q_(h,e)^(star,#symb.rl.decision_protocol) (#symb.rl.history, q_(t,i)),
+    quad "if" #symb.rl.representation "is decision-context sufficient"
   $,
   qh_sufficiency_factorization: $
-    Q_(h,e)^(star,#symb.rl.decision_protocol) (#symb.rl.history, i)
+    Q_(h,e)^(star,#symb.rl.decision_protocol) (#symb.rl.history, q_(t,i))
     =
-    Q_(h,e)^(star,sigma,#symb.rl.decision_protocol) (#symb.rl.representation, i)
-    quad "if" #symb.rl.representation "is reward-and-transition sufficient"
+    Q_(h,e)^(star,sigma,#symb.rl.decision_protocol) (#symb.rl.representation, q_(t,i))
+    quad "if" #symb.rl.representation "is decision-context sufficient"
   $,
   support_conditioned_score: $
     #symb.rl.support_score

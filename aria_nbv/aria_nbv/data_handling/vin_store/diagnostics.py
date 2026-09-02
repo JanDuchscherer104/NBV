@@ -40,7 +40,7 @@ RRI_COMPONENT_BLOCKS: tuple[str, ...] = (
 
 POSE_CAMERA_BLOCKS: tuple[str, ...] = (
     "oracle.candidate_poses_world_cam",
-    "vin.reference_pose_world_rig",
+    "oracle.reference_pose_world_rig",
     "oracle.p3d.R",
     "oracle.p3d.T",
     "oracle.p3d.focal_length",
@@ -903,7 +903,7 @@ def collect_vin_offline_dataset_stats(
                 reader.read_numeric_block(record, "oracle.candidate_poses_world_cam"),
                 dtype=np.float32,
             )[:candidate_count]
-            reference_pose = np.asarray(reader.read_numeric_block(record, "vin.reference_pose_world_rig"))
+            reference_pose = np.asarray(reader.read_numeric_block(record, "oracle.reference_pose_world_rig"))
             if candidate_poses.size:
                 row_pose_values = _candidate_pose_values(
                     candidate_poses=candidate_poses,

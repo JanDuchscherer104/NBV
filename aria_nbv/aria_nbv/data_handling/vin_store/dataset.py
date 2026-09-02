@@ -507,13 +507,13 @@ class VinOfflineDataset(Dataset[VinOfflineDatasetItem]):
         )
 
     def _build_reference_pose(self, record: VinOfflineIndexRecord) -> PoseTW:
-        """Decode the actor-visible reference pose from the version-11 VIN block."""
+        """Decode the actor-visible reference pose from the immutable V10 block."""
 
         return cast(
             PoseTW,
             PoseTW(
                 self._tensor(
-                    self._store.read_numeric_block(record, "vin.reference_pose_world_rig"),
+                    self._store.read_numeric_block(record, "oracle.reference_pose_world_rig"),
                     dtype=torch.float32,
                 )
             ),

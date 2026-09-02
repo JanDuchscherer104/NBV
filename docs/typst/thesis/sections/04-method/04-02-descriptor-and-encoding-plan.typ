@@ -127,8 +127,10 @@ The current encoder implements the #symb.rl.s_pose actor-state carrier described
 above. The implemented `v1_observed` selector constructs its target token from
 detected OBBs, the actor-visible snippet transform, sample identity, and the
 neutral reference-frame pose `vin.reference_pose_world_rig`; it does not require
-an oracle payload. VIN format version 11 makes this actor-owned block mandatory
-and rejects older stores with rebuild guidance. Focused tests establish
+an oracle payload. The immutable VIN format V10 stores the physical
+reference-pose block under its oracle namespace; the reader lifts it into the
+actor-owned field and rejects incompatible stores with rebuild guidance.
+Focused tests establish
 numerical identity with the neutral carrier and invariance to oracle RRI and GT
 OBB payloads. The resulting actor-only construction is implemented, but no
 frozen observed-target-protocol corpus or held-out policy evaluation exists.
