@@ -17,9 +17,13 @@ explicit.
 - Every durable delta has one authoritative owner.
 - Every activated branch meets its referenced completion criteria.
 - **Thesis-code synchronization.** Keep the active thesis sources and executable
-   implementation in sync. When a change affects an implemented scientific or
-   behavioral claim, update and verify both owning surfaces together; do not let
-   thesis prose describe behavior unsupported by current code and tests.
+  implementation in sync. When a change affects an implemented scientific or
+  behavioral claim, update and verify both owning surfaces together; do not let
+  thesis prose describe behavior unsupported by current code and tests.
+- **Reader-order independence.** For thesis prose, the chapter reader-state
+  ledger and epistemic dependencies own exposition order. Repository layout,
+  implementation call order, protocol field order, and evidence-gate order are
+  source material, not a manuscript outline.
 - **Lowest shared owner.** Put behavior used by demonstrated consumers at their
   lowest shared domain owner. Use exact sources to prove consumers and Graphify
   for non-obvious relationships; add a generic utility owner only after
@@ -33,8 +37,10 @@ explicit.
 2. **Define the result.** Surface conflicting interpretations, terminology, and
    tradeoffs before editing. State the intended behavior, success evidence,
    material assumptions, exclusions, and earliest failed contract that would
-   redirect the lane. Another agent must be able to distinguish done, deferred,
-   and out of scope.
+   redirect the lane. For thesis argument work, also state the incoming reader
+   state, active reader question, teaching device, durable takeaways, and
+   outgoing dependency. Another agent must be able to distinguish done,
+   deferred, and out of scope.
 3. **Choose the simplest lane.** Prefer existing or native behavior over a local
    abstraction, adapter, option, or feature the request does not require. Keep
    likely change local behind the current owner's smallest interface and verify
@@ -54,6 +60,14 @@ explicit.
 
 ## Conditional branches
 
+- **Thesis lesson or theory architecture:** For thesis prose, chapter structure,
+  conceptual explanation, or equation exposition, read `academic-writing` and
+  the matching reader-state ledger record. When the conceptual model, theory
+  choice, or architecture rationale remains unsettled—or the user requests
+  conceptual, elaborate, or deep-theory treatment—route first through
+  `aria-grill`. Require its task-local thesis teaching packet before drafting,
+  then return accepted conclusions to `academic-writing`; the packet is input,
+  not a durable claim owner.
 - **Unsettled policy choice:** When accepted scoped requirements, exact owners,
   and accepted sequencing leave a material choice unsettled, read
   [`references/reviewed-intent.md`](references/reviewed-intent.md) before

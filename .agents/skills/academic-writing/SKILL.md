@@ -27,6 +27,9 @@ language of the argument.
    read [`section-contract.md`](assets/templates/section-contract.md); for
    chapter, outline, prose-flow, or equation-exposition work, also read
    [`reader-centred-exposition.md`](references/reader-centred-exposition.md).
+   If an accepted `aria-grill` thesis teaching packet exists, use it as
+   task-local shape input and recheck every factual statement against the exact
+   owners; the packet is not evidence or a durable source of truth.
    The step is complete when the incoming reader state, active reader question,
    one to three durable takeaways, teaching device, and outgoing dependency are
    explicit.
