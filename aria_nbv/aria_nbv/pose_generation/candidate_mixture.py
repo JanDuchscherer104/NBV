@@ -48,13 +48,12 @@ from ..utils import TargetConfig
 from ..utils.seeding import derive_stable_seed
 from .candidate_generation import CandidateViewGenerator, CandidateViewGeneratorConfig
 from .config import (
-    BoxViewJitterConfig,
     CandidateGazeConfig,
     CandidateMixtureComponentConfig,
     CenterConfig,
     SampledCenterConfig,
-    SampledCenterMode,
     TargetOrbitCenterConfig,
+    UniformSphereConfig,
 )
 from .types import (
     CandidateGenerationRuntimeContext,
@@ -143,37 +142,6 @@ def _default_mixture_base() -> CandidateViewGeneratorConfig:
     )
 
 
-def _sampled_center(
-    mode: SampledCenterMode,
-    *,
-    sampling_strategy: SamplingStrategy = SamplingStrategy.FORWARD_POWERSPHERICAL,
-    min_radius_m: float = 0.25,
-    max_radius_m: float = 1.25,
-    min_elevation_deg: float = -12.0,
-    max_elevation_deg: float = 18.0,
-    azimuth_width_deg: float = 120.0,
-    concentration: float = 8.0,
-) -> SampledCenterConfig:
-    """Build a complete sampled-center value for an existing family."""
-
-    return SampledCenterConfig(
-        mode=mode,
-        sampling_strategy=sampling_strategy,
-        min_radius_m=min_radius_m,
-        max_radius_m=max_radius_m,
-        min_elevation_deg=min_elevation_deg,
-        max_elevation_deg=max_elevation_deg,
-        azimuth_width_deg=azimuth_width_deg,
-        concentration=concentration,
-    )
-
-
-def _boxed_gaze(mode: ViewDirectionMode, *, name: str = "primary") -> CandidateGazeConfig:
-    """Build one gaze with the nonzero seminar jitter envelope."""
-
-    return CandidateGazeConfig(name=name, mode=mode, jitter=BoxViewJitterConfig())
-
-
 def _default_mixture_components() -> tuple[CandidateMixtureComponentConfig, ...]:
     """Return the established resolved 24/24/12 mixture in nested form."""
 
@@ -181,20 +149,20 @@ def _default_mixture_components() -> tuple[CandidateMixtureComponentConfig, ...]
         CandidateMixtureComponentConfig(
             name="forward_local",
             count=24,
-            center=_sampled_center(CandidatePositionMode.FORWARD_LOCAL),
-            gazes=(_boxed_gaze(ViewDirectionMode.FORWARD_RIG),),
+            center=SampledCenterConfig(mode=CandidatePositionMode.FORWARD_LOCAL),
+            gazes=(CandidateGazeConfig(mode=ViewDirectionMode.FORWARD_RIG),),
         ),
         CandidateMixtureComponentConfig(
             name="target_bearing_local",
             count=24,
-            center=_sampled_center(CandidatePositionMode.TARGET_BEARING_LOCAL),
-            gazes=(_boxed_gaze(ViewDirectionMode.TARGET_POINT),),
+            center=SampledCenterConfig(mode=CandidatePositionMode.TARGET_BEARING_LOCAL),
+            gazes=(CandidateGazeConfig(mode=ViewDirectionMode.TARGET_POINT),),
         ),
         CandidateMixtureComponentConfig(
             name="lateral_target_bypass",
             count=12,
-            center=_sampled_center(CandidatePositionMode.LATERAL_TARGET_BYPASS),
-            gazes=(_boxed_gaze(ViewDirectionMode.TARGET_POINT),),
+            center=SampledCenterConfig(mode=CandidatePositionMode.LATERAL_TARGET_BYPASS),
+            gazes=(CandidateGazeConfig(mode=ViewDirectionMode.TARGET_POINT),),
         ),
     )
 
@@ -250,17 +218,16 @@ class CandidateMixtureViewGeneratorConfig(TargetConfig["CandidateMixtureViewGene
                 CandidateMixtureComponentConfig(
                     name="upper_bound_free_shell",
                     count=count,
-                    center=_sampled_center(
-                        CandidatePositionMode.UPPER_BOUND_FREE_SHELL,
-                        sampling_strategy=SamplingStrategy.UNIFORM_SPHERE,
+                    center=SampledCenterConfig(
+                        mode=CandidatePositionMode.UPPER_BOUND_FREE_SHELL,
+                        distribution=UniformSphereConfig(),
                         min_radius_m=0.5,
                         max_radius_m=1.8,
                         min_elevation_deg=-20.0,
                         max_elevation_deg=25.0,
                         azimuth_width_deg=170.0,
-                        concentration=4.0,
                     ),
-                    gazes=(_boxed_gaze(ViewDirectionMode.RADIAL_AWAY),),
+                    gazes=(CandidateGazeConfig(mode=ViewDirectionMode.RADIAL_AWAY),),
                 ),
             ),
         )
@@ -282,40 +249,40 @@ class CandidateMixtureViewGeneratorConfig(TargetConfig["CandidateMixtureViewGene
                 CandidateMixtureComponentConfig(
                     name="target_bearing_local",
                     count=18,
-                    center=_sampled_center(CandidatePositionMode.TARGET_BEARING_LOCAL),
-                    gazes=(_boxed_gaze(ViewDirectionMode.TARGET_POINT),),
+                    center=SampledCenterConfig(mode=CandidatePositionMode.TARGET_BEARING_LOCAL),
+                    gazes=(CandidateGazeConfig(mode=ViewDirectionMode.TARGET_POINT),),
                 ),
                 CandidateMixtureComponentConfig(
                     name="forward_local",
                     count=18,
-                    center=_sampled_center(CandidatePositionMode.FORWARD_LOCAL),
-                    gazes=(_boxed_gaze(ViewDirectionMode.FORWARD_RIG),),
+                    center=SampledCenterConfig(mode=CandidatePositionMode.FORWARD_LOCAL),
+                    gazes=(CandidateGazeConfig(mode=ViewDirectionMode.FORWARD_RIG),),
                 ),
                 CandidateMixtureComponentConfig(
                     name="lateral_target_bypass",
                     count=12,
-                    center=_sampled_center(CandidatePositionMode.LATERAL_TARGET_BYPASS),
-                    gazes=(_boxed_gaze(ViewDirectionMode.TARGET_POINT),),
+                    center=SampledCenterConfig(mode=CandidatePositionMode.LATERAL_TARGET_BYPASS),
+                    gazes=(CandidateGazeConfig(mode=ViewDirectionMode.TARGET_POINT),),
                 ),
                 CandidateMixtureComponentConfig(
                     name="local_refinement",
                     count=6,
-                    center=_sampled_center(
-                        CandidatePositionMode.LOCAL_REFINEMENT,
+                    center=SampledCenterConfig(
+                        mode=CandidatePositionMode.LOCAL_REFINEMENT,
                         min_radius_m=0.25,
                         max_radius_m=0.7,
                     ),
-                    gazes=(_boxed_gaze(ViewDirectionMode.TARGET_POINT),),
+                    gazes=(CandidateGazeConfig(mode=ViewDirectionMode.TARGET_POINT),),
                 ),
                 CandidateMixtureComponentConfig(
                     name="revisit_backtrack",
                     count=6,
-                    center=_sampled_center(
-                        CandidatePositionMode.REVISIT_BACKTRACK,
+                    center=SampledCenterConfig(
+                        mode=CandidatePositionMode.REVISIT_BACKTRACK,
                         min_radius_m=0.25,
                         max_radius_m=0.25,
                     ),
-                    gazes=(_boxed_gaze(ViewDirectionMode.FORWARD_RIG),),
+                    gazes=(CandidateGazeConfig(mode=ViewDirectionMode.FORWARD_RIG),),
                 ),
             ),
         )
@@ -330,43 +297,43 @@ class CandidateMixtureViewGeneratorConfig(TargetConfig["CandidateMixtureViewGene
                 CandidateMixtureComponentConfig(
                     name="target_forward_pair",
                     count=12,
-                    center=_sampled_center(CandidatePositionMode.TARGET_BEARING_LOCAL),
+                    center=SampledCenterConfig(mode=CandidatePositionMode.TARGET_BEARING_LOCAL),
                     gazes=(
-                        _boxed_gaze(ViewDirectionMode.TARGET_POINT),
-                        _boxed_gaze(ViewDirectionMode.FORWARD_RIG, name="paired_forward_rig"),
+                        CandidateGazeConfig(mode=ViewDirectionMode.TARGET_POINT),
+                        CandidateGazeConfig(mode=ViewDirectionMode.FORWARD_RIG, name="paired_forward_rig"),
                     ),
                 ),
                 CandidateMixtureComponentConfig(
                     name="forward_local",
                     count=12,
-                    center=_sampled_center(CandidatePositionMode.FORWARD_LOCAL),
-                    gazes=(_boxed_gaze(ViewDirectionMode.FORWARD_RIG),),
+                    center=SampledCenterConfig(mode=CandidatePositionMode.FORWARD_LOCAL),
+                    gazes=(CandidateGazeConfig(mode=ViewDirectionMode.FORWARD_RIG),),
                 ),
                 CandidateMixtureComponentConfig(
                     name="lateral_target_bypass",
                     count=12,
-                    center=_sampled_center(CandidatePositionMode.LATERAL_TARGET_BYPASS),
-                    gazes=(_boxed_gaze(ViewDirectionMode.TARGET_POINT),),
+                    center=SampledCenterConfig(mode=CandidatePositionMode.LATERAL_TARGET_BYPASS),
+                    gazes=(CandidateGazeConfig(mode=ViewDirectionMode.TARGET_POINT),),
                 ),
                 CandidateMixtureComponentConfig(
                     name="local_refinement",
                     count=6,
-                    center=_sampled_center(
-                        CandidatePositionMode.LOCAL_REFINEMENT,
+                    center=SampledCenterConfig(
+                        mode=CandidatePositionMode.LOCAL_REFINEMENT,
                         min_radius_m=0.25,
                         max_radius_m=0.7,
                     ),
-                    gazes=(_boxed_gaze(ViewDirectionMode.TARGET_POINT),),
+                    gazes=(CandidateGazeConfig(mode=ViewDirectionMode.TARGET_POINT),),
                 ),
                 CandidateMixtureComponentConfig(
                     name="revisit_backtrack",
                     count=6,
-                    center=_sampled_center(
-                        CandidatePositionMode.REVISIT_BACKTRACK,
+                    center=SampledCenterConfig(
+                        mode=CandidatePositionMode.REVISIT_BACKTRACK,
                         min_radius_m=0.25,
                         max_radius_m=0.25,
                     ),
-                    gazes=(_boxed_gaze(ViewDirectionMode.FORWARD_RIG),),
+                    gazes=(CandidateGazeConfig(mode=ViewDirectionMode.FORWARD_RIG),),
                 ),
             ),
         )
@@ -422,46 +389,46 @@ class CandidateMixtureViewGeneratorConfig(TargetConfig["CandidateMixtureViewGene
                 CandidateMixtureComponentConfig(
                     name="radial_towards_target_bearing",
                     count=16,
-                    center=_sampled_center(
-                        CandidatePositionMode.TARGET_BEARING_LOCAL,
+                    center=SampledCenterConfig(
+                        mode=CandidatePositionMode.TARGET_BEARING_LOCAL,
                         min_radius_m=0.35,
                         max_radius_m=1.1,
                         azimuth_width_deg=110.0,
                     ),
-                    gazes=(_boxed_gaze(ViewDirectionMode.RADIAL_TOWARDS),),
+                    gazes=(CandidateGazeConfig(mode=ViewDirectionMode.RADIAL_TOWARDS),),
                 ),
                 CandidateMixtureComponentConfig(
                     name="radial_away_target_bearing",
                     count=16,
-                    center=_sampled_center(
-                        CandidatePositionMode.TARGET_BEARING_LOCAL,
+                    center=SampledCenterConfig(
+                        mode=CandidatePositionMode.TARGET_BEARING_LOCAL,
                         min_radius_m=0.35,
                         max_radius_m=1.1,
                         azimuth_width_deg=110.0,
                     ),
-                    gazes=(_boxed_gaze(ViewDirectionMode.RADIAL_AWAY),),
+                    gazes=(CandidateGazeConfig(mode=ViewDirectionMode.RADIAL_AWAY),),
                 ),
                 CandidateMixtureComponentConfig(
                     name="revisit_backtrack",
                     count=12,
-                    center=_sampled_center(
-                        CandidatePositionMode.REVISIT_BACKTRACK,
+                    center=SampledCenterConfig(
+                        mode=CandidatePositionMode.REVISIT_BACKTRACK,
                         min_radius_m=0.25,
                         max_radius_m=0.25,
                         azimuth_width_deg=110.0,
                     ),
-                    gazes=(_boxed_gaze(ViewDirectionMode.FORWARD_RIG),),
+                    gazes=(CandidateGazeConfig(mode=ViewDirectionMode.FORWARD_RIG),),
                 ),
                 CandidateMixtureComponentConfig(
                     name="target_point_anchor",
                     count=4,
-                    center=_sampled_center(
-                        CandidatePositionMode.TARGET_BEARING_LOCAL,
+                    center=SampledCenterConfig(
+                        mode=CandidatePositionMode.TARGET_BEARING_LOCAL,
                         min_radius_m=0.35,
                         max_radius_m=0.9,
                         azimuth_width_deg=110.0,
                     ),
-                    gazes=(_boxed_gaze(ViewDirectionMode.TARGET_POINT),),
+                    gazes=(CandidateGazeConfig(mode=ViewDirectionMode.TARGET_POINT),),
                 ),
             ),
         )

@@ -872,6 +872,26 @@ def test_default_mixture_resolves_exact_nested_authoring_contract() -> None:
         assert component.gazes[0].jitter.pitch_half_width_deg == pytest.approx(30.0)
 
 
+@pytest.mark.parametrize(
+    "preset",
+    (
+        CandidateMixtureViewGeneratorConfig,
+        CandidateMixtureViewGeneratorConfig.upper_bound_free_shell,
+        CandidateMixtureViewGeneratorConfig.rich_local_five_family,
+        CandidateMixtureViewGeneratorConfig.paired_center_gaze_family,
+        CandidateMixtureViewGeneratorConfig.radial_target_backtrack_family,
+    ),
+)
+def test_code_owned_mixture_presets_use_nested_distribution_authoring(preset) -> None:
+    """Current presets must not route through retired flat distribution keys."""
+
+    config = preset()
+    for component in config.components:
+        center = component.center.model_dump()
+        assert "sampling_strategy" not in center
+        assert "concentration" not in center
+
+
 def _portable_tensor_fingerprint_bytes(value: torch.Tensor) -> bytes:
     """Return exact discrete bytes and 1e-3-quantized floating-point bytes."""
 
