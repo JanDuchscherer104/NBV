@@ -19,9 +19,11 @@ That historical zero-jitter fact/config is revision-bound to PR116 commit
 
 | Config | Role | Depends on |
 | --- | --- | --- |
-| `build_rollouts_v1_cuda_campaign.toml` | Broad 100-scene CUDA campaign | `build_rollouts_v1_cuda_campaign_writer.toml` |
-| `build_rollouts_v1_cuda_campaign_pilot_corrected_v11.toml` | Current V10-bound corrected paired pilot | `build_rollouts_v1_cuda_campaign_writer.toml` |
-| `build_rollouts_v1_cuda_campaign_writer.toml` | Local 100-row generation writer | `rollout_campaign100_source_manifest.json` and local VIN source store |
+| `build_rollouts_v2_cuda_campaign.toml` | Active nested-authoring broad 100-scene CUDA campaign | `build_rollouts_v2_cuda_campaign_writer.toml` |
+| `build_rollouts_v2_cuda_campaign_writer.toml` | Active nested-authoring 100-row generation writer | `rollout_campaign100_source_manifest.json` and local VIN source store |
+| `build_rollouts_v1_cuda_campaign.toml` | Historical flat-authoring broad campaign retained for evidence identity | Evidence-bound `build_rollouts_v1_cuda_campaign_writer.toml` |
+| `build_rollouts_v1_cuda_campaign_pilot_corrected_v11.toml` | Historical V10-bound corrected paired pilot | Evidence-bound `build_rollouts_v1_cuda_campaign_writer.toml` |
+| `build_rollouts_v1_cuda_campaign_writer.toml` | Historical flat-authoring writer retained for evidence identity | `rollout_campaign100_source_manifest.json` and local VIN source store |
 | `build_vin_offline_rollout_campaign100_v10.toml` | Current strict-V10 source-store build | VIN source shards listed in the file |
 | `build_vin_offline_rollout_campaign100_v8.toml` | Historical immutable reviewed V8 source-store build (non-current) | VIN source shards listed in the file |
 | `build_rollouts_v1_lrz.template.toml` | LRZ generation template | Replace `/ABS/PATH/TO/...` placeholders |
@@ -37,7 +39,7 @@ source .env
 cd aria_nbv
 uv run nbv-build-offline --config-path ../.configs/build_vin_offline_rollout_campaign100_v10.toml
 uv run nbv-plan-rollout-source \
-  --config-path ../.configs/build_rollouts_v1_cuda_campaign_writer.toml \
+  --config-path ../.configs/build_rollouts_v2_cuda_campaign_writer.toml \
   --output-manifest ../.configs/rollout_campaign100_source_manifest.json
 ```
 
@@ -58,8 +60,10 @@ print('split_manifest_hash =', repr(m['split_manifest_hash']))
 PY
 ```
 
-Plan the corrected paired pilot, run its smoke, launch at most ten new units,
-and inspect status:
+The corrected-V11 pilot is historical evidence and is not runnable from the
+current nested-authoring implementation. Reproduce it only at its bound source
+revision. Plan, smoke, launch, and inspect the active nested-authoring campaign
+with the V2 entry point:
 
 The `smoke` command is a canonical **single-work-unit guard**. It proves the
 leaf contract for the deterministic first planned unit only; it does not prove
@@ -69,14 +73,14 @@ the later WP18 gate.
 
 ```bash
 uv run nbv-rollout-campaign plan \
-  --config-path ../.configs/build_rollouts_v1_cuda_campaign_pilot_corrected_v11.toml \
+  --config-path ../.configs/build_rollouts_v2_cuda_campaign.toml \
   --source-manifest ../.configs/rollout_campaign100_source_manifest.json
 uv run nbv-rollout-campaign smoke \
-  --config-path ../.configs/build_rollouts_v1_cuda_campaign_pilot_corrected_v11.toml
+  --config-path ../.configs/build_rollouts_v2_cuda_campaign.toml
 uv run nbv-rollout-campaign run \
-  --config-path ../.configs/build_rollouts_v1_cuda_campaign_pilot_corrected_v11.toml \
-  --plan-path .campaign/cuda-rollouts-v1-pilot-corrected-v11/plan.json \
+  --config-path ../.configs/build_rollouts_v2_cuda_campaign.toml \
+  --plan-path rollout_supervision/campaigns/cuda-rollouts-v2/plan.json \
   --max-new-units 10
 uv run nbv-rollout-campaign status \
-  --config-path ../.configs/build_rollouts_v1_cuda_campaign_pilot_corrected_v11.toml
+  --config-path ../.configs/build_rollouts_v2_cuda_campaign.toml
 ```

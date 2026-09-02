@@ -403,18 +403,34 @@ def candidate_family_preflight_config_from_writer(
     target_positions = {"target_bearing_local", "lateral_target_bypass", "target_orbit"}
     for component in components:
         name = str(getattr(component, "name", ""))
-        position = getattr(component, "position_mode", None)
+        center = getattr(component, "center", None)
+        position = getattr(center, "mode", None)
+        if getattr(center, "kind", None) == "target_orbit":
+            position = "target_orbit"
+        if position is None:
+            position = getattr(component, "position_mode", None)
         position_value = str(getattr(position, "value", position or ""))
         if not name or not position_value:
             raise ValueError("rollout writer candidate components require names and position roles")
-        names = [name]
-        paired = getattr(component, "paired_view_mode", None)
-        if paired is not None:
-            paired_value = str(getattr(paired, "value", paired))
-            names.append(f"{name}__paired_{paired_value}")
+        emitted = [(name, None)]
+        gazes = getattr(component, "gazes", ())
+        if gazes:
+            emitted = [(name, gazes[0].mode)]
+            emitted.extend((f"{name}__{gaze.name}", gaze.mode) for gaze in gazes[1:])
+        else:
+            emitted[0] = (name, getattr(component, "view_mode", getattr(component, "strategy", None)))
+            paired = getattr(component, "paired_view_mode", None)
+            if paired is not None:
+                paired_value = str(getattr(paired, "value", paired))
+                emitted.append((f"{name}__paired_{paired_value}", paired))
+        names = [family_name for family_name, _gaze_mode in emitted]
         configured.extend(names)
-        if position_value in target_positions:
-            target_aware.extend(names)
+        center_requires_target = position_value in target_positions
+        target_aware.extend(
+            family_name
+            for family_name, gaze_mode in emitted
+            if center_requires_target or str(getattr(gaze_mode, "value", gaze_mode)) == "target_point"
+        )
         if position_value == "forward_local":
             if forward_family is not None and forward_family != name:
                 raise ValueError("rollout writer has ambiguous forward-family provenance")
@@ -1767,8 +1783,10 @@ def _configured_family_names(reader: Any) -> tuple[str, ...]:
     components = mixture.get("components", ()) if isinstance(mixture, Mapping) else ()
     names = []
     for component in components if isinstance(components, Collection) else ():
+        gazes = None
         if isinstance(component, Mapping):
             name = component.get("name") or component.get("family") or component.get("position")
+            gazes = component.get("gazes")
             paired = component.get("paired_view_mode")
         elif isinstance(component, (list, tuple)) and component:
             name = component[0]
@@ -1778,7 +1796,11 @@ def _configured_family_names(reader: Any) -> tuple[str, ...]:
             paired = None
         if name is not None:
             names.append(str(name))
-            if paired is not None:
+            if isinstance(gazes, Collection):
+                for gaze in tuple(gazes)[1:]:
+                    if isinstance(gaze, Mapping) and gaze.get("name") is not None:
+                        names.append(f"{name}__{gaze['name']}")
+            elif paired is not None:
                 names.append(f"{name}__paired_{paired}")
     return tuple(dict.fromkeys(names))
 

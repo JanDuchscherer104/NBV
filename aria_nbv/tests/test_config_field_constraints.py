@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import ast
 from collections.abc import Callable
+from pathlib import Path
 
 import pytest
 from pydantic import ValidationError
@@ -15,9 +17,11 @@ from aria_nbv.oracle.target_rri import TargetRriScorerConfig
 from aria_nbv.oracle.target_selection import OracleTargetTaskSamplerConfig
 from aria_nbv.pose_generation import (
     CandidateMixtureComponentConfig,
+    CandidatePositionMode,
     CandidateViewGeneratorConfig,
     ViewDirectionMode,
 )
+from aria_nbv.pose_generation.config import BoxViewJitterConfig, CandidateGazeConfig, SampledCenterConfig
 from aria_nbv.rerun_inspector._config import (
     RerunInspectorCandidateConfig,
     RerunInspectorEfmVoxelConfig,
@@ -48,9 +52,46 @@ def _recipe(**kwargs: object) -> RolloutRecipeConfig:
 def _mixture_component(**kwargs: object) -> CandidateMixtureComponentConfig:
     return CandidateMixtureComponentConfig(
         name="constraint-test",
-        strategy=ViewDirectionMode.FORWARD_RIG,
+        center=SampledCenterConfig(
+            mode=CandidatePositionMode.FORWARD_LOCAL,
+            min_radius_m=0.25,
+            max_radius_m=1.25,
+            min_elevation_deg=-12.0,
+            max_elevation_deg=18.0,
+            azimuth_width_deg=120.0,
+        ),
+        gazes=(
+            CandidateGazeConfig(
+                name="primary",
+                mode=ViewDirectionMode.FORWARD_RIG,
+                jitter=BoxViewJitterConfig(),
+            ),
+        ),
         **kwargs,
     )
+
+
+def test_active_python_callers_do_not_use_retired_mixture_component_keywords() -> None:
+    repo = Path(__file__).resolve().parents[2]
+    roots = (repo / "aria_nbv/aria_nbv", repo / "aria_nbv/tests", repo / "docs/contents/evidence")
+    retired = {"strategy", "view_mode", "paired_view_mode", "position_mode"}
+    violations: list[str] = []
+    for root in roots:
+        for path in root.rglob("*.py"):
+            source = path.read_text(encoding="utf-8")
+            if "HISTORICAL_IMPLEMENTATION_REVISION" in source:
+                continue
+            tree = ast.parse(source, filename=str(path))
+            for node in ast.walk(tree):
+                if not isinstance(node, ast.Call):
+                    continue
+                name = node.func.id if isinstance(node.func, ast.Name) else None
+                if name != "CandidateMixtureComponentConfig":
+                    continue
+                invalid = sorted(retired.intersection(keyword.arg for keyword in node.keywords if keyword.arg))
+                if invalid:
+                    violations.append(f"{path.relative_to(repo)}:{node.lineno}: {', '.join(invalid)}")
+    assert not violations, "retired CandidateMixtureComponentConfig keywords:\n" + "\n".join(violations)
 
 
 @pytest.mark.parametrize(

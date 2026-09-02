@@ -22,6 +22,17 @@ _HIGH_GAIN_SAMPLE_KEYS = [
     "ASE_83550_Atek_000000",
 ]
 
+_ACTIVE_WRITER_CONFIGS = (
+    "build_rollouts_qh_v0_baseline.toml",
+    "build_rollouts_v2_cuda_campaign_writer.toml",
+    "build_rollouts_v1_diverse.toml",
+    "build_rollouts_v1_lrz.template.toml",
+    "build_rollouts_v1_microset.toml",
+    "build_rollouts_v1_multihorizon_highgain.toml",
+    "build_rollouts_v2_realistic.toml",
+    "build_rollouts_v1_smoke.toml",
+)
+
 
 def test_replay_and_recipe_configs_each_have_one_policy_field() -> None:
     assert set(CounterfactualPoseGeneratorConfig.model_fields) == {
@@ -32,6 +43,24 @@ def test_replay_and_recipe_configs_each_have_one_policy_field() -> None:
         "is_debug",
     }
     assert set(RolloutRecipeConfig.model_fields) == {"name", "policy"}
+
+
+def test_active_writer_profiles_use_nested_center_and_gaze_authoring() -> None:
+    for config_name in _ACTIVE_WRITER_CONFIGS:
+        path = _repo_root() / ".configs" / config_name
+        payload = tomllib.loads(path.read_text())
+        config = RolloutDatasetWriterConfig.model_validate(payload)
+
+        assert config.candidate_mixture.total_count > 0
+        for payload_component, config_component in zip(
+            payload["candidate_mixture"]["components"],
+            config.candidate_mixture.components,
+            strict=True,
+        ):
+            assert "center" in payload_component
+            assert payload_component.get("gazes")
+            assert config_component.gazes[0].name == payload_component["gazes"][0]["name"]
+            assert not ({"strategy", "view_mode", "paired_view_mode", "position_mode"} & payload_component.keys())
 
 
 def test_legacy_flat_rollout_policy_fields_are_rejected() -> None:
@@ -84,12 +113,12 @@ def test_paired_rollout_profiles_use_the_planned_candidate_families() -> None:
     assert realistic.candidate_mixture.total_count == diverse.candidate_mixture.total_count == 60
 
     diverse_by_name = {component.name: component for component in diverse.candidate_mixture.components}
-    assert diverse_by_name["local_refinement"].view_mode is ViewDirectionMode.TARGET_POINT
-    assert diverse_by_name["local_refinement"].position_mode is CandidatePositionMode.LOCAL_REFINEMENT
-    assert diverse_by_name["revisit_backtrack"].view_mode is ViewDirectionMode.FORWARD_RIG
-    assert diverse_by_name["revisit_backtrack"].position_mode is CandidatePositionMode.REVISIT_BACKTRACK
+    assert diverse_by_name["local_refinement"].gazes[0].mode is ViewDirectionMode.TARGET_POINT
+    assert diverse_by_name["local_refinement"].center.mode is CandidatePositionMode.LOCAL_REFINEMENT
+    assert diverse_by_name["revisit_backtrack"].gazes[0].mode is ViewDirectionMode.FORWARD_RIG
+    assert diverse_by_name["revisit_backtrack"].center.mode is CandidatePositionMode.REVISIT_BACKTRACK
     assert all(
-        component.view_mode not in {ViewDirectionMode.RADIAL_TOWARDS, ViewDirectionMode.RADIAL_AWAY}
+        component.gazes[0].mode not in {ViewDirectionMode.RADIAL_TOWARDS, ViewDirectionMode.RADIAL_AWAY}
         for component in diverse.candidate_mixture.components
     )
 
@@ -127,7 +156,7 @@ def test_paired_rollout_profiles_bind_the_exact_source_manifest_and_shared_recip
 
 
 def test_paired_rollout_profile_rejects_source_manifest_drift() -> None:
-    config_path = _repo_root() / ".configs" / "build_rollouts_v1_realistic.toml"
+    config_path = _repo_root() / ".configs" / "build_rollouts_v2_realistic.toml"
     payload = tomllib.loads(config_path.read_text())
     payload["max_samples"] = 49
     with pytest.raises(ValidationError, match="manifest row count"):
@@ -166,7 +195,7 @@ def test_multihorizon_highgain_profile_selects_exact_ordered_cross_scene_roots()
 
 
 def test_rollout_sample_keys_fail_closed_for_duplicates_and_manifest_misses() -> None:
-    config_path = _repo_root() / ".configs" / "build_rollouts_v1_realistic.toml"
+    config_path = _repo_root() / ".configs" / "build_rollouts_v2_realistic.toml"
     payload = tomllib.loads(config_path.read_text())
     payload["max_samples"] = 2
     payload["sample_keys"] = ["ASE_81283_Atek_000005", "ASE_81283_Atek_000005"]
@@ -180,7 +209,7 @@ def test_rollout_sample_keys_fail_closed_for_duplicates_and_manifest_misses() ->
 
 def test_oracle_profiles_explicitly_own_active_target_sampling_parameters() -> None:
     config_names = (
-        "build_rollouts_v1_realistic.toml",
+        "build_rollouts_v2_realistic.toml",
         "build_rollouts_v1_diverse.toml",
         "build_rollouts_v1_lrz.template.toml",
     )
@@ -195,7 +224,7 @@ def test_oracle_profiles_explicitly_own_active_target_sampling_parameters() -> N
             "policy",
         }
         assert "max_targets_per_sample" not in payload
-        if config_name in {"build_rollouts_v1_realistic.toml", "build_rollouts_v1_diverse.toml"}:
+        if config_name in {"build_rollouts_v2_realistic.toml", "build_rollouts_v1_diverse.toml"}:
             assert payload["oracle_target_task_sampler"]["max_targets_per_sample"] == 1
             assert "oversample_factor" not in payload["candidate_mixture"]["base"]
             assert "max_resamples" not in payload["candidate_mixture"]["base"]
@@ -203,7 +232,7 @@ def test_oracle_profiles_explicitly_own_active_target_sampling_parameters() -> N
 
 
 def test_lrz_profile_keeps_realistic_generation_semantics_without_smoke_caps() -> None:
-    realistic = RolloutDatasetWriterConfig.from_toml(_repo_root() / ".configs" / "build_rollouts_v1_realistic.toml")
+    realistic = RolloutDatasetWriterConfig.from_toml(_repo_root() / ".configs" / "build_rollouts_v2_realistic.toml")
     lrz = RolloutDatasetWriterConfig.from_toml(_repo_root() / ".configs" / "build_rollouts_v1_lrz.template.toml")
 
     assert lrz.max_samples is None
@@ -237,6 +266,6 @@ def _paired_pilot_configs() -> tuple[RolloutDatasetWriterConfig, RolloutDatasetW
 
     config_dir = _repo_root() / ".configs"
     return (
-        RolloutDatasetWriterConfig.from_toml(config_dir / "build_rollouts_v1_realistic.toml"),
+        RolloutDatasetWriterConfig.from_toml(config_dir / "build_rollouts_v2_realistic.toml"),
         RolloutDatasetWriterConfig.from_toml(config_dir / "build_rollouts_v1_diverse.toml"),
     )

@@ -47,16 +47,46 @@ view_max_elevation_deg = 30.0
 [[candidate_mixture.components]]
 name = "target_point"
 count = 4
-strategy = "target_point"
-view_max_azimuth_deg = 60.0
-view_max_elevation_deg = 30.0
+[candidate_mixture.components.center]
+kind = "sampled"
+mode = "upper_bound_free_shell"
+sampling_strategy = "uniform_sphere"
+min_radius_m = 0.5
+max_radius_m = 1.8
+min_elevation_deg = -20.0
+max_elevation_deg = 25.0
+azimuth_width_deg = 170.0
+concentration = 4.0
+[[candidate_mixture.components.gazes]]
+name = "primary"
+mode = "target_point"
+[candidate_mixture.components.gazes.jitter]
+kind = "box"
+yaw_half_width_deg = 60.0
+pitch_half_width_deg = 30.0
+roll_half_width_deg = 0.0
 
 [[candidate_mixture.components]]
 name = "forward_rig"
 count = 4
-strategy = "forward_rig"
-view_max_azimuth_deg = 60.0
-view_max_elevation_deg = 30.0
+[candidate_mixture.components.center]
+kind = "sampled"
+mode = "upper_bound_free_shell"
+sampling_strategy = "uniform_sphere"
+min_radius_m = 0.5
+max_radius_m = 1.8
+min_elevation_deg = -20.0
+max_elevation_deg = 25.0
+azimuth_width_deg = 170.0
+concentration = 4.0
+[[candidate_mixture.components.gazes]]
+name = "primary"
+mode = "forward_rig"
+[candidate_mixture.components.gazes.jitter]
+kind = "box"
+yaw_half_width_deg = 60.0
+pitch_half_width_deg = 30.0
+roll_half_width_deg = 0.0
 
 [target_scorer]
 backprojection_stride = 12

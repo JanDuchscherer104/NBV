@@ -1,0 +1,54 @@
+campaign_id = "cuda-rollouts-v2"
+mode = "broad"
+frozen_profile = "realistic_core_60"
+pilot_scene_count = 5
+temperatures = [0.5, 1.0, 2.0, 4.0]
+writer_config_path = ".configs/build_rollouts_v2_cuda_campaign_writer.toml"
+seed = 20260728
+observed_target_iou_threshold = 0.20
+expected_scene_count = 100
+min_valid_root_candidates = 15
+stage_timeout_seconds = 120
+work_unit_timeout_seconds = 3600
+output_root = "rollout_supervision/campaigns/cuda-rollouts-v2"
+
+[[profiles]]
+name = "realistic_core_60"
+device = "cuda"
+components = [
+  {name="forward_local", count=24, center={kind="sampled", mode="forward_local", distribution={kind="forward_powerspherical", concentration=8.0}, min_radius_m=0.25, max_radius_m=1.1, min_elevation_deg=-12.0, max_elevation_deg=18.0, azimuth_width_deg=100.0}, gazes=[{name="primary", mode="forward_rig", jitter={kind="box", yaw_half_width_deg=60.0, pitch_half_width_deg=30.0, roll_half_width_deg=0.0}}]},
+  {name="target_bearing_local", count=24, center={kind="sampled", mode="target_bearing_local", distribution={kind="forward_powerspherical", concentration=8.0}, min_radius_m=0.4, max_radius_m=1.1, min_elevation_deg=-12.0, max_elevation_deg=18.0, azimuth_width_deg=100.0}, gazes=[{name="primary", mode="target_point", jitter={kind="box", yaw_half_width_deg=60.0, pitch_half_width_deg=30.0, roll_half_width_deg=0.0}}]},
+  {name="lateral_target_bypass", count=12, center={kind="sampled", mode="lateral_target_bypass", distribution={kind="forward_powerspherical", concentration=8.0}, min_radius_m=0.25, max_radius_m=1.1, min_elevation_deg=-12.0, max_elevation_deg=18.0, azimuth_width_deg=100.0}, gazes=[{name="primary", mode="target_point", jitter={kind="box", yaw_half_width_deg=60.0, pitch_half_width_deg=30.0, roll_half_width_deg=0.0}}]},
+]
+recipes = [{name="temperature_softmax_h8", policy="temperature_softmax", horizon=8, branch=1, beam=1}]
+
+[[profiles]]
+name = "rich_local_60"
+device = "cuda"
+components = [
+  {name="target_bearing_local", count=18, center={kind="sampled", mode="target_bearing_local", distribution={kind="forward_powerspherical", concentration=8.0}, min_radius_m=0.4, max_radius_m=1.1, min_elevation_deg=-12.0, max_elevation_deg=18.0, azimuth_width_deg=100.0}, gazes=[{name="primary", mode="target_point", jitter={kind="box", yaw_half_width_deg=60.0, pitch_half_width_deg=30.0, roll_half_width_deg=0.0}}]},
+  {name="forward_local", count=18, center={kind="sampled", mode="forward_local", distribution={kind="forward_powerspherical", concentration=8.0}, min_radius_m=0.25, max_radius_m=1.1, min_elevation_deg=-12.0, max_elevation_deg=18.0, azimuth_width_deg=100.0}, gazes=[{name="primary", mode="forward_rig", jitter={kind="box", yaw_half_width_deg=60.0, pitch_half_width_deg=30.0, roll_half_width_deg=0.0}}]},
+  {name="lateral_target_bypass", count=12, center={kind="sampled", mode="lateral_target_bypass", distribution={kind="forward_powerspherical", concentration=8.0}, min_radius_m=0.25, max_radius_m=1.1, min_elevation_deg=-12.0, max_elevation_deg=18.0, azimuth_width_deg=100.0}, gazes=[{name="primary", mode="target_point", jitter={kind="box", yaw_half_width_deg=60.0, pitch_half_width_deg=30.0, roll_half_width_deg=0.0}}]},
+  {name="local_refinement", count=6, center={kind="sampled", mode="local_refinement", distribution={kind="forward_powerspherical", concentration=8.0}, min_radius_m=0.25, max_radius_m=0.7, min_elevation_deg=-12.0, max_elevation_deg=18.0, azimuth_width_deg=120.0}, gazes=[{name="primary", mode="target_point", jitter={kind="box", yaw_half_width_deg=60.0, pitch_half_width_deg=30.0, roll_half_width_deg=0.0}}]},
+  {name="revisit_backtrack", count=6, center={kind="sampled", mode="revisit_backtrack", distribution={kind="forward_powerspherical", concentration=8.0}, min_radius_m=0.25, max_radius_m=0.25, min_elevation_deg=-12.0, max_elevation_deg=18.0, azimuth_width_deg=120.0}, gazes=[{name="primary", mode="forward_rig", jitter={kind="box", yaw_half_width_deg=60.0, pitch_half_width_deg=30.0, roll_half_width_deg=0.0}}]},
+]
+recipes = [{name="temperature_softmax_h8", policy="temperature_softmax", horizon=8, branch=1, beam=1}]
+
+[[profiles]]
+name = "radial_backtrack_60"
+device = "cuda"
+components = [
+  {name="radial_towards_target_bearing", count=20, center={kind="sampled", mode="target_bearing_local", distribution={kind="forward_powerspherical", concentration=8.0}, min_radius_m=0.35, max_radius_m=1.1, min_elevation_deg=-12.0, max_elevation_deg=18.0, azimuth_width_deg=110.0}, gazes=[{name="primary", mode="radial_towards", jitter={kind="box", yaw_half_width_deg=60.0, pitch_half_width_deg=30.0, roll_half_width_deg=0.0}}]},
+  {name="radial_away_target_bearing", count=20, center={kind="sampled", mode="target_bearing_local", distribution={kind="forward_powerspherical", concentration=8.0}, min_radius_m=0.35, max_radius_m=1.1, min_elevation_deg=-12.0, max_elevation_deg=18.0, azimuth_width_deg=110.0}, gazes=[{name="primary", mode="radial_away", jitter={kind="box", yaw_half_width_deg=60.0, pitch_half_width_deg=30.0, roll_half_width_deg=0.0}}]},
+  {name="revisit_backtrack", count=15, center={kind="sampled", mode="revisit_backtrack", distribution={kind="forward_powerspherical", concentration=8.0}, min_radius_m=0.25, max_radius_m=0.25, min_elevation_deg=-12.0, max_elevation_deg=18.0, azimuth_width_deg=110.0}, gazes=[{name="primary", mode="forward_rig", jitter={kind="box", yaw_half_width_deg=60.0, pitch_half_width_deg=30.0, roll_half_width_deg=0.0}}]},
+  {name="target_point_anchor", count=5, center={kind="sampled", mode="target_bearing_local", distribution={kind="forward_powerspherical", concentration=8.0}, min_radius_m=0.35, max_radius_m=0.9, min_elevation_deg=-12.0, max_elevation_deg=18.0, azimuth_width_deg=110.0}, gazes=[{name="primary", mode="target_point", jitter={kind="box", yaw_half_width_deg=60.0, pitch_half_width_deg=30.0, roll_half_width_deg=0.0}}]},
+]
+recipes = [{name="temperature_softmax_h8", policy="temperature_softmax", horizon=8, branch=1, beam=1}]
+
+[[profiles]]
+name = "free_shell_upper_bound_60"
+device = "cuda"
+components = [
+  {name="upper_bound_free_shell", count=60, center={kind="sampled", mode="upper_bound_free_shell", distribution={kind="uniform_sphere"}, min_radius_m=0.5, max_radius_m=1.8, min_elevation_deg=-20.0, max_elevation_deg=25.0, azimuth_width_deg=170.0}, gazes=[{name="primary", mode="radial_away", jitter={kind="box", yaw_half_width_deg=60.0, pitch_half_width_deg=30.0, roll_half_width_deg=0.0}}]},
+]
+recipes = [{name="temperature_softmax_h8", policy="temperature_softmax", horizon=8, branch=1, beam=1}]

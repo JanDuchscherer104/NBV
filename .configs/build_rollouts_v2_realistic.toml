@@ -1,16 +1,22 @@
-# Paired 50-source V1 rollout pilot: local-family challenger.
+# Paired 50-source V1 rollout pilot: realistic candidate-family baseline.
 #
-# This profile is scientifically paired with build_rollouts_v2_realistic.toml.
-# Its ordered roots, target sampler, candidate budget, compute settings, scorer,
-# retention, validity contract, and rollout recipes are identical. Only the
-# candidate-family components and rollout destination differ.
+# Usage:
+#   cd aria_nbv
+#   uv run nbv-build-rollouts --config-path ../.configs/build_rollouts_v2_realistic.toml --dry-run
+#   uv run nbv-build-rollouts --config-path ../.configs/build_rollouts_v2_realistic.toml
+#
+# This paired pilot consumes the reviewed source manifest below and rejects
+# source-count, source-store identity, or split-hash drift. Regenerate and
+# review that manifest before changing its source population. The immutable VIN
+# store remains cache-relative; rollout replay is written separately. Q_H
+# training settings do not belong in this TOML.
 
-max_samples               = 50
-source_manifest_path      = ".configs/rollout_pilot50_source_manifest.json"
-require_label_valid       = true
+max_samples            = 50
+source_manifest_path   = ".configs/rollout_pilot50_source_manifest.json"
+require_label_valid    = true
 min_valid_root_candidates = 15
-log_timing                = true
-verbosity                 = 1
+log_timing             = true
+verbosity              = 1
 
 [source]
 split                    = "train"
@@ -32,9 +38,9 @@ verbosity                = 1
     store_dir = "vin_offline_rollout_pilot50_v7"
 
 [oracle_target_task_sampler]
-max_targets_per_sample = 1
-seed                   = 0
-policy                 = "uniform_without_replacement"
+max_targets_per_sample            = 1
+seed                              = 0
+policy                            = "uniform_without_replacement"
 
 [candidate_mixture.base]
 camera_label           = "rgb"
@@ -69,8 +75,8 @@ view_roll_jitter_deg   = 0.0
 seed                   = 0
 
 [[candidate_mixture.components]]
-name = "forward_local"
-count = 18
+name  = "forward_local"
+count = 24
 [candidate_mixture.components.center]
 kind = "sampled"
 mode = "forward_local"
@@ -91,8 +97,8 @@ pitch_half_width_deg = 30.0
 roll_half_width_deg = 0.0
 
 [[candidate_mixture.components]]
-name = "target_bearing_local"
-count = 18
+name  = "target_bearing_local"
+count = 24
 [candidate_mixture.components.center]
 kind = "sampled"
 mode = "target_bearing_local"
@@ -113,7 +119,7 @@ pitch_half_width_deg = 30.0
 roll_half_width_deg = 0.0
 
 [[candidate_mixture.components]]
-name = "lateral_target_bypass"
+name  = "lateral_target_bypass"
 count = 12
 [candidate_mixture.components.center]
 kind = "sampled"
@@ -128,50 +134,6 @@ concentration = 8.0
 [[candidate_mixture.components.gazes]]
 name = "primary"
 mode = "target_point"
-[candidate_mixture.components.gazes.jitter]
-kind = "box"
-yaw_half_width_deg = 60.0
-pitch_half_width_deg = 30.0
-roll_half_width_deg = 0.0
-
-[[candidate_mixture.components]]
-name = "local_refinement"
-count = 6
-[candidate_mixture.components.center]
-kind = "sampled"
-mode = "local_refinement"
-sampling_strategy = "forward_powerspherical"
-min_radius_m = 0.25
-max_radius_m = 0.7
-min_elevation_deg = -12.0
-max_elevation_deg = 18.0
-azimuth_width_deg = 100.0
-concentration = 8.0
-[[candidate_mixture.components.gazes]]
-name = "primary"
-mode = "target_point"
-[candidate_mixture.components.gazes.jitter]
-kind = "box"
-yaw_half_width_deg = 60.0
-pitch_half_width_deg = 30.0
-roll_half_width_deg = 0.0
-
-[[candidate_mixture.components]]
-name = "revisit_backtrack"
-count = 6
-[candidate_mixture.components.center]
-kind = "sampled"
-mode = "revisit_backtrack"
-sampling_strategy = "forward_powerspherical"
-min_radius_m = 0.25
-max_radius_m = 0.9
-min_elevation_deg = -12.0
-max_elevation_deg = 18.0
-azimuth_width_deg = 100.0
-concentration = 8.0
-[[candidate_mixture.components.gazes]]
-name = "primary"
-mode = "forward_rig"
 [candidate_mixture.components.gazes.jitter]
 kind = "box"
 yaw_half_width_deg = 60.0
@@ -206,16 +168,16 @@ log_timing                  = true
     verbosity            = 1
 
         [target_scorer.depth.renderer]
-        device         = "cuda"
-        zfar           = 20.0
-        znear          = 0.001
-        cull_backfaces = false
-        blur_radius    = 0.0
-        bin_size       = 0
+        device            = "cuda"
+        zfar              = 20.0
+        znear             = 0.001
+        cull_backfaces    = false
+        blur_radius       = 0.0
+        bin_size          = 0
         max_views_per_batch = 2
-        dtype          = "float32"
-        is_debug       = false
-        verbosity      = 1
+        dtype             = "float32"
+        is_debug          = false
+        verbosity         = 1
 
 [selected_depth]
 enabled     = true
@@ -224,7 +186,7 @@ height_px   = 240
 chunk_steps = 16
 
 [store]
-store_dir                    = "rollouts_v1_diverse_pilot50.zarr"
+store_dir                    = "rollouts_v2_realistic_pilot50.zarr"
 target_protocol_version      = "v0_gt_input"
 field_retention_policy       = "compact_selected_heavy"
 source_offline_store_version = "vin-offline-v7"

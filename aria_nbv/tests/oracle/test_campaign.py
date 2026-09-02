@@ -28,6 +28,7 @@ from aria_nbv.oracle.pipelines.campaign import (
     CudaRolloutCampaign,
     CudaRolloutCampaignConfig,
     GenerationRevision,
+    _candidate_component_projection,
     bounded_scene_stratified_plan,
 )
 from aria_nbv.oracle.pipelines.rollout_dataset import (
@@ -35,6 +36,9 @@ from aria_nbv.oracle.pipelines.rollout_dataset import (
     RolloutDatasetWriterConfig,
     _RolloutSourceLineageBuilder,
 )
+from aria_nbv.pose_generation import CandidateMixtureViewGeneratorConfig
+from aria_nbv.pose_generation.config import CandidateGazeConfig, SampledCenterConfig
+from aria_nbv.pose_generation.types import CandidatePositionMode, ViewDirectionMode
 from aria_nbv.rollouts.qh_reader import QhRolloutReader
 from aria_nbv.rollouts.shard_manifest import (
     RolloutShardRow,
@@ -58,6 +62,54 @@ from aria_nbv.utils.fingerprints import stable_config_hash, stable_msgspec_hash
 from tests.rollout_fixtures import build_rollout_records
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
+
+
+def test_campaign_projects_legacy_and_nested_component_roles_identically() -> None:
+    nested = CandidateMixtureViewGeneratorConfig.paired_center_gaze_family().components
+    legacy = tuple(
+        SimpleNamespace(
+            name=component.name,
+            position_mode=component.center.mode,
+            view_mode=component.gazes[0].mode,
+            paired_view_mode=(
+                SimpleNamespace(value=component.gazes[1].mode.value) if len(component.gazes) > 1 else None
+            ),
+        )
+        for component in nested
+    )
+
+    assert _candidate_component_projection(legacy) == _candidate_component_projection(nested)
+
+
+def test_campaign_projects_target_gaze_on_forward_center_as_target_dependent() -> None:
+    component = SimpleNamespace(
+        name="forward_mixed_gaze",
+        center=SampledCenterConfig(mode=CandidatePositionMode.FORWARD_LOCAL),
+        gazes=(
+            CandidateGazeConfig(name="primary", mode=ViewDirectionMode.FORWARD_RIG),
+            CandidateGazeConfig(name="target", mode=ViewDirectionMode.TARGET_POINT),
+        ),
+    )
+
+    positions, target_families = _candidate_component_projection((component,))
+
+    assert positions == {
+        "forward_mixed_gaze": "forward_local",
+        "forward_mixed_gaze__target": "forward_local",
+    }
+    assert target_families == frozenset({"forward_mixed_gaze__target"})
+
+
+def test_campaign_rejects_unknown_nested_center_kind() -> None:
+    component = SimpleNamespace(
+        name="future",
+        center=SimpleNamespace(kind="target_shell"),
+        gazes=(SimpleNamespace(name="primary"),),
+        paired_view_mode=None,
+    )
+
+    with pytest.raises(ValueError, match="unsupported nested candidate center kind: target_shell"):
+        _candidate_component_projection((component,))
 
 
 class _CampaignFixtureManifest(msgspec.Struct):
@@ -223,11 +275,10 @@ def test_typed_worker_result_preserves_bound_conflicted_outcome(tmp_path):
 
 def test_all_profiles_adapt_into_real_writer_candidate_mixture(tmp_path):
     campaign = _campaign(tmp_path)
-    writer = RolloutDatasetWriterConfig.from_toml(REPO_ROOT / ".configs/build_rollouts_v1_realistic.toml")
+    writer = RolloutDatasetWriterConfig.from_toml(REPO_ROOT / ".configs/build_rollouts_v2_realistic.toml")
     # This test exercises the legacy in-memory adapter seam. Production worker
     # tests retain the canonical manifest and verify exact sample binding.
     writer = writer.model_copy(update={"source_manifest_path": None})
-    writer_components = {component.name: component for component in writer.candidate_mixture.components}
     expected_modes = {
         "forward_local": "forward_rig",
         "target_bearing_local": "target_point",
@@ -273,22 +324,16 @@ def test_all_profiles_adapt_into_real_writer_candidate_mixture(tmp_path):
         assert adapted.candidate_mixture.base.max_backward_step_m == pytest.approx(0.25)
         assert adapted.candidate_mixture.base.max_yaw_delta_deg == pytest.approx(70.0)
         component_by_name = {component.name: component for component in components}
-        for name, reviewed_count in profile.components:
-            if name not in writer_components:
-                continue
-            assert component_by_name[name].model_dump(exclude={"count"}) == writer_components[name].model_dump(
-                exclude={"count"}
+        for reviewed_component in profile.components:
+            assert component_by_name[reviewed_component.name].model_dump() == reviewed_component.model_dump()
+        assert [(c.name, c.count, c.gazes[0].mode.value, c.center.mode.value) for c in components] == [
+            (
+                component.name,
+                component.count,
+                expected_modes[component.name],
+                expected_positions[component.name],
             )
-            assert component_by_name[name].count == reviewed_count
-        if "target_bearing_local" in component_by_name:
-            assert component_by_name["target_bearing_local"].min_radius == pytest.approx(0.4)
-            assert component_by_name["target_bearing_local"].max_radius == pytest.approx(1.1)
-        if "local_refinement" in component_by_name:
-            assert component_by_name["local_refinement"].view_mode.value == "target_point"
-        if "revisit_backtrack" in component_by_name:
-            assert component_by_name["revisit_backtrack"].max_radius <= 0.25
-        assert [(c.name, c.count, c.view_mode.value, c.position_mode.value) for c in components] == [
-            (name, count, expected_modes[name], expected_positions[name]) for name, count in profile.components
+            for component in profile.components
         ]
         assert [r.name for r in adapted.recipes] == ["temperature_softmax_h8_t0.5"]
         assert [r.policy.selection_temperature for r in adapted.recipes] == [0.5]
@@ -316,9 +361,9 @@ def _append_campaign_started(campaign, plan):
 
 def test_canonical_worker_argv_uses_current_python_module_and_carries_writer_config_path(monkeypatch):
     monkeypatch.setattr("aria_nbv.oracle.pipelines.campaign.sys.executable", "/stable/venv/bin/python")
-    config = CudaRolloutCampaignConfig.from_toml(REPO_ROOT / ".configs/build_rollouts_v1_cuda_campaign.toml")
+    config = CudaRolloutCampaignConfig.from_toml(REPO_ROOT / ".configs/build_rollouts_v2_cuda_campaign.toml")
     campaign = config.setup_target()
-    unit = CampaignWorkUnit("cuda-rollouts-v1", "sample", "target", "realistic_core_60", "unit")
+    unit = CampaignWorkUnit("cuda-rollouts-v2", "sample", "target", "realistic_core_60", "unit")
     argv = campaign.worker_argv(Path("plan.json"), unit)
     assert argv[:5] == (
         "/stable/venv/bin/python",
@@ -328,7 +373,7 @@ def test_canonical_worker_argv_uses_current_python_module_and_carries_writer_con
         "worker",
     )
     assert "--writer-config-path" in argv
-    assert ".configs/build_rollouts_v1_cuda_campaign_writer.toml" in argv
+    assert ".configs/build_rollouts_v2_cuda_campaign_writer.toml" in argv
 
     writer = RolloutDatasetWriterConfig.from_toml(REPO_ROOT / config.writer_config_path)
     manifest = json.loads((REPO_ROOT / ".configs/rollout_campaign100_source_manifest.json").read_text(encoding="utf-8"))
@@ -347,19 +392,37 @@ def test_canonical_worker_argv_uses_current_python_module_and_carries_writer_con
 
 
 def test_canonical_campaign_freezes_accepted_realistic_batch_profile():
-    config = CudaRolloutCampaignConfig.from_toml(REPO_ROOT / ".configs/build_rollouts_v1_cuda_campaign.toml")
+    config = CudaRolloutCampaignConfig.from_toml(REPO_ROOT / ".configs/build_rollouts_v2_cuda_campaign.toml")
     writer = RolloutDatasetWriterConfig.from_toml(REPO_ROOT / config.writer_config_path)
 
     assert config.frozen_profile == "realistic_core_60"
     assert writer.target_scorer.depth.renderer.max_views_per_batch == 2
 
 
+def test_campaign_artifact_recovers_complete_typed_candidate_profiles(tmp_path):
+    config_path = REPO_ROOT / ".configs/build_rollouts_v2_cuda_campaign.toml"
+    config = CudaRolloutCampaignConfig.from_toml(config_path)
+    round_tripped = CudaRolloutCampaignConfig.model_validate(config.model_dump())
+    writer = RolloutDatasetWriterConfig.from_toml(REPO_ROOT / config.writer_config_path)
+    writer = writer.model_copy(update={"source_manifest_path": None})
+    campaign = CudaRolloutCampaign(config.model_copy(update={"output_root": tmp_path}))
+    profile = next(profile for profile in config.profiles if profile.name == "rich_local_60")
+    unit = CampaignWorkUnit(config.campaign_id, "sample", "target", profile.name, "unit")
+
+    adapted, _ = campaign.adapt_work_unit(unit, writer_config=writer, shard_entry=SimpleNamespace())
+
+    assert stable_config_hash(round_tripped) == stable_config_hash(config)
+    assert [component.model_dump() for component in adapted.candidate_mixture.components] == [
+        component.model_dump() for component in profile.components
+    ]
+
+
 def test_canonical_campaign_writes_to_shared_rollout_supervision_cache():
-    config = CudaRolloutCampaignConfig.from_toml(REPO_ROOT / ".configs/build_rollouts_v1_cuda_campaign.toml")
+    config = CudaRolloutCampaignConfig.from_toml(REPO_ROOT / ".configs/build_rollouts_v2_cuda_campaign.toml")
 
     assert (
         config.output_root
-        == (PathConfig().offline_cache_dir / "rollout_supervision" / "campaigns" / "cuda-rollouts-v1").resolve()
+        == (PathConfig().offline_cache_dir / "rollout_supervision" / "campaigns" / "cuda-rollouts-v2").resolve()
     )
 
 
@@ -370,7 +433,7 @@ def test_canonical_broad_plan_assigns_disjoint_scene_splits_and_preserves_lineag
         "aria_nbv.oracle.pipelines.campaign.current_generation_revision",
         lambda: GenerationRevision("g003-v1", "commit", "tree", "lock", "bundle", "generation"),
     )
-    config = CudaRolloutCampaignConfig.from_toml(REPO_ROOT / ".configs/build_rollouts_v1_cuda_campaign.toml")
+    config = CudaRolloutCampaignConfig.from_toml(REPO_ROOT / ".configs/build_rollouts_v2_cuda_campaign.toml")
     campaign = CudaRolloutCampaign(config.model_copy(update={"output_root": tmp_path}))
     rows = []
     for index in range(100):
@@ -2121,7 +2184,7 @@ def test_progress_summary_preserves_skip_and_surfaces_invalid_orphan_and_conflic
 def test_effective_writer_hash_rebinds_base_writer_before_terminal_validation(tmp_path, monkeypatch):
     base_campaign = _campaign(tmp_path)
     config_values = base_campaign.config.model_dump()
-    config_values["writer_config_path"] = REPO_ROOT / ".configs/build_rollouts_v1_cuda_campaign_writer.toml"
+    config_values["writer_config_path"] = REPO_ROOT / ".configs/build_rollouts_v2_cuda_campaign_writer.toml"
     config_values["profiles"] = base_campaign.config.profiles
     config = CudaRolloutCampaignConfig.model_construct(**config_values)
     campaign = CudaRolloutCampaign(config)

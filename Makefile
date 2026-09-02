@@ -1,5 +1,5 @@
 .DEFAULT_GOAL := help
-.PHONY: help ci ci-impact-self-test ownership-consolidation-contract typst-authoring-contract thesis-literature-provenance skill-source-self-test graphify-skill-upstream-self-test graphify-projection-self-test graphify-projection-live-check graphify-usable-check graphify-state-check graphify-maintain graphify-session-readiness-integration scaffold-check agents-db-validate package-smoke qh-ci replay-oracle-golden docs-render-core quarto-docs-ci typst-paper-ci thesis-pdf-ci thesis-marker-contract thesis-roadmap-contract ruff-full ruff-targeted mypy-contract mypy-full mypy-targeted coverage-targeted agent-status
+.PHONY: help ci ci-impact-self-test ownership-consolidation-contract typst-authoring-contract thesis-literature-provenance skill-source-self-test graphify-skill-upstream-self-test graphify-projection-self-test graphify-projection-live-check graphify-usable-check graphify-state-check graphify-maintain graphify-session-readiness-integration scaffold-check agents-db-validate package-smoke pose-generation-contract qh-ci replay-oracle-golden docs-render-core quarto-docs-ci typst-paper-ci thesis-pdf-ci thesis-marker-contract thesis-roadmap-contract ruff-full ruff-targeted mypy-contract mypy-full mypy-targeted coverage-targeted agent-status
 .PHONY: api-docs-self-test
 .PHONY: context-qmd-tree qmd-frontmatter-check
 .PHONY: context-index context-get context-contracts context-modules context-classes context-functions
@@ -98,6 +98,15 @@ PACKAGE_SMOKE_TESTS := \
 	tests/lightning/test_vin_batch_collate.py \
 	tests/app/panels/test_vin_diagnostics_runtime.py \
 	tests/vin/test_vin_diagnostics_runtime.py
+POSE_GENERATION_CONTRACT_TESTS := \
+	tests/pose_generation/test_candidate_mixture.py \
+	tests/pose_generation/test_pose_generation.py \
+	tests/pose_generation/test_orientations.py \
+	tests/pose_generation/test_plotting_helpers.py \
+	tests/rollouts/test_candidate_benchmark.py::test_candidate_preflight_projects_legacy_and_nested_components_identically \
+	tests/rollouts/test_candidate_benchmark.py::test_candidate_preflight_marks_only_target_gaze_on_forward_center_target_aware \
+	tests/oracle/test_campaign.py::test_campaign_projects_legacy_and_nested_component_roles_identically \
+	tests/oracle/test_campaign.py::test_campaign_projects_target_gaze_on_forward_center_as_target_dependent
 QH_CI_RUFF_PATHS := \
 	aria_nbv/data_handling/__init__.py \
 	aria_nbv/data_handling/qh_contracts.py \
@@ -831,6 +840,9 @@ package-smoke: mypy-contract qh-ci ## Run CPU-only package lint and smoke tests 
 	@cd $(PKG_DIR) && $(UV) run --extra dev ruff format --check $(PACKAGE_SMOKE_RUFF_PATHS)
 	@cd $(PKG_DIR) && $(UV) run --extra dev ruff check $(PACKAGE_SMOKE_RUFF_PATHS)
 	@cd $(PKG_DIR) && $(UV) run --extra dev pytest --import-mode=importlib $(PYTEST_WORKERS_FLAG) $(PACKAGE_SMOKE_TESTS)
+
+pose-generation-contract: ## Run deterministic CPU candidate-generation authoring/runtime/plot contracts
+	@cd $(PKG_DIR) && $(UV) run --extra dev pytest --import-mode=importlib $(PYTEST_WORKERS_FLAG) $(POSE_GENERATION_CONTRACT_TESTS)
 
 ruff-full: ## Run Ruff format and lint across package and tests (set RUFF_FIX=1 for safe fixes; RUFF_CHECK_OUTPUT_FORMAT=json is machine-readable)
 	@cd $(PKG_DIR) && $(UV) run --extra dev ruff format --check --quiet aria_nbv tests

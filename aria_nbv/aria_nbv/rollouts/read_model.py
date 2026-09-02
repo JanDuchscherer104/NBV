@@ -366,7 +366,7 @@ def candidate_mixture_family_names(
 
     if mixture_ids.shape != gaze_variant_ids.shape:
         raise ValueError("mixture and gaze-variant arrays must align")
-    component_names: dict[int, tuple[str, str | None]] = {}
+    component_names: dict[int, tuple[str, ...]] = {}
     try:
         writer_config = reader.manifest().get("manifest", {}).get("generation", {}).get("writer_config")
         candidate_mixture = writer_config.get("candidate_mixture") if isinstance(writer_config, dict) else None
@@ -376,9 +376,19 @@ def candidate_mixture_family_names(
                 if isinstance(component, dict):
                     name = component.get("name") or component.get("family") or component.get("position_mode")
                     if name is not None:
-                        paired = component.get("paired_view_mode")
-                        paired_name = None if paired is None else f"{name}__paired_{paired}"
-                        component_names[index] = (str(name), paired_name)
+                        gazes = component.get("gazes")
+                        if isinstance(gazes, list) and gazes:
+                            variant_names = [str(name)]
+                            variant_names.extend(
+                                f"{name}__{gaze['name']}"
+                                for gaze in gazes[1:]
+                                if isinstance(gaze, dict) and gaze.get("name") is not None
+                            )
+                            component_names[index] = tuple(variant_names)
+                        else:
+                            paired = component.get("paired_view_mode")
+                            paired_name = None if paired is None else f"{name}__paired_{paired}"
+                            component_names[index] = (str(name),) if paired_name is None else (str(name), paired_name)
     except (KeyError, TypeError, ValueError):
         component_names = {}
     names = []
@@ -390,15 +400,13 @@ def candidate_mixture_family_names(
                 raise ValueError("paired gaze family cannot be decoded without component provenance")
             names.append("unknown" if int(mixture_id) < 0 else f"component_{int(mixture_id)}")
             continue
-        base_name, paired_name = identity
-        if paired_name is None:
+        base_name = identity[0]
+        if len(identity) == 1:
             if variant >= 0:
                 raise ValueError(f"unpaired component {base_name!r} carries paired gaze provenance")
             names.append(base_name)
-        elif variant == 0:
-            names.append(base_name)
-        elif variant == 1:
-            names.append(paired_name)
+        elif 0 <= variant < len(identity):
+            names.append(identity[variant])
         else:
             raise ValueError(f"paired component {base_name!r} is missing canonical gaze-variant provenance")
     return np.asarray(names, dtype=np.str_)

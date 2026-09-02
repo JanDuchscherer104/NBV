@@ -19,7 +19,7 @@ template:
 | `LRZ_CONTAINER_IMAGE` | Enroot/Pyxis image URI, for example `nvcr.io#nvidia/pytorch:24.10-py3`. |
 | `RUN_ID` | Human-readable run ID used in staging, logs, checkpoints, and manifests. |
 | `DATASET_VERSION` | Dataset/cache version or immutable store version being consumed. |
-| `CONFIG_PATH` | Rollout writer TOML with explicit DSS-backed paths. Copy `.configs/build_rollouts_v1_realistic.toml` into an untracked run config, then override DSS paths and shard/sample counts there. |
+| `CONFIG_PATH` | Rollout writer TOML with explicit DSS-backed paths. Copy `.configs/build_rollouts_v2_realistic.toml` into an untracked run config, then override DSS paths and shard/sample counts there. |
 | `SHARD_MANIFEST` | JSONL or table that maps Slurm array task IDs to deterministic shards. |
 
 ## DSS Staging Layout

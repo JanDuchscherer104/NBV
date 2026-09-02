@@ -1,20 +1,19 @@
-# Paired 50-source V1 rollout pilot: local-family challenger.
+# Canonical 100-scene V1 CUDA rollout campaign writer profile.
 #
-# This profile is scientifically paired with build_rollouts_v2_realistic.toml.
-# Its ordered roots, target sampler, candidate budget, compute settings, scorer,
-# retention, validity contract, and rollout recipes are identical. Only the
-# candidate-family components and rollout destination differ.
-
-max_samples               = 50
-source_manifest_path      = ".configs/rollout_pilot50_source_manifest.json"
-require_label_valid       = true
+# This config owns the reviewed 100-row source population consumed by
+# build_rollouts_v2_cuda_campaign.toml. The campaign adapter binds one
+# actor-visible target and the exact profile recipe suite per work unit.
+# Do not use this writer directly to launch the broad campaign.
+max_samples            = 100
+source_manifest_path   = ".configs/rollout_campaign100_source_manifest.json"
+require_label_valid    = true
 min_valid_root_candidates = 15
-log_timing                = true
-verbosity                 = 1
+log_timing             = true
+verbosity              = 1
 
 [source]
 split                    = "train"
-limit                    = 50
+limit                    = 100
 return_format            = "sample"
 include_efm_snippet      = true
 include_gt_mesh          = true
@@ -29,12 +28,12 @@ map_location             = "cuda"
 verbosity                = 1
 
     [source.store]
-    store_dir = "vin_offline_rollout_pilot50_v7"
+    store_dir = "vin_offline_rollout_campaign100_v10_rebuilt"
 
 [oracle_target_task_sampler]
-max_targets_per_sample = 1
-seed                   = 0
-policy                 = "uniform_without_replacement"
+max_targets_per_sample            = 1
+seed                              = 0
+policy                            = "uniform_without_replacement"
 
 [candidate_mixture.base]
 camera_label           = "rgb"
@@ -70,16 +69,17 @@ seed                   = 0
 
 [[candidate_mixture.components]]
 name = "forward_local"
-count = 18
+count = 24
 [candidate_mixture.components.center]
 kind = "sampled"
 mode = "forward_local"
-sampling_strategy = "forward_powerspherical"
 min_radius_m = 0.25
 max_radius_m = 1.1
 min_elevation_deg = -12.0
 max_elevation_deg = 18.0
 azimuth_width_deg = 100.0
+[candidate_mixture.components.center.distribution]
+kind = "forward_powerspherical"
 concentration = 8.0
 [[candidate_mixture.components.gazes]]
 name = "primary"
@@ -92,16 +92,17 @@ roll_half_width_deg = 0.0
 
 [[candidate_mixture.components]]
 name = "target_bearing_local"
-count = 18
+count = 24
 [candidate_mixture.components.center]
 kind = "sampled"
 mode = "target_bearing_local"
-sampling_strategy = "forward_powerspherical"
 min_radius_m = 0.4
 max_radius_m = 1.1
 min_elevation_deg = -12.0
 max_elevation_deg = 18.0
 azimuth_width_deg = 100.0
+[candidate_mixture.components.center.distribution]
+kind = "forward_powerspherical"
 concentration = 8.0
 [[candidate_mixture.components.gazes]]
 name = "primary"
@@ -118,60 +119,17 @@ count = 12
 [candidate_mixture.components.center]
 kind = "sampled"
 mode = "lateral_target_bypass"
-sampling_strategy = "forward_powerspherical"
 min_radius_m = 0.25
 max_radius_m = 1.1
 min_elevation_deg = -12.0
 max_elevation_deg = 18.0
 azimuth_width_deg = 100.0
+[candidate_mixture.components.center.distribution]
+kind = "forward_powerspherical"
 concentration = 8.0
 [[candidate_mixture.components.gazes]]
 name = "primary"
 mode = "target_point"
-[candidate_mixture.components.gazes.jitter]
-kind = "box"
-yaw_half_width_deg = 60.0
-pitch_half_width_deg = 30.0
-roll_half_width_deg = 0.0
-
-[[candidate_mixture.components]]
-name = "local_refinement"
-count = 6
-[candidate_mixture.components.center]
-kind = "sampled"
-mode = "local_refinement"
-sampling_strategy = "forward_powerspherical"
-min_radius_m = 0.25
-max_radius_m = 0.7
-min_elevation_deg = -12.0
-max_elevation_deg = 18.0
-azimuth_width_deg = 100.0
-concentration = 8.0
-[[candidate_mixture.components.gazes]]
-name = "primary"
-mode = "target_point"
-[candidate_mixture.components.gazes.jitter]
-kind = "box"
-yaw_half_width_deg = 60.0
-pitch_half_width_deg = 30.0
-roll_half_width_deg = 0.0
-
-[[candidate_mixture.components]]
-name = "revisit_backtrack"
-count = 6
-[candidate_mixture.components.center]
-kind = "sampled"
-mode = "revisit_backtrack"
-sampling_strategy = "forward_powerspherical"
-min_radius_m = 0.25
-max_radius_m = 0.9
-min_elevation_deg = -12.0
-max_elevation_deg = 18.0
-azimuth_width_deg = 100.0
-concentration = 8.0
-[[candidate_mixture.components.gazes]]
-name = "primary"
-mode = "forward_rig"
 [candidate_mixture.components.gazes.jitter]
 kind = "box"
 yaw_half_width_deg = 60.0
@@ -206,16 +164,16 @@ log_timing                  = true
     verbosity            = 1
 
         [target_scorer.depth.renderer]
-        device         = "cuda"
-        zfar           = 20.0
-        znear          = 0.001
-        cull_backfaces = false
-        blur_radius    = 0.0
-        bin_size       = 0
+        device              = "cuda"
+        zfar                = 20.0
+        znear               = 0.001
+        cull_backfaces      = false
+        blur_radius         = 0.0
+        bin_size            = 0
         max_views_per_batch = 2
-        dtype          = "float32"
-        is_debug       = false
-        verbosity      = 1
+        dtype               = "float32"
+        is_debug            = false
+        verbosity           = 1
 
 [selected_depth]
 enabled     = true
@@ -224,11 +182,11 @@ height_px   = 240
 chunk_steps = 16
 
 [store]
-store_dir                    = "rollouts_v1_diverse_pilot50.zarr"
+store_dir                    = "rollouts_v2_cuda_campaign.zarr"
 target_protocol_version      = "v0_gt_input"
 field_retention_policy       = "compact_selected_heavy"
-source_offline_store_version = "vin-offline-v7"
-split_manifest_hash          = "0c746d304c1feac2"
+source_offline_store_version = "10"
+split_manifest_hash          = "4780c7cde1b811bf"
 discount_gamma               = 1.0
 q_h_chunk_states             = 64
 target_eval_crop_max_points  = 50000

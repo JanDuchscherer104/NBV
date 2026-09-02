@@ -30,11 +30,8 @@ from ._stored_rollouts.shared import ExplanationSection, ScientificExplanation
 from ._stored_rollouts.shared import plot_control_key as _plot_control_key
 from ._stored_rollouts.shared import render_plot as _render_plot
 
-_DEFAULT_CONFIG = ".configs/build_rollouts_v1_cuda_campaign.toml"
-_REVIEWED_CONFIGS = (
-    _DEFAULT_CONFIG,
-    ".configs/build_rollouts_v1_cuda_campaign_pilot_corrected_v10.toml",
-)
+_DEFAULT_CONFIG = ".configs/build_rollouts_v2_cuda_campaign.toml"
+_REVIEWED_CONFIGS = (_DEFAULT_CONFIG,)
 _SAFE_SESSION = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$")
 _MAX_NEW_UNITS = 100
 _MAX_TIME_BUDGET_MINUTES = 24 * 60
@@ -542,7 +539,7 @@ def render_campaign_generation_page(
             "writer_config": str(cfg.writer_config_path or ""),
             "scientific_contract": {
                 "profile": profile.name,
-                "components": profile.components,
+                "components": [component.model_dump(mode="json") for component in profile.components],
                 "total_candidates": profile.total_count,
                 "device": profile.device,
                 "recipes": [

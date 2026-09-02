@@ -711,14 +711,14 @@ def test_campaign_plan_reads_rows_from_manifest_envelope(tmp_path: Path, monkeyp
 
 def test_canonical_campaign_root_and_smoke_plan_resolution(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     config = CudaRolloutCampaignConfig.from_toml(
-        Path(__file__).resolve().parents[3] / ".configs/build_rollouts_v1_cuda_campaign.toml"
+        Path(__file__).resolve().parents[3] / ".configs/build_rollouts_v2_cuda_campaign.toml"
     )
     assert (
         config.output_root
-        == (PathConfig().offline_cache_dir / "rollout_supervision" / "campaigns" / "cuda-rollouts-v1").resolve()
+        == (PathConfig().offline_cache_dir / "rollout_supervision" / "campaigns" / "cuda-rollouts-v2").resolve()
     )
 
-    output_root = tmp_path / "cuda-rollouts-v1"
+    output_root = tmp_path / "cuda-rollouts-v2"
     output_root.mkdir()
     plan_path = output_root / "plan.json"
     plan_path.write_text("{}\n", encoding="utf-8")

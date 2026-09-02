@@ -3,15 +3,20 @@
 import json
 import tomllib
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
+from aria_nbv.pose_generation import CandidateMixtureViewGeneratorConfig
+from aria_nbv.pose_generation.config import CandidateGazeConfig, SampledCenterConfig
+from aria_nbv.pose_generation.types import CandidatePositionMode, ViewDirectionMode
 from aria_nbv.rollouts.candidate_benchmark import (
     BINDING_KEYS,
     MULTI_STORE_BINDING_ALGORITHM,
     SCHEMA_ID,
     CandidateFamilyCounts,
     aggregate_store_content_sha256,
+    candidate_family_preflight_config_from_writer,
     canonical_json_bytes,
     read_bundle,
     reduce_candidate_records,
@@ -50,6 +55,46 @@ def test_production_seminar_jitter_contract_is_unchanged() -> None:
         30.0,
         0.0,
     )
+
+
+def test_candidate_preflight_projects_legacy_and_nested_components_identically() -> None:
+    nested_mixture = CandidateMixtureViewGeneratorConfig.paired_center_gaze_family()
+    legacy_components = tuple(
+        SimpleNamespace(
+            name=component.name,
+            position_mode=component.center.mode,
+            view_mode=component.gazes[0].mode,
+            paired_view_mode=(
+                SimpleNamespace(value=component.gazes[1].mode.value) if len(component.gazes) > 1 else None
+            ),
+        )
+        for component in nested_mixture.components
+    )
+    legacy_writer = SimpleNamespace(
+        candidate_mixture=SimpleNamespace(components=legacy_components, total_count=nested_mixture.total_count)
+    )
+    nested_writer = SimpleNamespace(candidate_mixture=nested_mixture)
+
+    assert candidate_family_preflight_config_from_writer(
+        legacy_writer
+    ) == candidate_family_preflight_config_from_writer(nested_writer)
+
+
+def test_candidate_preflight_marks_only_target_gaze_on_forward_center_target_aware() -> None:
+    component = SimpleNamespace(
+        name="forward_mixed_gaze",
+        center=SampledCenterConfig(mode=CandidatePositionMode.FORWARD_LOCAL),
+        gazes=(
+            CandidateGazeConfig(name="primary", mode=ViewDirectionMode.FORWARD_RIG),
+            CandidateGazeConfig(name="target", mode=ViewDirectionMode.TARGET_POINT),
+        ),
+    )
+    writer = SimpleNamespace(candidate_mixture=SimpleNamespace(components=(component,), total_count=8))
+
+    preflight = candidate_family_preflight_config_from_writer(writer)
+
+    assert preflight.configured_families == ("forward_mixed_gaze", "forward_mixed_gaze__target")
+    assert preflight.target_aware_families == ("forward_mixed_gaze__target",)
 
 
 def test_bundle_requires_parquet_engine_or_round_trips(tmp_path: Path) -> None:

@@ -4,6 +4,9 @@
 
 from __future__ import annotations
 
+import hashlib
+from pathlib import Path
+
 import pytest
 
 pytest.importorskip("efm3d")
@@ -12,6 +15,7 @@ import torch
 import trimesh
 from efm3d.aria import CameraTW, PoseTW
 
+from aria_nbv.oracle.pipelines.rollout_dataset import RolloutDatasetWriterConfig
 from aria_nbv.pose_generation import (
     CandidateGenerationRuntimeContext,
     CandidateMixtureComponentConfig,
@@ -25,7 +29,17 @@ from aria_nbv.pose_generation import (
     candidate_position_id,
     candidate_strategy_id,
 )
+from aria_nbv.pose_generation.config import (
+    BoxViewJitterConfig,
+    CandidateGazeConfig,
+    PowerSphericalConfig,
+    SampledCenterConfig,
+    TargetOrbitCenterConfig,
+    UniformSphereConfig,
+    sphere_distribution_from_legacy,
+)
 from aria_nbv.targets import TargetDescriptor
+from aria_nbv.utils.fingerprints import stable_config_hash
 from aria_nbv.utils.frames import world_up_tensor
 
 
@@ -75,6 +89,67 @@ def _base_cfg() -> CandidateViewGeneratorConfig:
     )
 
 
+def _component(
+    *,
+    name: str,
+    count: int,
+    strategy: ViewDirectionMode | None = None,
+    view_mode: ViewDirectionMode | None = None,
+    paired_view_mode: ViewDirectionMode | None = None,
+    position_mode: CandidatePositionMode = CandidatePositionMode.UPPER_BOUND_FREE_SHELL,
+    sampling_strategy: SamplingStrategy = SamplingStrategy.UNIFORM_SPHERE,
+    view_sampling_strategy: SamplingStrategy | None = None,
+    min_radius: float = 0.8,
+    max_radius: float = 0.8,
+    min_elev_deg: float = -20.0,
+    max_elev_deg: float = 25.0,
+    delta_azimuth_deg: float = 170.0,
+    kappa: float = 4.0,
+    view_kappa: float = 4.0,
+    view_max_angle_deg: float = 0.0,
+    view_max_azimuth_deg: float | None = 60.0,
+    view_max_elevation_deg: float | None = 30.0,
+    view_roll_jitter_deg: float = 0.0,
+    target_orbit_angles_deg: tuple[float, ...] = (-6.0, 6.0, -10.0, 10.0, -14.0, 14.0),
+) -> CandidateMixtureComponentConfig:
+    resolved_view_mode = view_mode or strategy
+    assert resolved_view_mode is not None
+    if position_mode is CandidatePositionMode.TARGET_ORBIT:
+        center = TargetOrbitCenterConfig(angles_deg=target_orbit_angles_deg)
+    else:
+        center = SampledCenterConfig(
+            mode=position_mode,
+            distribution=sphere_distribution_from_legacy(sampling_strategy, kappa),
+            min_radius_m=min_radius,
+            max_radius_m=max_radius,
+            min_elevation_deg=min_elev_deg,
+            max_elevation_deg=max_elev_deg,
+            azimuth_width_deg=delta_azimuth_deg,
+        )
+
+    azimuth = view_max_angle_deg if view_max_azimuth_deg is None else view_max_azimuth_deg
+    elevation = view_max_angle_deg if view_max_elevation_deg is None else view_max_elevation_deg
+    gazes = [
+        CandidateGazeConfig.from_legacy(
+            mode=resolved_view_mode,
+            sampling_strategy=view_sampling_strategy,
+            concentration=view_kappa,
+            yaw_half_width_deg=azimuth,
+            pitch_half_width_deg=elevation,
+            roll_half_width_deg=view_roll_jitter_deg,
+        )
+    ]
+    if paired_view_mode is not None:
+        gazes.append(
+            CandidateGazeConfig(
+                name=f"paired_{paired_view_mode.value}",
+                mode=paired_view_mode,
+                jitter=gazes[0].jitter,
+            )
+        )
+    return CandidateMixtureComponentConfig(name=name, count=count, center=center, gazes=tuple(gazes))
+
+
 def _run_generate(
     cfg: CandidateMixtureViewGeneratorConfig,
     *,
@@ -99,8 +174,8 @@ def test_mixed_sampler_fixed_counts_and_full_shell_provenance() -> None:
     cfg = CandidateMixtureViewGeneratorConfig(
         base=_base_cfg(),
         components=[
-            CandidateMixtureComponentConfig(name="target", count=4, strategy=ViewDirectionMode.TARGET_POINT),
-            CandidateMixtureComponentConfig(name="away", count=2, strategy=ViewDirectionMode.RADIAL_AWAY),
+            _component(name="target", count=4, strategy=ViewDirectionMode.TARGET_POINT),
+            _component(name="away", count=2, strategy=ViewDirectionMode.RADIAL_AWAY),
         ],
     )
 
@@ -140,11 +215,13 @@ def test_target_point_family_projects_actor_visible_target_inside_camera() -> No
             }
         ),
         components=[
-            CandidateMixtureComponentConfig(
+            _component(
                 name="target",
                 count=6,
                 view_mode=ViewDirectionMode.TARGET_POINT,
                 position_mode=CandidatePositionMode.TARGET_BEARING_LOCAL,
+                view_max_azimuth_deg=1.0,
+                view_max_elevation_deg=1.0,
             )
         ],
     )
@@ -161,14 +238,14 @@ def test_paired_variants_keep_original_component_id() -> None:
     cfg = CandidateMixtureViewGeneratorConfig(
         base=_base_cfg(),
         components=[
-            CandidateMixtureComponentConfig(
+            _component(
                 name="pair",
                 count=2,
                 view_mode=ViewDirectionMode.TARGET_POINT,
                 paired_view_mode=ViewDirectionMode.FORWARD_RIG,
                 position_mode=CandidatePositionMode.TARGET_BEARING_LOCAL,
             ),
-            CandidateMixtureComponentConfig(name="after", count=2, view_mode=ViewDirectionMode.FORWARD_RIG),
+            _component(name="after", count=2, view_mode=ViewDirectionMode.FORWARD_RIG),
         ],
     )
 
@@ -210,8 +287,8 @@ def test_mixture_prepares_mesh_query_once_for_all_components(monkeypatch: pytest
     cfg = CandidateMixtureViewGeneratorConfig(
         base=_base_cfg().model_copy(update={"min_distance_to_mesh": 0.1}),
         components=[
-            CandidateMixtureComponentConfig(name="forward", count=2, strategy=ViewDirectionMode.FORWARD_RIG),
-            CandidateMixtureComponentConfig(name="away", count=2, strategy=ViewDirectionMode.RADIAL_AWAY),
+            _component(name="forward", count=2, strategy=ViewDirectionMode.FORWARD_RIG),
+            _component(name="away", count=2, strategy=ViewDirectionMode.RADIAL_AWAY),
         ],
     )
 
@@ -300,8 +377,8 @@ def test_mixture_skips_mesh_preparation_when_collision_clearance_is_disabled(
             }
         ),
         components=[
-            CandidateMixtureComponentConfig(name="forward", count=2, strategy=ViewDirectionMode.FORWARD_RIG),
-            CandidateMixtureComponentConfig(name="away", count=2, strategy=ViewDirectionMode.RADIAL_AWAY),
+            _component(name="forward", count=2, strategy=ViewDirectionMode.FORWARD_RIG),
+            _component(name="away", count=2, strategy=ViewDirectionMode.RADIAL_AWAY),
         ],
     )
 
@@ -326,13 +403,13 @@ def test_mixture_reuses_inference_mesh_within_each_request_only(
     cfg = CandidateMixtureViewGeneratorConfig(
         base=_base_cfg().model_copy(update={"min_distance_to_mesh": 0.1}),
         components=[
-            CandidateMixtureComponentConfig(
+            _component(
                 name="forward",
                 count=2,
                 view_mode=ViewDirectionMode.RADIAL_AWAY,
                 paired_view_mode=ViewDirectionMode.FORWARD_RIG,
             ),
-            CandidateMixtureComponentConfig(name="away", count=2, strategy=ViewDirectionMode.RADIAL_AWAY),
+            _component(name="away", count=2, strategy=ViewDirectionMode.RADIAL_AWAY),
         ],
     )
     generator = CandidateMixtureViewGenerator(cfg)
@@ -366,13 +443,13 @@ def test_mixture_normalizes_mesh_once_across_components(monkeypatch: pytest.Monk
     cfg = CandidateMixtureViewGeneratorConfig(
         base=_base_cfg().model_copy(update={"min_distance_to_mesh": 0.1}),
         components=[
-            CandidateMixtureComponentConfig(
+            _component(
                 name="paired",
                 count=2,
                 view_mode=ViewDirectionMode.RADIAL_AWAY,
                 paired_view_mode=ViewDirectionMode.FORWARD_RIG,
             ),
-            CandidateMixtureComponentConfig(name="ordinary", count=2, strategy=ViewDirectionMode.RADIAL_AWAY),
+            _component(name="ordinary", count=2, strategy=ViewDirectionMode.RADIAL_AWAY),
         ],
     )
     mesh, verts, faces = _mesh_triplet(cfg.device)
@@ -507,7 +584,7 @@ def test_paired_seed_is_derived_from_resolved_component_seed_for_direct_and_repl
     cfg = CandidateMixtureViewGeneratorConfig(
         base=_base_cfg(),
         components=[
-            CandidateMixtureComponentConfig(
+            _component(
                 name="pair",
                 count=2,
                 view_mode=ViewDirectionMode.TARGET_POINT,
@@ -546,7 +623,7 @@ def test_paired_seed_is_derived_from_resolved_component_seed_for_direct_and_repl
 def test_target_point_component_requires_runtime_target_context() -> None:
     cfg = CandidateMixtureViewGeneratorConfig(
         base=_base_cfg(),
-        components=[CandidateMixtureComponentConfig(name="target", count=2, strategy=ViewDirectionMode.TARGET_POINT)],
+        components=[_component(name="target", count=2, strategy=ViewDirectionMode.TARGET_POINT)],
     )
     mesh, verts, faces = _mesh_triplet(cfg.device)
 
@@ -564,7 +641,7 @@ def test_target_point_component_requires_runtime_target_context() -> None:
 def test_target_point_component_applies_nonzero_seminar_jitter_around_target_gaze() -> None:
     cfg = CandidateMixtureViewGeneratorConfig(
         base=_base_cfg(),
-        components=[CandidateMixtureComponentConfig(name="target", count=4, strategy=ViewDirectionMode.TARGET_POINT)],
+        components=[_component(name="target", count=4, strategy=ViewDirectionMode.TARGET_POINT)],
     )
 
     result = _run_generate(cfg)
@@ -614,20 +691,348 @@ def test_default_mixture_uses_realistic_position_families_without_free_shell() -
     assert "target_bearing_yaw_rad" in result.extras
 
 
-def test_mixture_rejects_zero_resolved_view_jitter() -> None:
-    with pytest.raises(ValueError, match="nonzero resolved azimuth and elevation view jitter"):
-        CandidateMixtureViewGeneratorConfig(
-            base=_base_cfg(),
-            components=[
-                CandidateMixtureComponentConfig(
-                    name="invalid_zero_jitter",
-                    count=6,
-                    view_mode=ViewDirectionMode.FORWARD_RIG,
-                    view_max_azimuth_deg=0.0,
-                    view_max_elevation_deg=30.0,
-                )
-            ],
+def test_default_mixture_resolves_exact_nested_authoring_contract() -> None:
+    cfg = CandidateMixtureViewGeneratorConfig()
+
+    assert cfg.base.sampling_strategy is SamplingStrategy.FORWARD_POWERSPHERICAL
+    assert (cfg.base.min_radius, cfg.base.max_radius) == pytest.approx((0.25, 1.25))
+    assert (cfg.base.min_elev_deg, cfg.base.max_elev_deg, cfg.base.delta_azimuth_deg) == pytest.approx(
+        (-12.0, 18.0, 120.0)
+    )
+    assert cfg.base.kappa == pytest.approx(8.0)
+    assert [(component.name, component.count) for component in cfg.components] == [
+        ("forward_local", 24),
+        ("target_bearing_local", 24),
+        ("lateral_target_bypass", 12),
+    ]
+    assert [component.center.mode for component in cfg.components] == [
+        CandidatePositionMode.FORWARD_LOCAL,
+        CandidatePositionMode.TARGET_BEARING_LOCAL,
+        CandidatePositionMode.LATERAL_TARGET_BYPASS,
+    ]
+    assert [component.gazes[0].mode for component in cfg.components] == [
+        ViewDirectionMode.FORWARD_RIG,
+        ViewDirectionMode.TARGET_POINT,
+        ViewDirectionMode.TARGET_POINT,
+    ]
+    for component in cfg.components:
+        assert isinstance(component.center, SampledCenterConfig)
+        assert component.center.min_radius_m == pytest.approx(0.25)
+        assert component.center.max_radius_m == pytest.approx(1.25)
+        assert isinstance(component.gazes[0].jitter, BoxViewJitterConfig)
+        assert component.gazes[0].jitter.yaw_half_width_deg == pytest.approx(60.0)
+        assert component.gazes[0].jitter.pitch_half_width_deg == pytest.approx(30.0)
+
+
+def _portable_tensor_fingerprint_bytes(value: torch.Tensor) -> bytes:
+    """Return exact discrete bytes and 1e-3-quantized floating-point bytes."""
+
+    canonical = value.detach().cpu().contiguous()
+    if canonical.is_floating_point():
+        canonical = torch.round(canonical.to(torch.float64) * 1_000.0).to(torch.int64)
+    return canonical.numpy().tobytes()
+
+
+@pytest.mark.parametrize(
+    ("config_name", "expected_fingerprint"),
+    (
+        ("build_rollouts_qh_v0_baseline.toml", "657d3762eb39bf91fa69710f0eb3972beb1f992cdc6a84eb78cd16b71c453f3d"),
+        (
+            "build_rollouts_v2_cuda_campaign_writer.toml",
+            "4135d79d895ecffcb319ebef51a3ccddee6409b9191177b95d441325afc0e920",
+        ),
+        ("build_rollouts_v1_diverse.toml", "5f882b8988b3c29eca53cb84474aa460462e7834c7510dc5bbc42d5db63c7674"),
+        (
+            "build_rollouts_v1_lrz.template.toml",
+            "4135d79d895ecffcb319ebef51a3ccddee6409b9191177b95d441325afc0e920",
+        ),
+        ("build_rollouts_v1_microset.toml", "34af9d8a090aa83082e055537e5653639bf785d067ba185e04808110e104652f"),
+        (
+            "build_rollouts_v1_multihorizon_highgain.toml",
+            "4135d79d895ecffcb319ebef51a3ccddee6409b9191177b95d441325afc0e920",
+        ),
+        ("build_rollouts_v2_realistic.toml", "4135d79d895ecffcb319ebef51a3ccddee6409b9191177b95d441325afc0e920"),
+        ("build_rollouts_v1_smoke.toml", "61b04effff3d1c9495939615667821cf8a7f3f7b3e4d2328c1f3165ee44b1889"),
+    ),
+)
+def test_migrated_active_profiles_match_origin_main_candidate_fingerprints(
+    config_name: str,
+    expected_fingerprint: str,
+) -> None:
+    config_path = Path(__file__).resolve().parents[3] / ".configs" / config_name
+    mixture = RolloutDatasetWriterConfig.from_toml(config_path).candidate_mixture
+    base = mixture.base.model_copy(update={"device": torch.device("cpu")})
+    result = _run_generate(mixture.model_copy(update={"base": base}), seed=123)
+
+    digest = hashlib.sha256()
+    for value in (
+        result.shell_poses.tensor(),
+        result.views.tensor(),
+        result.mask_valid,
+        result.strategy_id,
+        result.position_id,
+        result.mixture_id,
+        result.sampler_probability,
+        result.position_pair_id,
+        result.gaze_variant_id,
+    ):
+        if value is not None:
+            digest.update(_portable_tensor_fingerprint_bytes(value))
+    for name in sorted(result.masks):
+        digest.update(name.encode())
+        digest.update(_portable_tensor_fingerprint_bytes(result.masks[name]))
+    for name in (
+        "view_jitter_yaw_deg",
+        "view_jitter_pitch_deg",
+        "view_jitter_is_bounded",
+        "view_jitter_azimuth_limit_deg",
+        "view_jitter_elevation_limit_deg",
+    ):
+        value = result.extras.get(name)
+        if torch.is_tensor(value):
+            digest.update(_portable_tensor_fingerprint_bytes(value))
+    digest.update("\n".join(result.component_name or ()).encode())
+
+    assert digest.hexdigest() == expected_fingerprint
+
+
+def test_component_validation_and_three_gaze_expansion() -> None:
+    center = _component(name="template", count=6, view_mode=ViewDirectionMode.FORWARD_RIG).center
+    gazes = (
+        CandidateGazeConfig(name="primary", mode=ViewDirectionMode.FORWARD_RIG, jitter=BoxViewJitterConfig()),
+        CandidateGazeConfig(name="target", mode=ViewDirectionMode.TARGET_POINT, jitter=BoxViewJitterConfig()),
+        CandidateGazeConfig(name="away", mode=ViewDirectionMode.RADIAL_AWAY, jitter=BoxViewJitterConfig()),
+    )
+    component = CandidateMixtureComponentConfig(name="triple", count=6, center=center, gazes=gazes)
+    cfg = CandidateMixtureViewGeneratorConfig(base=_base_cfg(), components=(component,))
+
+    assert cfg.total_count == 18
+    result = _run_generate(cfg)
+    assert result.mask_valid.numel() == 18
+    assert torch.equal(result.sampler_probability, torch.full_like(result.sampler_probability, 1.0 / 18.0))
+    assert result.component_name == ("triple",) * 6 + ("triple__target",) * 6 + ("triple__away",) * 6
+    assert result.position_pair_id.tolist() == list(range(6)) * 3
+    assert result.gaze_variant_id.tolist() == [0] * 6 + [1] * 6 + [2] * 6
+
+    with pytest.raises(ValueError, match="gaze names must be unique"):
+        CandidateMixtureComponentConfig(name="duplicate", count=1, center=center, gazes=(gazes[0], gazes[0]))
+    with pytest.raises(ValueError, match="component names must be unique"):
+        CandidateMixtureViewGeneratorConfig(components=(component, component))
+    colliding = CandidateMixtureComponentConfig(name="triple__target", count=1, center=center, gazes=(gazes[0],))
+    with pytest.raises(ValueError, match="provenance names must be globally unique"):
+        CandidateMixtureViewGeneratorConfig(components=(component, colliding))
+
+
+def test_nested_config_defaults_and_identity_propagation_are_owned_once() -> None:
+    center = SampledCenterConfig(mode=CandidatePositionMode.FORWARD_LOCAL)
+    gaze = CandidateGazeConfig(mode=ViewDirectionMode.FORWARD_RIG)
+    component = CandidateMixtureComponentConfig(name="component", count=2, center=center, gazes=(gaze,))
+
+    assert center.model_dump() == {
+        "kind": "sampled",
+        "mode": CandidatePositionMode.FORWARD_LOCAL,
+        "distribution": {
+            "kind": SamplingStrategy.FORWARD_POWERSPHERICAL,
+            "concentration": 8.0,
+        },
+        "min_radius_m": 0.25,
+        "max_radius_m": 1.25,
+        "min_elevation_deg": -12.0,
+        "max_elevation_deg": 18.0,
+        "azimuth_width_deg": 120.0,
+    }
+    assert gaze.name == "primary"
+    assert isinstance(gaze.jitter, BoxViewJitterConfig)
+    assert component.gazes[0].name == "primary"
+    assert "name" not in component.gazes[0].propagated_fields
+
+
+def test_sampled_center_legacy_projection_preserves_controls_and_revalidates_overrides() -> None:
+    base = CandidateViewGeneratorConfig(
+        sampling_strategy=SamplingStrategy.FORWARD_POWERSPHERICAL,
+        kappa=13.0,
+        min_radius=0.4,
+        max_radius=1.6,
+        min_elev_deg=-9.0,
+        max_elev_deg=17.0,
+        delta_azimuth_deg=155.0,
+    )
+
+    center = SampledCenterConfig.from_legacy(
+        base,
+        mode=CandidatePositionMode.LOCAL_REFINEMENT,
+        min_radius_m=0.2,
+        max_radius_m=0.7,
+    )
+
+    assert center == SampledCenterConfig(
+        mode=CandidatePositionMode.LOCAL_REFINEMENT,
+        distribution=PowerSphericalConfig(concentration=13.0),
+        min_radius_m=0.2,
+        max_radius_m=0.7,
+        min_elevation_deg=-9.0,
+        max_elevation_deg=17.0,
+        azimuth_width_deg=155.0,
+    )
+    with pytest.raises(ValueError, match="min_radius_m must not exceed max_radius_m"):
+        SampledCenterConfig.from_legacy(
+            base,
+            mode=CandidatePositionMode.FORWARD_LOCAL,
+            min_radius_m=2.0,
+            max_radius_m=1.0,
         )
+
+
+@pytest.mark.parametrize(
+    "field,value",
+    [
+        ("min_radius_m", float("nan")),
+        ("max_radius_m", float("inf")),
+        ("azimuth_width_deg", float("inf")),
+    ],
+)
+def test_sampled_center_rejects_non_finite_support(field: str, value: float) -> None:
+    with pytest.raises(ValueError):
+        SampledCenterConfig(mode=CandidatePositionMode.FORWARD_LOCAL, **{field: value})
+
+
+def test_sphere_distribution_is_discriminated_and_has_no_inert_uniform_concentration() -> None:
+    uniform = SampledCenterConfig.model_validate({"mode": "forward_local", "distribution": {"kind": "uniform_sphere"}})
+    powered = SampledCenterConfig.model_validate(
+        {
+            "mode": "forward_local",
+            "distribution": {"kind": "forward_powerspherical", "concentration": 12.0},
+        }
+    )
+
+    assert isinstance(uniform.distribution, UniformSphereConfig)
+    assert uniform.distribution.model_dump() == {"kind": SamplingStrategy.UNIFORM_SPHERE}
+    assert isinstance(powered.distribution, PowerSphericalConfig)
+    assert powered.distribution.concentration == pytest.approx(12.0)
+    assert stable_config_hash(SampledCenterConfig.model_validate(powered.model_dump())) == stable_config_hash(powered)
+    with pytest.raises(ValueError, match="concentration"):
+        SampledCenterConfig.model_validate(
+            {
+                "mode": "forward_local",
+                "distribution": {"kind": "uniform_sphere", "concentration": 12.0},
+            }
+        )
+
+
+@pytest.mark.parametrize("value", [float("nan"), float("inf"), float("-inf")])
+def test_power_spherical_distribution_rejects_non_finite_concentration(value: float) -> None:
+    with pytest.raises(ValueError):
+        PowerSphericalConfig(concentration=value)
+
+
+def test_component_count_replacement_revalidates_scalar_and_orbit_invariants() -> None:
+    component = _component(name="forward", count=2, view_mode=ViewDirectionMode.FORWARD_RIG)
+    with pytest.raises(ValueError, match="greater than 0"):
+        component.with_count(0)
+    with pytest.raises(ValueError, match="greater than 0"):
+        component.with_count(-1)
+
+    orbit = CandidateMixtureComponentConfig(
+        name="orbit",
+        count=2,
+        center=TargetOrbitCenterConfig(angles_deg=(-6.0, 6.0)),
+        gazes=(CandidateGazeConfig(mode=ViewDirectionMode.TARGET_POINT),),
+    )
+    with pytest.raises(ValueError, match="at least two centers"):
+        CandidateMixtureViewGeneratorConfig(components=(orbit.with_count(1),))
+
+
+def test_component_config_import_paths_remain_stable() -> None:
+    import aria_nbv.pose_generation as pose_generation
+    from aria_nbv.pose_generation import CandidateMixtureComponentConfig as PackageConfig
+    from aria_nbv.pose_generation.candidate_mixture import CandidateMixtureComponentConfig as ModuleConfig
+
+    assert PackageConfig is CandidateMixtureComponentConfig
+    assert ModuleConfig is CandidateMixtureComponentConfig
+    assert pose_generation.__all__ == [
+        "CandidateViewGenerator",
+        "CandidateViewGeneratorConfig",
+        "CandidateMixtureComponentConfig",
+        "CandidateMixtureViewGenerator",
+        "CandidateMixtureViewGeneratorConfig",
+        "CandidateGenerationRuntimeContext",
+        "CandidatePositionMode",
+        "ViewDirectionMode",
+        "candidate_position_id",
+        "candidate_strategy_id",
+        "CandidateSamplingResult",
+        "SamplingStrategy",
+        "CollisionBackend",
+        "summarise_offsets_ref",
+        "summarise_dirs_ref",
+        "stats_to_markdown_table",
+    ]
+
+
+def test_mixed_generation_ignores_obsolete_base_fields_but_retains_alignment() -> None:
+    baseline = CandidateMixtureViewGeneratorConfig(base=_base_cfg())
+    changed_base = _base_cfg().model_copy(
+        update={
+            "num_samples": 1,
+            "oversample_factor": 4.0,
+            "max_resamples": 9,
+            "position_mode": CandidatePositionMode.REVISIT_BACKTRACK,
+            "sampling_strategy": SamplingStrategy.FORWARD_POWERSPHERICAL,
+            "min_radius": 3.0,
+            "max_radius": 4.0,
+            "min_elev_deg": 40.0,
+            "max_elev_deg": 50.0,
+            "delta_azimuth_deg": 20.0,
+            "kappa": 1.0,
+            "position_target_point_world": torch.tensor([9.0, 8.0, 7.0]),
+            "target_orbit_angles_deg": (-40.0, 40.0),
+            "view_direction_mode": ViewDirectionMode.RADIAL_AWAY,
+            "view_sampling_strategy": SamplingStrategy.UNIFORM_SPHERE,
+            "view_kappa": 1.0,
+            "view_max_angle_deg": 2.0,
+            "view_max_azimuth_deg": 1.0,
+            "view_max_elevation_deg": 1.0,
+            "view_roll_jitter_deg": 20.0,
+            "view_target_point_world": torch.tensor([7.0, 8.0, 9.0]),
+        }
+    )
+    changed = CandidateMixtureViewGeneratorConfig(base=changed_base)
+
+    expected = _run_generate(baseline, seed=17)
+    actual = _run_generate(changed, seed=17)
+    assert torch.equal(actual.shell_poses.tensor(), expected.shell_poses.tensor())
+    assert torch.equal(actual.mask_valid, expected.mask_valid)
+    assert torch.equal(actual.views.tensor(), expected.views.tensor())
+    assert torch.equal(actual.strategy_id, expected.strategy_id)
+    assert torch.equal(actual.position_id, expected.position_id)
+
+    pitch = torch.deg2rad(torch.tensor(30.0))
+    tilted = PoseTW.from_Rt(
+        torch.tensor(
+            [[1.0, 0.0, 0.0], [0.0, torch.cos(pitch), -torch.sin(pitch)], [0.0, torch.sin(pitch), torch.cos(pitch)]]
+        ),
+        torch.zeros(3),
+    )
+    aligned = _run_generate(baseline, seed=17, reference_pose=tilted)
+    unaligned = _run_generate(
+        CandidateMixtureViewGeneratorConfig(base=_base_cfg().model_copy(update={"align_to_gravity": False})),
+        seed=17,
+        reference_pose=tilted,
+    )
+    assert not torch.equal(aligned.sampling_pose.tensor(), unaligned.sampling_pose.tensor())
+
+
+def test_mixture_rejects_zero_resolved_view_jitter() -> None:
+    with pytest.raises(ValueError, match="use NoViewJitterConfig"):
+        BoxViewJitterConfig(
+            yaw_half_width_deg=0.0,
+            pitch_half_width_deg=0.0,
+            roll_half_width_deg=0.0,
+        )
+
+    assert BoxViewJitterConfig(yaw_half_width_deg=1.0, pitch_half_width_deg=0.0)
+    assert BoxViewJitterConfig(yaw_half_width_deg=0.0, pitch_half_width_deg=1.0)
+    assert BoxViewJitterConfig(yaw_half_width_deg=0.0, pitch_half_width_deg=0.0, roll_half_width_deg=1.0)
 
 
 def test_rich_local_five_family_is_named_ablation() -> None:
@@ -647,7 +1052,7 @@ def test_paired_component_reuses_centers_and_retains_gaze_variants() -> None:
     cfg = CandidateMixtureViewGeneratorConfig(
         base=_base_cfg(),
         components=[
-            CandidateMixtureComponentConfig(
+            _component(
                 name="target_forward_pair",
                 count=4,
                 view_mode=ViewDirectionMode.TARGET_POINT,
@@ -675,65 +1080,7 @@ def test_paired_center_gaze_preset_keeps_sixty_candidate_rows() -> None:
     cfg = CandidateMixtureViewGeneratorConfig.paired_center_gaze_family()
 
     assert cfg.total_count == 60
-    assert cfg.components[0].paired_view_mode is ViewDirectionMode.FORWARD_RIG
-
-
-def test_reviewed_component_templates_preserve_rich_family_fields() -> None:
-    writer_target_bearing = CandidateMixtureComponentConfig(
-        name="target_bearing_local",
-        count=24,
-        view_mode=ViewDirectionMode.TARGET_POINT,
-        position_mode=CandidatePositionMode.TARGET_BEARING_LOCAL,
-        sampling_strategy=SamplingStrategy.UNIFORM_SPHERE,
-        view_sampling_strategy=SamplingStrategy.FORWARD_POWERSPHERICAL,
-        min_radius=0.4,
-        max_radius=1.1,
-        min_elev_deg=-8.0,
-        max_elev_deg=14.0,
-        delta_azimuth_deg=90.0,
-        kappa=6.0,
-        view_kappa=12.0,
-        view_max_angle_deg=30.0,
-        view_max_azimuth_deg=20.0,
-        view_max_elevation_deg=10.0,
-        view_roll_jitter_deg=5.0,
-    )
-    components = CandidateMixtureViewGeneratorConfig.reviewed_component_templates(
-        (
-            ("target_bearing_local", 18),
-            ("forward_local", 18),
-            ("lateral_target_bypass", 12),
-            ("local_refinement", 6),
-            ("revisit_backtrack", 6),
-        ),
-        existing_components=[writer_target_bearing],
-    )
-
-    assert sum(component.count for component in components) == 60
-    by_name = {component.name: component for component in components}
-    assert by_name["target_bearing_local"].model_dump(exclude={"count"}) == writer_target_bearing.model_dump(
-        exclude={"count"}
-    )
-    assert by_name["target_bearing_local"].count == 18
-    assert by_name["target_bearing_local"].min_radius == pytest.approx(0.4)
-    assert by_name["target_bearing_local"].max_radius == pytest.approx(1.1)
-    assert by_name["local_refinement"].view_mode is ViewDirectionMode.TARGET_POINT
-    assert by_name["local_refinement"].min_radius == pytest.approx(0.25)
-    assert by_name["local_refinement"].max_radius == pytest.approx(0.7)
-    assert by_name["revisit_backtrack"].position_mode is CandidatePositionMode.REVISIT_BACKTRACK
-    assert by_name["revisit_backtrack"].min_radius == pytest.approx(0.25)
-    assert by_name["revisit_backtrack"].max_radius == pytest.approx(0.25)
-    assert all(
-        component.view_max_azimuth_deg is None for name, component in by_name.items() if name != "target_bearing_local"
-    )
-    assert all(
-        component.view_max_elevation_deg is None
-        for name, component in by_name.items()
-        if name != "target_bearing_local"
-    )
-
-    with pytest.raises(ValueError, match="unsupported reviewed candidate component schedule"):
-        CandidateMixtureViewGeneratorConfig.reviewed_component_templates((("new_family", 60),))
+    assert cfg.components[0].gazes[1].mode is ViewDirectionMode.FORWARD_RIG
 
 
 def test_radial_target_backtrack_family_is_diverse_rollout_profile() -> None:
@@ -756,16 +1103,14 @@ def test_radial_target_backtrack_family_is_diverse_rollout_profile() -> None:
     assert [component.count for component in cfg.components] == [16, 16, 12, 4]
 
     component_by_name = {component.name: component for component in cfg.components}
-    assert component_by_name["radial_towards_target_bearing"].view_mode is ViewDirectionMode.RADIAL_TOWARDS
-    assert (
-        component_by_name["radial_towards_target_bearing"].position_mode is CandidatePositionMode.TARGET_BEARING_LOCAL
-    )
-    assert component_by_name["radial_away_target_bearing"].view_mode is ViewDirectionMode.RADIAL_AWAY
-    assert component_by_name["radial_away_target_bearing"].position_mode is CandidatePositionMode.TARGET_BEARING_LOCAL
-    assert component_by_name["revisit_backtrack"].view_mode is ViewDirectionMode.FORWARD_RIG
-    assert component_by_name["revisit_backtrack"].position_mode is CandidatePositionMode.REVISIT_BACKTRACK
-    assert component_by_name["revisit_backtrack"].max_radius == pytest.approx(0.25)
-    assert component_by_name["target_point_anchor"].view_mode is ViewDirectionMode.TARGET_POINT
+    assert component_by_name["radial_towards_target_bearing"].gazes[0].mode is ViewDirectionMode.RADIAL_TOWARDS
+    assert component_by_name["radial_towards_target_bearing"].center.mode is CandidatePositionMode.TARGET_BEARING_LOCAL
+    assert component_by_name["radial_away_target_bearing"].gazes[0].mode is ViewDirectionMode.RADIAL_AWAY
+    assert component_by_name["radial_away_target_bearing"].center.mode is CandidatePositionMode.TARGET_BEARING_LOCAL
+    assert component_by_name["revisit_backtrack"].gazes[0].mode is ViewDirectionMode.FORWARD_RIG
+    assert component_by_name["revisit_backtrack"].center.mode is CandidatePositionMode.REVISIT_BACKTRACK
+    assert component_by_name["revisit_backtrack"].center.max_radius_m == pytest.approx(0.25)
+    assert component_by_name["target_point_anchor"].gazes[0].mode is ViewDirectionMode.TARGET_POINT
 
 
 def test_upper_bound_free_shell_ablation_is_explicit() -> None:
@@ -803,7 +1148,7 @@ def test_target_orbit_attempts_both_sides_at_constant_world_horizontal_standoff(
             }
         ),
         components=[
-            CandidateMixtureComponentConfig(
+            _component(
                 name="target_orbit",
                 count=12,
                 view_mode=ViewDirectionMode.TARGET_POINT,
@@ -851,11 +1196,12 @@ def test_target_orbit_interleaves_reordered_angle_bank_for_small_component() -> 
     cfg = CandidateMixtureViewGeneratorConfig(
         base=_base_cfg().model_copy(update={"target_orbit_angles_deg": (-6.0, -10.0, 6.0, 10.0)}),
         components=[
-            CandidateMixtureComponentConfig(
+            _component(
                 name="target_orbit",
                 count=2,
                 view_mode=ViewDirectionMode.TARGET_POINT,
                 position_mode=CandidatePositionMode.TARGET_ORBIT,
+                target_orbit_angles_deg=(-6.0, -10.0, 6.0, 10.0),
             )
         ],
     )
@@ -871,11 +1217,11 @@ def test_target_orbit_interleaves_reordered_angle_bank_for_small_component() -> 
 
 
 def test_target_orbit_mixture_requires_two_attempted_proposals() -> None:
-    with pytest.raises(ValueError, match="count >= 2"):
+    with pytest.raises(ValueError, match="at least two centers"):
         CandidateMixtureViewGeneratorConfig(
             base=_base_cfg(),
             components=[
-                CandidateMixtureComponentConfig(
+                _component(
                     name="target_orbit",
                     count=1,
                     view_mode=ViewDirectionMode.TARGET_POINT,

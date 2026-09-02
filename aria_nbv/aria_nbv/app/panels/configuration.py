@@ -47,6 +47,7 @@ def trusted_config_patterns() -> dict[str, tuple[str, ...]]:
     return {
         "Training experiment": ("offline_only.toml", "offline_smoke_2epoch.toml"),
         "Rollout campaign": (
+            "build_rollouts_v2_cuda_campaign.toml",
             "build_rollouts_v1_cuda_campaign.toml",
             "build_rollouts_v1_cuda_campaign_pilot_corrected_v*.toml",
         ),
@@ -56,7 +57,8 @@ def trusted_config_patterns() -> dict[str, tuple[str, ...]]:
             "build_rollouts_v1_lrz.template.toml",
             "build_rollouts_v1_microset.toml",
             "build_rollouts_v1_multihorizon_highgain.toml",
-            "build_rollouts_v1_realistic.toml",
+            "build_rollouts_v2_cuda_campaign_writer.toml",
+            "build_rollouts_v2_realistic.toml",
             "build_rollouts_v1_smoke.toml",
         ),
         "Offline VIN writer": ("build_vin_offline*.toml",),
