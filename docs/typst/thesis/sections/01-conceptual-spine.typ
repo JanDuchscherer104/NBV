@@ -121,9 +121,9 @@ explicit exploratory tail remains necessary to expose occluded target surfaces
 // - mixed intervention support -> aria_nbv/aria_nbv/pose_generation/candidate_mixture.py
 
 The current implementation realizes a deliberately coarse instance of this
-factorization through an #gh-wip(
+factorization through a #gh-wip(
   "aria_nbv/aria_nbv/targets/protocol.py",
-  body: [actor-visible target protocol],
+  body: [target-provenance boundary],
 ), a #gh-wip(
   "aria_nbv/aria_nbv/pose_generation/candidate_mixture.py",
   body: [mixed candidate generator],
