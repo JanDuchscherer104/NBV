@@ -1,171 +1,137 @@
 # ARIA-NBV Thesis Writing Guide
 
-This is calibrated for a computer-science master thesis on target-conditioned
-next-best-view planning, not for biomedical journal submission.
+This guide calibrates the reader-facing argument for a computer-science
+master's thesis on target-conditioned next-best-view planning. The educational
+goal is not to expose every verified contract. It is to teach a technically
+competent reader how geometry, time, hierarchy, representation, and data shape
+the scientific problem, then let that reader assess the evidence.
 
-## Context7 Synthesis
+## Narrative spine
 
-Use the external scientific-writing skills as a pattern library, not as
-authority over this thesis. Keep the practices that improve CS/ML thesis prose:
+The default thesis spine is:
 
-- Draft with bullet outlines, but finish in connected paragraphs.
-- Treat IMRAD as reader flow: motivation and gap, reproducible method, factual
-  results, bounded interpretation.
-- Ground claims in repository artifacts, cited literature, experiments, or
-  explicit hypothesis wording. Use
-  [`claim-citation-discipline.md`](claim-citation-discipline.md) for the claim
-  taxonomy and evidence gate.
-- Prefer primary sources for specific method, dataset, benchmark, and metric
-  claims. Use reviews only for broad context.
-- Avoid citation clusters larger than two or three sources unless the sentence
-  names what each source contributes.
-- Design figures and tables around one takeaway, with captions that state the
-  setting, evidence, and supported claim.
-- Audit evidence before polishing: scope, strength, falsifier, key support,
-  strongest alternative explanation, and limitation.
+1. a limited view budget makes observation choice consequential;
+2. target conditioning defines whose reconstruction should improve;
+3. the locally strongest view may be a poor first step of a useful sequence;
+4. an offline oracle tests whether bounded non-myopic opportunity exists;
+5. an actor-visible model tests whether that opportunity can be recovered
+   without privileged information;
+6. representation, candidate support, and data quality explain when those tests
+   succeed or fail.
 
-Do not import generic defaults that conflict with ARIA-NBV:
+Secondary representation or simulator questions support this spine. They do
+not become co-equal thesis narratives merely because the implementation
+contains them.
 
-- mandatory AI-generated graphical abstracts or fixed figure quotas;
-- generic "one figure per N words" rules when thesis evidence and page design
-  should decide;
-- biomedical reporting checklists such as CONSORT, STROBE, PRISMA, STARD, or
-  CARE as defaults; use them only if a section genuinely has that study design;
-- generic journal-submission framing when the advisor proposal and thesis
-  contracts own the audience;
-- mandatory external `research-lookup` workflows; use local source order, KG
-  checks, and literature indexes when a claim needs evidence;
-- image-generation-first workflows, including Nano Banana or generated
-  schematic mandates, unless the task explicitly asks for generated bitmap
-  figures.
+## ARIA theory lenses
 
-## Writing Modes
+Use these lenses when they clarify a chapter's reader question. They are
+questions to teach and test, not conclusions to assert without evidence.
 
-Use these nested modes only while constructing or revising a source-grounded
-candidate; they are ARIA adaptations of Matt writing skills, not activated upstream owners. See
-[upstream-matt-writing](upstream-matt-writing.md) for the pinned source links and update policy.
+### Geometry and symmetry
 
-`fragment-capture`: use before structure exists. Collect scratch claims,
-observations, advisor notes, possible phrasings, examples, objections, and
-evidence gaps into a scratch pile. Do not write final thesis claims directly
-from fragments; first classify scope, strength, evidence, limitation, and
-terminology.
+- Which geometric objects are represented: poses, rays, points, voxels,
+  surfaces, targets, candidate sets, or relations?
+- Which group action changes only coordinates, and which output should remain
+  invariant or transform equivariantly?
+- Can candidate-target or candidate-history relations remove arbitrary global
+  frames while preserving decision-relevant geometry?
+- Is an apparent isomorphism exact, approximate, or only an architectural
+  analogy?
 
-`shape-pass`: use when the input pile is fixed. Arrange scoped claims and
-evidence using the section contract and
-[`reader-centred-exposition.md`](reader-centred-exposition.md). If the pile
-lacks an example, citation, metric, or limitation, mark the gap instead of
-fabricating.
+Introduce the physical transformation and desired behavior before terms such
+as invariance, equivariance, or SE(3).
 
-`beat-pass`: use to improve the reader-state transitions defined in
-[`reader-centred-exposition.md`](reader-centred-exposition.md). This is useful
-for introductions, Related Work transitions, discussion, limitations, and
-advisor summaries; it must not override method-section contracts, notation
-rules, or evidence gates.
+### Spatio-temporal state
 
-## Proposal And Thesis Rhetoric
+- What information is available before the current action?
+- Which temporal dependence is already captured by explicit poses, observations,
+  and budget, and which requires learned memory?
+- Does a sequence model address a diagnosed missing dependency, or merely mirror
+  the dataset's time axis?
+- How do factual successors differ from counterfactual one-step outcomes?
 
-Use a compact ABT/CARS structure:
+Teach causal prefixes and delayed consequences through a short rollout before
+formal return notation.
 
-- AND / territory: active 3D reconstruction, NBV planning, AR guidance,
-  semantic scene representations, and learned reconstruction proxies.
-- BUT / niche: handheld AR needs target-aware view choice, efficient
-  counterfactual candidate evaluation, and leakage-safe oracle supervision.
-- THEREFORE / contribution: ARIA-NBV proposes a target-conditioned,
-  quality-driven finite-candidate NBV stack and specifies its fixed-budget
-  evaluation contract.
+### Hierarchy
 
-The gap must follow from the context. Do not bolt on "semantic relevance" as a
-slogan; state the concrete failure mode it addresses.
+Distinguish scene, requested target, current state, candidate set, selected
+action, rollout, and experiment population. Explain how information moves
+between levels and which operations should be shared, pooled, masked, or
+conditioned. A flat tensor layout is not itself a scientific hierarchy.
 
-## Section Jobs
+### Scene and target representations
 
-Abstract or advisor summary: write after the section claims settle. State the
-problem, gap, approach, current evidence status, contribution, and main
-limitation in plain language.
+Compare representations by the information and symmetries they preserve:
+local EVL voxel fields, occupancy or observed/free/unknown state, semidense
+points, sparse geometric tokens, target-centred crops, relational graphs,
+renderable fields, and combinations thereof. For a discrete field, teach
+resolution, sparsity, locality, boundary effects, interpolation, unknown space,
+and target alignment before discussing an encoder. Derived representations are
+motivated by a specific lost distinction, not by architectural novelty.
 
-Introduction: establish why interactive NBV matters, state the limitation of
-geometry-only or scene-level framing, introduce ARIA-NBV, and end with precise
-contributions.
+### Data and simulation
 
-Related work: use [`literature-synthesis.md`](literature-synthesis.md) to teach
-the conceptual machinery that makes the method's requirements and choices
-understandable.
+Separate independent scenes, overlapping snippets, factual transitions,
+counterfactual labels, augmentations, and simulator-generated trajectories.
+Changing ATEK stride may produce more factual windows and state coverage, but
+does not create new independent environments. Synthetic data is useful only
+when action, observation, target, modality, noise, and provenance interfaces
+match the question being tested. Explicitly expose factual-counterfactual
+modality asymmetry and ground-truth leakage.
 
-Method/system design: specify input/output contracts, frame conventions,
-symbol/equation references, learned vs deterministic components, online vs
-offline parts, reproducibility assumptions, and expected failure modes.
+## Chapter jobs
 
-Experiments: report dataset/split assumptions, candidate sampling, oracle
-labels, baselines, ablations, metrics, aggregation, runtime constraints,
-limitations, and threats to validity.
+- **Introduction:** motivate one central planning tension through a concrete
+  target example; state the principal questions and subordinate validity
+  conditions.
+- **Foundations and Related Work:** teach the objective, support, temporal, and
+  representation machinery through conceptual tensions. Synthesize sources
+  around those tensions rather than attaching a criticism to every paper.
+- **Oracle and Data Generation:** use a running state-and-candidate example to
+  separate actor information, privileged evaluation, selected factual
+  successors, and replay.
+- **Method:** begin with one conceptual input-output account and one selected
+  method. Formalize components only after their roles are understood; place
+  code mappings and design-space ladders later.
+- **Experimental Design:** align comparisons with the research questions and
+  distinguish scene-level evidence from additional correlated windows or
+  labels.
+- **Results:** report in research-question order using ordinary metric names,
+  denominators, uncertainty, and first-failure attribution.
+- **Discussion:** move from observation to mechanism, competing explanation,
+  discriminating test, and bounded implication.
+- **Conclusion:** answer each principal question directly and introduce no new
+  machinery.
 
-Results: report what was measured before interpreting why it happened. Tie each
-result to a metric, split, baseline, uncertainty or aggregation rule, and figure
-or table when one carries the evidence.
+## Prose and notation
 
-Discussion: separate what experiments show, what the design suggests, what is
-speculative, and what future AR-in-the-loop studies must validate.
-
-## Scoped Claim Scaffold
-
-Before drafting a major section, compress it to one to three scoped claims. For
-each claim, record:
-
-1. Claim: the sentence the thesis can defend.
-2. Scope: dataset, split, method version, target protocol, metric, or section
-   boundary where the claim holds.
-3. Strength: established, supported, suggested, or hypothesis.
-4. Falsifier: the result, citation, or implementation fact that would force a
-   rewrite.
-5. Key evidence: citation key, code path, experiment, table, figure, or explicit
-   limitation.
-6. Limitation: what the claim does not cover.
-
-If this scaffold cannot be filled, write the point as an open question,
-limitation, or planned experiment instead of a result.
-
-## Paragraph Unit Test
-
-Use the reader-centred exposition contract for paragraph order and information
-flow. Then ask:
-
-1. What is the paragraph's single job?
-2. What concrete claim does it make?
-3. What evidence supports it?
-4. Which term or symbol must stay consistent with the shared library?
-5. Would a skeptical reader know the scope, evidence, and uncertainty level?
-
-If the answer is unclear, rewrite before polishing.
-
-## Style
-
-Prefer sober, specific prose. Use active voice when it is clearer and shorter,
-but do not contort method descriptions to avoid passive voice. Use "significant"
-only for statistical significance; use "substantial", "measurable", or the
-actual metric change for practical effects. Avoid hedge stacking: choose one of
-"suggests", "may", or "could" when evidence is limited.
-
-Bad:
-
-> This work leverages semantic awareness to unlock a powerful and holistic AR reconstruction pipeline.
+Prefer positive, concrete definitions. Conceptual prose uses scientific terms;
+formal relations use the shared notation owners; implementation identifiers
+appear only in an explicit correspondence surface. Introduce an alternative
+after the selected idea is understood. Avoid turning development status,
+admission rules, manifests, hashes, DTOs, masks, and report keys into the
+narrative subject.
 
 Good:
 
-> ARIA-NBV scores candidate views by expected reconstruction improvement for the selected target, not only by scene-level surface coverage.
+> ARIA-NBV evaluates how much a candidate view improves the requested object's
+> reconstruction. Scene-wide coverage remains a separate diagnostic.
 
-Avoid filler: crucial, pivotal, revolutionary, landscape, delve, holistic,
-foster, underscore, pave the way, seamlessly, it is well known that.
+Use active voice when it is clearer. Reserve “significant” for statistical
+significance and choose one calibrated hedge when evidence is limited. Prefer
+mechanisms, examples, measurements, and consequences over generic academic
+phrasing.
 
-## Outline-To-Prose Workflow
+## Writing modes
 
-1. Write a bullet outline with claims, scope, evidence, limitations, and
-   citations.
-2. Convert each bullet cluster into paragraphs.
-3. Start each paragraph with its job or claim, then add evidence, explanation,
-   and transition.
-4. Remove bullets from final manuscript sections unless the template requires
-   them.
-5. Replace generic fluency with mechanisms, metrics, comparisons, or
-   limitations.
-6. Review in this order: correctness, structure, evidence, then style.
+- **Fragment capture:** collect claims, examples, objections, and evidence gaps;
+  do not promote fragments directly.
+- **Shape pass:** satisfy the teaching-first section contract and chapter ledger.
+- **Beat pass:** improve paragraph inheritance and chapter transitions without
+  changing evidence or notation contracts.
+
+Review in this order: reader journey and conceptual dependency, scientific
+correctness, evidence calibration, formal exposition, then sentence style. A
+late style pass cannot repair a specification-shaped argument.

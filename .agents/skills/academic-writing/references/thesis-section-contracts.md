@@ -1,50 +1,73 @@
 # Thesis Section Contracts
 
-Use these acceptance checks when drafting or reviewing thesis/proposal prose.
+Use these acceptance checks with the chapter's record in
+`docs/typst/thesis/development/reader-state.toml`. The ledger owns the intended
+learning transition; active thesis sources own claims.
 
 ## Introduction
 
-Must contain concrete problem context, the target-aware NBV gap, the ARIA-NBV
-contribution, scope boundaries, and testable research questions. Reject if
-semantic relevance is a slogan or contributions are generic.
+Teach the concrete target-conditioned planning tension before naming the
+system. Establish one central question, separate oracle opportunity from
+learned recovery, and present support, causality, representation, and leakage as
+validity conditions. Reject an opening that requires repository identifiers or
+presents all implementation threads as equal contributions.
 
-## Related Work
+## Foundations and Related Work
 
-Each paragraph names a subfield, states what prior work contributes, identifies
-the limitation relative to ARIA-NBV, and cites specific sources. Avoid "many
-works have explored" openings and unassigned citation clusters.
+Teach the conceptual machinery in dependency order: target utility, feasible
+action support, causal state, delayed value, and representation structure.
+Organize literature around scientific tensions and synthesize multiple sources
+where they jointly establish a premise. A paragraph need not criticize every
+paper relative to ARIA-NBV. Reject taxonomies that do not change what the reader
+can understand or assess.
 
-## System / Method
+## Oracle and Data Generation
 
-Must state inputs, actor-visible state, oracle-only assets, finite candidate
-set, masks/reasons, target protocol, equations, learned components, and
-expected failure modes. Reject if GT assets appear actor-visible without an
-explicit V0/upper-bound label.
+Use a running state, target, and candidate set to distinguish actor-visible
+history, privileged candidate evaluation, the selected factual successor, and
+stored supervision. Explain factual-counterfactual modality asymmetry,
+overlapping windows, and leakage conceptually before schemas or storage
+relations. Reject prose that lets unselected oracle observations enter the
+actor state or treats correlated windows as independent scenes.
 
-## Offline Oracle
+## Method
 
-Must separate label generation from decision-time inputs, define the metric,
-state invalidity as a hard constraint, and name where evaluation uses GT.
-Reject if invalid candidates are treated as merely low reward.
+Open with a plain-language input-output account of one selected method and a
+worked candidate query. Then explain scene, target, history, candidate, budget,
+horizon, geometric relations, shared context, value output, and learning target
+in that order. Architecture ladders, rejected objectives, protocol versions,
+DTOs, and internal variant codes follow only in an explicit comparison,
+implementation mapping, appendix, or development note. Reject a first
+paragraph that assumes implementation names or defines the method mainly by
+what it is not.
 
-## VIN Proxy / One-Step Scorer
+## Experimental Design
 
-Must define the myopic task, target conditioning, baseline role, evidence
-needed for calibration, and what the scorer is not allowed to claim.
+Connect every comparison to a research question or diagnosed mechanism. Specify
+scene-level population and splits, targets, candidate support, matched budgets
+and actor modalities, metrics, aggregation, uncertainty, exclusions, limited-
+data strategy, and factual-counterfactual or simulator controls. Reject designs
+that count overlapping snippets as independent environments or compare policies
+with unequal privileged information.
 
-## Finite-Horizon Q_H
+## Results
 
-Must define the finite candidate action space, masked candidate-token output,
-training return, endpoint metric, oracle re-evaluation, and headroom condition.
-Reject if planned `Q_H` behavior is phrased as implemented evidence.
+Report factual outcomes in research-question order. Each result states the
+population, comparison, estimate, uncertainty, interpretation, and earliest
+condition limiting the claim. Use reader-facing metric names in prose; keep
+report keys and artifact schemas in reproducibility surfaces. Reject pipeline
+reachability, fixtures, or training loss presented as endpoint policy evidence.
 
-## Experiments
+## Discussion
 
-Must specify dataset/splits, candidate sampling, baselines, ablations, metrics,
-aggregation, runtime/coverage reporting, and threats to validity.
+For each material result, distinguish observation, supported mechanism,
+competing explanation, discriminating test, scope, and implication. Promote a
+representation, temporal model, data source, or simulator only when it answers
+a measured limitation. Reject architecture catalogues detached from results.
 
-## Limitations And Conclusion
+## Conclusion
 
-Must separate established results, design implications, blockers, bridge work,
-and future work. Reject if continuous control, real-device deployment, or
-semantic global planning is promoted beyond available evidence.
+Give one plain-language, evidence-calibrated answer per principal research
+question, then state the transferable conceptual lesson and strongest bounded
+next step. Introduce no new symbols, protocols, architectures, or evidence.
+Reject conditional development trees as substitutes for conclusions.
