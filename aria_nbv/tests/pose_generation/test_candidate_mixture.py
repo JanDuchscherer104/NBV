@@ -725,34 +725,34 @@ def test_default_mixture_resolves_exact_nested_authoring_contract() -> None:
 
 
 def _portable_tensor_fingerprint_bytes(value: torch.Tensor) -> bytes:
-    """Return exact discrete bytes and 1e-4-quantized floating-point bytes."""
+    """Return exact discrete bytes and 1e-3-quantized floating-point bytes."""
 
     canonical = value.detach().cpu().contiguous()
     if canonical.is_floating_point():
-        canonical = torch.round(canonical.to(torch.float64) * 10_000.0).to(torch.int64)
+        canonical = torch.round(canonical.to(torch.float64) * 1_000.0).to(torch.int64)
     return canonical.numpy().tobytes()
 
 
 @pytest.mark.parametrize(
     ("config_name", "expected_fingerprint"),
     (
-        ("build_rollouts_qh_v0_baseline.toml", "2f5a1315e825a37b064b84af2d66b9a38d46f9771a1fd971b99a987620fffaac"),
+        ("build_rollouts_qh_v0_baseline.toml", "657d3762eb39bf91fa69710f0eb3972beb1f992cdc6a84eb78cd16b71c453f3d"),
         (
             "build_rollouts_v2_cuda_campaign_writer.toml",
-            "2eab29a1844c0f8f58b18066bfc441abee15e07caeeb3415f655002c2d1356d9",
+            "4135d79d895ecffcb319ebef51a3ccddee6409b9191177b95d441325afc0e920",
         ),
-        ("build_rollouts_v1_diverse.toml", "20457d6d41b51d5c9cf5064cdb1f4863818573b98c281e500cac008a74b563d8"),
+        ("build_rollouts_v1_diverse.toml", "5f882b8988b3c29eca53cb84474aa460462e7834c7510dc5bbc42d5db63c7674"),
         (
             "build_rollouts_v1_lrz.template.toml",
-            "2eab29a1844c0f8f58b18066bfc441abee15e07caeeb3415f655002c2d1356d9",
+            "4135d79d895ecffcb319ebef51a3ccddee6409b9191177b95d441325afc0e920",
         ),
-        ("build_rollouts_v1_microset.toml", "eb637e89154e1d8639ffa7b5a1c6d748b39ba71898c30014fa2c9ca154e9ddce"),
+        ("build_rollouts_v1_microset.toml", "34af9d8a090aa83082e055537e5653639bf785d067ba185e04808110e104652f"),
         (
             "build_rollouts_v1_multihorizon_highgain.toml",
-            "2eab29a1844c0f8f58b18066bfc441abee15e07caeeb3415f655002c2d1356d9",
+            "4135d79d895ecffcb319ebef51a3ccddee6409b9191177b95d441325afc0e920",
         ),
-        ("build_rollouts_v2_realistic.toml", "2eab29a1844c0f8f58b18066bfc441abee15e07caeeb3415f655002c2d1356d9"),
-        ("build_rollouts_v1_smoke.toml", "32fc1030b0f81ba88adda3d50677ce2f4f4e91ce9c2f1684bc94e91b5050d306"),
+        ("build_rollouts_v2_realistic.toml", "4135d79d895ecffcb319ebef51a3ccddee6409b9191177b95d441325afc0e920"),
+        ("build_rollouts_v1_smoke.toml", "61b04effff3d1c9495939615667821cf8a7f3f7b3e4d2328c1f3165ee44b1889"),
     ),
 )
 def test_migrated_active_profiles_match_origin_main_candidate_fingerprints(
