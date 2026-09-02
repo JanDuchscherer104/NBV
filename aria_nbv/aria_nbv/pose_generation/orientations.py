@@ -97,9 +97,6 @@ class OrientationBuilder:
             mu = torch.tensor(DEVICE_FWD, device=device, dtype=dtype)
             scale = torch.tensor(distribution.concentration, device=device, dtype=dtype)
             dist = PowerSpherical(loc=mu, scale=scale)
-        else:
-            v = torch.tensor(DEVICE_FWD, device=device, dtype=dtype)
-            return v.view(1, 3).expand(num, 3)
 
         return _normalise(dist.rsample((num,)))
 
