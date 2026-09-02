@@ -1,0 +1,59 @@
+{
+  "schema": "pose-generation-runtime-cuda-parity-receipt-v2",
+  "evidence_class": "privileged_v0_gt_obb_generation_parity",
+  "baseline": {
+    "pull_request": 225,
+    "commit": "5ce42e9327ccffcda44fc363432907ed2b42e235"
+  },
+  "candidate": {
+    "pull_request": 226,
+    "commit": "d7c624e678439f2e05a6fd1125202a8bb11e030a"
+  },
+  "scene_id": "81283",
+  "snippet_id": "ASE_81283_Atek_000000",
+  "target_selection": "nearest valid real-scene GT OBB to the final reference pose",
+  "target_distance_m": 2.6926422119140625,
+  "config": ".configs/build_rollouts_v2_realistic.toml",
+  "seed": 73,
+  "attempted": 60,
+  "valid": 21,
+  "compute": {
+    "device": "cuda",
+    "gpu": "NVIDIA GeForce RTX 3080 Ti",
+    "torch": "2.4.1+cu121",
+    "cuda_runtime": "12.1",
+    "cudnn": 90100
+  },
+  "procedure": {
+    "probe": ".agents/work/pose-generation-revision/10--runtime-cuda-parity-probe--09-01.py",
+    "baseline_command": "PYTHONPATH=/home/jd/.codex/worktrees/aria-pose-generation-config-pr1/aria_nbv:/home/jd/.codex/worktrees/aria-pose-generation-config-pr1/external/efm3d /home/jd/repos/ARIA-NBV/aria_nbv/.venv/bin/python .agents/work/pose-generation-revision/10--runtime-cuda-parity-probe--09-01.py --config /home/jd/.codex/worktrees/aria-pose-generation-config-pr1/.configs/build_rollouts_v2_realistic.toml --output /tmp/pr225-runtime-parity.json",
+    "candidate_command": "PYTHONPATH=/home/jd/.codex/worktrees/aria-pose-generation-runtime-pr2/aria_nbv:/home/jd/.codex/worktrees/aria-pose-generation-runtime-pr2/external/efm3d /home/jd/repos/ARIA-NBV/aria_nbv/.venv/bin/python .agents/work/pose-generation-revision/10--runtime-cuda-parity-probe--09-01.py --config /home/jd/.codex/worktrees/aria-pose-generation-runtime-pr2/.configs/build_rollouts_v2_realistic.toml --output /tmp/pr226-runtime-parity.json",
+    "comparison_command": "sha256sum /tmp/pr225-runtime-parity.json /tmp/pr226-runtime-parity.json && diff -u /tmp/pr225-runtime-parity.json /tmp/pr226-runtime-parity.json",
+    "baseline_receipt_sha256": "b54cc264926652789ef10462bfdc589e4454e214d21c385a9b5d91c5f9814319",
+    "candidate_receipt_sha256": "b54cc264926652789ef10462bfdc589e4454e214d21c385a9b5d91c5f9814319"
+  },
+  "comparison": {
+    "exact_tensor_equality": true,
+    "matching_nan_positions": true,
+    "compared_named_masks": 4,
+    "compared_tensor_extras": 27,
+    "global_rng_state_unchanged_per_run": true,
+    "global_rng_state_equal_across_heads": true,
+    "cpu_rng_state_sha256": "fd0ad24b97ee4655812faa137072e4c686b4c6303d49ca5eb2ed13a1b7345c1f",
+    "cuda_rng_state_sha256": "f9d4da50384cafe1ed5527b1bcf4fd480a0fc9a4aac8960b491d946e536fc14f",
+    "fields": [
+      "shell_poses",
+      "poses_world_cam",
+      "mask_valid",
+      "strategy_id",
+      "position_id",
+      "mixture_id",
+      "sampler_probability",
+      "position_pair_id",
+      "gaze_variant_id",
+      "component_name",
+      "all tensor-valued extras"
+    ],
+    "note": "The only non-finite values were expected path_min_clearance_m NaNs at identical positions in both results. All finite values and provenance tensors were bit-exact."
+  }
+}

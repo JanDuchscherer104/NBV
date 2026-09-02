@@ -49,7 +49,7 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from contextlib import contextmanager
-from math import isfinite, radians
+from math import ceil, isfinite, radians
 from typing import Annotated, Any, Literal
 
 import torch
@@ -68,6 +68,16 @@ from .candidate_generation_rules import (
     MotionRealismRule,
     PathCollisionRule,
     Rule,
+)
+from .config import (
+    BoxViewJitterConfig,
+    CandidateGazeConfig,
+    CenterConfig,
+    NoViewJitterConfig,
+    SampledCenterConfig,
+    SphericalViewJitterConfig,
+    TargetOrbitCenterConfig,
+    sphere_distribution_from_legacy,
 )
 from .orientations import OrientationBuilder
 from .positional_sampling import PositionSampler
@@ -385,6 +395,47 @@ def _gravity_align_pose(reference_pose: PoseTW, *, eps: float = 1e-6) -> PoseTW:
     return PoseTW.from_Rt(r_new, t_w)
 
 
+def _center_config_from_legacy(config: CandidateViewGeneratorConfig) -> CenterConfig:
+    """Resolve legacy positional fields once at generator construction."""
+
+    if config.position_mode is CandidatePositionMode.TARGET_ORBIT:
+        return TargetOrbitCenterConfig(angles_deg=config.target_orbit_angles_deg)
+    return SampledCenterConfig.from_legacy(
+        config,
+        mode=config.position_mode,  # type: ignore[arg-type]
+    )
+
+
+def _gaze_config_from_legacy(config: CandidateViewGeneratorConfig) -> CandidateGazeConfig:
+    """Resolve legacy orientation fields once at generator construction."""
+
+    azimuth = float(config.view_max_azimuth_deg)
+    elevation = float(config.view_max_elevation_deg)
+    if azimuth > 0.0 or elevation > 0.0:
+        jitter = BoxViewJitterConfig(
+            yaw_half_width_deg=azimuth,
+            pitch_half_width_deg=elevation,
+            roll_half_width_deg=config.view_roll_jitter_deg,
+        )
+    elif config.view_sampling_strategy is not None:
+        jitter = SphericalViewJitterConfig(
+            distribution=sphere_distribution_from_legacy(
+                config.view_sampling_strategy,
+                float(config.view_kappa),
+            ),
+            roll_half_width_deg=config.view_roll_jitter_deg,
+        )
+    elif config.view_roll_jitter_deg > 0.0:
+        jitter = BoxViewJitterConfig(
+            yaw_half_width_deg=0.0,
+            pitch_half_width_deg=0.0,
+            roll_half_width_deg=config.view_roll_jitter_deg,
+        )
+    else:
+        jitter = NoViewJitterConfig()
+    return CandidateGazeConfig(name="primary", mode=config.view_direction_mode, jitter=jitter)
+
+
 @contextmanager
 def _maybe_seed(seed: int | None, *, device: torch.device) -> Iterator[None]:
     if seed is None:
@@ -427,15 +478,58 @@ class CandidateViewGenerator:
         config: CandidateViewGeneratorConfig,
         *,
         mesh_query: PreparedMeshQuery | None = None,
+        _center_config: CenterConfig | None = None,
+        _gaze_config: CandidateGazeConfig | None = None,
+        _center_count: int | None = None,
+    ) -> None:
+        self._init_runtime(
+            config,
+            center_config=_center_config if _center_config is not None else _center_config_from_legacy(config),
+            gaze_config=_gaze_config if _gaze_config is not None else _gaze_config_from_legacy(config),
+            center_count=_center_count
+            if _center_count is not None
+            else ceil(config.num_samples * config.oversample_factor),
+            mesh_query=mesh_query,
+        )
+
+    @classmethod
+    def _from_component(
+        cls,
+        base_config: CandidateViewGeneratorConfig,
+        *,
+        center_config: CenterConfig,
+        gaze_config: CandidateGazeConfig,
+        center_count: int,
+    ) -> "CandidateViewGenerator":
+        """Build one mixture-owned runtime without translating configuration."""
+
+        return cls(
+            base_config,
+            _center_config=center_config,
+            _gaze_config=gaze_config,
+            _center_count=center_count,
+        )
+
+    def _init_runtime(
+        self,
+        config: CandidateViewGeneratorConfig,
+        *,
+        center_config: CenterConfig,
+        gaze_config: CandidateGazeConfig,
+        center_count: int,
+        mesh_query: PreparedMeshQuery | None,
     ) -> None:
         self.config = config
+        self._center_config = center_config
+        self._gaze_config = gaze_config
+        self._center_count = int(center_count)
         self.console = (
             Console.with_prefix(self.__class__.__name__)
             .set_verbosity(self.config.verbosity)
             .set_debug(self.config.is_debug)
         )
-        self._position_sampler = PositionSampler(config)
-        self._orientation_builder = OrientationBuilder(config)
+        self._position_sampler = PositionSampler(center_config, device=config.device)
+        self._orientation_builder = OrientationBuilder(gaze_config, verbosity=config.verbosity)
         self._mesh_query: PreparedMeshQuery | None = None
         self._request_mesh_query = mesh_query
         self._rules: list[Rule] = self._build_default_rules(config)
@@ -542,6 +636,37 @@ class CandidateViewGenerator:
             poses, masks and optional debug statistics.
         """
         del runtime_context
+        prepared_mesh_query = self._request_mesh_query
+        self._request_mesh_query = None
+        return self._generate_impl(
+            reference_pose=reference_pose,
+            gt_mesh=gt_mesh,
+            mesh_verts=mesh_verts,
+            mesh_faces=mesh_faces,
+            camera_calib_template=camera_calib_template,
+            occupancy_extent=occupancy_extent,
+            position_target_center_world=self.config.position_target_point_world,
+            gaze_target_center_world=self.config.view_target_point_world,
+            prepared_mesh_query=prepared_mesh_query,
+            seed=self.config.seed if seed is None else seed,
+        )
+
+    def _generate_impl(
+        self,
+        *,
+        reference_pose: PoseTW,
+        gt_mesh: trimesh.Trimesh,
+        mesh_verts: torch.Tensor,
+        mesh_faces: torch.Tensor,
+        camera_calib_template: CameraTW,
+        occupancy_extent: torch.Tensor,
+        position_target_center_world: torch.Tensor | None,
+        gaze_target_center_world: torch.Tensor | None,
+        prepared_mesh_query: PreparedMeshQuery | None,
+        seed: int | None,
+    ) -> CandidateSamplingResult:
+        """Sample centers and evaluate one request with explicit private facts."""
+
         device = self.config.device
 
         reference_pose = rotate_yaw_cw90(
@@ -549,9 +674,11 @@ class CandidateViewGenerator:
         )
         sampling_pose = _gravity_align_pose(reference_pose) if self.config.align_to_gravity else reference_pose
 
-        with _maybe_seed(self.config.seed if seed is None else seed, device=torch.device(device)):
+        with _maybe_seed(seed, device=torch.device(device)):
             centers_world, offsets_ref = self._position_sampler.sample(
                 sampling_pose,
+                count=self._center_count,
+                target_center_world=position_target_center_world,
             )
             return self._generate_for_centers(
                 reference_pose=reference_pose,
@@ -563,6 +690,9 @@ class CandidateViewGenerator:
                 mesh_faces=mesh_faces,
                 camera_calib_template=camera_calib_template,
                 occupancy_extent=occupancy_extent,
+                position_target_center_world=position_target_center_world,
+                gaze_target_center_world=gaze_target_center_world,
+                prepared_mesh_query=prepared_mesh_query,
                 seed=None,
             )
 
@@ -586,6 +716,41 @@ class CandidateViewGenerator:
         validity remain independently auditable per candidate row.
         """
 
+        prepared_mesh_query = self._request_mesh_query
+        self._request_mesh_query = None
+        return self._generate_from_centers_impl(
+            reference_pose=reference_pose,
+            centers_world=centers_world,
+            offsets_ref=offsets_ref,
+            gt_mesh=gt_mesh,
+            mesh_verts=mesh_verts,
+            mesh_faces=mesh_faces,
+            camera_calib_template=camera_calib_template,
+            occupancy_extent=occupancy_extent,
+            position_target_center_world=self.config.position_target_point_world,
+            gaze_target_center_world=self.config.view_target_point_world,
+            prepared_mesh_query=prepared_mesh_query,
+            seed=self.config.seed if seed is None else seed,
+        )
+
+    def _generate_from_centers_impl(
+        self,
+        *,
+        reference_pose: PoseTW,
+        centers_world: torch.Tensor,
+        offsets_ref: torch.Tensor,
+        gt_mesh: trimesh.Trimesh,
+        mesh_verts: torch.Tensor,
+        mesh_faces: torch.Tensor,
+        camera_calib_template: CameraTW,
+        occupancy_extent: torch.Tensor,
+        position_target_center_world: torch.Tensor | None,
+        gaze_target_center_world: torch.Tensor | None,
+        prepared_mesh_query: PreparedMeshQuery | None,
+        seed: int | None,
+    ) -> CandidateSamplingResult:
+        """Orient explicit centers and evaluate one request with explicit private facts."""
+
         device = self.config.device
         prepared_reference = rotate_yaw_cw90(ensure_unbatched_pose(reference_pose.to(device)))
         sampling_pose = _gravity_align_pose(prepared_reference) if self.config.align_to_gravity else prepared_reference
@@ -599,7 +764,10 @@ class CandidateViewGenerator:
             mesh_faces=mesh_faces,
             camera_calib_template=camera_calib_template,
             occupancy_extent=occupancy_extent,
-            seed=self.config.seed if seed is None else seed,
+            position_target_center_world=position_target_center_world,
+            gaze_target_center_world=gaze_target_center_world,
+            prepared_mesh_query=prepared_mesh_query,
+            seed=seed,
         )
 
     def _generate_for_centers(
@@ -614,6 +782,9 @@ class CandidateViewGenerator:
         mesh_faces: torch.Tensor,
         camera_calib_template: CameraTW,
         occupancy_extent: torch.Tensor,
+        position_target_center_world: torch.Tensor | None,
+        gaze_target_center_world: torch.Tensor | None,
+        prepared_mesh_query: PreparedMeshQuery | None,
         seed: int | None,
     ) -> CandidateSamplingResult:
         """Build orientations and apply hard rules for prepared centers."""
@@ -623,6 +794,7 @@ class CandidateViewGenerator:
             shell_poses, view_dirs_delta = self._orientation_builder.build(
                 sampling_pose,
                 centers_world,
+                target_center_world=gaze_target_center_world,
             )
 
         candidate_count = centers_world.shape[0]
@@ -634,34 +806,34 @@ class CandidateViewGenerator:
             delta_forward = delta_rotation[:, :, 2]
             jitter_yaw_deg = torch.rad2deg(torch.atan2(delta_forward[:, 0], delta_forward[:, 2]))
             jitter_pitch_deg = torch.rad2deg(torch.asin(delta_forward[:, 1].clamp(-1.0, 1.0)))
+        jitter = self._gaze_config.jitter
+        bounded = isinstance(jitter, NoViewJitterConfig | BoxViewJitterConfig)
+        azimuth_limit = jitter.yaw_half_width_deg if isinstance(jitter, BoxViewJitterConfig) else 0.0
+        elevation_limit = jitter.pitch_half_width_deg if isinstance(jitter, BoxViewJitterConfig) else 0.0
         jitter_debug: dict[str, Any] = {
             "view_jitter_yaw_deg": jitter_yaw_deg,
             "view_jitter_pitch_deg": jitter_pitch_deg,
             "view_jitter_is_bounded": torch.full(
                 (candidate_count,),
-                bool(
-                    self.config.view_sampling_strategy is None
-                    or float(self.config.view_max_azimuth_deg) > 0.0
-                    or float(self.config.view_max_elevation_deg) > 0.0
-                ),
+                bounded,
                 dtype=torch.bool,
                 device=device,
             ),
             "view_jitter_azimuth_limit_deg": torch.full(
                 (candidate_count,),
-                float(self.config.view_max_azimuth_deg),
+                float(azimuth_limit),
                 device=device,
             ),
             "view_jitter_elevation_limit_deg": torch.full(
                 (candidate_count,),
-                float(self.config.view_max_elevation_deg),
+                float(elevation_limit),
                 device=device,
             ),
         }
         if view_dirs_delta is not None:
             jitter_debug["view_dirs_delta"] = view_dirs_delta
 
-        if self.config.position_mode is CandidatePositionMode.TARGET_ORBIT:
+        if isinstance(self._center_config, TargetOrbitCenterConfig):
             # Orbit centers are constructed in the world-horizontal plane. The
             # motion contract, however, evaluates backward displacement in the
             # physical reference frame rather than the gravity-aligned sampling
@@ -669,9 +841,8 @@ class CandidateViewGenerator:
             offsets_ref = reference_pose.inverse().transform(centers_world)
 
         if self.config.requires_mesh_query:
-            if self._request_mesh_query is not None:
-                mesh_query = self._request_mesh_query
-                self._request_mesh_query = None
+            if prepared_mesh_query is not None:
+                mesh_query = prepared_mesh_query
                 if not mesh_query.matches_request(
                     mesh_verts,
                     mesh_faces,
@@ -723,10 +894,10 @@ class CandidateViewGenerator:
             ctx.mark_debug("path_collision_evaluated_mask", torch.zeros_like(ctx.mask_valid))
             ctx.mark_debug("path_collision_detected", torch.zeros_like(ctx.mask_valid))
             ctx.mark_debug("path_collision_mask", torch.zeros_like(ctx.mask_valid))
-        if self.config.position_target_point_world is not None:
-            ctx.mark_debug("target_bearing_yaw_rad", _target_bearing_yaw_rad(ctx))
-            ctx.mark_debug("target_distance_m", _target_distance_m(ctx))
-            for name, value in _target_view_diagnostics(ctx).items():
+        if position_target_center_world is not None:
+            ctx.mark_debug("target_bearing_yaw_rad", _target_bearing_yaw_rad(ctx, position_target_center_world))
+            ctx.mark_debug("target_distance_m", _target_distance_m(ctx, position_target_center_world))
+            for name, value in _target_view_diagnostics(ctx, position_target_center_world).items():
                 ctx.mark_debug(name, value)
 
         self._apply_rules(ctx)
@@ -808,11 +979,11 @@ def _clone_camera_template(
     return data.to(device)[0].unsqueeze(0).expand(n, -1).clone()
 
 
-def _target_bearing_yaw_rad(ctx: CandidateContext) -> torch.Tensor:
+def _target_bearing_yaw_rad(ctx: CandidateContext, target_center_world: torch.Tensor) -> torch.Tensor:
     """Compute world-horizontal candidate-to-target bearing for diagnostics."""
 
     target = torch.as_tensor(
-        ctx.cfg.position_target_point_world,
+        target_center_world,
         device=ctx.centers_world.device,
         dtype=ctx.centers_world.dtype,
     ).reshape(1, 3)
@@ -820,18 +991,21 @@ def _target_bearing_yaw_rad(ctx: CandidateContext) -> torch.Tensor:
     return torch.atan2(delta[:, 0], delta[:, 2])
 
 
-def _target_distance_m(ctx: CandidateContext) -> torch.Tensor:
+def _target_distance_m(ctx: CandidateContext, target_center_world: torch.Tensor) -> torch.Tensor:
     """Compute candidate-center distance to the actor-visible target point."""
 
     target = torch.as_tensor(
-        ctx.cfg.position_target_point_world,
+        target_center_world,
         device=ctx.centers_world.device,
         dtype=ctx.centers_world.dtype,
     ).reshape(1, 3)
     return torch.linalg.norm(target - ctx.centers_world, dim=1)
 
 
-def _target_view_diagnostics(ctx: CandidateContext) -> dict[str, torch.Tensor]:
+def _target_view_diagnostics(
+    ctx: CandidateContext,
+    target_center_world: torch.Tensor,
+) -> dict[str, torch.Tensor]:
     """Project the actor-visible target centre into every candidate camera.
 
     The returned tensors are audit-only geometry. ``target_in_fov_mask`` uses
@@ -843,7 +1017,7 @@ def _target_view_diagnostics(ctx: CandidateContext) -> dict[str, torch.Tensor]:
     if shell_poses is None:
         return {}
     target_world = torch.as_tensor(
-        ctx.cfg.position_target_point_world,
+        target_center_world,
         device=ctx.centers_world.device,
         dtype=ctx.centers_world.dtype,
     ).reshape(1, 3)

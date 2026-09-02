@@ -28,27 +28,33 @@ Theory:
 
 from __future__ import annotations
 
-from math import ceil
+from math import radians
 from typing import TYPE_CHECKING
 
 import torch
 from power_spherical import HypersphericalUniform, PowerSpherical  # type: ignore[import-untyped]
 
 from ..utils.frames import world_up_tensor
+from .config import (
+    CenterConfig,
+    PowerSphericalConfig,
+    SampledCenterConfig,
+    TargetOrbitCenterConfig,
+    UniformSphereConfig,
+)
 from .geometry import DEVICE_FWD
-from .types import CandidatePositionMode, SamplingStrategy
+from .types import CandidatePositionMode
 
 if TYPE_CHECKING:
     from efm3d.aria.pose import PoseTW
-
-    from .candidate_generation import CandidateViewGeneratorConfig
 
 
 class PositionSampler:
     """Sample candidate centers around a reference pose."""
 
-    def __init__(self, cfg: CandidateViewGeneratorConfig):
-        self.cfg = cfg
+    def __init__(self, config: CenterConfig, *, device: torch.device):
+        self.config = config
+        self.device = device
 
     @staticmethod
     def _angles_from_dirs_rig(dirs_rig: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
@@ -71,23 +77,25 @@ class PositionSampler:
           rescale xz-plane to keep unit norm. This preserves azimuth and avoids pile-up.
         """
 
-        cfg = self.cfg
+        cfg = self.config
+        if not isinstance(cfg, SampledCenterConfig):
+            raise TypeError("angular caps apply only to sampled centers")
         device = dirs_rig.device
         dtype = dirs_rig.dtype
 
         x, y, z = dirs_rig.unbind(dim=-1)
 
         # Azimuth scaling (around +Y). Keep distribution uniform over the target band.
-        if cfg.delta_azimuth_deg < 360.0 - 1e-3:
+        if cfg.azimuth_width_deg < 360.0 - 1e-3:
             az_raw = torch.atan2(x, z)  # [-pi, pi]
-            scale_az = torch.tensor(cfg.delta_azimuth_rad, device=device, dtype=dtype) / (2 * torch.pi)
+            scale_az = torch.tensor(radians(cfg.azimuth_width_deg), device=device, dtype=dtype) / (2 * torch.pi)
             az_scaled = az_raw * scale_az  # now in [-delta/2, delta/2]
             x = torch.sin(az_scaled)
             z = torch.cos(az_scaled)
 
         # Elevation scaling via y = sin(elev) interval mapping.
-        y_min = torch.sin(torch.tensor(cfg.min_elev_rad, device=device, dtype=dtype))
-        y_max = torch.sin(torch.tensor(cfg.max_elev_rad, device=device, dtype=dtype))
+        y_min = torch.sin(torch.tensor(radians(cfg.min_elevation_deg), device=device, dtype=dtype))
+        y_max = torch.sin(torch.tensor(radians(cfg.max_elevation_deg), device=device, dtype=dtype))
         # map [-1,1] -> [y_min, y_max]
         y_scaled = y_min + (y + 1.0) * 0.5 * (y_max - y_min)
         xz_norm = torch.linalg.norm(torch.stack([x, z], dim=-1), dim=-1).clamp_min(1e-8)
@@ -101,32 +109,36 @@ class PositionSampler:
 
     def _sample_unit_sphere(self, n_draw: int) -> torch.Tensor:
         """Fallback: sample unit vectors via normalized Gaussian noise."""
-        dirs = torch.randn(n_draw, 3, device=self.cfg.device, dtype=torch.float32)
+        dirs = torch.randn(n_draw, 3, device=self.device, dtype=torch.float32)
         return dirs / dirs.norm(dim=-1, keepdim=True).clamp_min(1e-8)
 
-    def _target_direction_ref(self, reference_pose: PoseTW) -> torch.Tensor:
+    def _target_direction_ref(self, reference_pose: PoseTW, target_center_world: torch.Tensor | None) -> torch.Tensor:
         """Return normalized actor-visible target bearing in the reference frame."""
 
-        target_ref = self._target_point_ref(reference_pose)
+        target_ref = self._target_point_ref(reference_pose, target_center_world)
         if torch.linalg.norm(target_ref) < 1e-6:
-            target_ref = torch.tensor(DEVICE_FWD, device=self.cfg.device, dtype=torch.float32)
+            target_ref = torch.tensor(DEVICE_FWD, device=self.device, dtype=torch.float32)
         return target_ref / torch.linalg.norm(target_ref).clamp_min(1e-8)
 
-    def _target_point_ref(self, reference_pose: PoseTW) -> torch.Tensor:
+    def _target_point_ref(self, reference_pose: PoseTW, target_center_world: torch.Tensor | None) -> torch.Tensor:
         """Return the actor-visible target center in the reference frame."""
 
-        target_world = self._target_point_world()
+        target_world = self._target_point_world(target_center_world)
         return reference_pose.inverse().transform(target_world.reshape(1, 3)).reshape(3)
 
-    def _target_point_world(self) -> torch.Tensor:
+    def _target_point_world(self, target_center_world: torch.Tensor | None) -> torch.Tensor:
         """Return the actor-visible target center in world coordinates."""
 
-        target_world = self.cfg.position_target_point_world
-        if target_world is None:
-            raise ValueError(f"{self.cfg.position_mode.value} requires position_target_point_world.")
-        return torch.as_tensor(target_world, device=self.cfg.device, dtype=torch.float32).reshape(3)
+        if target_center_world is None:
+            raise ValueError(f"{_position_mode(self.config).value} requires target_center_world.")
+        return torch.as_tensor(target_center_world, device=self.device, dtype=torch.float32).reshape(3)
 
-    def _sample_target_orbit(self, reference_pose: PoseTW, n_draw: int) -> tuple[torch.Tensor, torch.Tensor]:
+    def _sample_target_orbit(
+        self,
+        reference_pose: PoseTW,
+        n_draw: int,
+        target_center_world: torch.Tensor | None,
+    ) -> tuple[torch.Tensor, torch.Tensor]:
         r"""Sample balanced partial arcs at the current horizontal target standoff.
 
         For world-horizontal root-to-target bearing $b$, left tangent $l$,
@@ -144,8 +156,8 @@ class PositionSampler:
             raise ValueError("target_orbit requires at least two attempted proposals.")
 
         root_world = reference_pose.t.reshape(3)
-        target_delta_world = self._target_point_world() - root_world
-        world_up = world_up_tensor(device=self.cfg.device, dtype=torch.float32)
+        target_delta_world = self._target_point_world(target_center_world) - root_world
+        world_up = world_up_tensor(device=self.device, dtype=torch.float32)
         target_horizontal = target_delta_world - (target_delta_world @ world_up) * world_up
         standoff = torch.linalg.norm(target_horizontal)
         if standoff < 1e-6:
@@ -153,10 +165,11 @@ class PositionSampler:
 
         bearing = target_horizontal / standoff
         lateral = torch.cross(world_up, bearing, dim=0)
-        angles_deg = torch.tensor(self.cfg.target_orbit_angles_deg, device=self.cfg.device, dtype=torch.float32)
+        assert isinstance(self.config, TargetOrbitCenterConfig)
+        angles_deg = torch.tensor(self.config.angles_deg, device=self.device, dtype=torch.float32)
         negative = angles_deg[angles_deg < 0.0]
         positive = angles_deg[angles_deg > 0.0]
-        pair_indices = torch.arange((n_draw + 1) // 2, device=self.cfg.device)
+        pair_indices = torch.arange((n_draw + 1) // 2, device=self.device)
         angles_interleaved = torch.stack(
             (negative[pair_indices % negative.numel()], positive[pair_indices % positive.numel()]),
             dim=1,
@@ -181,10 +194,15 @@ class PositionSampler:
         dirs = base + float(spread) * orthogonal
         return dirs / dirs.norm(dim=-1, keepdim=True).clamp_min(1e-8)
 
-    def _apply_position_mode(self, dirs_rig: torch.Tensor, reference_pose: PoseTW) -> torch.Tensor:
+    def _apply_position_mode(
+        self,
+        dirs_rig: torch.Tensor,
+        reference_pose: PoseTW,
+        target_center_world: torch.Tensor | None,
+    ) -> torch.Tensor:
         """Map raw angular samples to the configured position family."""
 
-        match self.cfg.position_mode:
+        match _position_mode(self.config):
             case CandidatePositionMode.UPPER_BOUND_FREE_SHELL:
                 return dirs_rig
             case CandidatePositionMode.FORWARD_LOCAL:
@@ -197,12 +215,16 @@ class PositionSampler:
                 backward = torch.tensor([0.0, 0.0, -1.0], device=dirs_rig.device, dtype=dirs_rig.dtype)
                 return self._direction_around(backward, dirs_rig, spread=0.35)
             case CandidatePositionMode.TARGET_BEARING_LOCAL:
-                target_dir = self._target_direction_ref(reference_pose).to(device=dirs_rig.device, dtype=dirs_rig.dtype)
+                target_dir = self._target_direction_ref(reference_pose, target_center_world).to(
+                    device=dirs_rig.device, dtype=dirs_rig.dtype
+                )
                 return self._direction_around(target_dir, dirs_rig, spread=0.4)
             case CandidatePositionMode.TARGET_ORBIT:
                 raise RuntimeError("target_orbit centers must be sampled by _sample_target_orbit.")
             case CandidatePositionMode.LATERAL_TARGET_BYPASS:
-                target_dir = self._target_direction_ref(reference_pose).to(device=dirs_rig.device, dtype=dirs_rig.dtype)
+                target_dir = self._target_direction_ref(reference_pose, target_center_world).to(
+                    device=dirs_rig.device, dtype=dirs_rig.dtype
+                )
                 up = torch.tensor([0.0, 1.0, 0.0], device=dirs_rig.device, dtype=dirs_rig.dtype)
                 lateral = torch.cross(up, target_dir, dim=0)
                 if torch.linalg.norm(lateral) < 1e-6:
@@ -213,56 +235,77 @@ class PositionSampler:
                 dirs = 0.55 * target_dir.reshape(1, 3) + signs * 0.85 * lateral.reshape(1, 3) + vertical
                 return dirs / dirs.norm(dim=-1, keepdim=True).clamp_min(1e-8)
 
-    def sample(self, reference_pose: PoseTW) -> tuple[torch.Tensor, torch.Tensor]:
+    def sample(
+        self,
+        reference_pose: PoseTW,
+        *,
+        count: int,
+        target_center_world: torch.Tensor | None,
+    ) -> tuple[torch.Tensor, torch.Tensor]:
         """Draw candidate centers and offsets in reference frame.
 
         Args:
             reference_pose: ``PoseTW`` reference2world pose used as sampling origin.
+            count: Exact number of centers to attempt.
+            target_center_world: Request-local actor-visible target, when required by the center family.
 
         Returns:
             Tuple of ``(centers_world, offsets_ref)`` where both are ``Tensor[N, 3]`` with
-            ``N = cfg.num_samples * cfg.oversample_factor``. Offsets are in the reference frame before rotation into world.
+            ``N = count``. Offsets are in the reference frame before rotation into world.
         """
-        n_draw = ceil(self.cfg.num_samples * self.cfg.oversample_factor)
+        n_draw = int(count)
 
-        if self.cfg.position_mode is CandidatePositionMode.TARGET_ORBIT:
-            return self._sample_target_orbit(reference_pose, n_draw)
+        if isinstance(self.config, TargetOrbitCenterConfig):
+            return self._sample_target_orbit(reference_pose, n_draw, target_center_world)
 
-        match self.cfg.sampling_strategy:
-            case SamplingStrategy.UNIFORM_SPHERE:
+        cfg = self.config
+        assert isinstance(cfg, SampledCenterConfig)
+
+        match cfg.distribution:
+            case UniformSphereConfig():
                 try:
-                    dirs = HypersphericalUniform(dim=3, device=self.cfg.device).sample((n_draw,))
+                    dirs = HypersphericalUniform(dim=3, device=self.device).sample((n_draw,))
                 except Exception:
                     dirs = self._sample_unit_sphere(n_draw)
-            case SamplingStrategy.FORWARD_POWERSPHERICAL:
-                mu = torch.tensor(DEVICE_FWD, device=self.cfg.device)
+            case PowerSphericalConfig(concentration=concentration):
+                mu = torch.tensor(DEVICE_FWD, device=self.device)
                 try:
                     dirs = PowerSpherical(
                         mu,
-                        torch.tensor(self.cfg.kappa, device=self.cfg.device),
+                        torch.tensor(concentration, device=self.device),
                     ).sample((n_draw,))
                 except Exception as exc:
                     raise RuntimeError(
                         "PowerSpherical position sampling failed for "
-                        f"strategy={self.cfg.sampling_strategy.value!r}, "
-                        f"device={str(self.cfg.device)!r}, kappa={self.cfg.kappa!r}. "
+                        f"strategy={cfg.distribution.kind!r}, "
+                        f"device={str(self.device)!r}, kappa={concentration!r}. "
                         "No alternate distribution was used; verify the sampler dependency, device, and profile values."
                     ) from exc
         dirs_rig = dirs / dirs.norm(dim=-1, keepdim=True)
 
         # Work entirely in reference (rig) frame for angle limits.
         dirs_rig = self._scale_into_caps(dirs_rig)
-        dirs_rig = self._apply_position_mode(dirs_rig, reference_pose)
+        dirs_rig = self._apply_position_mode(dirs_rig, reference_pose, target_center_world)
 
         dirs_world = reference_pose.rotate(dirs_rig)
         offsets_rig = dirs_rig
 
-        radii = torch.empty(dirs_world.shape[0], device=self.cfg.device, dtype=dirs_world.dtype).uniform_(
-            self.cfg.min_radius, self.cfg.max_radius
+        radii = torch.empty(dirs_world.shape[0], device=self.device, dtype=dirs_world.dtype).uniform_(
+            cfg.min_radius_m, cfg.max_radius_m
         )
         offsets_rig = offsets_rig * radii[:, None]
         centers_world = reference_pose.transform(offsets_rig)
         return centers_world, offsets_rig
+
+
+def _position_mode(config: CenterConfig) -> CandidatePositionMode:
+    match config:
+        case SampledCenterConfig(mode=mode):
+            return CandidatePositionMode(mode)
+        case TargetOrbitCenterConfig():
+            return CandidatePositionMode.TARGET_ORBIT
+        case _:
+            raise TypeError(f"unsupported center configuration: {type(config).__name__}")
 
 
 __all__ = [
