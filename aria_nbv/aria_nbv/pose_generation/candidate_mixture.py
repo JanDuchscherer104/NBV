@@ -538,7 +538,7 @@ class CandidateMixtureViewGenerator:
                 component=component,
                 generators=tuple(
                     CandidateViewGenerator._from_component(
-                        config.base,
+                        self.config.base,
                         center_config=component.center,
                         gaze_config=gaze,
                         center_count=component.count,
@@ -546,7 +546,7 @@ class CandidateMixtureViewGenerator:
                     for gaze in component.gazes
                 ),
             )
-            for component in config.components
+            for component in self.config.components
         )
 
     def generate_from_typed_sample(

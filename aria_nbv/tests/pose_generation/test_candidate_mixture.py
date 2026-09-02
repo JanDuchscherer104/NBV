@@ -1431,5 +1431,10 @@ def test_mixture_runtime_snapshots_mutable_authoring_tree() -> None:
     original_name = runtime.config.components[0].name
     config.components[0].name = "mutated-after-setup"
     config.components[0].count = 1
+
+    result = _run_generate(runtime.config, generator=runtime, seed=17)
+
     assert runtime.config.components[0].name == original_name
     assert runtime.config.components[0].count == 24
+    assert result.component_name.count(original_name) == 24
+    assert "mutated-after-setup" not in result.component_name
