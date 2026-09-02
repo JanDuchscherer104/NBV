@@ -1391,7 +1391,27 @@ def test_target_rri_candidate_config_uses_target_aware_mixture() -> None:
         "revisit_backtrack",
     ]
     assert [component.count for component in cfg.components] == [5, 5, 3, 2, 1]
-    assert cfg.components[0].strategy is ViewDirectionMode.TARGET_POINT
+    assert cfg.components[0].gazes[0].mode is ViewDirectionMode.TARGET_POINT
+
+
+def test_toml_candidate_profile_loads_target_shell_and_applies_runtime_overrides() -> None:
+    profile_path = Path(__file__).resolve().parents[4] / ".configs" / "build_rollouts_v3_target_shell_experiment.toml"
+    profile = rollout_panel._load_live_candidate_profile(profile_path)
+
+    cfg = rollout_panel._candidate_config_for_live_rollout(
+        scoring_mode=rollout_panel.LiveRolloutScoringMode.TARGET_RRI,
+        candidate_budget=60,
+        seed=73,
+        device=torch.device("cpu"),
+        profile=profile,
+    )
+
+    assert isinstance(cfg, CandidateMixtureViewGeneratorConfig)
+    assert cfg.total_count == 60
+    target_shell = next(component for component in cfg.components if component.name == "target_shell")
+    assert target_shell.center.kind == "target_shell"
+    assert cfg.base.device == torch.device("cpu")
+    assert cfg.base.seed == 73
 
 
 def test_target_mixture_preserves_spherical_direction_sampling_with_roll() -> None:
