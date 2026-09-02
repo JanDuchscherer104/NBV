@@ -1,0 +1,85 @@
+{
+  "schema": "target-shell-matched-real-scene-receipt-v2",
+  "evidence_class": "privileged_v0_gt_obb_evaluation",
+  "scene_id": "81283",
+  "snippet_id": "ASE_81283_Atek_000000",
+  "target_id": "ASE_81283_Atek_000000:gt:6",
+  "target_distance_m": 2.6926422119140625,
+  "seed": 73,
+  "attempted_budget": 60,
+  "admission_config_equal": true,
+  "scorer_config_equal": true,
+  "unchanged_forward_generation_exact": true,
+  "renderer": {
+    "backend": "pytorch3d",
+    "device": "cuda",
+    "compute": "NVIDIA GeForce RTX 3080 Ti",
+    "resolution_scale": 0.25,
+    "backprojection_stride": 2
+  },
+  "selection_metric": "target_root_gain",
+  "comparison_note": "The repaired opt-in challenger no longer collapses: 8 of 24 target-shell gaze rows pass admission and total valid support increases from 21 to 29. The unchanged 24-row forward shell and validity mask are bit-identical between profiles. This one-target tracer still does not establish a quality gain because both best rows come from forward_local and challenger best-of-K target RRI is lower; the small score difference on identical forward geometry is batch-dependent scorer numerics.",
+  "profiles": [
+    {
+      "profile": "v2_existing_mixture",
+      "attempted": 60,
+      "valid": 21,
+      "families": [
+        {"component": "forward_local", "attempted": 24, "valid": 21},
+        {"component": "target_bearing_local", "attempted": 24, "valid": 0},
+        {"component": "lateral_target_bypass", "attempted": 12, "valid": 0}
+      ],
+      "best_of_k_target_rri": 1.7664426650298992e-06,
+      "best_target_rri_identity": {
+        "valid_index": 12,
+        "shell_index": 13,
+        "component": "forward_local",
+        "position_id": 1,
+        "target_rri": 1.7664426650298992e-06,
+        "selection_score": 1.7664426650298992e-06
+      },
+      "selected_identity": {
+        "valid_index": 12,
+        "shell_index": 13,
+        "component": "forward_local",
+        "position_id": 1,
+        "target_rri": 1.7664426650298992e-06,
+        "selection_score": 1.7664426650298992e-06
+      },
+      "generation_runtime_s": 0.9268632170005731,
+      "scoring_runtime_s": 1.8787302979999367,
+      "total_runtime_s": 2.80559351500051
+    },
+    {
+      "profile": "v3_target_shell_challenger",
+      "attempted": 60,
+      "valid": 29,
+      "families": [
+        {"component": "forward_local", "attempted": 24, "valid": 21},
+        {"component": "target_shell", "attempted": 12, "valid": 7},
+        {"component": "target_shell__target", "attempted": 12, "valid": 1},
+        {"component": "lateral_target_bypass", "attempted": 12, "valid": 0}
+      ],
+      "best_of_k_target_rri": 1.673471501817403e-06,
+      "best_target_rri_identity": {
+        "valid_index": 4,
+        "shell_index": 5,
+        "component": "forward_local",
+        "position_id": 1,
+        "target_rri": 1.673471501817403e-06,
+        "selection_score": 1.673471501817403e-06
+      },
+      "selected_identity": {
+        "valid_index": 4,
+        "shell_index": 5,
+        "component": "forward_local",
+        "position_id": 1,
+        "target_rri": 1.673471501817403e-06,
+        "selection_score": 1.673471501817403e-06
+      },
+      "generation_runtime_s": 0.6837165919996551,
+      "scoring_runtime_s": 1.617703707000146,
+      "total_runtime_s": 2.301420298999801
+    }
+  ]
+}

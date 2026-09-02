@@ -50,7 +50,7 @@ from __future__ import annotations
 from collections.abc import Iterator
 from contextlib import contextmanager
 from math import ceil, isfinite, radians
-from typing import Annotated, Any, Literal
+from typing import Annotated, Any, Literal, TypeAlias
 
 import torch
 import trimesh  # type: ignore[import-untyped]
@@ -77,6 +77,7 @@ from .config import (
     SampledCenterConfig,
     SphericalViewJitterConfig,
     TargetOrbitCenterConfig,
+    TargetShellCenterConfig,
     sphere_distribution_from_legacy,
 )
 from .orientations import OrientationBuilder
@@ -91,6 +92,17 @@ from .types import (
     ViewDirectionMode,
 )
 from .utils import ensure_unbatched_pose
+
+LegacyCandidatePositionMode: TypeAlias = Literal[
+    CandidatePositionMode.UPPER_BOUND_FREE_SHELL,
+    CandidatePositionMode.FORWARD_LOCAL,
+    CandidatePositionMode.TARGET_BEARING_LOCAL,
+    CandidatePositionMode.TARGET_ORBIT,
+    CandidatePositionMode.LATERAL_TARGET_BYPASS,
+    CandidatePositionMode.LOCAL_REFINEMENT,
+    CandidatePositionMode.REVISIT_BACKTRACK,
+]
+"""Position modes constructible from the legacy flat generator fields."""
 
 
 class CandidateViewGeneratorConfig(TargetConfig["CandidateViewGenerator"]):
@@ -148,7 +160,7 @@ class CandidateViewGeneratorConfig(TargetConfig["CandidateViewGenerator"]):
     kappa: float = 4.0
     """Concentration parameter for the forward-biased PowerSpherical sampler."""
 
-    position_mode: CandidatePositionMode = CandidatePositionMode.UPPER_BOUND_FREE_SHELL
+    position_mode: LegacyCandidatePositionMode = CandidatePositionMode.UPPER_BOUND_FREE_SHELL
     """Position-family prior used to sample candidate centers before orientation assignment."""
 
     position_target_point_world: torch.Tensor | None = None
@@ -833,8 +845,8 @@ class CandidateViewGenerator:
         if view_dirs_delta is not None:
             jitter_debug["view_dirs_delta"] = view_dirs_delta
 
-        if isinstance(self._center_config, TargetOrbitCenterConfig):
-            # Orbit centers are constructed in the world-horizontal plane. The
+        if isinstance(self._center_config, TargetOrbitCenterConfig | TargetShellCenterConfig):
+            # Target-relative centers are constructed in a world-aligned frame. The
             # motion contract, however, evaluates backward displacement in the
             # physical reference frame rather than the gravity-aligned sampling
             # frame used to construct positions.

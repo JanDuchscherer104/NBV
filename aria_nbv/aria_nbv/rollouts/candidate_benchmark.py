@@ -25,6 +25,7 @@ from typing import TYPE_CHECKING, Any, Literal, cast
 import numpy as np
 import pandas as pd
 
+from ..pose_generation.config import SampledCenterConfig, TargetOrbitCenterConfig, TargetShellCenterConfig
 from ..utils.fingerprints import stable_msgspec_hash
 
 if TYPE_CHECKING:
@@ -400,14 +401,21 @@ def candidate_family_preflight_config_from_writer(
     configured: list[str] = []
     target_aware: list[str] = []
     forward_family: str | None = None
-    target_positions = {"target_bearing_local", "lateral_target_bypass", "target_orbit"}
+    target_positions = {"target_bearing_local", "lateral_target_bypass", "target_orbit", "target_shell"}
     for component in components:
         name = str(getattr(component, "name", ""))
         center = getattr(component, "center", None)
-        position = getattr(center, "mode", None)
-        if getattr(center, "kind", None) == "target_orbit":
+        if isinstance(center, SampledCenterConfig):
+            position = center.mode
+        elif isinstance(center, TargetOrbitCenterConfig):
             position = "target_orbit"
-        if position is None:
+        elif isinstance(center, TargetShellCenterConfig):
+            position = "target_shell"
+        elif center is not None:
+            raise ValueError(
+                f"unsupported nested candidate center kind: {getattr(center, 'kind', type(center).__name__)!r}"
+            )
+        else:
             position = getattr(component, "position_mode", None)
         position_value = str(getattr(position, "value", position or ""))
         if not name or not position_value:

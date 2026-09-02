@@ -25,6 +25,10 @@ from ..data_handling import EfmSnippetView
 from ..targets import TargetDescriptor
 from ..utils import Console
 from ..utils.data_plotting import SnippetPlotBuilder, get_frustum_segments
+from ._target_shell import target_shell_boundary_directions, target_shell_support_contains
+from .candidate_mixture import candidate_position_id
+from .config import TargetShellCenterConfig
+from .types import CandidatePositionMode
 
 if TYPE_CHECKING:
     from ..rollouts.replay.state import CounterfactualRolloutResult, CounterfactualStepResult, CounterfactualTrajectory
@@ -155,6 +159,134 @@ def plot_candidate_frusta_simple(
         scene={"xaxis_title": "X (left)", "yaxis_title": "Y (up)", "zaxis_title": "Z (fwd)", "aspectmode": "data"},
     )
     return fig
+
+
+def plot_target_shell_support(
+    candidates: "CandidateSamplingResult",
+    *,
+    target_center_world: torch.Tensor,
+    config: TargetShellCenterConfig,
+    seed: int | None = None,
+    ray_length_m: float = 0.25,
+) -> go.Figure:
+    """Plot attempted target-shell centers, configured support, and gaze rays.
+
+    The support curves are derived from ``config`` rather than fitted to the
+    samples. Candidate markers retain full-shell validity, while short rays
+    expose the generated camera forward axes in world coordinates.
+    """
+
+    if candidates.position_id is None:
+        raise ValueError("target-shell plotting requires full-shell position_id provenance.")
+    row_mask = candidates.position_id == candidate_position_id(CandidatePositionMode.TARGET_SHELL)
+    if not bool(row_mask.any()):
+        raise ValueError("candidate result contains no target_shell rows.")
+    target_tensor = target_center_world.detach().to(candidates.shell_poses.t).reshape(3)
+    actor_tensor = candidates.reference_pose.t.detach().to(target_tensor).reshape(3)
+    target = target_tensor.cpu().numpy().astype(float, copy=False)
+    actor = actor_tensor.cpu().numpy().astype(float, copy=False)
+    centers = candidates.shell_poses.t[row_mask].detach().cpu().numpy().reshape(-1, 3)
+    directions = candidates.shell_poses.R[..., :, 2][row_mask].detach().cpu().numpy().reshape(-1, 3)
+    valid = candidates.mask_valid[row_mask].detach().cpu().numpy().reshape(-1).astype(bool, copy=False)
+    all_components = np.asarray(candidates.component_name or tuple("unspecified" for _ in range(len(row_mask))))
+    components = all_components[row_mask.detach().cpu().numpy()]
+    centers_tensor = candidates.shell_poses.t[row_mask].detach().to(target_tensor)
+    target_offsets = centers_tensor - target_tensor.reshape(1, 3)
+    radii = torch.linalg.norm(target_offsets, dim=-1)
+    directions_tensor = target_offsets / radii[:, None].clamp_min(1.0e-8)
+    support_valid = target_shell_support_contains(
+        directions_tensor,
+        actor_tensor,
+        target_tensor,
+        config.support,
+    )
+    radius_valid = (radii >= config.radius_min_m - 1.0e-5) & (radii <= config.radius_max_m + 1.0e-5)
+    if not bool((support_valid & radius_valid).all()):
+        raise ValueError("target_shell rows do not match the supplied support and radius configuration.")
+    figure = go.Figure()
+    for is_valid, symbol, color, label in (
+        (True, "circle", "#2E91E5", "valid candidates"),
+        (False, "x", "#E15F99", "rejected candidates"),
+    ):
+        mask = valid == is_valid
+        if not mask.any():
+            continue
+        figure.add_trace(
+            go.Scatter3d(
+                x=centers[mask, 0],
+                y=centers[mask, 1],
+                z=centers[mask, 2],
+                mode="markers",
+                name=label,
+                marker={"size": 4, "symbol": symbol, "color": color, "opacity": 0.85},
+                customdata=components[mask],
+                hovertemplate="component=%{customdata}<br>x=%{x:.3f}<br>y=%{y:.3f}<br>z=%{z:.3f}<extra></extra>",
+            )
+        )
+
+    ray_rows: list[np.ndarray] = []
+    for center, direction in zip(centers, directions, strict=True):
+        ray_rows.extend((center, center + float(ray_length_m) * direction, np.full(3, np.nan)))
+    rays = np.asarray(ray_rows)
+    figure.add_trace(
+        go.Scatter3d(
+            x=rays[:, 0],
+            y=rays[:, 1],
+            z=rays[:, 2],
+            mode="lines",
+            name="camera forward axes",
+            line={"color": "rgba(180,180,180,0.55)", "width": 2},
+            hoverinfo="skip",
+        )
+    )
+
+    boundary = target_shell_boundary_directions(actor_tensor, target_tensor, config.support).detach().cpu().numpy()
+    for radius, label in (
+        (config.radius_min_m, "configured inner support"),
+        (config.radius_max_m, "configured outer support"),
+    ):
+        points = target[None, :] + float(radius) * boundary
+        figure.add_trace(
+            go.Scatter3d(
+                x=points[:, 0],
+                y=points[:, 1],
+                z=points[:, 2],
+                mode="lines",
+                name=label,
+                line={"color": "#FFA15A", "width": 4, "dash": "dot"},
+                hoverinfo="skip",
+            )
+        )
+    figure.add_trace(
+        go.Scatter3d(
+            x=[target[0], actor[0]],
+            y=[target[1], actor[1]],
+            z=[target[2], actor[2]],
+            mode="markers+text",
+            name="target and actor",
+            text=["target", "actor/reference"],
+            textposition="top center",
+            marker={"size": 8, "color": ["#FECB52", "#00CC96"], "symbol": ["diamond", "cross"]},
+            hoverinfo="text",
+        )
+    )
+    seed_text = "unspecified" if seed is None else str(seed)
+    figure.update_layout(
+        title=(
+            f"Target-shell support · {config.support.support_kind} · attempted={centers.shape[0]} · "
+            f"valid={int(valid.sum())} · seed={seed_text}"
+        ),
+        scene={
+            "xaxis_title": "world x / m",
+            "yaxis_title": "world y / m",
+            "zaxis_title": "world z / m",
+            "aspectmode": "data",
+        },
+        legend_title="candidate evidence",
+        height=720,
+        margin={"l": 20, "r": 20, "t": 70, "b": 20},
+    )
+    return figure
 
 
 class CandidatePlotBuilder(SnippetPlotBuilder):

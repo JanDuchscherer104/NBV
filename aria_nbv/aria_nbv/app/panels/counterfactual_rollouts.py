@@ -22,6 +22,7 @@ import streamlit as st
 import torch
 from efm3d.aria.pose import PoseTW
 
+from ...configs import PathConfig
 from ...data_handling import (
     VinOfflineDatasetConfig,
     VinOfflineStoreConfig,
@@ -34,6 +35,7 @@ from ...oracle.pipelines.evaluated_rollout import (
     OracleReplayAdapter,
     OracleReplayInvalidityError,
 )
+from ...oracle.pipelines.rollout_dataset import RolloutDatasetWriterConfig
 from ...oracle.scene_rri import SceneRriScorerConfig
 from ...oracle.target_rri import TargetRriScorerConfig
 from ...oracle.target_selection import (
@@ -88,6 +90,7 @@ from .common import (
     current_scientific_label,
     render_scientific_notation,
 )
+from .configuration import trusted_config_patterns
 from .target_audit import render_target_selection_audit, target_selection_audit_rows
 
 _SOURCE_TARGET_INFO = """
@@ -383,6 +386,33 @@ def _candidate_config_device(config: CandidateViewGeneratorConfig | CandidateMix
     return str(config.device)
 
 
+def _live_candidate_profile_paths() -> tuple[Path, ...]:
+    """Return trusted rollout-writer TOMLs available to the live rollout lab."""
+
+    root = PathConfig().configs_dir.expanduser().resolve()
+    patterns = trusted_config_patterns().get("Rollout writer", ("build_rollouts*.toml",))
+    return tuple(
+        sorted(
+            {path for pattern in patterns for path in root.glob(pattern)},
+            key=lambda path: path.as_posix(),
+        )
+    )
+
+
+def _load_live_candidate_profile(path: Path) -> CandidateMixtureViewGeneratorConfig:
+    """Load and validate one trusted rollout-writer candidate mixture TOML."""
+
+    return RolloutDatasetWriterConfig.from_toml(path).candidate_mixture
+
+
+def _candidate_config_count(
+    config: CandidateViewGeneratorConfig | CandidateMixtureViewGeneratorConfig,
+) -> int:
+    """Return the effective attempted candidate count for a live config."""
+
+    return config.total_count if isinstance(config, CandidateMixtureViewGeneratorConfig) else int(config.num_samples)
+
+
 @lru_cache(maxsize=1)
 def _pytorch3d_cuda_rasterization_available() -> bool:
     """Return whether the installed PyTorch3D extension can rasterize on CUDA."""
@@ -557,8 +587,18 @@ def _candidate_config_for_live_rollout(
     seed: int | None,
     device: torch.device,
     counts: dict[str, int] | None = None,
+    profile: CandidateMixtureViewGeneratorConfig | None = None,
 ) -> CandidateViewGeneratorConfig | CandidateMixtureViewGeneratorConfig:
     """Return the candidate generator used by one live rollout run."""
+
+    if profile is not None:
+        if scoring_mode is not LiveRolloutScoringMode.TARGET_RRI:
+            raise ValueError("TOML candidate profiles currently require target_rri scoring.")
+        payload = profile.model_dump()
+        payload["base"]["device"] = torch.device(str(device))
+        payload["base"]["seed"] = seed
+        payload["base"]["num_samples"] = profile.total_count
+        return CandidateMixtureViewGeneratorConfig.model_validate(payload)
 
     base = CandidateViewGeneratorConfig(
         num_samples=int(candidate_budget),
@@ -1269,6 +1309,8 @@ def _render_live_rollouts_tab() -> None:
         )
         st.json(_target_detail_row(selected_target), expanded=False)
 
+    selected_candidate_profile: CandidateMixtureViewGeneratorConfig | None = None
+    selected_candidate_profile_name = "(interactive legacy mixture)"
     with st.expander("Rollout generation", expanded=True):
         _info_popover("rollout generation controls", _ROLLOUT_GENERATION_INFO)
         cfg_col1, cfg_col2, cfg_col3 = st.columns(3)
@@ -1280,7 +1322,72 @@ def _render_live_rollouts_tab() -> None:
                 format_func=lambda mode: mode.value,
                 key="cf_scoring_mode",
             )
-            candidate_budget = int(st.slider("Candidates per step", 5, 128, 60, step=1, key="cf_candidate_budget"))
+            profile_paths = _live_candidate_profile_paths()
+            profile_by_name = {path.name: path for path in profile_paths}
+            profile_options = ("(interactive legacy mixture)", *profile_by_name)
+            # A profile can disappear when the app switches worktrees or the
+            # config directory is refreshed.  Clear the stale widget value so
+            # Streamlit does not render an apparently selected profile with an
+            # empty search result list.
+            if st.session_state.get("cf_candidate_profile") not in profile_options:
+                st.session_state["cf_candidate_profile"] = profile_options[0]
+            selected_candidate_profile_name = st.selectbox(
+                "Candidate profile TOML",
+                options=profile_options,
+                key="cf_candidate_profile",
+                format_func=lambda name: (
+                    "Interactive legacy mixture" if name == "(interactive legacy mixture)" else _pretty_label(name)
+                ),
+                disabled=scoring_mode is not LiveRolloutScoringMode.TARGET_RRI,
+                help=(
+                    "Load a validated RolloutDatasetWriterConfig candidate mixture. "
+                    "Interactive mode retains the legacy five-family controls."
+                ),
+            )
+            if (
+                selected_candidate_profile_name != "(interactive legacy mixture)"
+                and scoring_mode is LiveRolloutScoringMode.TARGET_RRI
+            ):
+                try:
+                    selected_candidate_profile = _load_live_candidate_profile(
+                        profile_by_name[selected_candidate_profile_name]
+                    )
+                    st.caption(
+                        f"Loaded {_pretty_label(selected_candidate_profile_name)} · "
+                        f"{selected_candidate_profile.total_count} attempted candidates per step"
+                    )
+                    st.json(
+                        [
+                            {
+                                "name": component.name,
+                                "count": component.count,
+                                "center": component.center.model_dump(mode="json"),
+                                "gazes": [gaze.model_dump(mode="json") for gaze in component.gazes],
+                            }
+                            for component in selected_candidate_profile.components
+                        ],
+                        expanded=False,
+                    )
+                except Exception as exc:  # pragma: no cover - UI guard
+                    st.error(f"Candidate profile unavailable: {exc}")
+                    selected_candidate_profile = None
+            elif selected_candidate_profile_name != "(interactive legacy mixture)":
+                st.info(
+                    "Candidate TOML profiles are used for target-RRI generation; geometry/scene modes use the interactive generator."
+                )
+            candidate_budget = int(
+                st.slider(
+                    "Candidates per step",
+                    5,
+                    128,
+                    60,
+                    step=1,
+                    key="cf_candidate_budget",
+                    disabled=selected_candidate_profile is not None,
+                )
+            )
+            if selected_candidate_profile is not None:
+                candidate_budget = selected_candidate_profile.total_count
             device = st.selectbox(
                 "Generator device",
                 options=_live_rollout_device_options(),
@@ -1334,9 +1441,14 @@ def _render_live_rollouts_tab() -> None:
         if scoring_mode is LiveRolloutScoringMode.TARGET_RRI:
             _info_popover("target mixture families", _TARGET_MIXTURE_INFO)
             advanced_counts = st.checkbox(
-                "Advanced target-mixture counts", value=False, key="cf_advanced_mixture_counts"
+                "Advanced target-mixture counts",
+                value=False,
+                key="cf_advanced_mixture_counts",
+                disabled=selected_candidate_profile is not None,
             )
-            if advanced_counts:
+            if selected_candidate_profile is not None:
+                st.caption("Family counts and center/gaze parameters come from the selected TOML profile.")
+            elif advanced_counts:
                 mix_cols = st.columns(5)
                 target_counts = {
                     "target_bearing_local": int(
@@ -1383,6 +1495,7 @@ def _render_live_rollouts_tab() -> None:
         seed=int(seed),
         device=torch.device(str(device)),
         counts=target_counts,
+        profile=selected_candidate_profile,
     )
     rollout_cfg = CounterfactualPoseGeneratorConfig(
         candidate_config=candidate_config,
@@ -1399,7 +1512,7 @@ def _render_live_rollouts_tab() -> None:
         log_timing=bool(log_timing),
         verbosity=Verbosity.NORMAL,
     )
-    live_candidate_count = int(candidate_budget if target_counts is None else sum(target_counts.values()))
+    live_candidate_count = _candidate_config_count(candidate_config)
     depth_cfg = _live_depth_config(max_candidates=live_candidate_count, device=str(device))
     target_scorer_cfg = TargetRriScorerConfig(
         depth=depth_cfg,

@@ -1,0 +1,151 @@
+# Opt-in one-source experiment for target-centric shell proposals.
+# Production defaults remain unchanged; compare this profile against the V2
+# realistic baseline before authorizing any larger generation campaign.
+
+max_samples = 1
+max_targets_per_sample = 1
+require_label_valid = true
+min_valid_root_candidates = 15
+log_timing = true
+verbosity = 1
+
+[source]
+split = "train"
+limit = 1
+return_format = "sample"
+include_efm_snippet = true
+include_gt_mesh = true
+load_backbone = true
+load_candidates = false
+load_depths = false
+load_candidate_pcs = false
+load_gt_obbs = true
+load_detected_obbs = true
+load_trajectory_metadata = true
+map_location = "cuda"
+verbosity = 1
+
+    [source.store]
+    store_dir = "vin_offline_rollout_pilot50_v7"
+
+[oracle_target_task_sampler]
+max_targets_per_sample = 1
+seed = 0
+policy = "uniform_without_replacement"
+
+[candidate_mixture.base]
+camera_label = "rgb"
+num_samples = 60
+align_to_gravity = true
+min_radius = 0.25
+max_radius = 1.1
+min_elev_deg = -12.0
+max_elev_deg = 18.0
+delta_azimuth_deg = 100.0
+sampling_strategy = "forward_powerspherical"
+kappa = 8.0
+min_distance_to_mesh = 0.2
+ensure_collision_free = true
+ensure_free_space = true
+collision_backend = "pytorch3d"
+ray_subsample = 32
+step_clearance = 0.1
+enforce_motion_realism = true
+max_step_distance_m = 1.0
+max_height_delta_m = 0.25
+max_backward_step_m = 0.25
+max_yaw_delta_deg = 70.0
+device = "cuda"
+verbosity = 1
+collect_rule_masks = true
+collect_debug_stats = true
+seed = 0
+
+[[candidate_mixture.components]]
+name = "forward_local"
+count = 24
+[candidate_mixture.components.center]
+kind = "sampled"
+mode = "forward_local"
+sampling_strategy = "forward_powerspherical"
+min_radius_m = 0.25
+max_radius_m = 1.1
+min_elevation_deg = -12.0
+max_elevation_deg = 18.0
+azimuth_width_deg = 100.0
+concentration = 8.0
+[[candidate_mixture.components.gazes]]
+name = "primary"
+mode = "forward_rig"
+[candidate_mixture.components.gazes.jitter]
+kind = "box"
+yaw_half_width_deg = 60.0
+pitch_half_width_deg = 30.0
+roll_half_width_deg = 0.0
+
+[[candidate_mixture.components]]
+name = "target_shell"
+count = 12
+[candidate_mixture.components.center]
+kind = "target_shell"
+radius_min_m = 2.25
+radius_max_m = 3.1
+[candidate_mixture.components.center.support]
+support_kind = "actor_facing_cap"
+half_angle_deg = 15.0
+[[candidate_mixture.components.gazes]]
+name = "primary"
+mode = "forward_rig"
+[candidate_mixture.components.gazes.jitter]
+kind = "box"
+yaw_half_width_deg = 60.0
+pitch_half_width_deg = 30.0
+roll_half_width_deg = 0.0
+[[candidate_mixture.components.gazes]]
+name = "target"
+mode = "target_point"
+[candidate_mixture.components.gazes.jitter]
+kind = "box"
+yaw_half_width_deg = 60.0
+pitch_half_width_deg = 30.0
+roll_half_width_deg = 0.0
+
+[[candidate_mixture.components]]
+name = "lateral_target_bypass"
+count = 12
+[candidate_mixture.components.center]
+kind = "sampled"
+mode = "lateral_target_bypass"
+sampling_strategy = "forward_powerspherical"
+min_radius_m = 0.25
+max_radius_m = 1.1
+min_elevation_deg = -12.0
+max_elevation_deg = 18.0
+azimuth_width_deg = 100.0
+concentration = 8.0
+[[candidate_mixture.components.gazes]]
+name = "primary"
+mode = "target_point"
+[candidate_mixture.components.gazes.jitter]
+kind = "box"
+yaw_half_width_deg = 60.0
+pitch_half_width_deg = 30.0
+roll_half_width_deg = 0.0
+
+[selected_depth]
+enabled = false
+
+[store]
+store_dir = "rollouts_v3_target_shell_experiment.zarr"
+target_protocol_version = "v0_gt_input"
+field_retention_policy = "compact_selected_heavy"
+source_offline_store_version = "vin-offline-v7"
+split_manifest_hash = "local-target-shell-experiment"
+
+[[recipes]]
+name = "oracle_greedy"
+[recipes.policy]
+selection_policy = "oracle_greedy"
+horizon = 1
+branch_factor = 1
+seed = 0

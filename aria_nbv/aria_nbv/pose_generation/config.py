@@ -164,8 +164,69 @@ class TargetOrbitCenterConfig(BaseConfig):
         return values
 
 
+class AngularBoxSupportConfig(BaseConfig):
+    """Configure a target-relative azimuth/elevation support box."""
+
+    support_kind: Literal["angular_box"] = "angular_box"
+    """Discriminator for world-horizontal angular-box support."""
+
+    azimuth_half_width_deg: float = Field(default=180.0, gt=0.0, le=180.0)
+    """Signed half-width about the target-to-actor horizontal bearing, in degrees."""
+
+    elevation_min_deg: float = Field(default=-90.0, ge=-90.0, le=90.0)
+    """Minimum world-horizontal elevation in the target-aligned frame, in degrees."""
+
+    elevation_max_deg: float = Field(default=90.0, ge=-90.0, le=90.0)
+    """Maximum world-horizontal elevation in the target-aligned frame, in degrees."""
+
+    @model_validator(mode="after")
+    def _validate_elevation_order(self) -> Self:
+        if self.elevation_min_deg > self.elevation_max_deg:
+            raise ValueError("elevation_min_deg must not exceed elevation_max_deg")
+        return self
+
+
+class ActorFacingCapSupportConfig(BaseConfig):
+    """Configure rotationally symmetric support about the target-to-actor ray."""
+
+    support_kind: Literal["actor_facing_cap"] = "actor_facing_cap"
+    """Discriminator for actor-facing spherical-cap support."""
+
+    half_angle_deg: float = Field(gt=0.0, le=180.0)
+    """Cone half-angle about the three-dimensional target-to-actor ray, in degrees."""
+
+
+TargetShellSupportConfig = Annotated[
+    AngularBoxSupportConfig | ActorFacingCapSupportConfig,
+    Field(discriminator="support_kind"),
+]
+"""Discriminated directional support for target-centric shell centers."""
+
+
+class TargetShellCenterConfig(BaseConfig):
+    """Configure an opt-in target-centric spherical-shell center family."""
+
+    kind: Literal["target_shell"] = "target_shell"
+    """Discriminator for target-shell authoring; provenance is target shell."""
+
+    radius_min_m: PositiveFiniteFloat
+    """Minimum target-to-candidate radius in metres; equal bounds are valid."""
+
+    radius_max_m: PositiveFiniteFloat
+    """Maximum target-to-candidate radius in metres; equal bounds are valid."""
+
+    support: TargetShellSupportConfig
+    """Complete directional support; serialized identity contains only active fields."""
+
+    @model_validator(mode="after")
+    def _validate_support(self) -> Self:
+        if self.radius_min_m > self.radius_max_m:
+            raise ValueError("radius_min_m must not exceed radius_max_m")
+        return self
+
+
 CenterConfig = Annotated[
-    SampledCenterConfig | TargetOrbitCenterConfig,
+    SampledCenterConfig | TargetOrbitCenterConfig | TargetShellCenterConfig,
     Field(discriminator="kind"),
 ]
 """Discriminated center-family authoring accepted by mixed generation."""
@@ -301,6 +362,8 @@ class CandidateMixtureComponentConfig(BaseConfig):
 
 
 __all__ = [
+    "ActorFacingCapSupportConfig",
+    "AngularBoxSupportConfig",
     "BoxViewJitterConfig",
     "CandidateGazeConfig",
     "CandidateMixtureComponentConfig",
@@ -312,6 +375,8 @@ __all__ = [
     "SphericalViewJitterConfig",
     "SphereDistributionConfig",
     "TargetOrbitCenterConfig",
+    "TargetShellCenterConfig",
+    "TargetShellSupportConfig",
     "UniformSphereConfig",
     "ViewJitterConfig",
     "sphere_distribution_from_legacy",

@@ -10,6 +10,7 @@ import zarr
 
 from aria_nbv.rollouts import RolloutZarrStoreReader
 from aria_nbv.rollouts.read_model import (
+    decode_position_id,
     rollout_at,
     rollout_by_id,
     rollout_rows,
@@ -29,6 +30,10 @@ def _reader(tmp_path, *, selected_depth_enabled: bool = True) -> RolloutZarrStor
         selected_depth_enabled=selected_depth_enabled,
     )
     return RolloutZarrStoreReader(result.store_dir)
+
+
+def test_target_shell_position_id_has_canonical_decode() -> None:
+    assert decode_position_id(7) == "target_shell"
 
 
 def test_rollout_at_decodes_context_and_orders_steps(tmp_path) -> None:

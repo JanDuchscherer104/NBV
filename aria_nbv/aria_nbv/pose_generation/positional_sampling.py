@@ -35,11 +35,13 @@ import torch
 from power_spherical import HypersphericalUniform, PowerSpherical  # type: ignore[import-untyped]
 
 from ..utils.frames import world_up_tensor
+from ._target_shell import sample_target_shell_directions
 from .config import (
     CenterConfig,
     PowerSphericalConfig,
     SampledCenterConfig,
     TargetOrbitCenterConfig,
+    TargetShellCenterConfig,
     UniformSphereConfig,
 )
 from .geometry import DEVICE_FWD
@@ -184,6 +186,36 @@ class PositionSampler:
         offsets_ref = reference_pose.inverse().rotate(offsets_world)
         return centers_world, offsets_ref
 
+    def _sample_target_shell(
+        self,
+        reference_pose: PoseTW,
+        n_draw: int,
+        target_center_world: torch.Tensor | None,
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        r"""Sample target-relative centers with the configured solid-angle measure.
+
+        Angular boxes use uniform azimuth and uniform ``sin(elevation)`` in a
+        world-Z-up target-to-actor frame. Actor-facing caps use uniform cosine
+        about the true three-dimensional target-to-actor direction. Radius is
+        uniform in metres for every support mode.
+        """
+
+        cfg = self.config
+        assert isinstance(cfg, TargetShellCenterConfig)
+        root_world = reference_pose.t.reshape(3)
+        target_world = self._target_point_world(target_center_world)
+        directions_world = sample_target_shell_directions(
+            root_world,
+            target_world,
+            cfg.support,
+            count=n_draw,
+        )
+
+        radii = torch.empty(n_draw, device=self.device).uniform_(cfg.radius_min_m, cfg.radius_max_m)
+        centers_world = target_world[None, :] + radii[:, None] * directions_world
+        offsets_ref = reference_pose.inverse().transform(centers_world)
+        return centers_world, offsets_ref
+
     def _direction_around(self, base: torch.Tensor, noise: torch.Tensor, *, spread: float) -> torch.Tensor:
         """Blend a base direction with orthogonal noise in the reference frame."""
 
@@ -221,6 +253,8 @@ class PositionSampler:
                 return self._direction_around(target_dir, dirs_rig, spread=0.4)
             case CandidatePositionMode.TARGET_ORBIT:
                 raise RuntimeError("target_orbit centers must be sampled by _sample_target_orbit.")
+            case CandidatePositionMode.TARGET_SHELL:
+                raise RuntimeError("target_shell centers must be sampled by _sample_target_shell.")
             case CandidatePositionMode.LATERAL_TARGET_BYPASS:
                 target_dir = self._target_direction_ref(reference_pose, target_center_world).to(
                     device=dirs_rig.device, dtype=dirs_rig.dtype
@@ -257,6 +291,8 @@ class PositionSampler:
 
         if isinstance(self.config, TargetOrbitCenterConfig):
             return self._sample_target_orbit(reference_pose, n_draw, target_center_world)
+        if isinstance(self.config, TargetShellCenterConfig):
+            return self._sample_target_shell(reference_pose, n_draw, target_center_world)
 
         cfg = self.config
         assert isinstance(cfg, SampledCenterConfig)
@@ -304,6 +340,8 @@ def _position_mode(config: CenterConfig) -> CandidatePositionMode:
             return CandidatePositionMode(mode)
         case TargetOrbitCenterConfig():
             return CandidatePositionMode.TARGET_ORBIT
+        case TargetShellCenterConfig():
+            return CandidatePositionMode.TARGET_SHELL
         case _:
             raise TypeError(f"unsupported center configuration: {type(config).__name__}")
 

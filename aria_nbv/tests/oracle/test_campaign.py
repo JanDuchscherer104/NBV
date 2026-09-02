@@ -37,7 +37,13 @@ from aria_nbv.oracle.pipelines.rollout_dataset import (
     _RolloutSourceLineageBuilder,
 )
 from aria_nbv.pose_generation import CandidateMixtureViewGeneratorConfig
-from aria_nbv.pose_generation.config import CandidateGazeConfig, SampledCenterConfig
+from aria_nbv.pose_generation.config import (
+    ActorFacingCapSupportConfig,
+    BoxViewJitterConfig,
+    CandidateGazeConfig,
+    SampledCenterConfig,
+    TargetShellCenterConfig,
+)
 from aria_nbv.pose_generation.types import CandidatePositionMode, ViewDirectionMode
 from aria_nbv.rollouts.qh_reader import QhRolloutReader
 from aria_nbv.rollouts.shard_manifest import (
@@ -103,13 +109,36 @@ def test_campaign_projects_target_gaze_on_forward_center_as_target_dependent() -
 def test_campaign_rejects_unknown_nested_center_kind() -> None:
     component = SimpleNamespace(
         name="future",
-        center=SimpleNamespace(kind="target_shell"),
+        center=SimpleNamespace(kind="future_shell"),
         gazes=(SimpleNamespace(name="primary"),),
         paired_view_mode=None,
     )
 
-    with pytest.raises(ValueError, match="unsupported nested candidate center kind: target_shell"):
+    with pytest.raises(ValueError, match="unsupported nested candidate center kind: future_shell"):
         _candidate_component_projection((component,))
+
+
+def test_campaign_projects_target_shell_as_target_dependent() -> None:
+    component = SimpleNamespace(
+        name="target_shell",
+        center=TargetShellCenterConfig(
+            radius_min_m=0.8,
+            radius_max_m=1.2,
+            support=ActorFacingCapSupportConfig(half_angle_deg=45.0),
+        ),
+        gazes=(
+            CandidateGazeConfig(
+                name="primary",
+                mode=ViewDirectionMode.TARGET_POINT,
+                jitter=BoxViewJitterConfig(),
+            ),
+        ),
+    )
+
+    positions, target_families = _candidate_component_projection((component,))
+
+    assert positions == {"target_shell": "target_shell"}
+    assert target_families == frozenset({"target_shell"})
 
 
 class _CampaignFixtureManifest(msgspec.Struct):

@@ -9,15 +9,18 @@ import pytest
 import torch
 from efm3d.aria import CameraTW, PoseTW
 
+from aria_nbv.pose_generation.candidate_mixture import candidate_position_id
+from aria_nbv.pose_generation.config import AngularBoxSupportConfig, TargetShellCenterConfig
 from aria_nbv.pose_generation.plotting import (
     plot_candidate_centers_simple,
     plot_candidate_frusta_simple,
     plot_paired_gaze_support,
     plot_position_sphere,
     plot_proposal_sequence_support,
+    plot_target_shell_support,
     plot_view_jitter_support,
 )
-from aria_nbv.pose_generation.types import CandidateSamplingResult
+from aria_nbv.pose_generation.types import CandidatePositionMode, CandidateSamplingResult
 from aria_nbv.pose_generation.utils import rejected_pose_tensor
 
 
@@ -76,6 +79,49 @@ def test_plot_candidate_frusta_simple() -> None:
     candidates = _make_candidates(num=2)
     fig = plot_candidate_frusta_simple(candidates, scale=0.5, max_frustums=2)
     assert isinstance(fig, go.Figure)
+
+
+def test_plot_target_shell_support_exposes_boundary_validity_and_gaze() -> None:
+    candidates = _make_candidates(num=5)
+    candidates.mask_valid = torch.tensor([True, True, False, True, False])
+    candidates.component_name = ("forward", "target_shell", "target_shell", "target_shell", "lateral")
+    candidates.position_id = torch.tensor(
+        [
+            candidate_position_id(CandidatePositionMode.FORWARD_LOCAL),
+            candidate_position_id(CandidatePositionMode.TARGET_SHELL),
+            candidate_position_id(CandidatePositionMode.TARGET_SHELL),
+            candidate_position_id(CandidatePositionMode.TARGET_SHELL),
+            candidate_position_id(CandidatePositionMode.LATERAL_TARGET_BYPASS),
+        ]
+    )
+    config = TargetShellCenterConfig(
+        radius_min_m=0.5,
+        radius_max_m=10.0,
+        support=AngularBoxSupportConfig(),
+    )
+
+    fig = plot_target_shell_support(
+        candidates,
+        target_center_world=torch.tensor([-1.0, 0.0, 0.0]),
+        config=config,
+        seed=17,
+    )
+
+    assert isinstance(fig, go.Figure)
+    assert {trace.name for trace in fig.data} == {
+        "valid candidates",
+        "rejected candidates",
+        "camera forward axes",
+        "configured inner support",
+        "configured outer support",
+        "target and actor",
+    }
+    assert "angular_box" in fig.layout.title.text
+    assert "attempted=3" in fig.layout.title.text
+    assert "valid=2" in fig.layout.title.text
+    assert "seed=17" in fig.layout.title.text
+    marker_rows = sum(len(trace.x) for trace in fig.data if trace.name in {"valid candidates", "rejected candidates"})
+    assert marker_rows == 3
 
 
 def test_plot_view_jitter_support_shows_components_validity_and_bounds() -> None:

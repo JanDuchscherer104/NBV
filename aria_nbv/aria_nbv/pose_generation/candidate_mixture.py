@@ -53,6 +53,7 @@ from .config import (
     CenterConfig,
     SampledCenterConfig,
     TargetOrbitCenterConfig,
+    TargetShellCenterConfig,
     UniformSphereConfig,
 )
 from .types import (
@@ -77,6 +78,7 @@ _POSITION_IDS = {
     CandidatePositionMode.LOCAL_REFINEMENT: 4,
     CandidatePositionMode.REVISIT_BACKTRACK: 5,
     CandidatePositionMode.TARGET_ORBIT: 6,
+    CandidatePositionMode.TARGET_SHELL: 7,
 }
 
 
@@ -114,6 +116,8 @@ def _center_position_mode(center: CenterConfig) -> CandidatePositionMode:
             return CandidatePositionMode(mode)
         case TargetOrbitCenterConfig():
             return CandidatePositionMode.TARGET_ORBIT
+        case TargetShellCenterConfig():
+            return CandidatePositionMode.TARGET_SHELL
 
 
 def _center_position_id(center: CenterConfig) -> int:

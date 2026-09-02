@@ -110,7 +110,7 @@ def _candidate_component_projection(
 ) -> tuple[dict[str, str], frozenset[str]]:
     """Project nested or persisted-flat components into campaign family roles."""
 
-    from ...pose_generation.config import SampledCenterConfig, TargetOrbitCenterConfig
+    from ...pose_generation.config import SampledCenterConfig, TargetOrbitCenterConfig, TargetShellCenterConfig
     from ...pose_generation.types import CandidatePositionMode
 
     component_positions: dict[str, str] = {}
@@ -119,6 +119,7 @@ def _candidate_component_projection(
         CandidatePositionMode.TARGET_BEARING_LOCAL,
         CandidatePositionMode.LATERAL_TARGET_BYPASS,
         CandidatePositionMode.TARGET_ORBIT,
+        CandidatePositionMode.TARGET_SHELL,
     }
     for component in components:
         center = getattr(component, "center", None)
@@ -126,6 +127,8 @@ def _candidate_component_projection(
             position_mode = CandidatePositionMode(center.mode)
         elif isinstance(center, TargetOrbitCenterConfig):
             position_mode = CandidatePositionMode.TARGET_ORBIT
+        elif isinstance(center, TargetShellCenterConfig):
+            position_mode = CandidatePositionMode.TARGET_SHELL
         elif center is None:
             position_mode = CandidatePositionMode(component.position_mode)
         else:
