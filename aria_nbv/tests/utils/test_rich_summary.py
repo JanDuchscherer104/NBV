@@ -5,7 +5,7 @@ from __future__ import annotations
 import torch
 
 from aria_nbv.utils import rich_summary, summarize, summarize_shape
-from aria_nbv.utils.rich_summary import capture_tree, summary_markdown, summary_rows
+from aria_nbv.utils.rich_summary import SummaryRow, capture_tree, summary_markdown, summary_rows
 
 
 def test_summarize_preserves_public_tensor_contract() -> None:
@@ -57,3 +57,9 @@ def test_summary_rows_are_shared_between_text_and_streamlit_adapters() -> None:
     markdown = summary_markdown(summary)
     assert "`tensor` (tensor)" in markdown
     assert "`nested/count` (scalar): 3" in markdown
+
+
+def test_summary_rows_preserve_summarized_sequences() -> None:
+    rows = summary_rows({"items": summarize([1, 2, 3])})
+
+    assert rows == (SummaryRow(("items",), "len=3", "sequence"),)

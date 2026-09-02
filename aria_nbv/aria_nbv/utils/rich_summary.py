@@ -45,6 +45,9 @@ def summary_rows(summary: Mapping[str, Any]) -> tuple[SummaryRow, ...]:
         if isinstance(value, dict) and _is_tensor_summary(value):
             rows.append(SummaryRow(path, _format_tensor_summary(value), "tensor"))
             return
+        if _is_sequence_summary(value):
+            rows.append(SummaryRow(path, f"len={value['len']}", "sequence"))
+            return
         if isinstance(value, Mapping):
             if not value:
                 rows.append(SummaryRow(path, "{}", "mapping"))
@@ -60,6 +63,12 @@ def summary_rows(summary: Mapping[str, Any]) -> tuple[SummaryRow, ...]:
     for key, value in summary.items():
         visit((str(key),), value)
     return tuple(rows)
+
+
+def _is_sequence_summary(value: Any) -> bool:
+    """Recognize the compact representation returned by :func:`summarize`."""
+
+    return isinstance(value, Mapping) and len(value) == 1 and isinstance(value.get("len"), int) and value["len"] >= 0
 
 
 def summary_markdown(summary: Mapping[str, Any]) -> str:
