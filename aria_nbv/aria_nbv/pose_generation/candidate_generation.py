@@ -77,6 +77,7 @@ from .config import (
     SampledCenterConfig,
     SphericalViewJitterConfig,
     TargetOrbitCenterConfig,
+    sphere_distribution_from_legacy,
 )
 from .orientations import OrientationBuilder
 from .positional_sampling import PositionSampler
@@ -424,8 +425,10 @@ def _gaze_config_from_legacy(config: CandidateViewGeneratorConfig) -> CandidateG
         )
     elif config.view_sampling_strategy is not None:
         jitter = SphericalViewJitterConfig(
-            distribution=config.view_sampling_strategy,
-            concentration=float(config.view_kappa),
+            distribution=sphere_distribution_from_legacy(
+                config.view_sampling_strategy,
+                float(config.view_kappa),
+            ),
             roll_half_width_deg=config.view_roll_jitter_deg,
         )
     elif config.view_roll_jitter_deg > 0.0:

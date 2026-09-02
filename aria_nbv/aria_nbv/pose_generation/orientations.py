@@ -39,10 +39,12 @@ from .config import (
     BoxViewJitterConfig,
     CandidateGazeConfig,
     NoViewJitterConfig,
+    PowerSphericalConfig,
     SphericalViewJitterConfig,
+    UniformSphereConfig,
 )
 from .geometry import DEVICE_FWD
-from .types import SamplingStrategy, ViewDirectionMode
+from .types import ViewDirectionMode
 
 
 class OrientationBuilder:
@@ -88,12 +90,12 @@ class OrientationBuilder:
 
         # 3) Legacy distributions when no caps are provided.
         assert isinstance(jitter, SphericalViewJitterConfig)
-        strat = jitter.distribution
-        if strat == SamplingStrategy.UNIFORM_SPHERE:
+        distribution = jitter.distribution
+        if isinstance(distribution, UniformSphereConfig):
             dist = HypersphericalUniform(dim=3, device=device, dtype=dtype)
-        elif strat == SamplingStrategy.FORWARD_POWERSPHERICAL:
+        elif isinstance(distribution, PowerSphericalConfig):
             mu = torch.tensor(DEVICE_FWD, device=device, dtype=dtype)
-            scale = torch.tensor(jitter.concentration, device=device, dtype=dtype)
+            scale = torch.tensor(distribution.concentration, device=device, dtype=dtype)
             dist = PowerSpherical(loc=mu, scale=scale)
         else:
             v = torch.tensor(DEVICE_FWD, device=device, dtype=dtype)
