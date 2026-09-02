@@ -26,9 +26,9 @@ from aria_nbv.utils.config_paths import resolve_config_toml_path
 from ..scientific_labels import TheoryReferences
 from ._stored_rollouts.s2_directions import render_s2_report_preview
 from ._stored_rollouts.session import _store_projection_identity
-from ._stored_rollouts.shared import ExplanationSection, ScientificExplanation
-from ._stored_rollouts.shared import plot_control_key as _plot_control_key
-from ._stored_rollouts.shared import render_plot as _render_plot
+from .common import ExplanationSection, ScientificExplanation
+from .common import plot_control_key as _plot_control_key
+from .common import render_plot as _render_plot
 
 _DEFAULT_CONFIG = ".configs/build_rollouts_v2_cuda_campaign.toml"
 _REVIEWED_CONFIGS = (_DEFAULT_CONFIG,)

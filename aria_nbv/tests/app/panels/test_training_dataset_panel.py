@@ -20,7 +20,7 @@ from streamlit.testing.v1 import AppTest
 import aria_nbv.app.panels.training_dataset as training_dataset
 import aria_nbv.dataset_bundle as dataset_bundle
 from aria_nbv.app.panels._stored_rollouts import session as stored_rollout_session
-from aria_nbv.app.panels._stored_rollouts.shared import ExplanationSection, ScientificExplanation
+from aria_nbv.app.panels.common import ExplanationSection, ScientificExplanation
 from aria_nbv.app.panels.training_dataset import (
     _cached_deep_statistics,
     _cached_qh_preview,

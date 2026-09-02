@@ -13,11 +13,10 @@ import streamlit as st
 from ....rollouts.inspection import rollout_endpoint_metric_summary
 from ....rollouts.reporting import RolloutCorpusSummary
 from ...scientific_labels import TheoryReferences
-from ..common import current_scientific_label
-from .shared import ExplanationSection, ScientificExplanation
-from .shared import download_frame as _download_frame
-from .shared import plot_control_key as _plot_control_key
-from .shared import render_plot as _render_plot
+from ..common import ExplanationSection, ScientificExplanation, current_scientific_label
+from ..common import download_frame as _download_frame
+from ..common import plot_control_key as _plot_control_key
+from ..common import render_plot as _render_plot
 
 _TEMPORAL_METRIC_LABELS = {
     "Cumulative target root gain": "cumulative_target_root_gain",

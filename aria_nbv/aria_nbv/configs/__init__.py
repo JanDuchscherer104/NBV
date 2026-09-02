@@ -18,6 +18,7 @@ if TYPE_CHECKING:
         ConfigDiffEntry,
         ConfigDocument,
         ConfigFieldDescriptor,
+        ConfigValue,
         ConfigWriteReceipt,
     )
     from .optuna_config import OptunaConfig
@@ -31,6 +32,7 @@ _OWNERS = {
     "ConfigDiffEntry": ".authoring",
     "ConfigDocument": ".authoring",
     "ConfigFieldDescriptor": ".authoring",
+    "ConfigValue": ".authoring",
     "ConfigWriteReceipt": ".authoring",
     "OptunaConfig": ".optuna_config",
     "PathConfig": ".path_config",
@@ -57,6 +59,7 @@ __all__ = [
     "ConfigDiffEntry",
     "ConfigDocument",
     "ConfigFieldDescriptor",
+    "ConfigValue",
     "ConfigWriteReceipt",
     "OptunaConfig",
     "PathConfig",
