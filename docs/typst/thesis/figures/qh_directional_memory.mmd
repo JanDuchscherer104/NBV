@@ -1,0 +1,44 @@
+---
+config:
+  theme: base
+  htmlLabels: true
+  flowchart:
+    htmlLabels: true
+    nodeSpacing: 28
+    rankSpacing: 40
+    curve: basis
+  layout: elk
+  themeVariables:
+    background: "#ffffff"
+    fontFamily: "Inter, DejaVu Sans, Arial, sans-serif"
+    fontSize: "20px"
+    primaryTextColor: "#17202a"
+    lineColor: "#64748b"
+  themeCSS: |
+    .nodeLabel { font-size: 20px; }
+    .edgeLabel { font-size: 17px; }
+    .cluster-label { font-size: 20px; font-weight: 700; }
+---
+flowchart TB
+  Selected["$$\begin{array}{c}\textbf{Selected factual observations}\\\\\text{view poses and supported surface evidence}\end{array}$$"]
+  Directions["$$\begin{array}{c}\textbf{Target-centred view directions}\\\\\text{retain approach-direction evidence}\end{array}$$"]
+  Summary["$$\begin{array}{c}\textbf{Directional summary hypothesis}\\\\\text{first and second moments first}\\\\\text{spherical harmonics only if needed}\end{array}$$"]
+  Candidate["$$\begin{array}{c}\textbf{Candidate query}\\\\q_{t,i},\ \boldsymbol{\phi}_{e}\end{array}$$"]
+  Feature["$$\begin{array}{c}\textbf{Prospective novelty feature}\\\\\text{compare candidate direction with history}\end{array}$$"]
+  Test["$$\begin{array}{c}\textbf{Required ablation}\\\\\text{mask audit and held-out comparison}\\\\\text{against pose distance and overlap}\end{array}$$"]
+  Exclusion["$$\begin{array}{c}\textbf{Current status}\\\\\text{not an implemented actor input}\\\\\text{not a predictive claim}\end{array}$$"]
+
+  Selected --> Directions --> Summary
+  Candidate --> Feature
+  Summary --> Feature --> Test
+  Exclusion -. "development-only hypothesis" .-> Summary
+
+  classDef input fill:#D5E8D4,stroke:#82B366,color:#17202A,stroke-width:1.5px,rx:0,ry:0;
+  classDef output fill:#F8CECC,stroke:#B85450,color:#17202A,stroke-width:1.5px,rx:0,ry:0;
+  classDef compute fill:#E1D5E7,stroke:#9673A6,color:#17202A,stroke-width:1.5px,rx:8,ry:8;
+  classDef data fill:#F5F5F5,stroke:#9E9E9E,color:#17202A,stroke-width:1.2px,rx:0,ry:0;
+
+  class Selected,Candidate input;
+  class Directions,Summary,Feature compute;
+  class Test output;
+  class Exclusion data;

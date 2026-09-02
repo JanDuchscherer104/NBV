@@ -1,0 +1,54 @@
+---
+config:
+  theme: base
+  htmlLabels: true
+  flowchart:
+    htmlLabels: true
+    nodeSpacing: 30
+    rankSpacing: 42
+    curve: basis
+  layout: elk
+  themeVariables:
+    background: "#ffffff"
+    fontFamily: "Inter, DejaVu Sans, Arial, sans-serif"
+    fontSize: "20px"
+    primaryTextColor: "#17202a"
+    lineColor: "#64748b"
+  themeCSS: |
+    .nodeLabel { font-size: 20px; }
+    .edgeLabel { font-size: 17px; }
+    .cluster-label { font-size: 20px; font-weight: 700; }
+---
+flowchart LR
+  subgraph Rollout[Offline rollout materialization]
+    direction TB
+    State["$$\begin{array}{c}\textbf{Factual state and finite table}\\\\s_t^{\mathrm{S0\text{-}pose}},\ b_t,\ \mathcal{Q}_t\\\\m_{t,i}^{\mathrm{act}},\ \rho_{t,i}\end{array}$$"]
+    Oracle["$$\begin{array}{c}\textbf{Target RRI oracle}\\\\r_t^e\ \text{for finite valid rows}\\\\\text{label and support masks}\end{array}$$"]
+    Select["$$\begin{array}{c}\textbf{One factual selected action}\\\\a_t\in\mathcal{A}_t\\\\\text{successor: pose, history, budget, lineage}\end{array}$$"]
+    Store["$$\begin{array}{c}\textbf{Replay store}\\\\\texttt{q\_h/}: state, masks, labels,\\\\\text{selected transition, provenance}\end{array}$$"]
+  end
+
+  subgraph Learning[Offline fitted-Q learning]
+    direction TB
+    Batch["$$\begin{array}{c}\textbf{Causal batch}\\\\(s_t,\mathcal{Q}_t)\ \text{and}\ (s_{t+1},\mathcal{Q}_{t+1})\\\\\text{only factual successor support}\end{array}$$"]
+    Objective["$$\begin{array}{c}\textbf{Fitted-Q objective}\\\\h=1:\ \text{all finite hard-valid labels}\\\\h>1:\ Q_h\ \rightarrow\ Q_{h-1}\ \text{on selected support}\end{array}$$"]
+    DoubleQ["$$\begin{array}{c}\textbf{Optional Double-Q ablation}\\\\\text{online scorer selects; delayed scorer evaluates}\\\\\text{not the definition of }Q_H\end{array}$$"]
+    Policy["$$\begin{array}{c}\textbf{Held-out policy evaluation}\\\\\pi_Q\ \text{selects only hard-valid rows}\\\\\text{oracle rescoring measures endpoint gain}\end{array}$$"]
+  end
+
+  State --> Oracle --> Select --> Store
+  Rollout -->|"persisted q_h/ replay"| Learning
+  Batch --> Objective --> DoubleQ --> Policy
+
+  classDef input fill:#D5E8D4,stroke:#82B366,color:#17202A,stroke-width:1.5px,rx:0,ry:0;
+  classDef output fill:#F8CECC,stroke:#B85450,color:#17202A,stroke-width:1.5px,rx:0,ry:0;
+  classDef compute fill:#E1D5E7,stroke:#9673A6,color:#17202A,stroke-width:1.5px,rx:8,ry:8;
+  classDef data fill:#F5F5F5,stroke:#9E9E9E,color:#17202A,stroke-width:1.2px,rx:0,ry:0;
+
+  class State input;
+  class Store data;
+  class Oracle,Select,Batch,Objective,DoubleQ compute;
+  class Policy output;
+
+  style Rollout fill:#f7f3ff,stroke:#cdb2ff,stroke-width:2px,rx:12,ry:12
+  style Learning fill:#f0fbff,stroke:#8fd0ff,stroke-width:2px,rx:12,ry:12
