@@ -132,6 +132,26 @@ def test_candidate_interactive_bounds_are_domain_owned() -> None:
     assert bounds["max_step_distance_m"] == (1e-9, None)
 
 
+def _candidate_config_app() -> None:
+    from aria_nbv.app.panels.configuration import render_typed_config_fields
+    from aria_nbv.pose_generation import CandidateViewGeneratorConfig, candidate_config_ui_bounds
+
+    render_typed_config_fields(
+        CandidateViewGeneratorConfig(),
+        key_prefix="candidate",
+        bounds=candidate_config_ui_bounds(),
+    )
+
+
+def test_candidate_config_app_exposes_safe_num_samples_boundary() -> None:
+    app = AppTest.from_function(_candidate_config_app).run()
+
+    assert not app.exception
+    num_samples = next(widget for widget in app.number_input if widget.label == "num_samples")
+    assert num_samples.min == 2
+    assert num_samples.max == 512
+
+
 def test_typed_config_fields_keep_last_valid_config_on_validation_error() -> None:
     from aria_nbv.app.panels.configuration import render_typed_config_fields
 
