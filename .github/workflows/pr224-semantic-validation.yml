@@ -1,0 +1,133 @@
+name: PR224 Semantic Validation
+
+on:
+  push:
+    branches:
+      - codex/thesis-symbol-canonicalization
+
+permissions:
+  contents: write
+  statuses: write
+
+jobs:
+  validate:
+    if: github.event.head_commit.message == 'chore(pr224): validate canonical notation head'
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    steps:
+      - name: Check out trigger commit
+        uses: actions/checkout@v4
+        with:
+          ref: codex/thesis-symbol-canonicalization
+          path: trigger
+          fetch-depth: 2
+
+      - name: Resolve clean candidate head
+        id: candidate
+        working-directory: trigger
+        run: |
+          sha=$(git rev-parse HEAD^)
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          test ! -f "$(git rev-parse --show-toplevel)/trigger/.github/pr224/apply_notation_canonicalization.py" || true
+
+      - name: Check out candidate head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.candidate.outputs.sha }}
+          path: work
+          fetch-depth: 0
+
+      - name: Require the clean migrated tree
+        working-directory: work
+        run: |
+          test ! -e .github/pr224/apply_notation_canonicalization.py
+          test ! -e .github/workflows/pr224-canonicalization-runner.yml
+          test ! -e .github/workflows/pr224-force-rebuild.yml
+          test -f docs/typst/shared/symbols/metric.typ
+          test -f docs/typst/shared/symbols/trajectory.typ
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+
+      - name: Set up Typst
+        uses: typst-community/setup-typst@v4
+
+      - name: Install environment
+        working-directory: work
+        run: uv sync --project aria_nbv --locked --all-extras
+
+      - name: Verify generated notation is idempotent
+        working-directory: work
+        run: |
+          make glossary
+          git diff --exit-code
+          make glossary
+          git diff --exit-code
+
+      - name: Run notation and glossary tests
+        working-directory: work
+        run: |
+          aria_nbv/.venv/bin/python -m pytest \
+            scripts/tests/test_glossary_build.py \
+            scripts/tests/test_symbol_semantics.py \
+            -q
+
+      - name: Run Typst authoring contract
+        working-directory: work
+        run: make typst-authoring-contract
+
+      - name: Run thesis literature provenance
+        working-directory: work
+        run: make thesis-literature-provenance
+
+      - name: Compile thesis CI artifact
+        working-directory: work
+        run: make thesis-pdf-ci
+
+      - name: Verify graph projection freshness
+        working-directory: work
+        run: make graphify-projection-live-check
+
+      - name: Verify final tree
+        working-directory: work
+        run: |
+          git diff --check
+          git diff --exit-code
+
+      - name: Publish success status
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CANDIDATE_SHA: ${{ steps.candidate.outputs.sha }}
+        run: |
+          gh api --method POST \
+            repos/${{ github.repository }}/statuses/$CANDIDATE_SHA \
+            -f state=success \
+            -f context='PR224 semantic validation' \
+            -f description='Canonical notation, glossary, Typst, provenance, PDF, and graph gates passed'
+
+      - name: Publish failure status
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CANDIDATE_SHA: ${{ steps.candidate.outputs.sha }}
+        run: |
+          gh api --method POST \
+            repos/${{ github.repository }}/statuses/$CANDIDATE_SHA \
+            -f state=failure \
+            -f context='PR224 semantic validation' \
+            -f description='Canonical notation validation failed; inspect workflow log'
+
+      - name: Remove temporary trigger commit
+        if: always()
+        working-directory: trigger
+        env:
+          CANDIDATE_SHA: ${{ steps.candidate.outputs.sha }}
+        run: git push --force origin "$CANDIDATE_SHA":codex/thesis-symbol-canonicalization
