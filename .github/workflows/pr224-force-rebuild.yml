@@ -1,0 +1,54 @@
+name: PR224 Force Clean Rebuild
+
+on:
+  push:
+    branches:
+      - codex/thesis-symbol-canonicalization
+
+permissions:
+  contents: write
+
+jobs:
+  rebuild:
+    if: github.event.head_commit.message == 'chore(pr224): force clean canonicalization rebuild'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out control branch
+        uses: actions/checkout@v4
+        with:
+          ref: codex/thesis-symbol-canonicalization
+          path: control
+          fetch-depth: 2
+
+      - name: Restore already-clean branch when no staging script remains
+        working-directory: control
+        run: |
+          if [ ! -f .github/pr224/apply_notation_canonicalization.py ]; then
+            git push --force origin HEAD^:codex/thesis-symbol-canonicalization
+            echo "already rebuilt; removed this temporary trigger commit"
+            exit 0
+          fi
+
+      - name: Check out latest main
+        if: ${{ hashFiles('control/.github/pr224/apply_notation_canonicalization.py') != '' }}
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          path: work
+          fetch-depth: 0
+
+      - name: Apply migration
+        if: ${{ hashFiles('control/.github/pr224/apply_notation_canonicalization.py') != '' }}
+        run: python control/.github/pr224/apply_notation_canonicalization.py work
+
+      - name: Commit clean main-relative patch
+        if: ${{ hashFiles('control/.github/pr224/apply_notation_canonicalization.py') != '' }}
+        working-directory: work
+        run: |
+          git config user.name 'JanDuchscherer104'
+          git config user.email '100614873+JanDuchscherer104@users.noreply.github.com'
+          git add -A
+          git diff --cached --check
+          git commit -m 'docs(thesis): canonicalize notation by semantic type'
+          git push --force origin HEAD:codex/thesis-symbol-canonicalization
