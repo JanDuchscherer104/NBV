@@ -62,12 +62,6 @@ return {
       description = "Fraction of the learned-myopic-to-oracle-lookahead endpoint gap closed by the Q policy.",
       thesis_list = true,
     },
-    ["entity.return_h"] = {
-      tex = "G_t^{(H)}",
-      typst = "#symb.entity.return_h",
-      description = "Target-conditioned finite-horizon return.",
-      thesis_list = true,
-    },
     ["entity.rri_e"] = {
       tex = "\\mathrm{RRI}_e",
       typst = "#symb.entity.rri_e",
@@ -84,12 +78,6 @@ return {
       tex = "\\Delta_t^e",
       typst = "#symb.entity.target_error",
       description = "Target-specific reconstruction error at rollout step t.",
-      thesis_list = true,
-    },
-    ["entity.target_reward"] = {
-      tex = "r_t^e",
-      typst = "#symb.entity.target_reward",
-      description = "Canonical target-specific reward at rollout step t.",
       thesis_list = true,
     },
     ["entity.target_root_gain_cumulative"] = {
@@ -119,7 +107,7 @@ return {
     ["model.history_pose_feature"] = {
       tex = "\\boldsymbol{p}_{t,j}^{\\mathrm{hist}}",
       typst = "#symb.model.history_pose_feature",
-      description = "Previously selected pose j encoded from the current camera at decision state t.",
+      description = "Factual trajectory pose at time j encoded from the current camera at decision state t.",
       thesis_list = true,
     },
     ["model.history_relative_age"] = {
@@ -194,22 +182,10 @@ return {
       description = "Point-to-mesh directional error component.",
       thesis_list = true,
     },
-    ["oracle.candidate_qti"] = {
-      tex = "q_{t,i}",
-      typst = "#symb.oracle.candidate_qti",
-      description = "Candidate pose i at rollout step t.",
-      thesis_list = true,
-    },
     ["oracle.candidates"] = {
       tex = "\\mathcal{Q}",
       typst = "#symb.oracle.candidates",
       description = "Finite candidate-view set considered by the planner.",
-      thesis_list = true,
-    },
-    ["oracle.candidates_t"] = {
-      tex = "\\mathcal{Q}_t",
-      typst = "#symb.oracle.candidates_t",
-      description = "Candidate-view set available at rollout step t.",
       thesis_list = true,
     },
     ["oracle.center"] = {
@@ -302,6 +278,12 @@ return {
       description = "Remaining acquisition budget at rollout step t.",
       thesis_list = true,
     },
+    ["rl.candidate_qti"] = {
+      tex = "q_{t,i}",
+      typst = "#symb.rl.candidate_qti",
+      description = "Candidate action row i at rollout step t; it carries one proposed endpoint pose.",
+      thesis_list = true,
+    },
     ["rl.candidate_row_mask"] = {
       tex = "m_{t,i}^{\\mathrm{cand}}",
       typst = "#symb.rl.candidate_row_mask",
@@ -311,13 +293,13 @@ return {
     ["rl.candidate_table"] = {
       tex = "\\mathcal{Q}_t",
       typst = "#symb.rl.candidate_table",
-      description = "Finite candidate-view table at rollout step t.",
+      description = "Finite candidate-action table at rollout step t.",
       thesis_list = true,
     },
     ["rl.conditional_q"] = {
-      tex = "Q_{h,\\theta,e,i}^{\\mathrm{cond}}",
+      tex = "Q_{\\theta}(s_t,e,i,h)",
       typst = "#symb.rl.conditional_q",
-      description = "Action-mask-independent conditional candidate value emitted by the scorer.",
+      description = "Action-mask-independent candidate value emitted by the horizon-conditioned scorer.",
       thesis_list = true,
     },
     ["rl.coral_q_edge"] = {
@@ -387,9 +369,9 @@ return {
       thesis_list = true,
     },
     ["rl.qh"] = {
-      tex = "Q_H",
+      tex = "Q_{\\theta}(\\cdot,\\cdot,\\cdot,h)",
       typst = "#symb.rl.qh",
-      description = "Finite-horizon candidate-value function.",
+      description = "Horizon-conditioned candidate-value family represented by one shared scorer.",
       thesis_list = true,
     },
     ["rl.r"] = {
@@ -405,15 +387,9 @@ return {
       thesis_list = true,
     },
     ["rl.return_h"] = {
-      tex = "G_t^{(H)}",
+      tex = "G_{t,e}^{(h)}",
       typst = "#symb.rl.return_h",
-      description = "H-step finite-horizon return from rollout step t.",
-      thesis_list = true,
-    },
-    ["rl.reward_target"] = {
-      tex = "r_t^e",
-      typst = "#symb.rl.reward_target",
-      description = "Target-specific reward at rollout step t.",
+      description = "Target-conditioned return from rollout step t over requested residual horizon h.",
       thesis_list = true,
     },
     ["rl.rollout_index"] = {
@@ -471,9 +447,9 @@ return {
       thesis_list = true,
     },
     ["rl.source_role"] = {
-      tex = "\\ell_{t,i}^{\\mathrm{src}}",
+      tex = "\\zeta_{t,i}^{\\mathrm{src}}",
       typst = "#symb.rl.source_role",
-      description = "Actor-oracle source-provenance role for candidate evidence.",
+      description = "Categorical actor-oracle source-provenance role for candidate evidence.",
       thesis_list = true,
     },
     ["rl.successor_mask"] = {
@@ -488,16 +464,16 @@ return {
       description = "Selected target entity at rollout step t.",
       thesis_list = true,
     },
+    ["rl.target_reward"] = {
+      tex = "r_t^e",
+      typst = "#symb.rl.target_reward",
+      description = "Target-specific immediate reward at rollout step t.",
+      thesis_list = true,
+    },
     ["rl.transition"] = {
       tex = "T",
       typst = "#symb.rl.transition",
       description = "State-transition operator for selected candidate actions.",
-      thesis_list = true,
-    },
-    ["rl.validity_mask"] = {
-      tex = "m_{t,i}",
-      typst = "#symb.rl.validity_mask",
-      description = "Hard validity mask for candidate i at rollout step t.",
       thesis_list = true,
     },
     ["scene.evl_local"] = {
@@ -564,12 +540,18 @@ return {
       tex = "K",
       typst = "#symb.shape.K",
       description = "Number of ordinal bins or discrete levels when used in scorer losses.",
-      thesis_list = true,
+      thesis_list = false,
     },
     ["shape.Nq"] = {
       tex = "N_q",
       typst = "#symb.shape.Nq",
       description = "Number of candidate views in a candidate table.",
+      thesis_list = false,
+    },
+    ["spatial.candidate_camera_frame"] = {
+      tex = "c_{t,i}^{\\mathrm{cand}}",
+      typst = "#symb.spatial.candidate_camera_frame",
+      description = "Prospective camera frame carried by candidate action row i at decision step t.",
       thesis_list = true,
     },
     ["spatial.candidate_pose_feat"] = {
@@ -638,6 +620,12 @@ return {
       description = "Geometric-mean target-proxy scale derived from the target OBB semi-axis lengths.",
       thesis_list = true,
     },
+    ["spatial.trajectory_camera_frame"] = {
+      tex = "c_t^{\\mathrm{traj}}",
+      typst = "#symb.spatial.trajectory_camera_frame",
+      description = "Factual camera frame on the realised trajectory at decision step t.",
+      thesis_list = true,
+    },
     ["vin.cand_valid"] = {
       tex = "m",
       typst = "#symb.vin.cand_valid",
@@ -659,8 +647,8 @@ return {
     ["vin.rri"] = {
       tex = "r",
       typst = "#symb.vin.rri",
-      description = "Target or scene RRI value used as a model target.",
-      thesis_list = true,
+      description = "Historical VIN RRI proxy.",
+      thesis_list = false,
     },
     ["vin.rri_hat"] = {
       tex = "\\hat{r}",
@@ -956,6 +944,12 @@ return {
       tex = "\\boldsymbol{h}_e^{\\mathrm{tgt}}=\\operatorname{MLP}_{\\mathrm{tgt}}(\\operatorname{concat}(\\boldsymbol{\\phi}_e,\\boldsymbol{g}_e^{\\mathrm{tgt}}))",
       typst = "#eqs.model.qh_target_token",
       description = "",
+      thesis_list = false,
+    },
+    ["rl.candidate_camera_transition"] = {
+      tex = "q_{t,i}\\mapsto c_{t,i}^{\\mathrm{cand}},\\quad c_{t+1}^{\\mathrm{traj}}=c_{t,a_t}^{\\mathrm{cand}}",
+      typst = "#eqs.rl.candidate_camera_transition",
+      description = "A candidate action row carries a prospective camera endpoint; only the selected endpoint enters the factual trajectory.",
       thesis_list = false,
     },
     ["rl.candidate_mask_isolation"] = {

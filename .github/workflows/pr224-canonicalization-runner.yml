@@ -1,0 +1,120 @@
+name: PR224 Canonical Notation Migration
+
+on:
+  push:
+    branches:
+      - codex/thesis-symbol-canonicalization
+
+permissions:
+  contents: write
+
+jobs:
+  rebuild:
+    if: github.event.head_commit.message == 'chore(pr224): run canonical notation migration'
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    steps:
+      - name: Check out staging controls
+        uses: actions/checkout@v4
+        with:
+          ref: codex/thesis-symbol-canonicalization
+          path: control
+          fetch-depth: 1
+
+      - name: Check out current main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          path: work
+          fetch-depth: 0
+
+      - name: Record exact base
+        id: base
+        working-directory: work
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Apply semantic notation migration
+        run: python control/.github/pr224/apply_notation_canonicalization.py work
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+
+      - name: Set up Typst
+        uses: typst-community/setup-typst@v4
+
+      - name: Install repository environment
+        working-directory: work
+        run: uv sync --project aria_nbv --locked --all-extras
+
+      - name: Regenerate glossary and verify byte-idempotence
+        working-directory: work
+        run: |
+          make glossary
+          sha256sum \
+            docs/notation.yml \
+            docs/_extensions/aria-glossary/notation.generated.lua \
+            docs/typst/shared/notation.generated.typ \
+            docs/_generated/context/glossary.jsonl \
+            docs/contents/glossary.qmd > /tmp/glossary-first.sha
+          make glossary
+          sha256sum -c /tmp/glossary-first.sha
+
+      - name: Run notation and glossary tests
+        working-directory: work
+        run: |
+          aria_nbv/.venv/bin/python -m pytest \
+            scripts/tests/test_glossary_build.py \
+            scripts/tests/test_symbol_semantics.py \
+            -q
+
+      - name: Run Typst authoring contract
+        working-directory: work
+        run: make typst-authoring-contract
+
+      - name: Run thesis literature provenance
+        working-directory: work
+        run: make thesis-literature-provenance
+
+      - name: Compile thesis CI artifact
+        working-directory: work
+        run: make thesis-pdf-ci
+
+      - name: Check graph projection freshness
+        working-directory: work
+        run: make graphify-projection-live-check
+
+      - name: Verify patch integrity
+        working-directory: work
+        run: |
+          git diff --check
+          test -f docs/typst/shared/symbols/metric.typ
+          test -f docs/typst/shared/symbols/trajectory.typ
+          ! grep -R -n -E 's_t\^"(hist|off|cf0|cf\+|oracle)"|S0-pose|S1-surface|S2-ray|CF-GT-carrier' docs/typst/shared/symbols
+          ! grep -R -n -E '(bold\(T\)|(^|[^A-Za-z_])T)_\([^\n]*arrow\.l' docs/typst/shared/equations
+
+      - name: Refuse stale base
+        working-directory: work
+        env:
+          BASE_SHA: ${{ steps.base.outputs.sha }}
+        run: |
+          git fetch origin main
+          test "$(git rev-parse origin/main)" = "$BASE_SHA" || {
+            echo "main advanced during validation; refusing stale publication" >&2
+            exit 75
+          }
+
+      - name: Commit clean rebased patch
+        working-directory: work
+        run: |
+          git config user.name 'JanDuchscherer104'
+          git config user.email '100614873+JanDuchscherer104@users.noreply.github.com'
+          git add -A
+          git commit -m 'docs(thesis): canonicalize notation by semantic type'
+          git push --force origin HEAD:codex/thesis-symbol-canonicalization

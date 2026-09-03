@@ -1,5 +1,9 @@
 // Candidate-relative pose, relation, and directional-history descriptors.
 #let spatial = (
+  // Proposed camera frame carried by candidate action row i at decision step t.
+  candidate_camera_frame: $c_(t,i)^"cand"$,
+  // Factual camera frame on the realised trajectory at decision step t.
+  trajectory_camera_frame: $c_t^"traj"$,
   // Reserved reference pose; no direct authored use in the 2026-08-14 audit.
   ref_pose: $r_t$,
   // Relative transform from the reference pose to candidate i.
@@ -16,11 +20,11 @@
   local_delta_pos: $bold(delta)_(a|i)^"p"$,
   // Candidate-local relative rotation descriptor.
   local_delta_rot: $bold(delta)_(a|i)^"R"$,
-  // Optical-axis or bearing alignment from candidate to target.
-  target_bearing: $cos theta_(t,e,i)^"opt"$,
+  // Candidate optical-axis alignment with the target direction.
+  target_alignment: $cos theta_(t,e,i)^"opt"$,
   // Canonical unit direction; duplicated by unused `oracle.dir` and `vin.dir_unit`.
   dir_unit: $bold(d)$,
-  // Volume-equivalent radius from the selected target OBB semi-axes.
+  // Geometric-mean proxy scale from the selected target OBB semi-axis lengths.
   target_obb_scale: $r_e$,
   // Unit selected-camera displacement expressed in target-object coordinates.
   target_frame_motion_direction: $hat(bold(delta))_(j,t)^e$,

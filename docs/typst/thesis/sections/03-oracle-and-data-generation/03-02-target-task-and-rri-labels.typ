@@ -23,12 +23,20 @@ target-conditioned task. Actor-visible target discovery is evaluated through
 the separate proposal-association path below.
 
 At decision step $t$, the proposal mechanism produces
-#symb.rl.candidate_table. Each row #symb.oracle.candidate_qti represents one possible
+#symb.rl.candidate_table. Each row #symb.rl.candidate_qti represents one possible
 camera pose together with its proposal provenance. The hard mask
 #symb.rl.action_mask then induces the feasible action set
 
 $
   #eqs.rl.finite_action_set
+$
+
+The row is an action record, not its camera frame: $q_(t,i)$ carries the
+prospective endpoint $c_(t,i)^"cand"$. Only the selected row becomes factual
+at the successor state:
+
+$
+  #eqs.rl.candidate_camera_transition
 $
 
 Candidate generation and feasibility are deliberately separate operations. The
@@ -625,7 +633,7 @@ $
 
 is retained as a scale-sensitivity diagnostic. Thus
 #symb.entity.target_rri_marginal describes local candidate improvement,
-#symb.entity.return_h supplies the learning target, and
+#symb.rl.return_h supplies the learning target, and
 #symb.entity.endpoint_gain supplies the fixed-budget evaluation outcome. The
 endpoint denominator $Delta_0^e + epsilon$ differs from the clamped root
 denominator $max(Delta_0^e, epsilon)$ used by the additive reward. Near zero root

@@ -158,7 +158,7 @@
     op("concat") (
       bold(delta)_(e|i)^p,
       norm(bold(delta)_(e|i)^p)_2,
-      #symb.spatial.target_bearing,
+      #symb.spatial.target_alignment,
       beta_(t,e,i)^"elev",
       lambda_(t,e,i)^"obb"
     )

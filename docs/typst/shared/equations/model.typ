@@ -22,7 +22,7 @@
       #symb.rl.requested_horizon
     )
     ->
-    ({Q_(h,theta,e,i)^"cond"}_(i=1)^(#symb.shape.Nq),
+    ({Q_theta(s_t,e,i,h)}_(i=1)^(#symb.shape.Nq),
      {ell_(t,i)^"feas"}_(i=1)^(#symb.shape.Nq))
   $,
   qh_target_token: $
@@ -108,7 +108,7 @@
   qh_history_controls: $
     #symb.model.history_pose_feature
     &=
-    op("PoseEnc") (T_(c_t arrow.l c_j)),
+    op("PoseEnc") (T_(#symb.spatial.trajectory_camera_frame arrow.l c_j^"traj")),
     quad j<t \
     #symb.model.history_relative_age
     &=

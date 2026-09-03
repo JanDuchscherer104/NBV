@@ -379,7 +379,7 @@
   - rl.s
   - rl.action_set
   - rl.transition
-  - rl.reward_target
+  - rl.target_reward
   - rl.gamma
   - rl.H
   equation_refs:
@@ -431,8 +431,8 @@
   - rl.s_cf_geom
   - rl.s_oracle
   - oracle.points
-  - oracle.candidates_t
-  - rl.validity_mask
+  - rl.candidate_table
+  - rl.action_mask
   - rl.invalid_reason
   - rl.target
   - rl.budget
@@ -679,9 +679,9 @@
     typst: $cal(A)(s_t)$
   symbol_refs:
   - rl.action_set
-  - oracle.candidate_qti
-  - oracle.candidates_t
-  - rl.validity_mask
+  - rl.candidate_qti
+  - rl.candidate_table
+  - rl.action_mask
   equation_refs:
   - rl.finite_action_set
   internal_links:
@@ -770,7 +770,7 @@
   notation:
     typst: $r_t^e$
   symbol_refs:
-  - rl.reward_target
+  - rl.target_reward
   - entity.rri_e
   - oracle.points
   - ase.mesh_target
@@ -817,7 +817,7 @@
     typst: $G_t^((H))$
   symbol_refs:
   - rl.return_h
-  - rl.reward_target
+  - rl.target_reward
   - rl.gamma
   - rl.H
   equation_refs:
@@ -960,7 +960,7 @@
   notation:
     typst: $m_(t,i)$
   symbol_refs:
-  - rl.validity_mask
+  - rl.action_mask
   - rl.invalid_reason
   - vin.cand_valid
   equation_refs:
@@ -1520,8 +1520,8 @@
   notation:
     typst: '#symb.oracle.candidates'
   symbol_refs:
-  - oracle.candidates_t
-  - oracle.candidate_qti
+  - rl.candidate_table
+  - rl.candidate_qti
   internal_links:
   - docs/typst/thesis/sections/01-research-questions.typ#ssec:rq4
   - docs/contents/theory/rri_theory.qmd
