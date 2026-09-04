@@ -15,7 +15,7 @@ realization or certify scientific validity.
    argument; their source, test, data, and bibliography contracts remain
    authoritative.
 2. For a section or paragraph, read
-   [`section-contract.md`](./assets/templates/section-contract.md) and
+   [`section-contract.md`](.agents/skills/academic-writing/assets/templates/section-contract.md) and
    [`source-grounded-workflow.md`](references/source-grounded-workflow.md).
    For multi-paragraph, section, chapter, outline, or prose-flow work, also read
    [`reader-centred-exposition.md`](references/reader-centred-exposition.md).
