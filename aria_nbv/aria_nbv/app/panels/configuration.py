@@ -4,12 +4,14 @@ from __future__ import annotations
 
 import inspect
 import json
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from enum import Enum
 from pathlib import Path
 from typing import Any, Generic, TypeVar, cast
 
 import streamlit as st
+from pydantic import ValidationError
 
 from ...configs import (
     ConfigAuthoringError,
@@ -18,6 +20,7 @@ from ...configs import (
     ConfigValue,
     ConfigWriteReceipt,
     PathConfig,
+    describe_config_model,
 )
 from ...utils import BaseConfig
 
@@ -44,6 +47,14 @@ class ConfigEditorResult(Generic[ConfigT]):
 
     validation_succeeded: bool = False
     """Whether the current submitted draft passed complete Pydantic validation."""
+
+
+@dataclass(frozen=True, slots=True)
+class ConfigSelection(Generic[ConfigT]):
+    """One validated TOML variant selected by a Streamlit page."""
+
+    path: Path
+    config: ConfigT
 
 
 def trusted_config_catalog() -> dict[str, type[BaseConfig]]:
@@ -84,14 +95,14 @@ def trusted_config_patterns() -> dict[str, tuple[str, ...]]:
             "build_rollouts_v1_cuda_campaign_pilot_corrected_v*.toml",
         ),
         "Rollout writer": (
+            "build_rollouts_v2_cuda_campaign_writer.toml",
+            "build_rollouts_v2_realistic.toml",
+            "build_rollouts_v3_target_shell_experiment.toml",
             "build_rollouts_qh_v0_baseline.toml",
             "build_rollouts_v1_diverse.toml",
             "build_rollouts_v1_lrz.template.toml",
             "build_rollouts_v1_microset.toml",
             "build_rollouts_v1_multihorizon_highgain.toml",
-            "build_rollouts_v2_cuda_campaign_writer.toml",
-            "build_rollouts_v2_realistic.toml",
-            "build_rollouts_v3_target_shell_experiment.toml",
             "build_rollouts_v1_smoke.toml",
         ),
         "Offline VIN writer": ("build_vin_offline*.toml",),
@@ -123,12 +134,7 @@ def render_configuration_workspace(
     root = (configs_dir or PathConfig().configs_dir).expanduser().resolve()
     model_name = st.selectbox("Root config model", options=tuple(catalog), key="config_workspace_model")
     patterns = (path_patterns or {}).get(model_name, ("**/*.toml",))
-    paths = tuple(
-        sorted(
-            {path for pattern in patterns for path in root.glob(pattern)},
-            key=lambda path: path.as_posix(),
-        )
-    )
+    paths = ordered_config_paths(root, patterns)
     if not paths:
         st.info(f"No trusted {model_name} TOML configs found below {root}.")
         return
@@ -244,11 +250,165 @@ def render_config_document(
     return ConfigEditorResult(config=updated, submitted=True, receipt=receipt, validation_succeeded=True)
 
 
+def select_toml_config(
+    model: type[ConfigT],
+    paths: Sequence[Path],
+    *,
+    ui: Any = st,
+    label: str,
+    key_prefix: str,
+    allow_none: bool = False,
+    none_label: str = "(interactive defaults)",
+    disabled: bool = False,
+) -> ConfigSelection[ConfigT] | None:
+    """Select and validate one trusted TOML variant without constructing a target.
+
+    The selector is the shared GUI seam for campaign, rollout, and live-candidate
+    pages. Pydantic performs the complete parse/validation; callers explicitly
+    decide whether to call ``setup_target`` after selection.
+    """
+
+    # Preserve caller order: it is the source-owned reviewed default order.
+    # Sorting here can silently select an older campaign/profile on first load.
+    ordered_paths = tuple(dict.fromkeys(path.expanduser().resolve() for path in paths))
+    if not ordered_paths:
+        ui.info(f"No validated {model.__name__} TOML variants are available.")
+        return None
+    options: tuple[Path | None, ...] = ((None,) if allow_none else ()) + ordered_paths
+    selected = ui.selectbox(
+        label,
+        options=options,
+        format_func=lambda path: none_label if path is None else path.name,
+        key=f"{key_prefix}:path",
+        disabled=disabled,
+    )
+    if selected is None:
+        return None
+    try:
+        return ConfigSelection(path=selected, config=ConfigDocument.open(selected, model).config)
+    except (ConfigAuthoringError, OSError) as exc:
+        ui.error(f"Invalid {selected.name}: {exc}")
+        return None
+
+
+def ordered_config_paths(root: Path, patterns: Sequence[str]) -> tuple[Path, ...]:
+    """Expand trusted patterns deterministically without changing pattern order."""
+
+    paths: list[Path] = []
+    seen: set[Path] = set()
+    for pattern in patterns:
+        for path in sorted(root.glob(pattern), key=lambda candidate: candidate.as_posix()):
+            resolved = path.expanduser().resolve()
+            if resolved not in seen:
+                seen.add(resolved)
+                paths.append(resolved)
+    return tuple(paths)
+
+
+def render_typed_config_fields(
+    config: ConfigT,
+    *,
+    ui: Any = st,
+    key_prefix: str,
+    excluded_paths: frozenset[str] = frozenset(),
+    choices: Mapping[str, Sequence[ConfigValue]] | None = None,
+    bounds: Mapping[str, tuple[float | int | None, float | int | None]] | None = None,
+) -> ConfigT:
+    """Render schema-driven controls and return a revalidated config copy.
+
+    Pydantic field metadata determines the Streamlit widget: closed choices use
+    select boxes, booleans use checkboxes, numeric bounds use number inputs, and
+    structured values use JSON text areas. The returned model is validated before
+    leaving the adapter and no runtime target is created. ``choices`` supplies
+    explicit finite alternatives for fields whose domain type is runtime-only
+    (for example ``torch.device``) and therefore has no JSON-schema enum.
+    ``bounds`` supplies presentation bounds for operationally constrained fields
+    whose Pydantic model intentionally remains broad for programmatic callers.
+    """
+
+    current = _config_widget_values(config.model_dump(mode="python"))
+    patch: dict[str, ConfigValue] = {}
+    descriptors = describe_config_model(type(config))
+    for descriptor in descriptors:
+        if descriptor.path in excluded_paths:
+            continue
+        value = _value_at(current, descriptor.path)
+        if isinstance(value, dict) and any(item.path.startswith(f"{descriptor.path}.") for item in descriptors):
+            continue
+        choice_override = tuple((choices or {}).get(descriptor.path, ()))
+        minimum_override, maximum_override = (bounds or {}).get(descriptor.path, (None, None))
+        updated = _field_widget(
+            descriptor,
+            value,
+            key_prefix=key_prefix,
+            ui=ui,
+            choice_override=choice_override,
+            minimum_override=minimum_override,
+            maximum_override=maximum_override,
+        )
+        if updated != value:
+            _set_patch(patch, descriptor.path, updated)
+    if not patch:
+        return config
+    merged = dict(current)
+    _merge_value_patch(merged, patch)
+    try:
+        validated = type(config).model_validate(merged)
+    except (ValidationError, TypeError, ValueError) as exc:
+        ui.error(f"Invalid configuration draft: {exc}")
+        return config
+    return cast(ConfigT, validated)
+
+
+def _config_widget_values(value: Any) -> dict[str, ConfigValue]:
+    """Convert a Pydantic model dump into values accepted by Streamlit widgets."""
+
+    if isinstance(value, BaseConfig):
+        value = value.model_dump(mode="python")
+    if not isinstance(value, Mapping):
+        raise TypeError("Config field rendering requires a mapping model dump.")
+
+    def convert(item: Any) -> ConfigValue:
+        if isinstance(item, BaseConfig):
+            return convert(item.model_dump(mode="python"))
+        if isinstance(item, Path):
+            return item.as_posix()
+        if isinstance(item, Enum):
+            return convert(item.value)
+        if isinstance(item, Mapping):
+            return {str(key): convert(child) for key, child in item.items()}
+        if isinstance(item, tuple | list | set):
+            return [convert(child) for child in item]
+        tolist = getattr(item, "tolist", None)
+        if callable(tolist):
+            return convert(tolist())
+        if item is None or isinstance(item, (str, int, float, bool)):
+            return item
+        return str(item)
+
+    return {str(key): convert(item) for key, item in value.items()}
+
+
+def _merge_value_patch(container: dict[str, ConfigValue], patch: Mapping[str, ConfigValue]) -> None:
+    """Merge one dotted-field patch into a widget-value mapping."""
+
+    for key, value in patch.items():
+        current = container.get(key)
+        if isinstance(value, Mapping) and isinstance(current, dict):
+            _merge_value_patch(current, value)
+        else:
+            container[key] = value
+
+
 def _field_widget(
     descriptor: ConfigFieldDescriptor,
     value: ConfigValue | None,
     *,
     key_prefix: str,
+    ui: Any = st,
+    choice_override: Sequence[ConfigValue] = (),
+    minimum_override: float | int | None = None,
+    maximum_override: float | int | None = None,
 ) -> ConfigValue:
     label = descriptor.path
     help_text = descriptor.documentation
@@ -257,7 +417,7 @@ def _field_widget(
     if descriptor.theory_ids:
         help_text = f"{help_text or ''}\n\n{_theory_help(descriptor.theory_ids)}".strip()
     if descriptor.allows_none:
-        enabled = st.checkbox(
+        enabled = ui.checkbox(
             f"{label} enabled",
             value=value is not None,
             disabled=disabled,
@@ -268,30 +428,37 @@ def _field_widget(
             return None
         if value is None:
             value = _optional_seed(descriptor)
-    if descriptor.choices:
-        options = tuple(descriptor.choices)
+    options = tuple(choice_override) or tuple(descriptor.choices)
+    if options:
         index = options.index(value) if value in options else 0
         return cast(
-            ConfigValue, st.selectbox(label, options=options, index=index, disabled=disabled, help=help_text, key=key)
+            ConfigValue, ui.selectbox(label, options=options, index=index, disabled=disabled, help=help_text, key=key)
         )
     if isinstance(value, bool):
-        return st.checkbox(label, value=bool(value), disabled=disabled, help=help_text, key=key)
+        return cast(
+            ConfigValue,
+            ui.checkbox(label, value=bool(value), disabled=disabled, help=help_text, key=key),
+        )
     if isinstance(value, int) and not isinstance(value, bool):
         kwargs: dict[str, Any] = {"value": value, "step": 1, "disabled": disabled, "help": help_text, "key": key}
-        if descriptor.minimum is not None:
-            kwargs["min_value"] = int(descriptor.minimum)
-        if descriptor.maximum is not None:
-            kwargs["max_value"] = int(descriptor.maximum)
-        return int(st.number_input(label, **kwargs))
+        minimum = minimum_override if minimum_override is not None else descriptor.minimum
+        maximum = maximum_override if maximum_override is not None else descriptor.maximum
+        if minimum is not None:
+            kwargs["min_value"] = int(minimum)
+        if maximum is not None:
+            kwargs["max_value"] = int(maximum)
+        return int(ui.number_input(label, **kwargs))
     if isinstance(value, float):
         kwargs = {"value": value, "disabled": disabled, "help": help_text, "key": key}
-        if descriptor.minimum is not None:
-            kwargs["min_value"] = float(descriptor.minimum)
-        if descriptor.maximum is not None:
-            kwargs["max_value"] = float(descriptor.maximum)
-        return float(st.number_input(label, **kwargs))
+        minimum = minimum_override if minimum_override is not None else descriptor.minimum
+        maximum = maximum_override if maximum_override is not None else descriptor.maximum
+        if minimum is not None:
+            kwargs["min_value"] = float(minimum)
+        if maximum is not None:
+            kwargs["max_value"] = float(maximum)
+        return float(ui.number_input(label, **kwargs))
     if isinstance(value, list | dict):
-        raw = st.text_area(
+        raw = ui.text_area(
             label,
             value=json.dumps(value, indent=2, sort_keys=True),
             disabled=disabled,
@@ -301,9 +468,9 @@ def _field_widget(
         try:
             return cast(ConfigValue, json.loads(raw))
         except json.JSONDecodeError:
-            return raw
+            return cast(ConfigValue, raw)
     rendered = "" if value is None else str(value)
-    updated = st.text_input(
+    updated = ui.text_input(
         label,
         value=rendered,
         type="password" if descriptor.sensitive else "default",
@@ -311,16 +478,16 @@ def _field_widget(
         help=help_text,
         key=key,
     )
-    return None if value is None and not updated else updated
+    return cast(ConfigValue, None if value is None and not updated else updated)
 
 
 def _value_at(values: Mapping[str, ConfigValue], path: str) -> ConfigValue | None:
-    current: ConfigValue | None = values
+    current: ConfigValue | Mapping[str, ConfigValue] | None = values
     for segment in path.split("."):
         if not isinstance(current, Mapping):
             return None
         current = current.get(segment)
-    return current
+    return cast(ConfigValue | None, current)
 
 
 def _set_patch(patch: dict[str, ConfigValue], path: str, value: ConfigValue) -> None:
@@ -343,6 +510,8 @@ def _descriptor_for(
 
 def _optional_seed(descriptor: ConfigFieldDescriptor) -> ConfigValue:
     annotation = descriptor.annotation.lower()
+    if "tensor" in annotation:
+        return [0.0, 0.0, 0.0]
     if "bool" in annotation:
         return False
     if "int" in annotation:
@@ -384,8 +553,12 @@ def _theory_help(identifiers: tuple[str, ...]) -> str:
 
 __all__ = [
     "ConfigEditorResult",
+    "ConfigSelection",
     "render_config_document",
     "render_configuration_workspace",
+    "render_typed_config_fields",
+    "ordered_config_paths",
+    "select_toml_config",
     "trusted_config_catalog",
     "trusted_config_patterns",
 ]

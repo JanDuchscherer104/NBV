@@ -20,6 +20,7 @@ if TYPE_CHECKING:
         ConfigFieldDescriptor,
         ConfigValue,
         ConfigWriteReceipt,
+        describe_config_model,
     )
     from .optuna_config import OptunaConfig
     from .path_config import PathConfig
@@ -34,6 +35,7 @@ _OWNERS = {
     "ConfigFieldDescriptor": ".authoring",
     "ConfigValue": ".authoring",
     "ConfigWriteReceipt": ".authoring",
+    "describe_config_model": ".authoring",
     "OptunaConfig": ".optuna_config",
     "PathConfig": ".path_config",
     "WandbConfig": ".wandb_config",
@@ -61,6 +63,7 @@ __all__ = [
     "ConfigFieldDescriptor",
     "ConfigValue",
     "ConfigWriteReceipt",
+    "describe_config_model",
     "OptunaConfig",
     "PathConfig",
     "WandbConfig",

@@ -41,7 +41,9 @@ literature, bibliography, or Typst sources.
      [`display provenance profile`](references/review-profiles.md#display-provenance).
 3. Inspect exact evidence owners and report each finding with severity, locator,
    rationale, repair action, gate, and review independence. Separate evidence
-   from inference.
+   from inference. For exposition-focused reviews, apply the
+   reader-centred-exposition.md#completion-and-review-lens criteria alongside
+   the scientific evidence checks.
 4. Return findings to the owning author or implementation lane. This review
    never advances a phase state; the owner decides whether to mutate, realize,
    or request a fresh review.
