@@ -1,6 +1,6 @@
 ---
 name: scientific-review
-description: Use to independently review an exact scientific candidate for claim, citation, argument, mathematical, research-question, or empirical-validity risks; return advisory findings without mutation.
+description: Use to independently review an exact scientific candidate for claim, citation, prose, narrative, educational, mathematical, research-question, or empirical-validity risks; return advisory findings without mutation.
 ---
 
 # Scientific Review
@@ -14,8 +14,12 @@ literature, bibliography, or Typst sources.
 
 1. Capture the candidate identity, scope, and review question; read its nearest
    owner guidance.
-2. Read [`review-protocol.md`](references/review-protocol.md), then select only
-   the applicable branch:
+2. Read [`review-protocol.md`](references/review-protocol.md), then select the
+   applicable profile:
+   - prose, educational value, narrative cohesion, reader knowledge, internal
+     identifier leakage, or equation exposition:
+     [`exposition-quality.md`](references/exposition-quality.md) and the
+     matching thesis reader-state record;
    - empirical protocol, leakage, confounding, parity, uncertainty, or artifact
      freshness: academic-writing's
      [`empirical-reporting-and-reproducibility.md`](../academic-writing/references/empirical-reporting-and-reproducibility.md)
@@ -23,19 +27,16 @@ literature, bibliography, or Typst sources.
    - computational model, policy, rollout, or reported-result evidence: the
      [`computational evidence profile`](references/review-profiles.md#computational-evidence);
    - claim/citation entailment, Related Work, contribution scope, or argument
-     coherence: academic-writing's
+     validity: academic-writing's
      [`claim-citation discipline`](../academic-writing/references/claim-citation-discipline.md)
      and [`thesis section contracts`](../academic-writing/references/thesis-section-contracts.md);
-     for multi-paragraph reader journey or main-thread integrity, also apply the
-     frozen-candidate lens in
-     [`reader-centred exposition`](../academic-writing/references/reader-centred-exposition.md#completion-and-review-lens);
    - research-question/estimand alignment: the active
      [`research questions`](../../../docs/typst/thesis/sections/01-research-questions.typ)
      plus the applicable section contract;
    - mathematical, notation, or theoretical consistency: the exact local source
      plus [`equations.typ`](../../../docs/typst/shared/equations.typ),
      [`symbols.typ`](../../../docs/typst/shared/symbols.typ), or Typst's
-     [`notation policy`](../typst-authoring/references/aria-nbv-notation.md).
+     [`notation policy`](../typst-authoring/references/aria-nbv-notation.md);
    - a derived figure, table, or displayed quantity: the
      [`display provenance profile`](references/review-profiles.md#display-provenance).
 3. Inspect exact evidence owners and report each finding with severity, locator,
@@ -49,4 +50,4 @@ literature, bibliography, or Typst sources.
 
 The unchanged candidate has a reproducible identity, recorded review
 independence, all applicable checks have an evidence-bounded result, and
-unresolved risks are explicit for its owner.
+unresolved scientific or exposition risks are explicit for its owner.

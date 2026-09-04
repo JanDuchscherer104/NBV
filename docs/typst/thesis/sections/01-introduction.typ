@@ -45,36 +45,21 @@ structure can be recovered from a bounded egocentric information state.
 // - @GenNBV-chen2024 -> docs/literature/tex-src/arXiv-GenNBV/3-Method.tex:13-25,76-95 (history-conditioned continuous policy and coverage reward)
 // - @Hestia-lu2026 -> docs/literature/tex-src/arXiv-Hestia/sec/3_method.tex:30-58,70-118 (sequential coverage state and hierarchical action)
 
-The actor-state question includes a representation-transfer hypothesis. Prior
-NBV pipelines already use generic 2D pretraining or foundation-model components
-for view prediction, depth estimation, or scene construction
-@ThreeDNVS-ashutosh2020 @MACARONS-guedon2023 @NextBestSense-strong2024. These
-uses do not establish whether an egocentric 3D representation that combines a
-frozen 2D foundation feature extractor with learned upsampling and 3D processing
-improves target-conditioned endpoint-value learning. ARIA-NBV therefore treats
-EFM3D/EVL evidence as a hypothesis to be tested against matched actor-visible
-geometric controls, not as an assumed source of gain @EFM3D-straub2024.
-
-// evidence:
-// - @ThreeDNVS-ashutosh2020 -> docs/literature/tex-src/arXiv-3D-NVS/sections/method_new.tex:15-23 (fixed-view NBV classifier and ImageNet-pretrained VGG16 with frozen layers)
-// - @MACARONS-guedon2023 -> docs/literature/tex-src/arXiv-MACARONS/3_method.tex:27-34 (pretrained ResNet-18 image features in the depth module)
-// - @NextBestSense-strong2024 -> docs/literature/tex-src/arXiv-Next-Best-Sense/ms.tex:156-217 (SAM2/depth priors for 3DGS construction and Fisher-information view selection)
-// - @EFM3D-straub2024 -> docs/literature/tex-src/arXiv-EFM3D/method.tex:4-45, docs/literature/tex-src/arXiv-EFM3D/supplemental_text.tex:11-18 (frozen 2D foundation features followed by learned upsampling, 3D U-Net processing, and task heads)
-
-Project Aria supplies calibrated egocentric observations, EFM3D lifts them into
-local 3D evidence, and ARIA Synthetic Environments (ASE) provides the privileged
-geometry needed for controlled target tasks and counterfactual evaluation
-@projectaria-engel2023 @EFM3D-straub2024 @ProjectAria-ASE-2025. This combination
-makes the information boundary testable. Task construction, action-set
-construction, hard admission, supervision, and evaluation may use privileged
-geometry, while the scorer consumes only the fields admitted by its declared
-actor-facing protocol. Scientific interpretation must account for both paths.
-Chapter 3 therefore treats actor visibility as a property of the complete
-decision process, not merely of the scorer tensor.
+Project Aria, EFM3D, and ARIA Synthetic Environments (ASE) make this
+question experimentally accessible. Calibrated egocentric streams and local
+three-dimensional evidence define the actor-side observation substrate, while
+privileged ASE geometry supports controlled target construction and
+counterfactual evaluation @projectaria-engel2023 @EFM3D-straub2024
+@ProjectAria-ASE-2025. This separation also makes representation quality a
+testable question: EFM3D/EVL may preserve useful target-relative appearance and
+geometry, but its contribution to endpoint-value prediction must be compared
+against matched actor-visible geometric controls. Chapter 3 therefore treats
+actor visibility as a property of the complete decision process, not merely of
+the scorer tensor.
 
 // evidence:
 // - @projectaria-engel2023 -> docs/literature/tex-src/arXiv-project-aria/device.tex:12-17,71-81 (calibrated and time-aligned egocentric sensing)
-// - @EFM3D-straub2024 -> docs/literature/tex-src/arXiv-EFM3D/intro.tex:42-50, docs/literature/tex-src/arXiv-EFM3D/method.tex:1-42 (local gravity-aligned lifting and semi-dense surface/free-space evidence)
+// - @EFM3D-straub2024 -> docs/literature/tex-src/arXiv-EFM3D/intro.tex:42-50, docs/literature/tex-src/arXiv-EFM3D/method.tex:1-45 (local gravity-aligned lifting, learned 3D processing, and surface/free-space evidence)
 // - @ProjectAria-ASE-2025 -> docs/contents/ase_dataset.qmd:216-225,257-260 (GT depth and meshes as supervision, oracle, and evaluation assets)
 // - actor-visible and privileged information boundary -> docs/typst/thesis/sections/03-oracle-and-data-generation/03-01-state-and-visibility.typ, docs/typst/thesis/sections/04-method/04-01-scene-representation-requirements.typ
 
@@ -93,29 +78,33 @@ At every step, each policy selects from the same finite generated candidates;
 hard-invalid actions are excluded, and the target, horizon, candidate support,
 and endpoint evaluation are matched. The current oracle tasks use
 geometry-valid ground-truth boxes, while actor-visible target discovery and
-matching remain separate research requirements. The objective adapts VIN-NBV
-rather than copying it: VIN-NBV defines RRI from point-cloud Chamfer distance
-@VIN-NBV-frahm2025, whereas ARIA-NBV evaluates a target-cropped point--mesh error
-after an equal acquisition budget. The resulting claims concern this bounded
-finite-candidate setting, not a deployable target-selection system or an
-objective invariant to other reconstruction protocols.
+matching remain separate research requirements. ARIA-NBV retains VIN-NBV's
+principle of measuring realized reconstruction improvement and changes the
+evaluated geometry: VIN-NBV uses point-cloud Chamfer distance
+@VIN-NBV-frahm2025, while this thesis evaluates a target-cropped point--mesh
+error after an equal acquisition budget. The resulting claims concern this
+bounded finite-candidate setting, not a deployable target-selection system or
+an objective invariant to other reconstruction protocols.
 
 // evidence:
 // - @VIN-NBV-frahm2025 -> docs/literature/tex-src/arXiv-VIN-NBV/sec/3_methods.tex:36-44,82-92 (point-cloud Chamfer RRI precedent)
 // - ARIA-NBV adaptation -> docs/typst/thesis/sections/03-oracle-and-data-generation/03-02-target-task-and-rri-labels.typ:187-314 (target-cropped point--mesh error, training reward, and endpoint gain)
 
+#include "01-conceptual-spine.typ"
+
 == Contributions and current evidence
 
-The thesis operationalizes this evaluation through four scientific functions:
+The thesis operationalizes this evaluation through four linked contributions:
 
-+ It separates one-step RRI, finite-horizon return, and fixed-budget endpoint
-  gain within target-specific reconstruction quality.
-+ It defines an end-to-end information boundary across task and action
-  construction, state updates, model inputs, supervision, and evaluation.
-+ It defines candidate value relationally over target, causal state, admissible
-  action, budget, horizon, and continuation rule.
++ It separates immediate reconstruction improvement, finite-horizon return, and
+  fixed-budget endpoint gain within one target-specific quality objective.
++ It constructs a causal experimental world in which privileged geometry may
+  define supervision and evaluation without silently entering the actor state.
++ It formulates candidate value through target-relative geometry, causal scene
+  evidence, admissible action support, remaining budget, prediction horizon,
+  and continuation rule.
 + It evaluates measurement, support, oracle headroom, immediate-value learning,
-  recursion, and learned-control endpoint gap closure in that order.
+  finite-horizon recovery, and representation choices in dependency order.
 
 // evidence:
 // - one-step, finite-horizon, and endpoint estimands -> docs/typst/thesis/sections/01-research-questions.typ:9-61, docs/typst/thesis/sections/03-oracle-and-data-generation/03-02-target-task-and-rri-labels.typ:28-40
@@ -148,13 +137,14 @@ readiness.
 
 == Thesis structure <ssec:thesis-structure>
 
-The remaining chapters follow that dependency chain. @sec:thesis-foundations
-derives the objective, support, temporal, and representation concepts needed to
-state the gap precisely. @sec:thesis-oracle-data-generation constructs the
-experimental world by defining information access, admissible actions, state
-transitions, and measured outcomes. @sec:thesis-method then specifies the one
-finite-horizon value interface evaluated within that world.
-@sec:thesis-experimental-design states which evidence admits or blocks each
-claim. @sec:thesis-results reports the admitted answers in gate order;
-@sec:thesis-discussion attributes their implications and alternatives; and
-@sec:thesis-conclusion synthesizes what those bounded answers establish.
+The remaining chapters elaborate the conceptual spine above.
+@sec:thesis-foundations derives the objective, action-support, temporal, and
+geometric principles that make candidate value well defined.
+@sec:thesis-oracle-data-generation constructs the controlled decision process:
+actor-visible evidence, privileged evaluation, feasible candidates, factual
+successors, and replay. @sec:thesis-method instantiates that process as a
+horizon-conditioned candidate scorer with explicit scene, target, history, and
+geometry representations. @sec:thesis-experimental-design tests the resulting
+claims in dependency order. @sec:thesis-results reports the admitted answers;
+@sec:thesis-discussion interprets their mechanisms and alternatives; and
+@sec:thesis-conclusion states what the bounded study establishes.

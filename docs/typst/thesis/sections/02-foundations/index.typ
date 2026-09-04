@@ -1,25 +1,21 @@
 = Foundations and Related Work <sec:thesis-foundations>
 
-The Introduction located this thesis within active perception: sensing actions
-change the evidence on which later inference depends @ActivePerception-bajcsy1988
-@ActiveVision-aloimonos1988. Three-dimensional view planning turns that principle
-into a repeated choice of where to observe next @ViewPlanningSurvey-scott2003.
-The unresolved dependency is not another planner implementation but a precise
-account of what a view is valuable *for*, which actions are available, and what
-information a sequential score may condition on. By the end of the chapter,
-the thesis question is reduced to three coupled requirements—utility alignment,
-temporal dependence, and support/state adequacy—before the experimental world
-is constructed.
+The Introduction framed target-conditioned NBV as relational prediction over a
+causal geometric state. This chapter supplies the concepts needed to make that
+formulation precise. It asks what consequence makes a view useful, which actions
+can be considered, when immediate ranking is insufficient, and what information
+a finite-horizon score must preserve. The argument therefore separates utility
+from proposal and feasibility before introducing partial observability,
+state-dependent action support, and delayed reconstruction consequences.
 
-The argument follows the dependencies of the decision problem. It first
-separates the next-best-view mechanism from the objective used to rank views,
-then distinguishes target-conditioned reconstruction quality from coverage and
-uncertainty proxies. It next separates candidate-view support from endpoint,
-transition, and human-motion feasibility before explaining why partial
-observability and delayed consequences require a finite-horizon information
-state. The chapter then derives the geometric properties a candidate scorer
-should preserve and positions the thesis question against the resulting
-literature dimensions.
+The synthesis yields four design principles inherited by the later chapters:
+utility must be aligned with the requested target; candidate value is relational
+rather than a property of a pose alone; the scene state must preserve causal
+observability; and the representation should remove arbitrary coordinates and
+row order without erasing gravity, scale, orientation, occlusion, or temporal
+order. @sec:thesis-oracle-data-generation turns these principles into a
+controlled data-generating process, and @sec:thesis-method instantiates them in
+one learned candidate scorer.
 
 #include "02-01-active-perception-and-view-utility.typ"
 
