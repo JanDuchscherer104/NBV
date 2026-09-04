@@ -43,7 +43,8 @@ three durable takeaways.
 
 Use synthesis bridges to state what a section established and why that result
 makes the next section necessary. Repair coherence by changing reasoning order
-before adding connective phrases.
+before adding connective phrases. This context-content-conclusion spine keeps
+the explanation causal rather than merely sequential.
 
 ## Paragraph and sentence flow
 
@@ -99,7 +100,7 @@ teaching.
 ## Main text and appendix
 
 Keep a premise in the main text when it is required for the central conclusion,
-method comprehension, validity assessment, or repeated reasoning. Move
+method comprehension, validity assessment, or repeated reasoning; keep the main text self-contained for those claims. Move
 exhaustive implementation mapping, provenance, diagnostics, alternatives, and
 reproduction detail to an appendix or owning artifact. If ordinary reasoning
 repeatedly requires an appendix, repair the abstraction boundary.
@@ -108,7 +109,8 @@ repeatedly requires an appendix, repair the abstraction boundary.
 
 The candidate is structurally ready when every substantial unit has an
 incoming state, one principal question, one to three takeaways, a teaching
-device, and an outgoing dependency; concepts precede uses; equations complete
+device, and an outgoing dependency. Keep takeaway density high enough to retain
+the durable result without turning the exposition into a catalogue; concepts precede uses; equations complete
 the exposition loop; paragraphs land consequences; implementation vocabulary
 is confined to explicit mappings; and the main text remains sufficient for the
 central argument.

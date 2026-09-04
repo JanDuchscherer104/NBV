@@ -24,7 +24,7 @@ language of the argument.
 1. **Locate the lesson.** Read the nearest docs guide, the exact destination,
    and the chapter record in
    `docs/typst/thesis/development/reader-state.toml`. For a paragraph or section,
-   read [`section-contract.md`](assets/templates/section-contract.md); for
+   read [`section-contract.md`](.agents/skills/academic-writing/assets/templates/section-contract.md); for
    chapter, outline, prose-flow, or equation-exposition work, also read
    [`reader-centred-exposition.md`](references/reader-centred-exposition.md).
    The step is complete when the incoming reader state, active reader question,
@@ -84,7 +84,9 @@ language of the argument.
 State the destination and ledger entry, incoming and outgoing reader state,
 plain-language answer, teaching device, formal objects introduced, source
 identities, limitations, phase state, and required verification. The packet is
-task-local; active sources remain the durable record.
+task-local; active sources remain the durable record. For empirical candidates,
+obtain scientific-review findings before marking the work `ready-for-realization`.
+HM/FK07 assessment work follows the dated scientific-practice overlay.
 
 ## Completion
 
