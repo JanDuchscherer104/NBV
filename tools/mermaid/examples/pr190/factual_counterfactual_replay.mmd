@@ -56,12 +56,11 @@ flowchart TB
   %% aria-math: symbols.entity.target_reward
   Reward["<b>Selected reward</b><code>gather(gains, action)</code>$$r_t^e$$"]:::compute
   %% aria-compute: equations.rl.qh_doubleq_index
-  Backup["<b>Double-Q continuation</b><code>0 if terminal else</code><code>target_Q(next, argmax(</code><code>online_Q(next)[supported]))</code>"]:::compute
+  Backup["<b>Double-Q continuation</b><code>0 if terminal else</code><code>Q_target(next, h - 1,</code><code>argmax(Q_online(next,</code><code>h - 1)[supported]))</code>"]:::compute
   %% aria-math: equations.rl.qh_doubleq_target
   Target["<b>Training target</b>$$y_t^{(h,e)}=r_t^e+\gamma B_t^{(h,e)}$$"]:::compute
   %% aria-compute: equations.model.qh_s1_selected_surface
-  %% aria-math: symbols.rl.s_surface
-  Fusion["<b>Selected-depth control</b><code>backproject → transform</code><code>PointMLP → mean / max</code><code>root + residual</code>$$s_t^{\mathrm{S1-surface}}$$"]:::compute
+  Fusion["<b>Selected-depth encoder</b><code>backproject → transform</code><code>PointMLP → mean / max</code><code>root + residual</code>"]:::compute
   Oracle --> Render
   Candidates --> Render
   State --> Select
