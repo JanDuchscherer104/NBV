@@ -1,0 +1,54 @@
+---
+config:
+  theme: base
+  htmlLabels: true
+  forceLegacyMathML: true
+  layout: elk
+  fontFamily: "CMU Serif, Latin Modern Roman, serif"
+  flowchart:
+    nodeSpacing: 16
+    rankSpacing: 24
+    padding: 12
+    curve: linear
+    wrappingWidth: 320
+  themeVariables:
+    background: "#ffffff"
+    fontFamily: "CMU Serif, Latin Modern Roman, serif"
+    fontSize: "24px"
+    primaryTextColor: "#17202A"
+    edgeLabelBackground: "#ffffff"
+    clusterBkg: "#fafafa"
+    clusterBorder: "#737373"
+    lineColor: "#475569"
+  themeCSS: |
+    .nodeLabel { font-family: "CMU Serif", "Latin Modern Roman", serif; font-size: 24px; }
+    .nodeLabel div { flex-direction: column; line-height: 1.2; }
+    .nodeLabel b { display: block; font-size: 28px; font-weight: 700; line-height: 1.15; margin-bottom: 6px; }
+    .edgeLabel { font-family: "CMU Serif", "Latin Modern Roman", serif; font-size: 22px; }
+    .cluster-label { font-family: "CMU Serif", "Latin Modern Roman", serif; font-size: 24px; font-weight: 700; }
+    .katex { font-size: 1em; }
+    .katex-display { margin: 0; }
+---
+flowchart TB
+  %% aria-notation: typst
+  %% aria-architecture: symbolic-computational
+  %% aria-width-mm: 160
+  accTitle: Proposed spatial memory and candidate-local mathematical reads
+  accDescr: Proposed representation, not implemented architecture. Shared memory is queried without mutation. The three pooling domains are target, candidate frustum and their intersection. The ray readout retains depth, free and unknown intervals, hits, target weights, support, geometric uncertainty and directional evidence. Separate S0/S1 controls are not additive inputs.
+  Memory["<b>Proposed memory</b>$$#eqs.scene.qh_scene_memory$$"]:::compute
+  Target["<b>Target</b>$$#symb.entity.target_desc$$"]:::input
+  Candidate["<b>Query</b>$$#symb.oracle.candidate_qti$$"]:::input
+  Pools["<b>Regional pooling</b>$$#eqs.scene.candidate_query_pools$$"]:::compute
+  Rays["<b>Ray query</b>$$#eqs.scene.candidate_ray_query$$"]:::compute
+  Memory --> Pools
+  Memory --> Rays
+  Target --> Pools
+  Target --> Rays
+  Candidate --> Pools
+  Candidate --> Rays
+
+  classDef input fill:#D5E8D4,stroke:#82B366,color:#17202A,stroke-width:1.5px,rx:0,ry:0;
+  classDef output fill:#F8CECC,stroke:#B85450,color:#17202A,stroke-width:1.5px,rx:0,ry:0;
+  classDef compute fill:#E1D5E7,stroke:#9673A6,color:#17202A,stroke-width:1.5px,rx:8,ry:8;
+  classDef data fill:#F5F5F5,stroke:#9E9E9E,color:#17202A,stroke-width:1.2px,rx:0,ry:0;
+  classDef status fill:#FFFFFF,stroke:#475569,color:#17202A,stroke-width:1.5px,stroke-dasharray:5 4,rx:0,ry:0;

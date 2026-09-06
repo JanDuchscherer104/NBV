@@ -1,81 +1,90 @@
 ---
 name: aria-nbv-mermaid
-description: Use for ARIA-NBV Mermaid source, local lint and rendering, thesis diagrams, flowcharts, sequence diagrams, and Mermaid style or symbol-map work.
+description: Author mathematical ARIA-NBV diagrams with direct Typst symbol/equation references, generate Mermaid from the canonical projection, and validate scientific meaning and final-size readability.
 ---
 
-# ARIA-NBV Mermaid Figure Skill
+# Mathematical Mermaid Figures
 
-This skill owns the local Mermaid seam: versioned `.mmd` source through the
-vendored `tools/mermaid` lint and render commands. It routes notation, final
-document integration, and diagnosed tool failures to their existing owners.
+**Symbols carry data; equations carry transformations; edges carry dependencies;
+captions carry qualifications.** A heading, English function call or protocol
+name is not a substitute for the mathematical mechanism.
 
-## Use When
+## Owner-first route
 
-- Creating, editing, reviewing, linting, or rendering a repository `.mmd`.
-- Updating `tools/mermaid` templates, examples, style guidance, the symbol map,
-  or the local linter/render wrapper.
-- Turning a local architecture, protocol, storage, or sequence into a Mermaid
-  diagram.
+Read root/nearest `AGENTS.md`, the exact passage and implementation. Use
+`docs/typst/shared/symbols.typ`, `equations.typ` and their domain modules for
+meaning. `docs/notation.yml` is only the generated TeX projection; its `typst`
+fields identify the exact owners. Do not create another symbol dictionary.
 
-## Read First
+Load only the relevant reference:
 
-1. Read `AGENTS.md` and `docs/AGENTS.md`.
-2. For a thesis figure or any math label, read the local style guide and symbol
-   map; also inspect the relevant `docs/typst/shared` source.
-3. For a rendering or linting failure, capture the exact local command and
-   output before handing the evidence to the nearest owning guide.
-4. For current upstream grammar or renderer behavior, use the external-evidence
-   branch in [`aria-nbv-context`](../aria-nbv-context/SKILL.md) and its
-   [Context7 registry](../aria-nbv-context/references/context7_library_ids.md)
-   only after local owner inspection; local source, lint, and render results
-   remain decisive.
+- [Direct-reference syntax, mathematical grammar and sizing](../../../tools/mermaid/references/symbolic-style.md).
+- [Scientific and cold-reader review](references/figure-review.md).
+- [Bounded iteration and Mermaid Chart](references/iteration.md).
+- [Renderer transport and visible-math pitfalls](../../../tools/mermaid/references/math-transport.md).
+- New notation, dense mathematics, spatial geometry and final PDF: `typst-authoring`.
 
-## Seam Rules
+The seminar diagrams are composition baselines, not current model evidence.
+Keep selected implementations, privileged controls and proposed architectures
+visibly distinct. Do not change scientific dependencies to improve layout.
 
-- Keep `.mmd` as the source of record. `tools/mermaid` owns local template,
-  style, notation-projection, lint, and render behavior; do not add a second
-  Mermaid CLI wrapper to another skill. Its wrapper resolves a repository-local
-  CLI first, then an explicit `MERMAID_CLI` or `PATH` installation.
-- Start from the matching local template or example. Flowcharts use the shared
-  `input`, `compute`, `data`, and `output` classes; math-heavy flowcharts use
-  the supplied frontmatter.
-- Preserve contrast: every shared semantic `classDef` pins
-  `color:#17202A` with its pale fill. Quarto's dark Mermaid theme otherwise
-  mutes labels; the canonical definitions live in
-  [`aria_mermaid_style.md`](../../../tools/mermaid/references/aria_mermaid_style.md#3-node-classes).
-- Keep labels compact. Every new mathematical symbol must already be in shared
-  Typst notation and its Mermaid projection; hand off to `typst-authoring`
-  before changing either owner.
-- Treat lint warnings as review evidence. Preserve existing visual intent and
-  change it only for the requested diagram or a clear style mismatch.
-- Render locally only. If `mmdc` is unavailable, report that condition rather
-  than substituting an online renderer.
+## Authoring contract
 
-## Workflow
+Start from `tools/mermaid/templates/flowchart_symbolic.mmd`. New architecture
+sources require `%% aria-notation: typst` and
+`%% aria-architecture: symbolic-computational`.
 
-1. Identify the grammar and destination: source-only, Quarto fence, or a
-   rendered Typst asset.
-2. Copy the matching local template or adapt the closest local example.
-3. For math labels, verify each symbol against the shared Typst owner and
-   `aria_symbol_map.yaml`; stop and hand off if notation must change.
-4. Edit the `.mmd`, then run:
+```text
+State["<b>Memory</b>$$#symb.scene.scene_memory_t$$"]:::data
+Pools["<b>Pooling</b>$$#eqs.scene.candidate_query_pools$$"]:::compute
+```
 
-   ```bash
-   python tools/mermaid/scripts/aria_mermaid_lint.py <file.mmd>
-   ```
+Every math block is **one complete exported Typst name**. Data uses `#symb`;
+processes use `#eqs`. No copied TeX, local alias, suffix manipulation, expression
+slicing or `<code>` escape hatch. Split reusable equation rows at their shared
+Typst owner, then regenerate its adapters. Whole-equation references can contain
+sets, intersections, expectations, cases, sums, products and update rules; these
+are mathematical operations, not decoration.
 
-   Resolve errors. Record warnings that remain intentional.
-5. When the local renderer resolves a CLI, render a review artifact outside
-   tracked figure paths unless an output asset is requested:
+Keep one- or two-word bold CMU Serif headings outside math. Use the full
+mathematical expression beneath them; explain prerequisites in the section and
+limitations in the caption. Retain sets and case conditions that give the
+expression its meaning. Abbreviated projections must be repaired at the owner,
+not silently trusted because a spelling check passes.
 
-   ```bash
-   tools/mermaid/scripts/render_mermaid.sh <file.mmd> /tmp/<name>.svg
-   ```
+## Compile and verify
 
-6. Hand off Quarto inclusion to the nearest docs guide; hand off Typst asset inclusion,
-   captioning, and page inspection to `typst-authoring`.
+After changing the canonical owners, refresh their projections first:
+
+```sh
+python3 scripts/glossary_build.py validate render-notation-yaml render-notation-lua render-notation-typst
+python3 tools/mermaid/scripts/aria_mermaid_owners.py path/to/figure.mmd \
+  --output /tmp/figure.mmd --receipt /tmp/figure.refs.json
+python3 tools/mermaid/scripts/aria_mermaid_lint.py /tmp/figure.mmd
+python3 -W error -m unittest discover -s scripts/tests -p 'test_aria_mermaid_*.py'
+tools/mermaid/scripts/render_mermaid.sh path/to/figure.mmd /tmp/figure.svg
+node tools/mermaid/scripts/inspect_mermaid.mjs /tmp/figure.svg 160 /tmp/figure
+```
+
+The existing render wrapper resolves owner references automatically against the
+prepared projection. The authored `.mmd` is canonical; generated plain Mermaid
+and hash receipts are build evidence. Send **generated** Mermaid to the official
+Mermaid Chart `display_mermaid` tool or GitHub fences. Neither host understands
+project Typst identifiers itself. A successful tool response is not a rendering
+or font-validation certificate.
+
+Use the professor/student loop on actual artifacts. Inspect mathematical fonts,
+indices, set membership, case branches and domains as well as physical sizes,
+clipping and grayscale. A self-review is not independent approval. Reflow or
+split a formula-heavy view before shrinking the type; one shared equation can
+teach more than ten labelled boxes.
 
 ## Completion
 
-Report the source path, exact lint result, render result or `mmdc` gap, and
-the destination-owner handoff when one remains.
+Report exact owners, notation-regeneration evidence, direct-reference tests,
+rendered math/font/size checks and inspected images. Commit refreshed tracked
+adapters with owner changes; build-time regeneration alone is not a synchronized
+checkout. Final thesis inclusion still requires destination-source consistency,
+caption/include/cross-reference and PDF-page QA. Do not claim arbitrary Typst
+syntax runs inside Mermaid: only registered `#symb`/`#eqs` projections are
+supported. Use native Typst for math its KaTeX projection cannot faithfully express.

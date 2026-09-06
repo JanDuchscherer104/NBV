@@ -1,0 +1,53 @@
+---
+config:
+  theme: base
+  htmlLabels: true
+  forceLegacyMathML: true
+  layout: elk
+  fontFamily: "CMU Serif, Latin Modern Roman, serif"
+  flowchart:
+    nodeSpacing: 16
+    rankSpacing: 24
+    padding: 12
+    curve: linear
+    wrappingWidth: 320
+  themeVariables:
+    background: "#ffffff"
+    fontFamily: "CMU Serif, Latin Modern Roman, serif"
+    fontSize: "24px"
+    primaryTextColor: "#17202A"
+    edgeLabelBackground: "#ffffff"
+    clusterBkg: "#fafafa"
+    clusterBorder: "#737373"
+    lineColor: "#475569"
+  themeCSS: |
+    .nodeLabel { font-family: "CMU Serif", "Latin Modern Roman", serif; font-size: 24px; }
+    .nodeLabel div { flex-direction: column; line-height: 1.2; }
+    .nodeLabel b { display: block; font-size: 28px; font-weight: 700; line-height: 1.15; margin-bottom: 6px; }
+    .edgeLabel { font-family: "CMU Serif", "Latin Modern Roman", serif; font-size: 22px; }
+    .cluster-label { font-family: "CMU Serif", "Latin Modern Roman", serif; font-size: 24px; font-weight: 700; }
+    .katex { font-size: 1em; }
+    .katex-display { margin: 0; }
+---
+flowchart TB
+  %% aria-notation: typst
+  %% aria-architecture: symbolic-computational
+  %% aria-width-mm: 160
+  accTitle: History, compressed representation and sufficiency
+  accDescr: The ideal optimum conditions on the full actor-visible history and a physical first action. State compression yields the learned predictor input. Decision-law equality is a requirement for every admitted history/action at fixed target and protocol, not a measured result. Dashed edges mark this sufficient condition, not a computation or a claim that empirical fit proves sufficiency.
+  History["<b>History</b>$$#symb.rl.history$$"]:::input
+  Ideal["<b>Optimum</b>$$#eqs.rl.qh_history_optimum$$"]:::compute
+  Map["<b>Compression</b>$$#eqs.rl.qh_representation_map$$"]:::compute
+  Learned["<b>Prediction</b>$$#symb.rl.learned_q$$"]:::output
+  Law["<b>Sufficiency</b>$$#eqs.rl.qh_decision_outcome$$ $$#eqs.rl.qh_decision_sufficiency$$"]:::compute
+  History --> Ideal
+  History --> Map
+  Map --> Learned
+  Map -.-> Law
+  Ideal -.-> Law
+
+  classDef input fill:#D5E8D4,stroke:#82B366,color:#17202A,stroke-width:1.5px,rx:0,ry:0;
+  classDef output fill:#F8CECC,stroke:#B85450,color:#17202A,stroke-width:1.5px,rx:0,ry:0;
+  classDef compute fill:#E1D5E7,stroke:#9673A6,color:#17202A,stroke-width:1.5px,rx:8,ry:8;
+  classDef data fill:#F5F5F5,stroke:#9E9E9E,color:#17202A,stroke-width:1.2px,rx:0,ry:0;
+  classDef status fill:#FFFFFF,stroke:#475569,color:#17202A,stroke-width:1.5px,stroke-dasharray:5 4,rx:0,ry:0;

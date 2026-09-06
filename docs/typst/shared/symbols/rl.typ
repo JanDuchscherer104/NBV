@@ -1,5 +1,17 @@
 // Reinforcement-learning state, action, value, and rollout notation.
 #let rl = (
+  // History/representation distinction used by the mathematical Method overview.
+  // Actor-visible observation/action history before decision t.
+  history: $cal(H)_t$,
+  // Fixed target, observation, action-support, reward and horizon protocol.
+  decision_protocol: $Xi$,
+  // Finite actor representation of the causal history.
+  representation: $z_t^sigma$,
+  // State-construction map from causal actor history.
+  representation_map: $phi_sigma$,
+  // Learned representation-conditioned finite-horizon value family.
+  learned_q: $hat(Q)_(theta,h)^(sigma,Xi)$,
+
   // Generic reinforcement-learning state.
   s: $s$,
   // Generic observation emitted by the environment.

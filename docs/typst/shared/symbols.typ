@@ -140,6 +140,11 @@
   (key: "rl.exact_q2_target", tex: "y_t^{(2,\\mathrm{exact})}", description: "Exact two-step fitted-Q control using factual dense successor one-step rewards.", thesis_list: true, order: 732),
   (key: "rl.q2_recursion_error", tex: "\\varepsilon_t^{(2)}", description: "Absolute learned-recursion target error against the exact two-step control.", thesis_list: true, order: 734),
   (key: "vin.field_v", tex: "\\boldsymbol{F}_v", description: "Learned value field evaluated at v.", thesis_list: true, order: 740),
+  (key: "rl.history", tex: "\\mathcal{H}_t", description: "Actor-visible observation/action history before decision t.", thesis_list: false, order: 9999),
+  (key: "rl.decision_protocol", tex: "\\Xi", description: "Fixed target, observation, action-support, reward and horizon protocol.", thesis_list: false, order: 9999),
+  (key: "rl.representation", tex: "z_t^{\\sigma}", description: "Finite actor representation of the causal history.", thesis_list: false, order: 9999),
+  (key: "rl.representation_map", tex: "\\phi_{\\sigma}", description: "State-construction map from causal actor history.", thesis_list: false, order: 9999),
+  (key: "rl.learned_q", tex: "\\widehat{Q}_{\\theta,h}^{\\sigma,\\Xi}", description: "Learned representation-conditioned finite-horizon value family.", thesis_list: false, order: 9999),
 )
 
 #for entry in aria-notation-symbols [
