@@ -7,7 +7,7 @@
   qh_history_optimum: $
     Q_(h,e)^(star,Xi)(#symb.rl.history, q_(t,i))
       = op("sup", limits: #true)_(pi in cal(Pi)^"act")
-        bb(E)_pi [G_(t,e)^((h)) | #symb.rl.history, a_t=q_(t,i)] \
+        bb(E)_pi [G_(t,e)^((h)) | #symb.rl.history, q_(t,a_t)=q_(t,i)] \
     1 <= h <= b_t <= #symb.rl.H_max,
     quad Q_(0,e)^(star,Xi)(#symb.rl.history,q_(t,i))=0
   $,
