@@ -61,3 +61,19 @@ jobs:
             .cache/mermaid/*.qa.json
             .cache/mermaid/versions.txt
           if-no-files-found: warn
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: symbolic-mermaid-source-proof
+          include-hidden-files: true
+          path: |
+            tools/mermaid/scripts/
+            tools/mermaid/examples/
+            tools/mermaid/templates/
+            tools/mermaid/references/
+            docs/typst/shared/
+            docs/notation.yml
+            scripts/glossary_build.py
+            scripts/tests/test_aria_mermaid_notation.py
+            .cache/mermaid/pr190-notation.yml
+          if-no-files-found: error
