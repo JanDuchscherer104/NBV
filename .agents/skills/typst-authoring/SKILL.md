@@ -44,6 +44,8 @@ exposition validity use `scientific-review`.
      [`empirical-reporting-and-reproducibility.md`](../academic-writing/references/empirical-reporting-and-reproducibility.md).
 3. Make the smallest source edit. Preserve the accepted teaching order,
    paragraph jobs, equation exposition, takeaways, and main/appendix boundary.
+   Keep the reader-centred-exposition.md guidance visible when realizing prose
+   or figures.
    Keep conceptual prose, mathematical notation, and implementation mapping in
    their intended layers. Return any change to the reader question, dependency
    chain, or scientific argument to `academic-writing`; do not solve it as
