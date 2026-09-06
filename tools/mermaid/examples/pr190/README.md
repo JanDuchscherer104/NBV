@@ -75,8 +75,8 @@ action, with target/protocol fixed, to justify the stated sufficient condition
 for Bellman closure. A counterexample shows harmful aliasing. Finite predictive
 tests challenge but do not prove universal sufficiency.
 
-`Q` identifies the ideal value family; its full horizon, target and protocol
-conditioning remains in `q_h`. This is not behavior-return regression. A trained
+The full horizon, target and protocol conditioning of the optimal-value
+computation remains in `q_h`. This is not behavior-return regression. A trained
 Huber predictor is not automatically a conditional mean. Dashed status boxes
 are logical outcomes, not data modalities or implemented testing algorithms.
 

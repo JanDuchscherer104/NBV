@@ -41,8 +41,7 @@ flowchart TB
   %% aria-math: symbols.rl.decision_protocol
   Protocol["<b>Decision protocol</b>$$\Xi$$"]:::input
   %% aria-compute: equations.rl.q_h
-  %% aria-math: symbols.rl.Q
-  Ideal["<b>Optimal value</b><code>sup_policy(E[return |<br/>history, first_action])</code>$$Q$$"]:::output
+  Ideal["<b>Optimal value</b><code>sup_policy(E[return |<br/>history, first_action])</code>"]:::compute
   %% aria-math: equations.rl.qh_representation_map
   Map["<b>State construction</b>$$z_t^{\sigma}=\phi_{\sigma}(\mathcal{H}_t)$$"]:::compute
   %% aria-compute: equations.rl.qh_learned_predictor

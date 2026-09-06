@@ -46,8 +46,7 @@ flowchart TB
   %% aria-math: symbols.rl.s_pose
   State["<b>Pose-only state</b>$$s_t^{\mathrm{S0-pose}}$$"]:::data
   %% aria-compute: equations.rl.qh_masked_argmax
-  %% aria-math: symbols.rl.selected_action_theta
-  Select["<b>Select one action</b><code>argmax(values[valid])</code>$$a_t^\theta$$"]:::compute
+  Select["<b>Select one action</b><code>argmax(values[valid])</code>"]:::compute
   %% aria-compute: equations.rl.replay_transition
   %% aria-math: symbols.rl.selected_pose_prefix_next
   Step["<b>Replay step</b><code>pose ← selected_pose<br/>append(prefix, pose)<br/>budget ← budget - 1</code>$$\boldsymbol{H}_{t+1}^{\mathrm{pose}}$$"]:::compute

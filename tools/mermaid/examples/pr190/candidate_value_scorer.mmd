@@ -54,8 +54,7 @@ flowchart TB
   %% aria-compute: equations.model.qh_state_fusion_controls
   Attention["<b>A1 read</b><code>CrossAttn(query,<br/>key=state, value=state)</code>"]:::compute
   %% aria-compute: equations.model.qh_state_fusion_controls
-  %% aria-math: symbols.rl.candidate_token
-  Fuse["<b>Feature fusion</b><code>concat(query, context,<br/>query * context)</code>$$\boldsymbol{u}_{t,i}$$"]:::compute
+  Fuse["<b>Feature fusion</b><code>concat(query, context,<br/>query * context)</code>"]:::compute
   %% aria-compute: equations.rl.qh_scorer_interface
   %% aria-math: symbols.rl.conditional_q
   Values["<b>Value decoder</b><code>Linear → GELU<br/>Dropout → Linear</code>$$Q_{h,\theta,e,i}^{\mathrm{cond}}$$"]:::output
@@ -65,8 +64,7 @@ flowchart TB
   %% aria-math: symbols.rl.action_mask
   Mask["<b>Action support</b>$$m_{t,i}^{\mathrm{act}}$$"]:::input
   %% aria-compute: equations.rl.qh_masked_argmax
-  %% aria-math: symbols.rl.selected_action_theta
-  Select["<b>Policy</b><code>argmax(values[valid])</code>$$a_t^\theta$$"]:::compute
+  Select["<b>Policy</b><code>argmax(values[valid])</code>"]:::compute
   Scene --> Physical
   Pose --> Physical
   Physical --> Row
