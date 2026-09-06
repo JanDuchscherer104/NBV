@@ -76,12 +76,11 @@
     #symb.rl.s_cf0
     =
     (
-      #(symb.vin.field_v)^"root",
-      #(symb.oracle.points) _t,
-      #symb.oracle.candidates_t,
+      #symb.scene.scene_memory_t,
+      #symb.entity.target_desc,
+      #symb.rl.candidate_table,
       #symb.rl.validity_mask,
-      #symb.rl.invalid_reason,
-      #symb.rl.target,
+      #symb.rl.selected_pose_prefix,
       #symb.rl.budget
     )
     in cal(S)^"cf0"
@@ -95,7 +94,7 @@
       (bold(T)_(r,e), bold(l)_e),
       #symb.oracle.candidates_t,
       #symb.rl.validity_mask,
-      bold(H)_t^"pose",
+      #symb.rl.selected_pose_prefix,
       #symb.rl.budget
     )
   $,
@@ -148,11 +147,11 @@
     #symb.rl.action_set_t = {i in {1, dots, #symb.shape.Nq} : m_(t,i)^"act" = 1}
   $,
   replay_transition: $
-    (x_(t+1), bold(H)_(t+1), b_(t+1), cal(Q)_(t+1))
+    (x_(t+1), #symb.rl.selected_pose_prefix_next, b_(t+1), cal(Q)_(t+1))
     =
     op("Step")(
       x_t,
-      bold(H)_t,
+      #symb.rl.selected_pose_prefix,
       b_t,
       q_(t,a_t),
       xi_t
@@ -195,26 +194,52 @@
     sum_(k=0)^(h - 1) #symb.rl.gamma^k r_(t+k)^e,
     quad 1 <= h <= b_t <= #symb.rl.H_max
   $,
+  decision_protocol: $
+    #symb.rl.decision_protocol
+    =
+    (g, tau, sigma, nu_"mask", rho, #symb.rl.gamma, #symb.rl.H_max)
+  $,
   q_h: $
-    Q_(h,e)^star (s_t, i)
+    Q_(h,e)^(star,#symb.rl.decision_protocol) (#symb.rl.history, q_(t,i))
     =
     op("sup", limits: #true)_(pi in cal(Pi)^"act")
-    bb(E)_pi [G_(t,e)^((h)) | s_t, a_t=i],
+    bb(E)_pi [G_(t,e)^((h)) | #symb.rl.history, a_t=q_(t,i)],
     quad
     i in cal(A)_t,
     quad
     1 <= h <= b_t <= #symb.rl.H_max,
     quad
-    Q_(0,e)^star (s, i) = 0
+    Q_(0,e)^(star,#symb.rl.decision_protocol) (#symb.rl.history, q_(t,i)) = 0
+  $,
+  qh_representation_map: $
+    #symb.rl.representation
+    =
+    #symb.rl.representation_map (#symb.rl.history)
+  $,
+  qh_learned_predictor: $
+    #symb.rl.learned_q (#symb.rl.representation, e, q_(t,i))
+    approx
+    Q_(h,e)^(star,#symb.rl.decision_protocol) (#symb.rl.history, q_(t,i)),
+    quad "if" #symb.rl.representation "is decision-context sufficient"
+  $,
+  qh_sufficiency_factorization: $
+    Q_(h,e)^(star,#symb.rl.decision_protocol) (#symb.rl.history, q_(t,i))
+    =
+    Q_(h,e)^(star,sigma,#symb.rl.decision_protocol) (#symb.rl.representation, q_(t,i))
+    quad "if" #symb.rl.representation "is decision-context sufficient"
+  $,
+  support_conditioned_score: $
+    #symb.rl.support_score
+      (#symb.rl.representation, e, cal(C)_t^"ctx", q_(t,i))
   $,
   qh_scorer_interface: $
     (#symb.rl.conditional_q, #symb.rl.feasibility_logits)
     =
-    f_theta (s_t, e, q_(t,i), h),
+    f_theta (#symb.rl.representation, e, q_(t,i), h),
     quad
-    h = #symb.rl.budget "in implemented V1";
+    1 <= h <= #symb.rl.budget <= #symb.rl.H_max,
     quad
-    1 <= b_t <= #symb.rl.H_max
+    h = #symb.rl.budget "when omitted"
   $,
   qh_conditional_mask_independence: $
     (#symb.rl.conditional_q, #symb.rl.feasibility_logits)
@@ -277,7 +302,7 @@
   qh_uncentered_residual: $
     Q_(h,theta,e,i)
     =
-    hat(r)_psi^e (#symb.rl.s_cf0, #symb.entity.target_desc, #symb.rl.candidate_qti)
+    hat(r)_psi^e (#symb.rl.s_cf0, #symb.entity.target_desc, #symb.oracle.candidate_qti)
     +
     delta_(theta,t,e,i)^h (cal(I)_(t,e), q_(t,i)),
     quad

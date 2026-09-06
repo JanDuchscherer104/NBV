@@ -3480,6 +3480,27 @@ def test_store_invariants_expose_mask_depth_target_and_q_h_contracts(tmp_path: P
     assert "q_h/td_reward" in by_id["q_h_selected_transition"]["source_fields"]
 
 
+def test_store_invariants_report_missing_target_rri_as_optional_diagnostic(tmp_path: Path) -> None:
+    """Missing target RRI warns independently without invalidating Q support."""
+
+    result = write_rollout_zarr_store(
+        tmp_path / "rollouts.zarr",
+        build_rollout_records(horizon=1, num_samples=6, seed=511)[:1],
+        oracle_query_mode="dense_valid",
+        label_support_semantics="equals_action_on_realized_steps_v1",
+    )
+    root = zarr.open_group(result.store_dir, mode="a")
+    _zarr_array(root, "candidates/target_rri")[:] = np.nan
+
+    by_id = {str(row["invariant_id"]): row for row in store_invariant_rows(RolloutZarrStoreReader(result.store_dir))}
+
+    assert by_id["q_train_supervision"]["status"] == "PASS"
+    assert by_id["target_rri_availability"]["status"] == "WARN"
+    assert by_id["target_rri_availability"]["violation_count"] == int(
+        np.count_nonzero(_zarr_array(root, "candidates/q_train_mask")[:])
+    )
+
+
 def test_store_invariants_fail_selected_actor_mask_without_reclassifying_q_train(tmp_path: Path) -> None:
     """A selected invalid action is a violation, while selected-not-q-train remains allowed."""
 

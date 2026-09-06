@@ -431,6 +431,8 @@ def test_prepare_vin_offline_sample_preserves_candidate_label_order_in_payloads(
     )
 
     assert row.numeric_blocks["oracle.candidate_indices"].tolist() == [1, 3, -1, -1]  # noqa: S101
+    assert "oracle.reference_pose_world_rig" in row.numeric_blocks  # noqa: S101
+    assert "vin.reference_pose_world_rig" not in row.numeric_blocks  # noqa: S101
     assert row.numeric_blocks["oracle.rri"][:2].tolist() == pytest.approx([0.1, 0.2])  # noqa: S101
     assert np.isnan(row.numeric_blocks["oracle.rri"][2:]).all()  # noqa: S101
     assert np.allclose(  # noqa: S101

@@ -213,7 +213,7 @@ def test_observed_target_normalization_uses_persisted_snippet_gauge_not_rig_zero
         vin_snippet=snippet,
         efm_snippet_view=None,
         detected_obbs=SimpleNamespace(obbs=obb.tensor(), sem_id_to_name={1: "chair"}),
-        oracle=SimpleNamespace(reference_pose_world_rig=_pose(7.0)),
+        reference_pose_world_rig=_pose(7.0),
     )
 
     observed = observed_target_descriptors(sample)[0]
@@ -249,10 +249,46 @@ def test_raw_efm_and_rebuilt_vin_store_produce_same_world_descriptor() -> None:
             vin_snippet=rebuilt,
             efm_snippet_view=snippet if isinstance(snippet, EfmSnippetView) else None,
             detected_obbs=SimpleNamespace(obbs=obb.tensor(), sem_id_to_name={1: "chair"}),
-            oracle=SimpleNamespace(reference_pose_world_rig=_pose(7.0)),
+            reference_pose_world_rig=_pose(7.0),
         )
 
     raw_descriptor = observed_target_descriptors(sample(raw))[0].descriptor
     rebuilt_descriptor = observed_target_descriptors(sample(rebuilt))[0].descriptor
 
     assert raw_descriptor == rebuilt_descriptor
+
+
+def test_observed_descriptor_is_invariant_to_oracle_labels_and_gt_payload() -> None:
+    """Actor-visible descriptor construction is independent of privileged payloads."""
+
+    obb = ObbTW.from_lmc(
+        bb3_object=torch.tensor([[-0.5, 0.5, -0.5, 0.5, -0.5, 0.5]]),
+        bb2_rgb=torch.full((1, 4), -1.0),
+        bb2_slaml=torch.full((1, 4), -1.0),
+        bb2_slamr=torch.full((1, 4), -1.0),
+        T_world_object=_pose(2.0),
+        sem_id=torch.tensor([1]),
+        inst_id=torch.tensor([2]),
+        prob=torch.tensor([0.9]),
+    )
+    common = {
+        "sample_key": "sample",
+        "vin_snippet": VinSnippetView(
+            points_world=torch.zeros((0, 4)),
+            lengths=torch.zeros((1,), dtype=torch.int64),
+            t_world_rig=_pose(99.0),
+            t_world_snippet=_pose(7.0),
+        ),
+        "efm_snippet_view": None,
+        "detected_obbs": SimpleNamespace(obbs=obb.tensor(), sem_id_to_name={1: "chair"}),
+        "reference_pose_world_rig": _pose(7.0),
+    }
+    actor_only = SimpleNamespace(**common)
+    privileged = SimpleNamespace(
+        **common,
+        oracle=SimpleNamespace(rri=torch.tensor([123.0])),
+        gt_obbs=SimpleNamespace(obbs=torch.full((1, 34), 456.0)),
+    )
+
+    assert not hasattr(actor_only, "oracle")
+    assert observed_target_descriptors(actor_only) == observed_target_descriptors(privileged)

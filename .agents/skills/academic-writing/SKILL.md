@@ -24,7 +24,7 @@ language of the argument.
 1. **Locate the lesson.** Read the nearest docs guide, the exact destination,
    and the chapter record in
    `docs/typst/thesis/development/reader-state.toml`. For a paragraph or section,
-   read [`section-contract.md`](assets/templates/section-contract.md); for
+   read [`section-contract.md`](./assets/templates/section-contract.md); for
    chapter, outline, prose-flow, or equation-exposition work, also read
    [`reader-centred-exposition.md`](references/reader-centred-exposition.md).
    The step is complete when the incoming reader state, active reader question,
@@ -43,7 +43,10 @@ language of the argument.
    Use the claim and evidence references below only for branches that need
    them. Keep scope, falsifier, provenance, and reviewer notes in the task-local
    contract; project the subset a reader needs to understand or assess the
-   claim into the manuscript.
+   claim into the manuscript. For empirical-result claims, read
+   [`empirical-reporting-and-reproducibility.md`](references/empirical-reporting-and-reproducibility.md)
+   and obtain scientific-review findings before marking the candidate
+   `ready-for-realization`.
 4. **Draft positive-first prose.** Define the selected construct in ordinary
    scientific language before comparing alternatives. Use conceptual wording
    in exposition, shared mathematical symbols in formal relations, and code
@@ -72,7 +75,7 @@ language of the argument.
   [`literature-research`](../literature-research/SKILL.md).
 - Material source or conclusion change:
   [`change-impact.md`](references/change-impact.md).
-- HM/FK07 scientific-practice or declaration compliance:
+- HM/FK07 assessment work, scientific-practice, or declaration compliance:
   [`hm-scientific-practice.md`](references/hm-scientific-practice.md).
 - Scratch, shape, and beat mechanics:
   [`upstream-matt-writing.md`](references/upstream-matt-writing.md).

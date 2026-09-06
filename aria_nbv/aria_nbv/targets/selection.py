@@ -103,7 +103,8 @@ def observed_target_descriptors(sample: "VinOfflineSample") -> tuple[ObservedTar
     """Convert detected OBB rows into deterministic actor-visible descriptors.
 
     Padded rows are omitted and source-row order is preserved.  The function
-    reads only ``detected_obbs`` and sample identity; it never accesses GT OBBs.
+    reads only actor-visible geometry, the neutral reference-frame pose, and
+    sample identity; it never accesses the oracle payload or GT OBBs.
     """
 
     block = getattr(sample, "detected_obbs", None)
@@ -127,7 +128,7 @@ def observed_target_descriptors(sample: "VinOfflineSample") -> tuple[ObservedTar
     valid = (~flat.get_padding_mask()).reshape(-1)
     names = getattr(block, "sem_id_to_name", None) if isinstance(block, CompactObbBlock) else None
     sample_key = str(getattr(sample, "sample_key", ""))
-    reference_pose = sample.oracle.reference_pose_world_rig.to(device=data.device)
+    reference_pose = sample.reference_pose_world_rig.to(device=data.device)
     result: list[ObservedTargetDescriptor] = []
     for source_row in torch.nonzero(valid, as_tuple=False).reshape(-1).tolist():
         obb = ObbTW(data[source_row])

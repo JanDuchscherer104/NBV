@@ -29,7 +29,7 @@ class TargetInputProtocol(StrEnum):
     """Actor-visible target input produced by an observed detector or predictor."""
 
     @property
-    def is_deployable(self) -> bool:
+    def is_actor_visible_target_protocol(self) -> bool:
         """Whether the protocol requires actor-visible target evidence."""
 
         return self is TargetInputProtocol.V1_OBSERVED
@@ -55,13 +55,9 @@ class ActorVisibleTargetSource(StrEnum):
     """Actor-visible OBB detections produced by the VIN source store."""
 
 
-_ACTOR_VISIBLE_PROVENANCE = frozenset(
-    {
-        TargetDescriptorProvenance.ACTOR_VISIBLE_DETECTOR,
-        TargetDescriptorProvenance.ACTOR_VISIBLE_PREDICTOR,
-    }
-)
-_ACTOR_VISIBLE_TARGET_SOURCES = frozenset(source.value for source in ActorVisibleTargetSource)
+_ACTOR_VISIBLE_SOURCE_PROVENANCE = {
+    ActorVisibleTargetSource.DETECTED_OBBS.value: frozenset({TargetDescriptorProvenance.ACTOR_VISIBLE_DETECTOR}),
+}
 
 
 @dataclass(frozen=True, slots=True)
@@ -156,7 +152,7 @@ def validate_target_protocol_admission(
         descriptor_source: Source block that constructed the actor descriptor.
             V0 may omit this because its Oracle source is fixed; V1 must name it.
         descriptor_provenance: Construction class for the actor descriptor.
-            V1 accepts only actor-visible detector or predictor provenance.
+            V1 accepts only a provenance registered for ``target_source``.
 
     Returns:
         The canonical admitted protocol.
@@ -195,9 +191,16 @@ def validate_target_protocol_admission(
             "v1_observed requires matching non-empty target and descriptor sources; rebuild with explicit "
             "actor-visible descriptor provenance."
         )
-    if provenance not in _ACTOR_VISIBLE_PROVENANCE:
+    allowed_provenance = _ACTOR_VISIBLE_SOURCE_PROVENANCE.get(target_source)
+    if allowed_provenance is None:
         raise ValueError(
-            "v1_observed requires actor-visible detector or predictor descriptor provenance; rebuild the corpus."
+            f"v1_observed target source {target_source!r} is not registered as actor-visible; "
+            "rebuild from a canonical source."
+        )
+    if provenance not in allowed_provenance:
+        raise ValueError(
+            f"v1_observed source {target_source!r} does not admit descriptor provenance "
+            f"{str(provenance)!r}; rebuild with matching actor-visible provenance."
         )
     return admitted_protocol
 

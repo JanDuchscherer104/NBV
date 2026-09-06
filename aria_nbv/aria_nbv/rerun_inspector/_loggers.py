@@ -824,7 +824,7 @@ class RerunOfflineLogger:
     def _log_reference_pose(self, sample: VinOfflineSample) -> None:
         self._log_pose_transform(
             ENTITY_REFERENCE_POSE,
-            sample.oracle.reference_pose_world_rig,
+            sample.reference_pose_world_rig,
             axis_length=self.config.geometry.reference_axis_length,
         )
 

@@ -35,6 +35,14 @@ Support and failure strata are fixed before policy inspection. The report distin
 
 The first inferential comparison is bounded oracle lookahead against one-step oracle greedy. Its evaluation contract freezes one target mesh and crop, ASE-depth source, renderer and backprojection, fusion and point cap, and point--mesh metric configuration for every policy. Repeated evaluation must reproduce the same scores within the declared numerical tolerance; it verifies deterministic execution under this contract, not invariance to a different mesh, sampling process, or metric. The analysis artifact also freezes the meaningful-headroom rule before learned-policy inspection. Learned-control gap-closure ratios are reported only after oracle headroom passes that gate and only when their distinct actor-visible-myopic-to-oracle-lookahead denominator is admissible. The learned comparison then contrasts #symb.rl.qh with the actor-visible myopic control under the same endpoint evaluation and acquisition budget; because neither learned target-conditioned control is presently complete, this comparison remains prospective.
 
+The RQ5 extension, if activated, compares causal state updating with static-state
+deployment under the same frozen learned scorer. The intervention updates only
+the actor-visible state from the selected observation; candidate regeneration
+continues under the same generator protocol in both arms, model parameters never
+change, and no newly collected transition enters training. This isolates the
+value of causal observation updating from online fine-tuning, online data
+collection, target adaptation, and action-support changes.
+
 #validation_todo(
   [Populate the evidence chain in order: evaluation-contract identity and deterministic repeatability, candidate and target support, oracle-lookahead headroom, myopic-control calibration, finite-horizon gap closure, then representation and architecture ablations. Missing upstream evidence blocks downstream claims rather than becoming a zero result.],
   source: [thesis objective-to-evidence contract],

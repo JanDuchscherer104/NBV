@@ -73,7 +73,10 @@ reported privileged `V0/GT` task-construction sanity control; they do not satisf
 the core RQ3 gate. The core learned comparison requires an observation-derived
 target instruction and matching path (`V1/observed`) in addition to actor-visible
 candidate support, hard validity, selected-state updates, and scorer inputs.
-Until that route exists, the core actor-visible comparison remains unavailable.
+The `v1_observed` admission and writer--reader route exists, but no frozen
+scene-disjoint observed-target corpus, causal observation-updated state,
+actor-visible action-support protocol, or end-to-end evidence bundle yet
+supports the core comparison; it therefore remains unavailable.
 The scorer then receives only the declared target descriptor, causal egocentric
 evidence, remaining budget, and requested horizon; evaluation separately audits
 matching failures, ranking and calibration, and actor/oracle leakage.
@@ -92,15 +95,21 @@ coverage.
 
 === Scope extensions
 
-==== RQ5 — Online discrete bridge <ssec:rq5>
+==== RQ5 — Causal state-update bridge <ssec:rq5>
 
 *If offline headroom, replay support, and actor-visible scoring are established,
-does online interaction over the unchanged discrete candidate set and validity
-rules improve endpoint target gain or calibration over the offline policy?*
+does causal updating of the actor-visible scene state from selected observations,
+with fixed model weights and an otherwise identical decision protocol, improve
+equal-budget endpoint target gain over static-state deployment?*
 
-RQ5 keeps the target, information, candidate, validity, and endpoint assumptions
-of RQ1--RQ4 unchanged. It is not required for the offline finite-candidate
-evaluation.
+RQ5 changes one factor: after each selected view, the intervention fuses only
+that acquired actor-visible observation into the next state, whereas the control
+retains its root scene state. Both arms start from the same root evidence, use
+the same frozen scorer weights, target protocol, candidate generator,
+action-support semantics, acquisition budget, and endpoint evaluator, and
+perform no parameter update or on-policy training. Calibration remains a
+secondary diagnostic rather than a second intervention. RQ5 is not required for
+the offline finite-candidate evaluation.
 
 ==== RQ6 — Continuous or simulator-backed control <ssec:rq6>
 

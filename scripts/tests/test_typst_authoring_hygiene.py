@@ -351,8 +351,7 @@ def _file_is_code_context(relative: Path) -> bool:
     return (
         "typst/thesis/development/" in relative.as_posix()
         or "typst/thesis/figures/" in relative.as_posix()
-        or relative.name
-        in {"draft_markers.typ", "experiment_data.typ", "glossary-overrides.typ"}
+        or relative.name in {"draft_markers.typ", "experiment_data.typ"}
     )
 
 
@@ -571,7 +570,7 @@ class HygieneTests(unittest.TestCase):
         presentation = [
             call for call in calls if _table_surface(call.path) == "presentation"
         ]
-        self.assertEqual(len(publication), 31)
+        self.assertEqual(len(publication), 33)
         self.assertEqual(len(development), 1)
         self.assertEqual(len(presentation), 12)
         titlepage = ROOT / "docs/typst/thesis/template/layout/titlepage.typ"

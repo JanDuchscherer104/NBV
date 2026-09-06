@@ -650,6 +650,32 @@ def test_rollout_zarr_requires_explicit_target_root_gain_for_q_training(tmp_path
     assert not q_h["q_train_mask"].any()
 
 
+def test_rollout_zarr_q_training_does_not_require_diagnostic_target_rri(tmp_path) -> None:
+    """Finite root gain owns Q support even when diagnostic target RRI is unavailable."""
+
+    records = build_rollout_records(horizon=1, num_samples=6, seed=17)[:1]
+    for step in _steps(records[0]):
+        width = step.transition.candidates.mask_valid.shape[0]
+        step.evaluation.labels.metrics["target_rri"] = torch.full((width,), float("nan"))
+        step.evaluation.labels.metrics["target_root_gain"] = torch.arange(width, dtype=torch.float32)
+
+    result = write_rollout_zarr_store(
+        tmp_path / "root-gain-without-rri.zarr",
+        records,
+        oracle_query_mode="dense_valid",
+        label_support_semantics="equals_action_on_realized_steps_v1",
+    )
+    reader = RolloutZarrStoreReader(result.store_dir)
+    q_h = reader.q_h_view()
+    rri_audit_mask = q_h["valid_action_mask"] & np.isfinite(q_h["one_step_target_rri"])
+
+    assert np.array_equal(q_h["q_train_mask"], q_h["valid_action_mask"])
+    assert np.isfinite(q_h["one_step_target_root_gain"][q_h["q_train_mask"]]).all()
+    assert not rri_audit_mask.any()
+    validation = reader.validate()
+    assert validation.ok, validation.errors
+
+
 def test_rollout_zarr_never_backfills_scene_rri_from_generic_rri(tmp_path) -> None:
     records = build_rollout_records(horizon=1, num_samples=6, seed=10)[:1]
     for step in _steps(records[0]):

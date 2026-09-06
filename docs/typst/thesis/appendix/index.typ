@@ -3,6 +3,12 @@
 #import "../../shared/tables.typ": publication-table
 
 #let report-settings = thesis-report-settings()
+#let phase-a = json("/contents/evidence/candidate_family_phase_a_wp02_projection.json")
+#let phase-a-contract = phase-a.at("experiment_contract")
+#let phase-a-source = phase-a.at("source")
+#let phase-a-generation = phase-a.at("generation")
+#let short-digest(value) = value.slice(0, 16)
+#let yes-no(value) = if value { [yes] } else { [no] }
 #let thesis_evidence_status = report-settings.evidence-status
 #let thesis_data = load-thesis-report(
   report-settings.path,
@@ -111,6 +117,38 @@ role, missingness, and failure records.
 ] else [
   This pilot evidence bundle preserves provenance but is not confirmatory. Its numerical parameter rows are not rendered or interpreted as thesis results.
 ]
+
+== Bounded Phase-A experiment contract <ssec:phase-a-experiment-contract>
+
+The Phase-A proposal-support diagnostic is projected independently of the
+confirmatory report bundle because it is a historical, non-confirmatory audit.
+Its claim is limited to authenticated proposal-support counts and gate predicates.
+The table below is generated from the same authenticated artifact as the Results
+counts and figure. “Not applicable” is a factual stage boundary, whereas a
+missing gaze-variant identity is retained as a reproducibility limitation.
+
+#figure(
+  publication-table(
+    columns: (1.0fr, 1.9fr),
+    header: ([*Contract field*], [*Receipt-bound value*]),
+    rows: (
+      ([Candidate width], [#phase-a-contract.at("candidate_width") rows per factual state]),
+      ([Configured families], [#phase-a-contract.at("candidate_families").join(", ")]),
+      ([Family-support rule], [#phase-a-contract.at("family_floor_revision"); known applicability required: #yes-no(phase-a-contract.at("known_applicability_required"))]),
+      ([Candidate identity], [#phase-a-contract.at("candidate_identity_fields").join(", ")]),
+      ([Family attribution], [#phase-a-contract.at("family_attribution_rule").join(", ")]),
+      ([Coordinate convention], [#phase-a-contract.at("coordinate_revisions").join(", ")]),
+      ([Target source], [#phase-a-contract.at("target_sources").join(", ")]),
+      ([Random streams], [#phase-a-contract.at("proposal_randomness"); #phase-a-contract.at("selection_randomness")]),
+      ([Reward and execution], [#phase-a-contract.at("reward_execution")]),
+      ([Action support], [#phase-a-contract.at("action_support")]),
+      ([Label support], [#phase-a-contract.at("label_support")]),
+      ([Gaze-variant identity], [#phase-a-contract.at("gaze_variant_identity")]),
+      ([Generation command], [#raw(phase-a-generation.at("command"))]),
+    ),
+  ),
+  caption: [Generated Phase-A experiment contract. The source artifact SHA-256 begins #raw(short-digest(phase-a-source.at("artifact_sha256"))) and the projection SHA-256 begins #raw(short-digest(phase-a.at("projection_sha256"))). Full digests, per-row identities, and values remain in the machine-readable evidence bundle.],
+) <tab:phase-a-experiment-contract>
 
 #development_only(() => [
   #include "../sections/06-draft-open-work.typ"

@@ -1,78 +1,147 @@
 #import "../../../shared/macros.typ": *
 #import "../../../shared/symbols.typ": symb
 #import "../../../shared/equations.typ": eqs
-#import "../../draft_markers.typ": thesis_status, prune_todo
+#import "../../draft_markers.typ": thesis_status, development_only
 #import "../../../shared/tables.typ": publication-table
 
-== Geometric and Mask Acceptance Tests <sec:thesis-method-geometry-contract>
-
-#prune_todo(
-  [Retain acceptance properties only for the architecture that is actually implemented and evaluated. Proposed architecture alternatives belong in development notes until a measured failure motivates them.],
-  source: [this section; scorer implementation and tests],
-  gate: [one production scorer passes the stated permutation, masking, frame, and horizon tests],
-)
+== Selected Interaction and Acceptance Conditions <sec:thesis-method-geometry-contract>
 
 #thesis_status(
-  implementation: "partial",
+  implementation: "implemented",
   evidence: "pending",
-  citation: [@GeometricDeepLearning-bronstein2021 @DeepSets-zaheer2017 @SetTransformer-lee2019 @FixedHorizonTD-deAsis2020],
-  source: "aria_nbv/aria_nbv/vin/models/target_finite_horizon.py; aria_nbv/aria_nbv/vin/modules/qh_history_encoders.py; aria_nbv/aria_nbv/vin/modules/qh_state_fusion.py; aria_nbv/aria_nbv/lightning/qh_module.py; aria_nbv/tests/vin/test_qh_history_encoders.py; aria_nbv/tests/vin/test_qh_state_fusion.py; aria_nbv/tests/vin/test_target_finite_horizon.py; aria_nbv/tests/lightning/test_qh_module.py",
-  gate: [retain permutation, subset, duplicate, padding, mask-independence, frame, source, and horizon tests for every admitted state protocol],
-)[The implemented A0/A1 scorer uses independent candidate rows, candidate-relative target/current-pose geometry, scalar requested horizons, and adapter-owned hard masks. Permutation, duplicate, invalid-row isolation, mask independence, and horizon bounds are unit-tested for the shared public contract; scientific policy evidence and richer state protocols remain pending.]
+  citation: [@GeometricDeepLearning-bronstein2021 @DeepSets-zaheer2017],
+  source: "aria_nbv/aria_nbv/vin/models/target_finite_horizon.py; aria_nbv/aria_nbv/vin/modules/qh_state_fusion.py; aria_nbv/tests/vin/test_qh_state_fusion.py; aria_nbv/tests/vin/test_target_finite_horizon.py",
+  gate: [retain row-equivariance, invalid-row isolation, frame, source, mask-independence, and horizon tests; measure the A0/A1 control],
+)[A1 candidate-to-state cross-attention is the selected interaction; A0 is its feature-matched independent-row control. Both pass the same executable acceptance tests. Their scientific comparison remains pending.]
 
-Candidate order carries no task meaning. For a per-candidate scorer $f_theta$, jointly permuting row-aligned inputs by $Pi$ must permute outputs by the same amount:
+Each materialized candidate is an independent query over shared scene, target,
+history, budget, and horizon tokens. A1 uses the candidate as query and those
+five state tokens as keys and values; candidates never attend to other
+candidates. A0 flattens the same ordered tokens and applies a row-shared MLP.
+Both expose the same-width context to the same value-decoder seam.
+
+The A0/A1 choice is orthogonal to the state distinction in
+@tab:thesis-counterfactual-state-protocols. A1 is the current interaction
+choice, not the scientific target itself: the same row-equivariant interface
+can read a richer causal state without introducing candidate-to-candidate
+communication. Architecture should escalate only if a frozen comparison shows
+that an admitted state is informative but A0/A1 cannot recover its value.
+
+#development_only(() => [
+  === Architectural feature-integration ladder
+
+  The ladder below is a development plan, not a family of co-equal thesis
+  methods. It orders feature integration by the smallest additional dependency
+  introduced after the current A0/A1 controls. “Implemented” means that the
+  tensor path and acceptance properties exist; it does not mean that the
+  feature has demonstrated scientific value. “Eligible” names the first
+  one-factor comparison that may be frozen after its activation evidence is
+  present. “Possible extension” preserves a conditional test whose promotion
+  still depends on a diagnosed failure.
+
+  #figure(
+    publication-table(
+      text-size: 7.4pt,
+      columns: (0.62fr, 1.18fr, 1.42fr, 1.58fr),
+      header: ([*Stage and status*], [*Integrated feature*], [*Scientific purpose*], [*Principal risk and promotion gate*]),
+      rows: (
+        ([F0 — implemented], [candidate-relative geometric query], [Complete candidate pose relative to root and current camera, plus target pose relative to the candidate.], [Already present; retain transform-direction and local-frame tests. It supplies geometry, not selected-observation state.]),
+        ([F1 — implemented], [A0/A1 state fusion], [Compare identical-input independent-row fusion with candidate-to-state cross-attention.], [The controls are not parameter matched; report parameters and runtime and require a frozen held-out comparison.]),
+        ([F2 — first eligible promotion], [candidate-relative relation embeddings], [Embed each candidate’s relative transform to the target and pose-bearing causal history or state elements before A1 reads them.], [Activate only after state, support, label, and optimization failures are ruled out and held-out residuals retain relation structure.]),
+        ([F3 — separate support-conditioned hypothesis], [permutation-invariant candidate-set summary @DeepSets-zaheer2017], [Test whether a versioned context-row set supplies ranking information beyond the physical state and query-local relations.], [Does not inherit A0/A1 mask independence or duplicate-row invariance; freeze context rows, masks, duplicate semantics, and the score estimand.]),
+        ([F4 — separate support-conditioned hypothesis], [candidate self-attention @SetTransformer-lee2019], [Test whether pairwise candidate relations explain residual ranking error beyond an invariant set summary.], [Adds quadratic interaction and support sensitivity; promote only after a frozen F3 profile fails under matched support.]),
+        ([F5 — possible extension], [iterative or recurrent state reading], [Test whether one candidate query needs repeated access to an already adequate causal state.], [May hide missing state information behind capacity; promote only after the state, F2 relations, and simpler fusion controls pass.]),
+      ),
+    ),
+    caption: [Development-only architectural feature-integration ladder. Status records implementation maturity, while promotion remains conditional on a named scientific failure and a one-factor comparison.],
+  ) <tab:architecture-feature-integration-ladder>
+
+  Candidate-relative relation embeddings are the first eligible architectural
+  promotion because they can preserve the current per-candidate value interface while
+  making query-to-context geometry explicit. Query-centric models use local
+  coordinate systems and relative positional embeddings so that the active query
+  can read other elements through their relation to it @zhou2023query. In
+  ARIA-NBV, the same construction can attach a shared embedding of candidate--
+  target and candidate--history transforms to the A1 key/value tokens. Applied
+  independently to every candidate, it preserves candidate-row equivariance and
+  does not make an action’s value depend on unrelated candidate rows.
+
+  The case against immediate promotion is equally important. F0 already exposes
+  complete relative poses, so F2 adds an inductive bias rather than new raw
+  information. It can redundantly parameterize the same transform, overfit the
+  geometry of one proposal generator, increase cost with candidate--history
+  pairs, or encode an inappropriate symmetry if gravity, metric scale, camera
+  direction, or target orientation is suppressed. Geometric priors can reduce
+  the hypothesis space, but only when the chosen symmetry matches the task
+  @GeometricDeepLearning-bronstein2021. F2 therefore activates only when
+  held-out residual error varies systematically with candidate--target or
+  candidate--history relations, a non-learned relation probe predicts that
+  residual structure, and the pattern survives matched seeds, capacity, state,
+  support, label, and optimization controls. The existence of relation-embedding
+  architectures in another domain is not activation evidence.
+
+  F3 and F4 are not contract-preserving extensions of A0/A1. Their natural
+  output is a support-conditioned ranking score
+
+  #eqs.rl.support_conditioned_score
+
+  rather than an action value that depends only on one state--action pair.
+  Here $cal(C)_t^"ctx"$ is a separately versioned context-row set. Its profile
+  must state whether those rows are materialized, action-valid, or
+  label-supported; which mask enters the model; whether duplicate poses are one
+  semantic action or distinct proposals; and which A0/A1 invariants are retained
+  or intentionally replaced. Until corresponding permutation, invalid-row,
+  duplicate, and mask-sensitivity tests exist, F3/F4 remain development
+  hypotheses and cannot be reported as ordinary #symb.rl.learned_q models.
+
+  Full SE(3)-Transformer and geometric-algebra Transformer variants are out of
+  scope for the core study. The current local frames already remove arbitrary
+  origin dependence while retaining gravity-aligned and metric quantities that
+  may affect sensing. No measured symmetry failure presently warrants the added
+  representation, implementation, and compute commitments of an exact
+  equivariant backbone. Candidate-set interaction remains a later and separate
+  hypothesis because it changes the conditioning context of each action rather
+  than only how its physical relations are encoded.
+
+  // Evidence map:
+  // - @zhou2023query -> docs/literature/tex-src/arXiv-QCNet/main.tex:159-161 (query-centric local frames and query-relative spatial-temporal positional embeddings)
+  // - @GeometricDeepLearning-bronstein2021 -> docs/literature/tex-src/arXiv-Geometric-Deep-Learning/geometricpriors.tex:339-345,950-969 (symmetry priors restrict the hypothesis class; locality and receptive-field tradeoffs)
+  // - @DeepSets-zaheer2017 -> docs/literature/tex-src/arXiv-Deep-Sets/nips_2017.tex:803-865,907-996 (permutation-invariant summaries and permutation-equivariant set layers)
+  // - @SetTransformer-lee2019 -> docs/literature/tex-src/arXiv-Set-Transformer/01_introduction.tex:54-57; docs/literature/tex-src/arXiv-Set-Transformer/set_transformer.tex:82-86 (self-attention for pairwise or higher-order set interactions and permutation-invariant set modeling)
+])
+
+Candidate order has no semantic meaning. Jointly permuting aligned rows by $Pi$
+must permute predictions identically:
 
 $
   #eqs.rl.candidate_row_equivariance
 $
 
-Equivariance alone does not guarantee invalid-row isolation. Holding valid rows and the mask fixed while changing only invalid-row contents must satisfy
+Changing only hard-invalid row contents must not alter valid-row predictions:
 
 $
   #eqs.rl.candidate_mask_isolation
 $
 
-Mask ownership depends on the interaction. In implemented A0, each materialized candidate row is concatenated with the same five named state tokens and processed independently. In A1, materialized candidates are queries while scene, target, history, budget, and requested-horizon context are keys and values. `candidate_mask` sanitizes padding before either fusion. Neither scorer reads `action_mask`; Lightning uses it for Q-loss and bootstrap support, and online inference uses it for the final selectable set. Candidate masks become attention-key masks only in candidate-as-key architectures such as DeepSets context or a masked Set Transformer. Padding, action validity, Q-label support, feasibility-label support, and modality presence remain separate.
+The scorer reads #symb.rl.candidate_row_mask only to sanitize padding. It never
+reads #symb.rl.action_mask; training owns label and bootstrap admission, and
+online inference owns the final selectable set. Thus changing the hard mask
+cannot change raw conditional values or feasibility logits. Duplicate-row and
+valid-count tests further prevent accidental set normalization from redefining
+the value of an unchanged physical candidate.
 
-Duplicate-row and valid-count tests are required because candidate-set pooling or per-set normalization can otherwise change the absolute value of an unchanged physical candidate. A duplicate row may duplicate an output, but it must not silently change another row's value unless the tested architecture explicitly models candidate-set context.
+Local-frame encoding removes arbitrary global origin conventions without
+claiming exact $op("SE")(3)$ equivariance. Complete root/current-relative
+candidate poses and the candidate-from-target pose retain translation and
+rotation relationships represented by the shared PoseTW encoder
+@GeometricDeepLearning-bronstein2021. Provenance tests additionally
+exclude target gains, meshes, associations, and current candidate renders from
+the actor graph. Previously selected privileged depth belongs only to an
+explicit non-deployable state protocol.
 
-Coordinate handling is deliberately weaker than exact $op("SE")(3)$ equivariance. World poses remain available for reproducibility, while model inputs use root-, target-, or candidate-relative geometry. Gravity, scale, height, yaw, camera direction, target orientation, motion limits, and frustum geometry remain physical variables. A global origin convention must not become a shortcut @GeometricDeepLearning-bronstein2021.
-
-Actor/oracle provenance is the final acceptance condition. Target gains, GT associations, mesh distances, current candidate renders, and target crops may supervise or audit a model but may not enter its actor graph. Previously selected GT depth may enter only a `CF-GT` state branch. Source-dropout tests must show that removing an unavailable optional carrier changes only its masked branch.
-
-The scalar requested-horizon interface adds its own acceptance contract: the mathematical boundary $Q_0=0$ is represented only by padded rows in the executable call; an $h=1$ target contains no bootstrap; $h>b_t$ is rejected rather than clamped; and a target for $h>1$ may depend only on a successor value requested at $h-1$ @FixedHorizonTD-deAsis2020. Public vectorization remains gated on real atomic callers, measured inadequacy of private batching, and scalar/vector parity tests. No monotonicity such as $Q_(h+1)>=Q_h$ is assumed because valid actions may have negative immediate gain.
-
-=== Orthogonal architecture ladder
-
-#thesis_status(
-  implementation: "partial",
-  evidence: "pending",
-  citation: [@DeepSets-zaheer2017 @SetTransformer-lee2019 @zhou2023query @EGNN-satorras2021 @SE3Transformer-fuchs2020 @GATr-brehmer2023 @UVFA-schaul2015],
-  source: "aria_nbv/aria_nbv/data_handling/qh_data/views.py; docs/contents/theory/candidate_view_dependence.qmd",
-  gate: [measure identical-feature A0 versus A1 under the same fit/evaluation contract, then promote a level only after lower interaction controls pass on the same scene carrier and target/source protocol],
-)[A0 independent-row MLP and A1 candidate-to-state cross-attention are implemented over the same `S0-pose` root-moments inputs and decoder seam. A1 remains the default; comparative evidence, richer scene carriers, and candidate interaction remain orthogonal measurements.]
-
-The shared A0/A1 query contains root- and current-relative candidate pose, an explicit candidate--target transform, and global root-scene moments. Target, scene, causal pose-history summary, remaining budget, and requested horizon are supplied as the same ordered state-token tuple. A0 maps `[query; vec(tokens)]` to one context with a row-shared MLP; A1 maps the query and tuple to the same context width with cross-attention. Both then expose `[query; context; query times context]` to the configured value decoder. This is feature matching, not parameter matching; every comparison reports parameters, runtime, and the frozen decoder/training identity. The physical trunk and feasibility head precede target/horizon conditioning. Candidate provenance and generator-family identity remain audit-only by default.
-
-History representation is orthogonal to A0/A1 interaction. The default `None` alias preserves the original H0 masked mean and its old state-dictionary/config identity. Explicit `mean_pool_v1` names the same control; `causal_transformer_v1` is an implemented exploratory H1 carrier with relative-age encoding, a learned empty-prefix token, causal self-attention, and last-valid readout. Both emit one equal-width history token. H1 must retain exact-prefix, padding, future-perturbation, and candidate-equivariance tests, and it is not promoted from executability alone. Spatial scene memory remains a later internal replacement behind the same scorer interface @UVFA-schaul2015.
-
-#figure(
-  publication-table(
-    text-size: 8.2pt,
-    columns: (0.45fr, 1.02fr, 1.63fr),
-    header: ([*Level*], [*Interaction model*], [*Scientific role*]),
-    rows: (
-      [A0], [Independent per-row MLP], [Locks target/candidate descriptors, time context, and label learnability for a fixed scene carrier; adapters retain hard masks.],
-      [A1], [Candidate-to-state cross-attention], [Each candidate query independently reads shared target, scene, history, and budget context.],
-      [A2], [DeepSets candidate context], [Tests whether an unordered summary of valid candidates adds information without pairwise attention.],
-      [A3], [Masked Set Transformer], [Tests candidate--candidate interaction while preserving row equivariance and mask isolation.],
-      [A4], [Query-local relation bias], [Tests QCNet-style target, history, and candidate relations without importing its forecasting decoder.],
-      [A5], [Temporal/recurrent state read], [Tests whether ordered long-horizon history remains informative after explicit dynamic scene memory.],
-      [A6], [Residual value head], [Tests finite-horizon recovery over a calibrated continuous one-step root-gain control.],
-      [A7+], [Exact-equivariant or graph interaction], [Escalates only after local-frame controls reveal a symmetry-related failure.],
-    ),
-  ),
-  caption: [Interaction-architecture ladder. A0 and A1 are implemented; scene carrier, target/source protocol, time-query contract, decoder, and learning target stay fixed for their comparison.],
-) <tab:geometric-learning-ladder>
-
-Candidate-to-candidate attention is not required by the core task. It may improve relative policy context or diversity, but unrelated sampled rows must not silently redefine the absolute value of candidate $q_(t,i)$. Exact equivariant layers are similarly scoped to diagnosed support encoders or candidate graphs after local-frame scalar controls. This ordering favors reusable context encodings and keeps scalar requested-horizon conditioning separate from candidate-set interaction.
+Finally, $#symb.rl.requested_horizon=1$ has no bootstrap,
+$#symb.rl.requested_horizon>#symb.rl.budget$ is rejected rather than clamped,
+and an $#symb.rl.requested_horizon>1$ target may depend only on a factual
+successor queried at $#symb.rl.requested_horizon - 1$. No
+monotonicity across horizons is assumed because admissible actions may have
+negative immediate gain.

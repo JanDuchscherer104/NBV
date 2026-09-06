@@ -5,10 +5,10 @@ are resolved from the current checkout; generated stores are not committed
 here. The current strict source-store identity is
 `vin_offline_rollout_campaign100_v10_rebuilt`. Existing corrected-V10 rollout
 shards remain immutable historical artifacts because they were generated from
-the V8 source manifest; the corrected-V11 campaign is a historical V10-bound
+the V8 source manifest; the historical corrected pilot is a V10-bound
 rollout destination. The writer and LRZ template are the canonical production
 profiles and use seminar view jitter (60° azimuth, 30° elevation, 0° roll).
-The corrected-V11 plan preserves the V10 source-manifest identity and the
+The historical corrected plan preserves the V10 source-manifest identity and the
 selected five-snippet/two-profile/four-temperature workload shape only. It
 delegates to the canonical writer, so rerunning it now uses seminar 60°/30°/0°
 and does not reproduce historical plan/work-unit IDs or the historical
@@ -60,7 +60,7 @@ print('split_manifest_hash =', repr(m['split_manifest_hash']))
 PY
 ```
 
-The corrected-V11 pilot is historical evidence and is not runnable from the
+The historical corrected pilot is evidence only and is not runnable from the
 current nested-authoring implementation. Reproduce it only at its bound source
 revision. Plan, smoke, launch, and inspect the active nested-authoring campaign
 with the V2 entry point:

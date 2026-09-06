@@ -10,14 +10,14 @@ from ._stored_rollouts_page import (
 
 def render_stored_rollouts_panel(
     *,
-    s2_recipe: ScientificReportConfig,
-    s2_section_id: str,
-    s2_recipe_label: str,
+    s2_recipe: ScientificReportConfig | None = None,
+    s2_section_id: str = "s2",
+    s2_recipe_label: str = "default",
 ) -> None:
     """Render the science-first stored-dataset inspection workflow."""
 
     render_stored_rollouts_page(
-        s2_recipe=s2_recipe,
+        s2_recipe=s2_recipe or ScientificReportConfig(),
         s2_section_id=s2_section_id,
         s2_recipe_label=s2_recipe_label,
     )

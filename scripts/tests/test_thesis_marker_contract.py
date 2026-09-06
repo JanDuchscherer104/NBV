@@ -85,6 +85,10 @@ def main() -> None:
         "promotion-invalid-empty-summary",
         "promotion-invalid-unknown",
         "promotion-invalid-missing",
+        "scientific-core-todo-invalid-priority",
+        "scientific-core-todo-invalid-domain",
+        "scientific-core-todo-invalid-readiness",
+        "scientific-core-todo-invalid-blocker",
     )
     with tempfile.TemporaryDirectory(prefix="aria-nbv-thesis-markers-") as temp:
         output_dir = Path(temp)
@@ -104,6 +108,17 @@ def main() -> None:
             mode="submission",
             expect_success=False,
         )
+        _compile(
+            "scientific-core-todo-development",
+            output_dir,
+            expect_success=True,
+        )
+        _compile(
+            "scientific-core-todo-submission",
+            output_dir,
+            mode="submission",
+            expect_success=False,
+        )
         _compile("declaration", output_dir, expect_success=True)
         declaration_text = _pdf_text(output_dir / "declaration.pdf")
         for clause in (
@@ -115,6 +130,20 @@ def main() -> None:
             assert clause in declaration_text, clause
         assert _query_metadata("marker-development", "<marker-development>") == [
             "development-present"
+        ]
+        scientific_todos = _query_metadata(
+            "scientific-core-todo-development", "<scientific-core-todo>"
+        )
+        assert scientific_todos == [
+            {
+                "domain": "architecture",
+                "priority": "C1",
+                "readiness": "blocked",
+                "claim": "[exact horizon-two recovery]",
+                "gate": "[frozen actor-visible corpus]",
+                "source": "[method-alternatives.typ]",
+                "blocked_by": "[data admission]",
+            }
         ]
         for disposition in ("candidate", "blocked", "deferred", "rejected"):
             selector = f"<marker-promotion-{disposition}>"

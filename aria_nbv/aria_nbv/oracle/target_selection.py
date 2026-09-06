@@ -524,7 +524,7 @@ def _valid_obb_data_with_source_indices(obbs: ObbTW) -> tuple[Tensor, list[int]]
 
 
 def _reference_pose_world_rig(sample: "VinOfflineSample") -> PoseTW:
-    return PoseTW(sample.oracle.reference_pose_world_rig.tensor().reshape(-1, 12)[:1])
+    return PoseTW(sample.reference_pose_world_rig.tensor().reshape(-1, 12)[:1])
 
 
 def _pose_on_device(pose: PoseTW, *, device: torch.device) -> PoseTW:

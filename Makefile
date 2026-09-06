@@ -1,6 +1,6 @@
 .DEFAULT_GOAL := help
 .PHONY: help ci ci-impact-self-test ownership-consolidation-contract typst-authoring-contract thesis-literature-provenance skill-source-self-test graphify-skill-upstream-self-test graphify-projection-self-test graphify-projection-live-check graphify-usable-check graphify-state-check graphify-maintain graphify-session-readiness-integration scaffold-check agents-db-validate package-smoke pose-generation-contract qh-ci replay-oracle-golden docs-render-core quarto-docs-ci typst-paper-ci thesis-pdf-ci thesis-marker-contract thesis-roadmap-contract ruff-full ruff-targeted mypy-contract mypy-full mypy-targeted coverage-targeted agent-status
-.PHONY: api-docs-self-test
+.PHONY: api-docs-self-test phase-a-thesis-projection
 .PHONY: context-qmd-tree qmd-frontmatter-check
 .PHONY: context-index context-get context-contracts context-modules context-classes context-functions
 .PHONY: context-match context-qmd-outline context-typst-outline context-typst-includes
@@ -813,6 +813,10 @@ typst-table-gallery: ## Compile the isolated Typst table-style gallery into an i
 
 thesis-report-data-contract: _check_python ## Verify positive and negative Typst report-data fixtures
 	@$(PYTHON_INTERPRETER) scripts/tests/test_typst_report_data_contract.py
+
+phase-a-thesis-projection: _check_python ## Regenerate and verify the receipt-bound Phase-A thesis data and figure
+	@PYTHONPATH=aria_nbv $(PYTHON_INTERPRETER) scripts/project_phase_a_thesis_evidence.py
+	@PYTHONPATH=aria_nbv $(PYTHON_INTERPRETER) scripts/project_phase_a_thesis_evidence.py --check
 
 thesis-marker-contract: _check_python ## Verify Typst development/submission marker fixtures
 	@$(PYTHON_INTERPRETER) scripts/tests/test_thesis_marker_contract.py

@@ -774,17 +774,17 @@ def _trajectory_metric_rows(evaluated: EvaluatedRollout) -> pd.DataFrame:
             )
             selected_target_rri = _metric_float(selected_metrics.get("target_rri", selected_metrics.get("rri")))
             selected_target_root_gain = _metric_float(selected_metrics.get("target_root_gain"))
-            selected_return = (
-                selected_target_root_gain if selected_target_root_gain is not None else selected_target_rri
-            )
+            selected_return = selected_target_root_gain
             if selected_return is not None:
                 cumulative += selected_return
             valid_target_gain = _valid_step_metric_values(evaluated_step, "target_root_gain")
-            if valid_target_gain.size == 0:
-                valid_target_gain = _valid_step_metric_values(evaluated_step, "target_rri")
-            fanout_q025 = float(np.quantile(valid_target_gain, 0.025)) if valid_target_gain.size else None
-            fanout_q975 = float(np.quantile(valid_target_gain, 0.975)) if valid_target_gain.size else None
-            top_values = sorted(valid_target_gain.tolist(), reverse=True)[:5]
+            valid_target_rri = _valid_step_metric_values(evaluated_step, "target_rri")
+            fanout_q025 = float(np.quantile(valid_target_rri, 0.025)) if valid_target_rri.size else None
+            fanout_q975 = float(np.quantile(valid_target_rri, 0.975)) if valid_target_rri.size else None
+            root_gain_q025 = float(np.quantile(valid_target_gain, 0.025)) if valid_target_gain.size else None
+            root_gain_q975 = float(np.quantile(valid_target_gain, 0.975)) if valid_target_gain.size else None
+            top_rri_values = sorted(valid_target_rri.tolist(), reverse=True)[:5]
+            top_gain_values = sorted(valid_target_gain.tolist(), reverse=True)[:5]
             rows.append(
                 {
                     "trajectory": traj_idx,
@@ -794,8 +794,11 @@ def _trajectory_metric_rows(evaluated: EvaluatedRollout) -> pd.DataFrame:
                     "G_target": cumulative if selected_return is not None else None,
                     "fanout_q025": fanout_q025,
                     "fanout_q975": fanout_q975,
+                    "fanout_root_gain_q025": root_gain_q025,
+                    "fanout_root_gain_q975": root_gain_q975,
                     "valid_candidates": int(step.candidates.mask_valid.sum().item()),
-                    "top_target_rri": top_values,
+                    "top_target_rri": top_rri_values,
+                    "top_target_root_gain": top_gain_values,
                 }
             )
     return pd.DataFrame(rows)
@@ -2132,7 +2135,7 @@ def _render_live_rollout_metric_dashboard(
 
     top_rows: list[dict[str, int | float]] = []
     for row in cast(list[dict[str, Any]], step_df.to_dict("records")):
-        top_values = row.get("top_target_rri")
+        top_values = row.get("top_target_root_gain")
         if not isinstance(top_values, list):
             continue
         for rank, value in enumerate(top_values, start=1):
@@ -2141,7 +2144,7 @@ def _render_live_rollout_metric_dashboard(
                     "trajectory": _int_scalar(row.get("trajectory")),
                     "step": _int_scalar(row.get("step")),
                     "rank": rank,
-                    "top_target_rri": float(value),
+                    "top_target_root_gain": float(value),
                 }
             )
     if top_rows:
@@ -2151,15 +2154,15 @@ def _render_live_rollout_metric_dashboard(
             top_fig.add_trace(
                 go.Scatter(
                     x=rank_df["step"],
-                    y=rank_df["top_target_rri"],
+                    y=rank_df["top_target_root_gain"],
                     mode="lines+markers",
                     name=f"traj {traj_idx} top-{rank}",
                 )
             )
         top_fig.update_layout(
-            title="Top-k valid candidate target root gain / RRI per step",
+            title="Top-k valid candidate target root gain per step",
             xaxis_title="rollout step",
-            yaxis_title="target root gain / target RRI",
+            yaxis_title="target root gain",
         )
         _render_live_quality_plot(
             top_fig,

@@ -1,5 +1,5 @@
-# Generated compatibility glossary source.
-# Do not edit by hand; edit docs/typst/shared/glossary.typ and run `make glossary`.
+# Generated compatibility projection; this file owns no glossary semantics.
+# Canonical owner: docs/typst/shared/glossary.typ. Run `make glossary` after edits.
 
 - id: next-best-view
   anchor: term-next-best-view
@@ -366,9 +366,10 @@
   definition_short: Finite-horizon MDP contract for target-conditioned ARIA-NBV rollouts and
     fitted Q_H training.
   definition_long: The ARIA-NBV MDP keeps actions restricted to sampled finite candidate views
-    and keeps GT meshes or GT target crops outside the actor-visible state. It is the contract
-    that connects target-conditioned rollout generation, reward computation, validity masks,
-    and fitted finite-horizon Q learning.
+    and keeps GT meshes or GT target crops outside the actor-visible state. Its named target,
+    state, generator, action-support, reward, discount, and horizon protocols determine the
+    supported decision problem. The current oracle action mask is a privileged control rather
+    than actor-visible evidence.
   formula:
     label: ARIA-NBV MDP contract
     tex: \mathcal{M}_{\mathrm{NBV}}=(\mathcal{S},\mathcal{A},T,r_e,\gamma,H)
@@ -416,11 +417,13 @@
   tier: core
   lookup_rank: 140
   definition_short: Rollout state family separating actor-visible state from oracle-only supervision.
-  definition_long: ARIA-NBV distinguishes raw historic snippet state, persisted VIN offline
-    sample state, minimal counterfactual actor state, geometry-rich counterfactual ablation
-    state, and privileged oracle rollout state. The main Q_H actor input starts from the minimal
-    counterfactual state; all-candidate GT renders, GT mesh crops, and oracle RRI labels remain
-    outside the actor-visible state.
+  definition_long: 'ARIA-NBV distinguishes raw historic snippet state, persisted offline state,
+    the implemented pose-only S0 baseline, the privileged selected-surface S1 control, an
+    actor-visible observation-updated scientific target for which S2 ray memory is one candidate
+    realization, and privileged oracle state. These roles are not a maturity ladder: implementation
+    does not imply selection, selection does not imply validation, and the scientific target
+    is a semantic information contract rather than one fixed architecture. All-candidate GT
+    renders, GT mesh crops, and oracle RRI labels remain outside the actor-visible state.'
   notation:
     typst: $s_t$
   symbol_refs:
@@ -428,6 +431,9 @@
   - rl.s_hist
   - rl.s_off
   - rl.s_cf0
+  - rl.s_pose
+  - rl.s_surface
+  - rl.s_ray
   - rl.s_cf_geom
   - rl.s_oracle
   - oracle.points
@@ -459,6 +465,41 @@
   - planning
   - state
   - actor-visible
+- id: pose-only-counterfactual-state
+  anchor: term-pose-only-counterfactual-state
+  label: Pose-Only Counterfactual State
+  short: S0-pose
+  aliases:
+  - S0
+  - pose-history state
+  - pose-only rollout state
+  category: planning.state
+  parent: rollout-state
+  tier: core
+  lookup_rank: 142.5
+  definition_short: Implemented pose-history baseline without selected-observation scene updates.
+  definition_long: S0-pose is the selected executable baseline for interface and learning
+    tests. It carries immutable root evidence, target and candidate relations, causal selected-pose
+    history, and budget. Histories with the same poses but different observed surfaces collapse
+    to the same dynamic state, so S0-pose is not claimed to be task-sufficient for target-specific
+    future return.
+  notation:
+    typst: '#symb.rl.s_pose'
+  symbol_refs:
+  - rl.s_pose
+  - rl.selected_pose_prefix
+  equation_refs:
+  - rl.s_pose
+  internal_links:
+  - docs/typst/thesis/sections/04-method/04-01-scene-representation-requirements.typ#sec:thesis-scene-representation
+  related:
+  - minimal-counterfactual-state
+  - geometry-rich-counterfactual-state
+  - counterfactual-transition
+  kg_tags:
+  - planning
+  - state
+  - baseline
 - id: historic-snippet-state
   anchor: term-historic-snippet-state
   label: Historic Snippet State
@@ -544,13 +585,14 @@
   parent: rollout-state
   tier: core
   lookup_rank: 143
-  definition_short: Main Q_H actor state for mesh-supervised counterfactual rollouts.
-  definition_long: The minimal counterfactual actor state is the default input to target-conditioned
-    Q_H. It contains the accumulated counterfactual point proxy as broad scene state, optional
-    lifted image-foundation point features, local root EVL evidence for target support and
-    local reads, selected-action history, observed or predicted target descriptor, budget
-    state, finite candidate table, validity masks, reason codes, and current-state candidate-query
-    features. Synthetic observations update the state only after their candidate is selected.
+  definition_short: Architecture-neutral actor-state target for causal counterfactual planning.
+  definition_long: The minimal counterfactual actor state is the scientific state target,
+    not the currently selected implementation. It must expose an actor-visible target descriptor,
+    finite candidate support, causal selected history, budget, and an observation-updated
+    scene state that distinguishes observed surface, observed free, unknown space, support,
+    uncertainty, source, and recency. Points, voxels, sparse rays, or another carrier may
+    realize this contract only after leakage, deterministic-fusion, support, and held-out
+    task-sufficiency gates pass.
   notation:
     typst: $s_t^"cf0"$
   symbol_refs:
@@ -582,7 +624,7 @@
   parent: rollout-state
   tier: core
   lookup_rank: 144
-  definition_short: Counterfactual ablation state with selected synthetic geometry observations.
+  definition_short: Privileged selected-surface control over causal selected synthetic geometry.
   definition_long: The geometry-rich counterfactual state adds only selected prior synthetic
     observations to the minimal state. The executable qh_cfplus_gt_depth_v1 carrier holds
     strictly causal rendered depth, depth-valid masks, calibration, selected-camera poses,
@@ -604,6 +646,7 @@
     typst: $s_t^"cf+"$
   symbol_refs:
   - rl.s_cf_geom
+  - rl.s_surface
   equation_refs:
   - rl.s_cf_geom
   internal_links:
@@ -857,17 +900,19 @@
     neither encoder architecture nor training loss.'
   formula:
     label: Finite-horizon candidate value
-    tex: Q_H(s_t^{\mathrm{cf0}},a_t,\boldsymbol{\phi}_e)=\mathbb{E}\left[G_t^{(H)}\mid s_t=s_t^{\mathrm{cf0}},a_t,\boldsymbol{\phi}_e\right]
+    tex: Q_\theta(s_t,e,a,h)=\mathbb{E}\left[G_t^{(h)}\mid s_t,e,a_t=a\right]
   formulae:
   - label: Masked Double-DQN selector
-    tex: j^*=\arg\max_{j:m_{t+1,j}=1}Q_\theta(s_{t+1}^{\mathrm{cf0}},a_{t+1,j},\boldsymbol{\phi}_e)
+    tex: j^*=\arg\max_{j:m_{t+1,j}=1}Q_\theta(s_{t+1},e,j,h-1)
   - label: Masked Double-DQN target
-    tex: y_t=r_t^e+\gamma(1-d_t)Q_{\bar\theta}(s_{t+1}^{\mathrm{cf0}},a_{t+1,j^*},\boldsymbol{\phi}_e)
+    tex: y_t^{(h)}=r_t^e+\gamma(1-d_t)Q_{\bar\theta}(s_{t+1},e,j^*,h-1)
   notation:
     typst: $Q_H$
   symbol_refs:
   - rl.qh
   - rl.return_h
+  - rl.s
+  - rl.s_pose
   - rl.s_cf0
   - rl.a
   equation_refs:
@@ -884,6 +929,7 @@
   - IQL-kostrikov2021
   related:
   - finite-horizon-return
+  - pose-only-counterfactual-state
   - minimal-counterfactual-state
   - predicted-target-q
   - validity-mask
@@ -947,16 +993,19 @@
   definition_short: Hard mask that separates feasible candidate actions from invalid candidates.
   definition_long: 'The action mask $m_{t,i}$ gates selectable candidate rows, while actor
     evidence/support, target validity, oracle-label validity, and Q-training eligibility remain
-    distinct fields. Only physical or explicitly contracted admissibility failures clear action
-    validity. The scorer must not read this mask: changing it cannot change raw conditional
-    Q or feasibility logits. Lightning and online adapters apply it to selection, Q supervision,
-    and bootstrap; invalid rows receive no fabricated Q targets. Under the persisted `dense_valid`
-    supervision profile, `q_train_mask` must equal this action mask on every realized state;
-    under the historical `legacy_unspecified` profile, Q-label support may be only a subset.
-    Padding is excluded in both cases. Learned-only feasibility is deferred until calibration,
-    threshold, candidate-generator, source-population, abstention, and false-valid evidence
-    are versioned. Invalid reason codes $\rho_{t,i}$ preserve physical rejection causes, and
-    invalidity is not a low target-RRI class.'
+    distinct fields. Its persisted semantics distinguish privileged `oracle_action_mask_v1`,
+    actor-observed support, and a separately calibrated learned-feasibility route; the storage
+    field name `actor_action_mask` alone does not establish actor-visible provenance. Only
+    physical or explicitly contracted admissibility failures clear action validity. The scorer
+    must not read this mask: changing it cannot change raw conditional Q or feasibility logits.
+    Lightning and online adapters apply it to selection, Q supervision, and bootstrap; invalid
+    rows receive no fabricated Q targets. Under the persisted `dense_valid` supervision profile,
+    `q_train_mask` must equal this action mask on every realized state; under the historical
+    `legacy_unspecified` profile, Q-label support may be only a subset. Padding is excluded
+    in both cases. Learned-only feasibility is deferred until calibration, threshold, candidate-generator,
+    source-population, abstention, and false-valid evidence are versioned. Invalid reason
+    codes $\rho_{t,i}$ preserve physical rejection causes, and invalidity is not a low target-RRI
+    class.'
   notation:
     typst: $m_(t,i)$
   symbol_refs:

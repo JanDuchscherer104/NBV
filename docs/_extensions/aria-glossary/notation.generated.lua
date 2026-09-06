@@ -110,10 +110,16 @@ return {
       description = "State-relative marginal target RRI for candidate i at rollout step t.",
       thesis_list = true,
     },
+    ["model.candidate_physical_token"] = {
+      tex = "\\boldsymbol{h}_{t,i}^{\\mathrm{phys}}",
+      typst = "#symb.model.candidate_physical_token",
+      description = "Candidate-local physical token from root/current-relative candidate poses and compact root evidence.",
+      thesis_list = true,
+    },
     ["model.candidate_row"] = {
       tex = "\\boldsymbol{x}_{t,i}",
       typst = "#symb.model.candidate_row",
-      description = "Per-candidate row feature assembled from pose, relation, support, validity, provenance, and history descriptors.",
+      description = "Candidate-local conditional-value query formed by adding candidate-from-target pose encoding to the physical token.",
       thesis_list = true,
     },
     ["model.history_pose_feature"] = {
@@ -137,7 +143,7 @@ return {
     ["model.target_token"] = {
       tex = "\\boldsymbol{h}_e^{\\mathrm{tgt}}",
       typst = "#symb.model.target_token",
-      description = "Learned selected-target token built from the actor-visible target descriptor and scene support.",
+      description = "Learned selected-target token built from root-relative target pose and metric extents.",
       thesis_list = true,
     },
     ["obs.depth"] = {
@@ -296,6 +302,12 @@ return {
       description = "Valid action set available in state s_t.",
       thesis_list = true,
     },
+    ["rl.action_set_t"] = {
+      tex = "\\mathcal{A}_t",
+      typst = "#symb.rl.action_set_t",
+      description = "Finite feasible action set at rollout step t.",
+      thesis_list = true,
+    },
     ["rl.budget"] = {
       tex = "b_t",
       typst = "#symb.rl.budget",
@@ -338,6 +350,12 @@ return {
       description = "Fixed continuous-Q representative used to decode one CORAL class.",
       thesis_list = true,
     },
+    ["rl.decision_protocol"] = {
+      tex = "\\Xi",
+      typst = "#symb.rl.decision_protocol",
+      description = "Frozen decision protocol comprising generator, target source, state map, action-support provenance, reward, discount, and horizon.",
+      thesis_list = true,
+    },
     ["rl.exact_q2_target"] = {
       tex = "y_t^{(2,\\mathrm{exact})}",
       typst = "#symb.rl.exact_q2_target",
@@ -362,10 +380,22 @@ return {
       description = "Return discount factor.",
       thesis_list = true,
     },
+    ["rl.history"] = {
+      tex = "\\mathcal{H}_t",
+      typst = "#symb.rl.history",
+      description = "Actor-visible observation and action history available before decision step t.",
+      thesis_list = true,
+    },
     ["rl.invalid_reason"] = {
       tex = "\\rho_{t,i}",
       typst = "#symb.rl.invalid_reason",
       description = "Invalid-action reason code for candidate i at rollout step t.",
+      thesis_list = true,
+    },
+    ["rl.learned_q"] = {
+      tex = "\\widehat{Q}_{\\theta,h}^{\\sigma,\\Xi}",
+      typst = "#symb.rl.learned_q",
+      description = "Learned representation- and protocol-conditioned finite-horizon value predictor.",
       thesis_list = true,
     },
     ["rl.mdp_nbv"] = {
@@ -396,6 +426,18 @@ return {
       tex = "r",
       typst = "#symb.rl.r",
       description = "Scalar reward or immediate gain.",
+      thesis_list = true,
+    },
+    ["rl.representation"] = {
+      tex = "z_t^{\\sigma}",
+      typst = "#symb.rl.representation",
+      description = "Representation produced from actor-visible history by state-construction protocol sigma.",
+      thesis_list = true,
+    },
+    ["rl.representation_map"] = {
+      tex = "\\phi_{\\sigma}",
+      typst = "#symb.rl.representation_map",
+      description = "State-construction map from actor-visible history to the scorer representation.",
       thesis_list = true,
     },
     ["rl.requested_horizon"] = {
@@ -470,6 +512,30 @@ return {
       description = "Implemented fixed-root pose-history state used by qh_cf0_v1.",
       thesis_list = true,
     },
+    ["rl.s_ray"] = {
+      tex = "s_t^{\\mathrm{S2-ray}}",
+      typst = "#symb.rl.s_ray",
+      description = "Planned actor-visible ray-aware state preserving observed surface, free, unknown, support, uncertainty, source, and recency.",
+      thesis_list = true,
+    },
+    ["rl.s_surface"] = {
+      tex = "s_t^{\\mathrm{S1-surface}}",
+      typst = "#symb.rl.s_surface",
+      description = "Implemented privileged selected-surface control state; it consumes only previously selected rendered depth and is not deployable.",
+      thesis_list = true,
+    },
+    ["rl.selected_pose_prefix"] = {
+      tex = "\\boldsymbol{H}_t^{\\mathrm{pose}}",
+      typst = "#symb.rl.selected_pose_prefix",
+      description = "Strictly causal prefix of previously selected poses available at decision step t.",
+      thesis_list = true,
+    },
+    ["rl.selected_pose_prefix_next"] = {
+      tex = "\\boldsymbol{H}_{t+1}^{\\mathrm{pose}}",
+      typst = "#symb.rl.selected_pose_prefix_next",
+      description = "Strictly causal selected-pose prefix after applying the selected transition.",
+      thesis_list = false,
+    },
     ["rl.source_role"] = {
       tex = "\\ell_{t,i}^{\\mathrm{src}}",
       typst = "#symb.rl.source_role",
@@ -480,6 +546,12 @@ return {
       tex = "m_t^{\\mathrm{succ}}",
       typst = "#symb.rl.successor_mask",
       description = "Availability of a factual successor backup for transition t.",
+      thesis_list = true,
+    },
+    ["rl.support_score"] = {
+      tex = "U_{\\theta,h}^{\\Xi}",
+      typst = "#symb.rl.support_score",
+      description = "Support-conditioned candidate-ranking score reserved for candidate-set interaction models.",
       thesis_list = true,
     },
     ["rl.target"] = {
@@ -582,6 +654,12 @@ return {
       tex = "\\boldsymbol{h}_{t,e\\mid i}^{\\mathrm{rel}}",
       typst = "#symb.spatial.candidate_target_rel_feat",
       description = "Candidate-target relation descriptor in the candidate/query local frame.",
+      thesis_list = true,
+    },
+    ["spatial.dir_moment"] = {
+      tex = "\\boldsymbol{M}^{\\mathrm{dir}}",
+      typst = "#symb.spatial.dir_moment",
+      description = "Second directional moment used to summarize selected target-relative approach directions.",
       thesis_list = true,
     },
     ["spatial.frustum_solid_angle"] = {
@@ -910,10 +988,16 @@ return {
       description = "Per-state count of hard-valid candidates before reward or training masks; rows, with padded rows excluded.",
       thesis_list = true,
     },
+    ["model.candidate_pose_context"] = {
+      tex = "\\boldsymbol{h}_{t,i}^{\\mathrm{phys}}=\\operatorname{PhysicalProj}(\\operatorname{concat}(\\operatorname{PoseEnc}(\\boldsymbol{T}_{r\\leftarrow c_i}),\\operatorname{PoseEnc}(\\boldsymbol{T}_{c_t\\leftarrow c_i}),\\boldsymbol{\\Phi}_t^{\\mathrm{scene}}))",
+      typst = "#eqs.model.candidate_pose_context",
+      description = "Candidate-local physical token from root/current-relative candidate poses and compact root evidence.",
+      thesis_list = false,
+    },
     ["model.candidate_row_features"] = {
-      tex = "\\boldsymbol{x}_{t,i}=\\operatorname{concat}(\\boldsymbol{h}_{t,i}^{\\mathrm{pose+rel}},\\boldsymbol{h}_{t,i}^{\\mathrm{geom}},\\boldsymbol{h}_{t,i}^{\\mathrm{valid}},\\boldsymbol{h}_{t,i}^{\\mathrm{prov}},\\boldsymbol{H}_t)",
+      tex = "\\boldsymbol{x}_{t,i}=\\operatorname{ValueQueryProj}(\\operatorname{concat}(\\boldsymbol{h}_{t,i}^{\\mathrm{phys}},\\operatorname{PoseEnc}(\\boldsymbol{T}_{c_i\\leftarrow e})))",
       typst = "#eqs.model.candidate_row_features",
-      description = "",
+      description = "Selected conditional-value query from the physical candidate token and candidate-from-target pose.",
       thesis_list = false,
     },
     ["model.qh_cfplus_h0_control"] = {
@@ -923,9 +1007,9 @@ return {
       thesis_list = false,
     },
     ["model.qh_frozen_interface"] = {
-      tex = "f_\\theta(s_t^{\\mathrm{S0-pose}},\\boldsymbol{\\phi}_e,\\{q_{t,i}\\}_{i=1}^{N_q},h)\\to(\\{Q_{h,\\theta,e,i}^{\\mathrm{cond}}\\}_{i=1}^{N_q},\\{\\ell_{t,i}^{\\mathrm{feas}}\\}_{i=1}^{N_q})",
+      tex = "f_\\theta(s_t^{\\mathrm{S0-pose}},\\boldsymbol{T}_{r\\leftarrow e},\\boldsymbol{a}_e,\\{q_{t,i}\\}_{i=1}^{N_q},h)\\to(\\{Q_{h,\\theta,e,i}^{\\mathrm{cond}}\\}_{i=1}^{N_q},\\{\\ell_{t,i}^{\\mathrm{feas}}\\}_{i=1}^{N_q})",
       typst = "#eqs.model.qh_frozen_interface",
-      description = "Frozen scalar requested-horizon scorer interface.",
+      description = "Frozen scalar requested-horizon scorer interface over selected raw target geometry.",
       thesis_list = false,
     },
     ["model.qh_history_controls"] = {
@@ -935,9 +1019,9 @@ return {
       thesis_list = false,
     },
     ["model.qh_input_contract"] = {
-      tex = "\\mathcal{I}_{t,e}=(\\boldsymbol{h}_e^{\\mathrm{tgt}},\\boldsymbol{\\Phi}_t^{\\mathrm{scene}},\\boldsymbol{H}_t,\\boldsymbol{b}_t,t,H,\\{\\boldsymbol{x}_{t,i},\\boldsymbol{e}_{a\\mid i}^{\\mathrm{rel}},m_{t,i},\\boldsymbol{\\rho}_{t,i}\\}_{i=1}^{N_q})",
+      tex = "\\mathcal{I}_{t,e}=(\\boldsymbol{\\Phi}_t^{\\mathrm{scene}},\\boldsymbol{T}_{r\\leftarrow e},\\boldsymbol{a}_e,\\{\\boldsymbol{T}_{r\\leftarrow c_i},\\boldsymbol{T}_{c_t\\leftarrow c_i},\\boldsymbol{T}_{c_i\\leftarrow e},m_{t,i}^{\\mathrm{cand}}\\}_{i=1}^{N_q},\\{\\boldsymbol{T}_{c_t\\leftarrow c_j}\\}_{j<t},b_t,h)",
       typst = "#eqs.model.qh_input_contract",
-      description = "",
+      description = "Prediction-side selected-scorer input contract before learned projection.",
       thesis_list = false,
     },
     ["model.qh_s1_selected_surface"] = {
@@ -953,9 +1037,9 @@ return {
       thesis_list = false,
     },
     ["model.qh_target_token"] = {
-      tex = "\\boldsymbol{h}_e^{\\mathrm{tgt}}=\\operatorname{MLP}_{\\mathrm{tgt}}(\\operatorname{concat}(\\boldsymbol{\\phi}_e,\\boldsymbol{g}_e^{\\mathrm{tgt}}))",
+      tex = "\\boldsymbol{h}_e^{\\mathrm{tgt}}=\\operatorname{TargetProj}(\\operatorname{concat}(\\operatorname{PoseEnc}(\\boldsymbol{T}_{r\\leftarrow e}),\\boldsymbol{a}_e))",
       typst = "#eqs.model.qh_target_token",
-      description = "",
+      description = "Selected target token from root-relative pose and metric OBB extents.",
       thesis_list = false,
     },
     ["rl.candidate_mask_isolation"] = {
@@ -987,6 +1071,12 @@ return {
       typst = "#eqs.rl.cumulative_target_rri",
       description = "Running selected-chain diagnostic persisted as cumulative_target_rri.",
       thesis_list = true,
+    },
+    ["rl.decision_protocol"] = {
+      tex = "\\Xi=(g,\\tau,\\sigma,\\nu_{\\mathrm{mask}},\\rho,\\gamma,H_{\\max})",
+      typst = "#eqs.rl.decision_protocol",
+      description = "Frozen decision-protocol identity for candidate generation, target source, state construction, action support, reward and execution, discount, and horizon.",
+      thesis_list = false,
     },
     ["rl.evidence_chain"] = {
       tex = "\\mathcal{U}_{\\mathrm{cov/unc}}\\to\\hat r_t^e(i)\\to r_t^e\\to G_t^{(H)}\\to Q_{H,\\theta}",
@@ -1043,9 +1133,9 @@ return {
       thesis_list = false,
     },
     ["rl.q_h"] = {
-      tex = "Q_H(s_t^{\\mathrm{cf0}},a_t)=\\mathbb{E}\\left[G_t^{(H)}\\mid s_t=s_t^{\\mathrm{cf0}},a_t\\right]",
+      tex = "Q_{h,e}^{\\star,\\Xi}(\\mathcal{H}_t,i)=\\sup_{\\pi\\in\\Pi^{\\mathrm{act}}}\\mathbb{E}_{\\pi}\\left[G_{t,e}^{(h)}\\mid\\mathcal{H}_t,a_t=i\\right],\\quad i\\in\\mathcal{A}_t,\\quad 1\\le h\\le b_t\\le H_{\\max},\\quad Q_{0,e}^{\\star,\\Xi}(\\mathcal{H}_t,i)=0",
       typst = "#eqs.rl.q_h",
-      description = "",
+      description = "Ideal history-conditioned target value under one frozen decision protocol.",
       thesis_list = false,
     },
     ["rl.qh_candidate_token"] = {
@@ -1090,10 +1180,22 @@ return {
       description = "Factual dense-successor exact-Q2 control.",
       thesis_list = false,
     },
+    ["rl.qh_learned_predictor"] = {
+      tex = "\\widehat{Q}_{\\theta,h}^{\\sigma,\\Xi}(z_t^{\\sigma},e,q_{t,i})\\approx Q_{h,e}^{\\star,\\Xi}(\\mathcal{H}_t,i)\\quad\\text{if }z_t^{\\sigma}\\text{ is reward-and-transition sufficient}",
+      typst = "#eqs.rl.qh_learned_predictor",
+      description = "Pointwise ideal-value target available when the scorer representation is reward-and-transition sufficient.",
+      thesis_list = false,
+    },
     ["rl.qh_masked_argmax"] = {
       tex = "a_t^\\theta=\\operatorname*{argmax}_{i:m_{t,i}^{\\mathrm{act}}=1}Q_{H,\\theta,i}",
       typst = "#eqs.rl.qh_masked_argmax",
       description = "",
+      thesis_list = false,
+    },
+    ["rl.qh_representation_map"] = {
+      tex = "z_t^{\\sigma}=\\phi_{\\sigma}(\\mathcal{H}_t)",
+      typst = "#eqs.rl.qh_representation_map",
+      description = "State-construction map from actor-visible history to a scorer representation.",
       thesis_list = false,
     },
     ["rl.qh_residual_decomposition"] = {
@@ -1103,9 +1205,15 @@ return {
       thesis_list = false,
     },
     ["rl.qh_scorer_interface"] = {
-      tex = "(Q_{h,\\theta,e,i}^{\\mathrm{cond}},\\ell_{t,i}^{\\mathrm{feas}})=f_\\theta(s_t,e,q_{t,i},h),\\quad h=b_t\\ \\mathrm{if\\ omitted},\\quad 1\\le h\\le b_t\\le H_{\\mathrm{max}}",
+      tex = "(Q_{h,\\theta,e,i}^{\\mathrm{cond}},\\ell_{t,i}^{\\mathrm{feas}})=f_\\theta(z_t^{\\sigma},e,q_{t,i},h),\\quad h=b_t\\ \\mathrm{if\\ omitted},\\quad 1\\le h\\le b_t\\le H_{\\mathrm{max}}",
       typst = "#eqs.rl.qh_scorer_interface",
       description = "Mask-independent scorer output and scalar horizon contract.",
+      thesis_list = false,
+    },
+    ["rl.qh_sufficiency_factorization"] = {
+      tex = "Q_{h,e}^{\\star,\\Xi}(\\mathcal{H}_t,i)=Q_{h,e}^{\\star,\\sigma,\\Xi}(z_t^{\\sigma},i)\\quad\\text{if }z_t^{\\sigma}\\text{ is reward-and-transition sufficient}",
+      typst = "#eqs.rl.qh_sufficiency_factorization",
+      description = "Sufficient condition under which the ideal history value factors through a compressed representation.",
       thesis_list = false,
     },
     ["rl.qh_supported_successor_set"] = {
@@ -1133,9 +1241,9 @@ return {
       thesis_list = false,
     },
     ["rl.s_cf0"] = {
-      tex = "s_t^{\\mathrm{cf0}}=(V^{\\mathrm{root}},\\mathcal{P}_t,\\mathcal{Q}_t,m_{t,i},\\rho_{t,i},e_t,b_t)",
+      tex = "s_t^{\\mathrm{cf0}}=(\\boldsymbol{\\Phi}_t^{\\mathrm{scene}},\\boldsymbol{\\phi}_e,\\mathcal{Q}_t,m_{t,i},\\boldsymbol{H}_t^{\\mathrm{pose}},b_t)\\in\\mathcal{S}^{\\mathrm{cf0}}",
       typst = "#eqs.rl.s_cf0",
-      description = "",
+      description = "Architecture-neutral actor-state target; the scene-memory carrier must remain actor-visible and update only from selected observations.",
       thesis_list = false,
     },
     ["rl.s_cf_geom"] = {
@@ -1173,6 +1281,12 @@ return {
       typst = "#eqs.rl.s_pose",
       description = "Implemented qh_cf0_v1 actor carrier.",
       thesis_list = true,
+    },
+    ["rl.support_conditioned_score"] = {
+      tex = "U_{\\theta,h}^{\\Xi}(z_t^{\\sigma},e,\\mathcal{C}_t^{\\mathrm{ctx}},q_{t,i})",
+      typst = "#eqs.rl.support_conditioned_score",
+      description = "Support-conditioned ranking score whose estimand includes a versioned context-row set.",
+      thesis_list = false,
     },
     ["rl.target_root_gain_reward"] = {
       tex = "r_t^e=(\\Delta_t^e-\\Delta_{t+1}^e)/\\max(\\Delta_0^e,\\varepsilon)",

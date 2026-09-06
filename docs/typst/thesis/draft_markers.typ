@@ -4,6 +4,9 @@
 
 #let implementation_states = ("implemented", "partial", "planned", "exploratory")
 #let evidence_states = ("validated", "pending", "conflicted", "not-applicable")
+#let scientific_core_domains = ("architecture", "data")
+#let scientific_core_priorities = ("C0", "C1", "C2", "C3")
+#let scientific_core_readiness = ("ready", "blocked", "contingent")
 
 #if thesis_mode not in ("development", "submission") {
   panic("aria-thesis-mode must be either development or submission")
@@ -61,6 +64,83 @@
 #let validation_todo(body, source: none, gate: none) = todo_marker([Validation TODO], body, stroke: olive, source: source, gate: gate)
 #let prune_todo(body, source: none, gate: none) = todo_marker([Remove or rewrite before submission], body, stroke: gray, source: source, gate: gate)
 #let archive_note(body, source: none) = todo_marker([Archived source note], body, stroke: gray, source: source)
+
+// Scientific-core priorities are ordinal, not additive scores:
+// C0 protects the validity or information boundary of every central claim;
+// C1 blocks the next principal-RQ inference or frozen evidence gate;
+// C2 discriminates a diagnosed alternative explanation after C0/C1 work;
+// C3 is an exploratory extension outside the core claim.
+// Readiness is deliberately orthogonal: a blocked C0 remains C0.
+#let scientific_core_priority_meaning(priority) = if priority == "C0" {
+  [validity boundary]
+} else if priority == "C1" {
+  [core inference]
+} else if priority == "C2" {
+  [diagnostic discriminator]
+} else {
+  [exploratory extension]
+}
+
+#let scientific_core_todo(
+  body,
+  domain: none,
+  priority: none,
+  readiness: none,
+  claim: none,
+  source: none,
+  gate: none,
+  blocked-by: none,
+) = {
+  let domain = _required_promotion_field("domain", domain)
+  let priority = _required_promotion_field("priority", priority)
+  let readiness = _required_promotion_field("readiness", readiness)
+  let claim = _required_promotion_field("claim", claim)
+  let source = _required_promotion_field("source", source)
+  let gate = _required_promotion_field("gate", gate)
+
+  if type(domain) != str or domain not in scientific_core_domains {
+    panic("Unknown scientific-core domain: " + repr(domain))
+  }
+  if type(priority) != str or priority not in scientific_core_priorities {
+    panic("Unknown scientific-core priority: " + repr(priority))
+  }
+  if type(readiness) != str or readiness not in scientific_core_readiness {
+    panic("Unknown scientific-core readiness: " + repr(readiness))
+  }
+  if readiness == "blocked" {
+    let _ = _required_promotion_field("blocked-by", blocked-by)
+  }
+
+  let rank_meaning = scientific_core_priority_meaning(priority)
+  let record = (
+    domain: domain,
+    priority: priority,
+    readiness: readiness,
+    claim: repr(claim),
+    gate: repr(gate),
+    source: repr(source),
+    blocked_by: if blocked-by == none { none } else { repr(blocked-by) },
+  )
+
+  todo_marker(
+    [Scientific-core TODO #priority],
+    [
+      #metadata(record) <scientific-core-todo>
+      #body
+      \
+      #text(size: 7.6pt)[Rank #priority (#rank_meaning) — domain #domain — readiness #readiness]
+      \
+      #text(size: 7.6pt)[Affected claim: #claim]
+      #if blocked-by != none [
+        \
+        #text(size: 7.6pt)[Blocked by: #blocked-by]
+      ]
+    ],
+    stroke: if priority == "C0" { red } else if priority == "C1" { purple } else if priority == "C2" { blue } else { gray },
+    source: source,
+    gate: gate,
+  )
+}
 
 #let implementation_colour(state) = if state == "implemented" {
   rgb("#217A3C")

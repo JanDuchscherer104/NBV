@@ -185,8 +185,9 @@ def collate_qh_chains(
         VIN point padding is NaN. Padding never creates actor-valid or
         label-supported entries, and validation enforces
         ``label_mask <= action_mask <= candidate_mask``. The dense-valid
-        objective additionally canonicalizes both supervision tables to finite
-        values exactly on realized actor-valid support and NaN elsewhere.
+        objective additionally requires finite root-gain rewards exactly on
+        realized actor-valid support. Diagnostic RRI may remain unavailable;
+        both arrays are canonicalized to NaN outside realized support.
     """
 
     if not chains:
@@ -255,11 +256,9 @@ def _canonicalize_dense_valid(batch: QhBatch) -> QhBatch:
     if not torch.equal(batch.supervision.label_mask, expected):
         raise ValueError("Dense-valid Q_H label_mask must equal action_mask on every realized step.")
     reward = batch.supervision.candidate_reward
-    target_rri = batch.supervision.one_step_target_rri
     if not bool(torch.isfinite(reward[expected]).all()):
         raise ValueError("Dense-valid Q_H candidate_reward must be finite on exact actor-valid support.")
-    if not bool(torch.isfinite(target_rri[expected]).all()):
-        raise ValueError("Dense-valid Q_H one_step_target_rri must be finite on exact actor-valid support.")
+    target_rri = batch.supervision.one_step_target_rri
     supervision = replace(
         batch.supervision,
         candidate_reward=torch.where(expected, reward, torch.full_like(reward, float("nan"))),

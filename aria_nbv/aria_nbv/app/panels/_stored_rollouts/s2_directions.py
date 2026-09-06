@@ -39,7 +39,11 @@ def render_s2_report_preview(
         key_prefix: Store-scoped Streamlit widget namespace.
     """
 
-    section = recipe.rollout_s2_section(section_id)
+    try:
+        section = recipe.rollout_s2_section(section_id)
+    except ValueError:
+        st.info(f"S² report preview unavailable: recipe has no section {section_id!r}.")
+        return
     analysis = section.analysis
     st.markdown("#### Target-frame S² movement, view-direction, and frustum evidence")
     st.caption(

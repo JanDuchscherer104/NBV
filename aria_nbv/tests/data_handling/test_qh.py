@@ -41,7 +41,7 @@ from aria_nbv.data_handling.qh_data.views import (
     validate_experiment_profile,
 )
 from aria_nbv.data_handling.vin_store.format import VinOfflineIndexRecord
-from aria_nbv.data_handling.vin_store.store import VinOfflineStoreReader
+from aria_nbv.data_handling.vin_store.store import OFFLINE_DATASET_VERSION, VinOfflineStoreReader
 from aria_nbv.data_handling.vin_store.views import VinSnippetView
 from aria_nbv.lightning.qh_datamodule import QhDataModule
 from aria_nbv.lightning.qh_module import QhLightningModule, QhLightningModuleConfig
@@ -338,6 +338,24 @@ def _chain(*, steps: int, width: int, offset: int = 0) -> QhChain:
         ),
         key=QhChainKey(offset, offset, offset, f"scene-{offset}", offset),
     )
+
+
+def test_dense_valid_collation_keeps_diagnostic_rri_optional() -> None:
+    """Root-gain support remains trainable when diagnostic RRI is unavailable."""
+
+    chain = _chain(steps=2, width=3)
+    chain = replace(
+        chain,
+        supervision=replace(
+            chain.supervision,
+            one_step_target_rri=torch.full_like(chain.supervision.one_step_target_rri, float("nan")),
+        ),
+    )
+
+    batch = collate_qh_chains([chain], objective_profile="qh_dense_valid_fitted_q_v1")
+
+    assert torch.isfinite(batch.supervision.candidate_reward[batch.supervision.label_mask]).all()
+    assert torch.isnan(batch.supervision.one_step_target_rri[batch.supervision.label_mask]).all()
 
 
 def test_candidate_gather_uses_candidate_axis_for_sixty_vector_rows() -> None:
@@ -971,7 +989,7 @@ def test_named_profile_admission_rejects_point_schema_mutations(mutation: tuple[
         "version": "vin_points_v1",
     }
     manifest = SimpleNamespace(
-        version=10,
+        version=OFFLINE_DATASET_VERSION,
         vin={
             "include_obs_count": False,
             "point_feature_schema": schema,
@@ -987,7 +1005,7 @@ def test_named_profile_admission_rejects_point_schema_mutations(mutation: tuple[
 
 def test_named_profile_rejects_v8_with_rebuild_guidance() -> None:
     manifest = SimpleNamespace(version=8, vin={}, shards=[])
-    with pytest.raises(ValueError, match="version 10|Rebuild"):
+    with pytest.raises(ValueError, match=rf"version {OFFLINE_DATASET_VERSION}|Rebuild"):
         _require_named_profile_store(cast(VinOfflineStoreReader, SimpleNamespace(manifest=manifest)))
 
 
@@ -1009,7 +1027,7 @@ def test_named_profile_admission_returns_manifest_free_input_provenance(tmp_path
 @pytest.mark.parametrize("provenance", [None, "unknown"])
 def test_named_profile_admission_rejects_missing_or_unknown_free_input_provenance(provenance: Any) -> None:
     manifest = SimpleNamespace(
-        version=10,
+        version=OFFLINE_DATASET_VERSION,
         vin={
             "include_obs_count": False,
             "point_feature_schema": _point_feature_schema(include_obs_count=False),
@@ -1230,7 +1248,7 @@ def test_named_profiles_use_written_vin_and_rollout_artifacts(
     source.source_shard_id = actor_record.shard_id
     source.source_shard_row = actor_record.row
     source.split = actor_record.split
-    source.source_cache_version = "10"
+    source.source_cache_version = str(OFFLINE_DATASET_VERSION)
     source.source_offline_store_manifest_hash = stable_msgspec_hash(actor_reader.manifest)
     target.target_protocol_version = "v1_observed"
     target.target_source = "detected_obbs"
@@ -1293,7 +1311,7 @@ def test_named_profiles_use_written_vin_and_rollout_artifacts(
     rollout_store = write_rollout_zarr_store(
         tmp_path / "rollouts.zarr",
         [rollout],
-        source_offline_store_version="10",
+        source_offline_store_version=str(OFFLINE_DATASET_VERSION),
         split_manifest_hash=split_hash,
         target_protocol_version="v1_observed",
         selected_depth_enabled=True,

@@ -4,6 +4,13 @@
 #import "../draft_markers.typ": validation_todo
 #import "../../shared/tables.typ": publication-table, index-cell
 
+#let phase-a = json("/contents/evidence/candidate_family_phase_a_wp02_projection.json")
+#let phase-a-counts = phase-a.at("counts")
+#let phase-a-source = phase-a.at("source")
+#let phase-a-generation = phase-a.at("generation")
+#let phase-a-flat-gain = phase-a.at("flat_gain")
+#let short-digest(value) = value.slice(0, 16)
+
 #validation_todo(
   [Replace fixture- and readiness-oriented output with confirmatory results that answer each research question using matched endpoint evaluation, denominators, exclusions, aggregation units, independent-run uncertainty, and immutable artifact provenance.],
   source: [confirmatory report bundle and analysis manifest],
@@ -194,7 +201,78 @@ The thesis report bundle is loaded through the strict schema checked in `experim
 #if candidate-support-available [
   The confirmatory bundle supplies descriptive candidate-support quality-control diagnostics for every validated store. Actor-valid fraction, lower-tail valid support, configured-family zero rate, target-side balance, and circular orbit span are reported per profile in @tab:thesis-confirmatory-values with the frozen state--scene macro identities and scene denominators. These values audit candidate support; they are not paired policy effects and carry no comparative inference unless a separately preregistered paired scene contrast and interval are present.
 ] else [
-  The available artifacts show that the finite-candidate rollout path reaches mesh rendering, target-specific oracle scoring, and selected-action replay on training sources. They therefore support an implementation-readiness claim only. A CUDA out-of-memory failure in an unbatched candidate render and later memory-bounded attempts identify rendering as a scale gate; neither establishes rollout throughput, storage cost, candidate-family support, or policy quality for the intended study population.
+  No new confirmatory result is introduced. The bounded Phase-A development
+  artifact is a non-confirmatory, proposal-support-only diagnostic. Its
+  admissible empirical claim is limited to the authenticated counts, exclusions,
+  and failed support predicates below; it is not a policy or reconstruction result.
+
+  The frozen #phase-a-counts.at("scenes")-scene Phase-A proposal audit attempted
+  #phase-a-counts.at("attempted_candidates") candidates and admitted
+  #phase-a-counts.at("compact_valid_candidates") into the compact valid shells.
+  It nevertheless failed its support gate:
+  #phase-a-counts.at("collapsed_state_family_cells") applicable state--family
+  cells had no selected row,
+  #phase-a-counts.at("states_below_target_family_floor") states missed the
+  aggregate non-forward target-aware-family floor, and
+  #phase-a-counts.at("states_below_root_support") states missed the root-support
+  threshold. All #phase-a-counts.at("source_rows") reviewed source rows,
+  #phase-a-counts.at("scenes") scenes, and
+  #phase-a-counts.at("target_states") target states were represented; the
+  immutable bundle records #phase-a-counts.at("excluded_source_rows") source-row
+  exclusions. Because this no-render audit contains no reward labels, flat-gain
+  status is unavailable with label denominator
+  #phase-a-flat-gain.at("label_denominator") and eligible-state denominator
+  #phase-a-flat-gain.at("eligible_state_denominator"). The result diagnoses
+  proposal support; it provides no evidence about RRI, candidate quality,
+  rollout throughput, or policy performance and does not admit broad rollout
+  generation.
+
+  #figure(
+    publication-table(
+      columns: (1.35fr, 0.65fr),
+      align: (left, right),
+      header: ([*Phase-A diagnostic*], [*Bundle-derived value*]),
+      rows: (
+        ([Attempted candidate rows], [#phase-a-counts.at("attempted_candidates")]),
+        ([Compact-valid rows], [#phase-a-counts.at("compact_valid_candidates")]),
+        ([Collapsed state--family cells], [#phase-a-counts.at("collapsed_state_family_cells")]),
+        ([States below target-family floor], [#phase-a-counts.at("states_below_target_family_floor")]),
+        ([States below root-support floor], [#phase-a-counts.at("states_below_root_support")]),
+        ([Excluded source rows], [#phase-a-counts.at("excluded_source_rows")]),
+      ),
+    ),
+    caption: [Bounded Phase-A proposal-support diagnostic projected from the authenticated evidence bundle. These counts describe support and exclusions; they are not policy-performance estimates.],
+  ) <tab:candidate-family-phase-a-support>
+
+  Separately, training-source rollout attempts reached mesh rendering,
+  target-specific oracle scoring, and selected-action replay. An out-of-memory
+  failure during unbatched candidate rendering and subsequent memory-bounded
+  attempts identify rendering as a scale gate; they do not establish population
+  throughput or storage feasibility.
+
+  // Display provenance:
+  // - source -> docs/contents/evidence/candidate_family_phase_a_wp02.json (canonical 100-state Phase-A evidence and internal artifact identity)
+  // - transform -> scripts/project_phase_a_thesis_evidence.py authenticates the source, recomputes the reducer, selects one deterministic state per persisted audit stratum, and projects counts, exclusions, hashes, and SVG
+  // - aggregate -> preflight.coverage, preflight.blockers, preflight.flat_gain, and records[].points actor_valid counts
+  // - generation receipt -> make phase-a-thesis-projection; projector and source digests are stored in candidate_family_phase_a_wp02_projection.json
+  // - display -> candidate_family_phase_a_wp02_projection.json, candidate_family_phase_a_wp02_audit_heatmap.svg, and this bounded Results interpretation
+
+  #figure(
+    image(
+      "../../../contents/evidence/candidate_family_phase_a_wp02_audit_heatmap.svg",
+      width: 100%,
+    ),
+    caption: [
+      Candidate-family survival for one deterministic factual state from each
+      persisted Phase-A audit stratum. Each cell reports compact-valid-shell
+      membership divided by attempted rows; the complete
+      #phase-a-counts.at("target_states")-state matrix remains in the authenticated
+      evidence bundle. The figure, table, prose counts, and exclusion summary are
+      generated by #raw(phase-a-generation.at("command")). The source artifact has
+      digest #raw(short-digest(phase-a-source.at("artifact_sha256")))…; the derived
+      projection has digest #raw(short-digest(phase-a.at("projection_sha256")))….
+    ],
+  ) <fig:candidate-family-phase-a-support>
 ]
 
 == Target-Task Coverage

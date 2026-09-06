@@ -220,6 +220,40 @@ def test_reader_normalizes_validation_campaign_split_without_changing_source_spl
     assert source.campaign_split is Stage.VAL
 
 
+def test_dense_valid_reader_and_collation_do_not_require_diagnostic_rri(tmp_path: Path) -> None:
+    """A writer-backed root-gain chain remains trainable without target RRI."""
+
+    records = build_rollout_records(horizon=1, num_samples=6, seed=19)[:1]
+    trajectory = records[0].evaluated.result.trajectories[0]
+    for result_step in trajectory.steps:
+        step = records[0].evaluated.step(0, result_step.step_index)
+        width = step.transition.candidates.mask_valid.shape[0]
+        step.evaluation.labels.metrics["target_rri"] = torch.full((width,), float("nan"))
+        step.evaluation.labels.metrics["target_root_gain"] = torch.arange(width, dtype=torch.float32)
+    store = write_rollout_zarr_store(
+        tmp_path / "root-gain-without-rri.zarr",
+        records,
+        oracle_query_mode="dense_valid",
+        label_support_semantics="equals_action_on_realized_steps_v1",
+    ).store_dir
+    stored = QhRolloutReader((store,))[0]
+    identity = PoseTW().tensor()
+    chain = _tensor_chain(
+        stored,
+        VinSnippetView(
+            points_world=torch.zeros(1, 3),
+            lengths=torch.tensor([1]),
+            t_world_rig=PoseTW(torch.stack([identity])),
+            t_world_snippet=PoseTW(torch.stack([identity])),
+        ),
+    )
+
+    batch = collate_qh_chains([chain], objective_profile="qh_dense_valid_fitted_q_v1")
+
+    assert torch.isfinite(batch.supervision.candidate_reward[batch.supervision.label_mask]).all()
+    assert torch.isnan(batch.supervision.one_step_target_rri[batch.supervision.label_mask]).all()
+
+
 def test_reader_campaign_split_isolates_three_way_corpus_and_hides_excluded_rows(tmp_path: Path) -> None:
     records = [
         build_rollout_records(horizon=horizon, num_samples=6, seed=7 + index)[index]
