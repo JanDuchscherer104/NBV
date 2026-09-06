@@ -24,7 +24,7 @@ config:
     .nodeLabel { font-family: "CMU Serif", "Latin Modern Roman", serif; font-size: 24px; }
     .nodeLabel div { flex-direction: column; line-height: 1.2; }
     .nodeLabel b { display: block; font-size: 28px; font-weight: 700; line-height: 1.15; margin-bottom: 6px; }
-    .nodeLabel code { display: block; font-family: "CMU Serif", "Latin Modern Roman", serif; font-size: 22px; line-height: 1.15; margin: 3px 0; }
+    .nodeLabel code { display: block; font-family: "CMU Serif", "Latin Modern Roman", serif; font-size: 22px; line-height: 1.15; margin: 0; }
     .edgeLabel { font-family: "CMU Serif", "Latin Modern Roman", serif; font-size: 22px; }
     .cluster-label { font-family: "CMU Serif", "Latin Modern Roman", serif; font-size: 24px; font-weight: 700; }
     .katex { font-size: 1em; }
@@ -42,26 +42,26 @@ flowchart TB
   Candidates["<b>Candidate table</b>$$\mathcal{Q}_t$$"]:::input
   %% aria-compute: equations.rl.target_root_gain_reward
   %% aria-math: symbols.oracle.depth_q
-  Render["<b>Counterfactual labels</b><code>render → backproject<br/>target_error → root_gain</code>$$\boldsymbol{D}_q$$"]:::compute
+  Render["<b>Counterfactual labels</b><code>render → backproject</code><code>target_error → root_gain</code>$$\boldsymbol{D}_q$$"]:::compute
   %% aria-math: symbols.rl.s_pose
   State["<b>Pose-only state</b>$$s_t^{\mathrm{S0-pose}}$$"]:::data
   %% aria-compute: equations.rl.qh_masked_argmax
   Select["<b>Select one action</b><code>argmax(values[valid])</code>"]:::compute
   %% aria-compute: equations.rl.replay_transition
   %% aria-math: symbols.rl.selected_pose_prefix_next
-  Step["<b>Replay step</b><code>pose ← selected_pose<br/>append(prefix, pose)<br/>budget ← budget - 1</code>$$\boldsymbol{H}_{t+1}^{\mathrm{pose}}$$"]:::compute
+  Step["<b>Replay step</b><code>pose ← selected_pose</code><code>append(prefix, pose)</code><code>budget ← budget - 1</code>$$\boldsymbol{H}_{t+1}^{\mathrm{pose}}$$"]:::compute
   %% aria-compute: equations.rl.replay_transition
-  Next["<b>Successor candidates</b><code>Generate(next_pose,<br/>target, seed(prefix))</code>"]:::compute
+  Next["<b>Successor candidates</b><code>Generate(next_pose,</code><code>target, seed(prefix))</code>"]:::compute
   %% aria-compute: equations.rl.target_root_gain_reward
   %% aria-math: symbols.entity.target_reward
   Reward["<b>Selected reward</b><code>gather(gains, action)</code>$$r_t^e$$"]:::compute
   %% aria-compute: equations.rl.qh_doubleq_index
-  Backup["<b>Double-Q continuation</b><code>0 if terminal else<br/>target_Q(next, argmax(<br/>online_Q(next)[supported]))</code>"]:::compute
+  Backup["<b>Double-Q continuation</b><code>0 if terminal else</code><code>target_Q(next, argmax(</code><code>online_Q(next)[supported]))</code>"]:::compute
   %% aria-math: equations.rl.qh_doubleq_target
   Target["<b>Training target</b>$$y_t^{(h,e)}=r_t^e+\gamma B_t^{(h,e)}$$"]:::compute
   %% aria-compute: equations.model.qh_s1_selected_surface
   %% aria-math: symbols.rl.s_surface
-  Fusion["<b>Selected-depth control</b><code>backproject → transform<br/>PointMLP → mean / max<br/>root + residual</code>$$s_t^{\mathrm{S1-surface}}$$"]:::compute
+  Fusion["<b>Selected-depth control</b><code>backproject → transform</code><code>PointMLP → mean / max</code><code>root + residual</code>$$s_t^{\mathrm{S1-surface}}$$"]:::compute
   Oracle --> Render
   Candidates --> Render
   State --> Select

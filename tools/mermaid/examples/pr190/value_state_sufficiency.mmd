@@ -24,7 +24,7 @@ config:
     .nodeLabel { font-family: "CMU Serif", "Latin Modern Roman", serif; font-size: 24px; }
     .nodeLabel div { flex-direction: column; line-height: 1.2; }
     .nodeLabel b { display: block; font-size: 28px; font-weight: 700; line-height: 1.15; margin-bottom: 6px; }
-    .nodeLabel code { display: block; font-family: "CMU Serif", "Latin Modern Roman", serif; font-size: 22px; line-height: 1.15; margin: 3px 0; }
+    .nodeLabel code { display: block; font-family: "CMU Serif", "Latin Modern Roman", serif; font-size: 22px; line-height: 1.15; margin: 0; }
     .edgeLabel { font-family: "CMU Serif", "Latin Modern Roman", serif; font-size: 22px; }
     .cluster-label { font-family: "CMU Serif", "Latin Modern Roman", serif; font-size: 24px; font-weight: 700; }
     .katex { font-size: 1em; }
@@ -41,14 +41,14 @@ flowchart TB
   %% aria-math: symbols.rl.decision_protocol
   Protocol["<b>Decision protocol</b>$$\Xi$$"]:::input
   %% aria-compute: equations.rl.q_h
-  Ideal["<b>Optimal value</b><code>sup_policy(E[return |<br/>history, first_action])</code>"]:::compute
+  Ideal["<b>Optimal value</b><code>sup_policy(E[return |</code><code>history, first_action])</code>"]:::compute
   %% aria-math: equations.rl.qh_representation_map
   Map["<b>State construction</b>$$z_t^{\sigma}=\phi_{\sigma}(\mathcal{H}_t)$$"]:::compute
   %% aria-compute: equations.rl.qh_learned_predictor
   %% aria-math: symbols.rl.learned_q
-  Learned["<b>Learned value</b><code>predict(state, target,<br/>candidate, horizon)</code>$$\widehat{Q}_{\theta,h}^{\sigma,\Xi}$$"]:::output
+  Learned["<b>Learned value</b><code>predict(state, target,</code><code>candidate, horizon)</code>$$\widehat{Q}_{\theta,h}^{\sigma,\Xi}$$"]:::output
   %% aria-compute: equations.rl.qh_sufficiency_factorization
-  Test["<b>Sufficiency test</b><code>same_decision_law(<br/>histories | state, action)</code>"]:::compute
+  Test["<b>Sufficiency test</b><code>same_decision_law(</code><code>histories | state, action)</code>"]:::compute
   Closure["<b>Sufficient for closure</b>"]:::status
   Alias["<b>Harmful aliasing</b>"]:::status
   History --> Ideal

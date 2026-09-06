@@ -140,6 +140,10 @@ A["<b>Update</b><code>Step(\invented{x})</code>"]:::compute'''))
         self.assertEqual(self.errors(node+'%% aria-math: symbols.state\nA -->|"$$s$$"| B'), [])
         self.assertTrue(self.errors(node+'A -->|"This is all the possible future state data"| B'))
 
+    def test_computation_can_span_explicit_block_lines(self) -> None:
+        source = '%% aria-compute: equations.step\nA["<b>Step</b><code>Step(</code><code>state, action)</code>"]:::compute'
+        self.assertEqual(self.errors(source), [])
+
     def test_duplicate_nodes_rejected(self) -> None:
         source = 'A["<b>Outcome</b>"]:::status\nA["<b>Outcome</b>"]:::status'
         self.assertTrue(self.errors(source))

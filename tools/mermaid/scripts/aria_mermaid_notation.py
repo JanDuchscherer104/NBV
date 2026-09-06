@@ -149,8 +149,8 @@ def check_architecture(text: str, records: dict[str, str]) -> list[str]:
                 errors.append(f"line {number}: {node_id} pseudocode needs an aria-compute equation owner")
             if owner is not None and not codes:
                 errors.append(f"line {number}: aria-compute has no computational body")
-            for code in codes:
-                plain = html.unescape(re.sub(r"<br\s*/?>", " ", code))
+            if codes:
+                plain = html.unescape(re.sub(r"<br\s*/?>", " ", " ".join(codes)))
                 # A call or pipeline must describe the operation. This only
                 # checks form; review the operands/order against the owner.
                 if not re.search(r"[A-Za-z_]\w*(?:\.\w+)*\s*\([^)]*\)", plain) and not re.search(r"\w\s*(?:→|->)\s*\w", plain):

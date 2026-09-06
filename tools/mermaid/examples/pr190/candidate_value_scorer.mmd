@@ -24,7 +24,7 @@ config:
     .nodeLabel { font-family: "CMU Serif", "Latin Modern Roman", serif; font-size: 24px; }
     .nodeLabel div { flex-direction: column; line-height: 1.2; }
     .nodeLabel b { display: block; font-size: 28px; font-weight: 700; line-height: 1.15; margin-bottom: 6px; }
-    .nodeLabel code { display: block; font-family: "CMU Serif", "Latin Modern Roman", serif; font-size: 22px; line-height: 1.15; margin: 3px 0; }
+    .nodeLabel code { display: block; font-family: "CMU Serif", "Latin Modern Roman", serif; font-size: 22px; line-height: 1.15; margin: 0; }
     .edgeLabel { font-family: "CMU Serif", "Latin Modern Roman", serif; font-size: 22px; }
     .cluster-label { font-family: "CMU Serif", "Latin Modern Roman", serif; font-size: 24px; font-weight: 700; }
     .katex { font-size: 1em; }
@@ -44,20 +44,20 @@ flowchart TB
   Target["<b>Target geometry</b>$$\boldsymbol{\phi}_e$$"]:::input
   %% aria-compute: equations.model.candidate_pose_context
   %% aria-math: symbols.model.candidate_physical_token
-  Physical["<b>Physical encoder</b><code>cat(PoseEnc(root),<br/>PoseEnc(current), scene)<br/>Linear → GELU → LayerNorm</code>$$\boldsymbol{h}_{t,i}^{\mathrm{phys}}$$"]:::compute
+  Physical["<b>Physical encoder</b><code>cat(PoseEnc(root),</code><code>PoseEnc(current), scene)</code><code>Linear → GELU → LayerNorm</code>$$\boldsymbol{h}_{t,i}^{\mathrm{phys}}$$"]:::compute
   %% aria-compute: equations.model.candidate_row_features
   %% aria-math: symbols.model.candidate_row
-  Row["<b>Value query</b><code>concat(physical,<br/>PoseEnc(target_relative))<br/>Linear → GELU → LayerNorm</code>$$\boldsymbol{x}_{t,i}$$"]:::compute
+  Row["<b>Value query</b><code>concat(physical,</code><code>PoseEnc(target_relative))</code><code>Linear → GELU → LayerNorm</code>$$\boldsymbol{x}_{t,i}$$"]:::compute
   %% aria-compute: equations.model.qh_state_fusion_controls
   %% aria-math: symbols.model.history_token symbols.rl.budget symbols.rl.requested_horizon
-  Context["<b>State tokens</b><code>stack(scene, target, history,<br/>Emb(budget / Hmax),<br/>Emb(horizon / Hmax))</code>$$\boldsymbol{h}_t^{\mathrm{hist}}$$ $$b_t$$ $$h$$"]:::compute
+  Context["<b>State tokens</b><code>stack(scene, target, history,</code><code>Emb(budget / Hmax),</code><code>Emb(horizon / Hmax))</code>$$\boldsymbol{h}_t^{\mathrm{hist}}$$ $$b_t$$ $$h$$"]:::compute
   %% aria-compute: equations.model.qh_state_fusion_controls
-  Attention["<b>A1 read</b><code>CrossAttn(query,<br/>key=state, value=state)</code>"]:::compute
+  Attention["<b>A1 read</b><code>CrossAttn(query,</code><code>key=state, value=state)</code>"]:::compute
   %% aria-compute: equations.model.qh_state_fusion_controls
-  Fuse["<b>Feature fusion</b><code>concat(query, context,<br/>query * context)</code>"]:::compute
+  Fuse["<b>Feature fusion</b><code>concat(query, context,</code><code>query * context)</code>"]:::compute
   %% aria-compute: equations.rl.qh_scorer_interface
   %% aria-math: symbols.rl.conditional_q
-  Values["<b>Value decoder</b><code>Linear → GELU<br/>Dropout → Linear</code>$$Q_{h,\theta,e,i}^{\mathrm{cond}}$$"]:::output
+  Values["<b>Value decoder</b><code>Linear → GELU</code><code>Dropout → Linear</code>$$Q_{h,\theta,e,i}^{\mathrm{cond}}$$"]:::output
   %% aria-compute: equations.rl.qh_scorer_interface
   %% aria-math: symbols.rl.feasibility_logits
   Feasible["<b>Feasibility</b><code>Linear(physical)</code>$$\ell_{t,i}^{\mathrm{feas}}$$"]:::output

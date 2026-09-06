@@ -40,7 +40,7 @@ abstraction rather than inventing LaTeX or a new project symbol:
 
 ```mermaid
 %% aria-compute: equations.model.qh_state_fusion_controls
-Read["<b>A1 read</b><code>CrossAttn(query,<br/>key=state, value=state)</code>"]:::compute
+Read["<b>A1 read</b><code>CrossAttn(query,</code><code>key=state, value=state)</code>"]:::compute
 ```
 
 Here `query` is the incoming canonical candidate-row feature; `state` is the
@@ -125,8 +125,9 @@ argument boundaries before shrinking text. Occupancy is diagnostic, never a
 reason to erase scientifically meaningful separation. PNG resolution does not
 repair small typography.
 
-Mermaid may wrap labels in a flex row. The profile forces label divs to a column
-and headers/code to blocks. Check the rendered header, code and formulas rather
+Mermaid may wrap labels in a flex row and collapse `<br/>` inside code when
+math is present. Use one `<code>` block per computational line (joined for
+validation); the profile forces label divs to a column and code to blocks. Check the rendered header, code and formulas rather
 than trusting `<br/>`. Do not add redundant breaks or multiplication-like dots
 between unrelated symbols. Keep semantic class colors, but encode scientific
 boundaries with words, enclosure or stroke as well, so grayscale preserves them.

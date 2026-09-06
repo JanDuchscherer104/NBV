@@ -24,7 +24,7 @@ config:
     .nodeLabel { font-family: "CMU Serif", "Latin Modern Roman", serif; font-size: 24px; }
     .nodeLabel div { flex-direction: column; line-height: 1.2; }
     .nodeLabel b { display: block; font-size: 28px; font-weight: 700; line-height: 1.15; margin-bottom: 6px; }
-    .nodeLabel code { display: block; font-family: "CMU Serif", "Latin Modern Roman", serif; font-size: 22px; line-height: 1.15; margin: 3px 0; }
+    .nodeLabel code { display: block; font-family: "CMU Serif", "Latin Modern Roman", serif; font-size: 22px; line-height: 1.15; margin: 0; }
     .edgeLabel { font-family: "CMU Serif", "Latin Modern Roman", serif; font-size: 22px; }
     .cluster-label { font-family: "CMU Serif", "Latin Modern Roman", serif; font-size: 24px; font-weight: 700; }
     .katex { font-size: 1em; }
@@ -51,10 +51,10 @@ flowchart TB
   Candidate["<b>Camera query</b>$$q_{t,i}$$"]:::input
   %% aria-compute: equations.scene.candidate_query_pools
   %% aria-math: symbols.scene.target_support_pool symbols.scene.frustum_support_pool symbols.scene.target_frustum_pool
-  Pool["<b>Spatial pooling</b><code>Pool(features | target)<br/>Pool(features | frustum)<br/>Pool(features | intersection)</code>$$\boldsymbol{g}_e^{\mathrm{tgt}}$$ $$\boldsymbol{g}_{t,i}^{\mathrm{fr}}$$ $$\boldsymbol{g}_{t,e,i}^{\cap}$$"]:::compute
+  Pool["<b>Spatial pooling</b><code>Pool(features | target)</code><code>Pool(features | frustum)</code><code>Pool(features | intersection)</code>$$\boldsymbol{g}_e^{\mathrm{tgt}}$$ $$\boldsymbol{g}_{t,i}^{\mathrm{fr}}$$ $$\boldsymbol{g}_{t,e,i}^{\cap}$$"]:::compute
   %% aria-compute: equations.scene.candidate_ray_query
   %% aria-math: symbols.scene.ray_query_ti
-  RayRead["<b>Ray readout</b><code>RenderQuery(memory,<br/>candidate, target_box)</code>$$\boldsymbol{g}_{t,i}^{\mathrm{ray}}$$"]:::compute
+  RayRead["<b>Ray readout</b><code>RenderQuery(memory,</code><code>candidate, target_box)</code>$$\boldsymbol{g}_{t,i}^{\mathrm{ray}}$$"]:::compute
   end
   EVL --> Memory
   Rays --> Memory
