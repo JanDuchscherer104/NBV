@@ -1,0 +1,55 @@
+---
+config:
+  theme: base
+  htmlLabels: true
+  layout: elk
+  fontFamily: "CMU Serif, Latin Modern Roman, serif"
+  flowchart:
+    nodeSpacing: 18
+    rankSpacing: 30
+    padding: 12
+    curve: linear
+  themeVariables:
+    background: "#ffffff"
+    fontFamily: "CMU Serif, Latin Modern Roman, serif"
+    fontSize: "24px"
+    primaryTextColor: "#17202A"
+    lineColor: "#475569"
+  themeCSS: |
+    .nodeLabel { font-family: "CMU Serif", "Latin Modern Roman", serif; font-size: 24px; }
+    .nodeLabel b { font-size: 28px; font-weight: 700; }
+    .edgeLabel { font-family: "CMU Serif", "Latin Modern Roman", serif; font-size: 22px; }
+    .cluster-label { font-family: "CMU Serif", "Latin Modern Roman", serif; font-size: 24px; font-weight: 700; }
+    .katex { font-size: 1em; }
+---
+flowchart TB
+  %% aria-notation: strict
+  %% aria-width-mm: 160
+  accTitle: History, representation and decision sufficiency
+  accDescr: Optimal history-conditioned value and the learned compressed-state approximation are different objects. Equality of the full decision laws is sufficient for Bellman closure; a counterexample demonstrates harmful aliasing, not merely different histories.
+  %% aria-math: symbols.rl.history
+  History["<b>Causal history</b><br/>$$\mathcal{H}_t$$"]:::input
+  %% aria-math: symbols.rl.decision_protocol
+  Protocol["<b>Decision protocol</b><br/>$$\Xi$$"]:::input
+  Ideal["<b>Ideal optimal value</b><br/>history-conditioned"]:::output
+  %% aria-math: symbols.rl.representation_map
+  Map["<b>State construction</b><br/>$$\phi_{\sigma}$$"]:::compute
+  %% aria-math: symbols.rl.representation
+  State["<b>Compressed state</b><br/>$$z_t^{\sigma}$$"]:::data
+  %% aria-math: symbols.rl.learned_q
+  Learned["<b>Learned approximation</b><br/>$$\widehat{Q}_{\theta,h}^{\sigma,\Xi}$$"]:::output
+  Test["<b>Equal decision laws?</b><br/>compare aliased histories"]:::compute
+  Closure["<b>Sufficient for closure</b>"]:::output
+  Alias["<b>Decision-relevant aliasing</b>"]:::output
+  History --> Ideal
+  Protocol --> Ideal
+  History --> Map --> State --> Learned
+  Protocol --> Learned
+  State -.->|"test compression"| Test
+  Test -->|"equal"| Closure
+  Test -->|"counterexample"| Alias
+
+  classDef input fill:#D5E8D4,stroke:#82B366,color:#17202A,stroke-width:1.5px,rx:0,ry:0;
+  classDef output fill:#F8CECC,stroke:#B85450,color:#17202A,stroke-width:1.5px,rx:0,ry:0;
+  classDef compute fill:#E1D5E7,stroke:#9673A6,color:#17202A,stroke-width:1.5px,rx:8,ry:8;
+  classDef data fill:#F5F5F5,stroke:#9E9E9E,color:#17202A,stroke-width:1.2px,rx:0,ry:0;

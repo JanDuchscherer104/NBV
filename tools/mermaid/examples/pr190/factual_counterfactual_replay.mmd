@@ -1,0 +1,67 @@
+---
+config:
+  theme: base
+  htmlLabels: true
+  layout: elk
+  fontFamily: "CMU Serif, Latin Modern Roman, serif"
+  flowchart:
+    nodeSpacing: 18
+    rankSpacing: 30
+    padding: 12
+    curve: linear
+  themeVariables:
+    background: "#ffffff"
+    fontFamily: "CMU Serif, Latin Modern Roman, serif"
+    fontSize: "24px"
+    primaryTextColor: "#17202A"
+    lineColor: "#475569"
+  themeCSS: |
+    .nodeLabel { font-family: "CMU Serif", "Latin Modern Roman", serif; font-size: 24px; }
+    .nodeLabel b { font-size: 28px; font-weight: 700; }
+    .edgeLabel { font-family: "CMU Serif", "Latin Modern Roman", serif; font-size: 22px; }
+    .cluster-label { font-family: "CMU Serif", "Latin Modern Roman", serif; font-size: 24px; font-weight: 700; }
+    .katex { font-size: 1em; }
+---
+flowchart TB
+  %% aria-notation: strict
+  %% aria-width-mm: 160
+  accTitle: Oracle labels and the stored causal successor
+  accDescr: Dense current-state immediate labels are not successor values. Current pose-only replay advances pose, selected-pose prefix, budget and candidates. Only selected depth may enter a separate privileged observation control; unselected renders have no state-update edge.
+  subgraph Labels["Counterfactual supervision"]
+  %% aria-math: symbols.rl.s_oracle
+  Mesh["<b>Oracle state</b><br/>$$s_t^{\mathrm{oracle}}$$"]:::input
+  %% aria-math: symbols.oracle.candidates_t
+  Candidates["<b>Candidate table</b><br/>$$\mathcal{Q}_t$$"]:::input
+  %% aria-math: symbols.oracle.depth_q
+  Render["<b>Render and evaluate</b><br/>$$\boldsymbol{D}_q$$"]:::compute
+  Dense["<b>Immediate gain labels</b><br/>all evaluable valid rows"]:::output
+  end
+  subgraph Replay["Current pose-only replay"]
+  %% aria-math: symbols.rl.s_pose
+  State["<b>Current state</b><br/>$$s_t^{\mathrm{S0-pose}}$$"]:::data
+  Select["<b>Choose one row</b>"]:::compute
+  %% aria-math: symbols.rl.selected_pose_prefix_next
+  Step["<b>Pose / budget step</b><br/>$$\boldsymbol{H}_{t+1}^{\mathrm{pose}}$$"]:::compute
+  Next["<b>Successor query</b><br/>new candidate table"]:::data
+  end
+  %% aria-math: symbols.entity.target_reward
+  Reward["<b>Selected gain</b><br/>$$r_t^e$$"]:::data
+  Backup["<b>Double-Q target</b><br/>successor support · termination"]:::compute
+  Fusion["<b>Observation fusion</b><br/>separate control / target"]:::compute
+  Mesh --> Render
+  Candidates --> Render --> Dense
+  State --> Select
+  Candidates --> Select
+  Select --> Step --> Next
+  Dense -->|"selected row"| Reward
+  Select --> Reward
+  Select -.->|"selection gate"| Fusion
+  Next --> Backup
+  Reward --> Backup
+  Render -.->|"selected depth only"| Fusion
+  style Fusion stroke-dasharray:5 4
+
+  classDef input fill:#D5E8D4,stroke:#82B366,color:#17202A,stroke-width:1.5px,rx:0,ry:0;
+  classDef output fill:#F8CECC,stroke:#B85450,color:#17202A,stroke-width:1.5px,rx:0,ry:0;
+  classDef compute fill:#E1D5E7,stroke:#9673A6,color:#17202A,stroke-width:1.5px,rx:8,ry:8;
+  classDef data fill:#F5F5F5,stroke:#9E9E9E,color:#17202A,stroke-width:1.2px,rx:0,ry:0;

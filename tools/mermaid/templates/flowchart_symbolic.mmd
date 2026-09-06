@@ -1,0 +1,38 @@
+---
+config:
+  theme: base
+  htmlLabels: true
+  layout: elk
+  fontFamily: "CMU Serif, Latin Modern Roman, serif"
+  flowchart:
+    nodeSpacing: 18
+    rankSpacing: 30
+    padding: 12
+    curve: linear
+  themeVariables:
+    background: "#ffffff"
+    fontFamily: "CMU Serif, Latin Modern Roman, serif"
+    fontSize: "24px"
+    primaryTextColor: "#17202A"
+    lineColor: "#475569"
+  themeCSS: |
+    .nodeLabel { font-family: "CMU Serif", "Latin Modern Roman", serif; font-size: 24px; }
+    .nodeLabel b { font-size: 28px; font-weight: 700; }
+    .edgeLabel { font-family: "CMU Serif", "Latin Modern Roman", serif; font-size: 22px; }
+    .cluster-label { font-family: "CMU Serif", "Latin Modern Roman", serif; font-size: 24px; font-weight: 700; }
+    .katex { font-size: 1em; }
+---
+flowchart TB
+  %% aria-notation: strict
+  %% aria-width-mm: 160
+  %% aria-math: symbols.oracle.candidates_t
+  Candidates["<b>Candidate set</b><br/>$$\mathcal{Q}_t$$"]:::input
+  Model["<b>Shared scorer</b>"]:::compute
+  %% aria-math: symbols.rl.conditional_q
+  Values["<b>Conditional values</b><br/>$$Q_{h,\theta,e,i}^{\mathrm{cond}}$$"]:::output
+  Candidates --> Model --> Values
+
+  classDef input fill:#D5E8D4,stroke:#82B366,color:#17202A,stroke-width:1.5px,rx:0,ry:0;
+  classDef output fill:#F8CECC,stroke:#B85450,color:#17202A,stroke-width:1.5px,rx:0,ry:0;
+  classDef compute fill:#E1D5E7,stroke:#9673A6,color:#17202A,stroke-width:1.5px,rx:8,ry:8;
+  classDef data fill:#F5F5F5,stroke:#9E9E9E,color:#17202A,stroke-width:1.2px,rx:0,ry:0;
