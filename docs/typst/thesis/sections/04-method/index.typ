@@ -1,79 +1,42 @@
-#import "../../../shared/macros.typ": *
-#import "../../../shared/symbols.typ": symb
-#import "../../../shared/tables.typ": publication-table
+#import "../../draft_markers.typ": prune_todo
 
 = Method <sec:thesis-method>
 
-Chapter 3 fixed the experimental world: a target-specific task, a
-@finite-candidate-action-set:short, a causal @counterfactual-transition:short,
-and a root-normalized reconstruction-gain outcome. This chapter fixes the
-learner that operates inside that world. Three classifications are kept
-independent throughout:
+#prune_todo(
+  [Rewrite this chapter around one frozen, implemented, and evaluated method. Move rejected objectives, alternative carriers, architecture ladders, and unresolved scorer interfaces to development-only notes or a compact limitations/future-work account.],
+  source: [this chapter and its source-owner decision gates],
+  gate: [production scorer, frozen objective, matched controls, and end-to-end acceptance evidence],
+)
 
-- *scientific role* asks whether an element is the selected realization, a
-  matched control, a requirement of the scientific target, a contingent
-  alternative, or an exploratory idea;
-- *implementation maturity* asks whether its data path and computation are
-  implemented, partial, planned, or only conceptual; and
-- *evidence maturity* asks whether the corresponding scientific claim is
-  validated, pending, conflicted, or inapplicable.
+Chapter 3 defined the controlled decision process; this chapter specifies the
+model evaluated within it. At each realized state, the model receives a causal
+scene representation, a target state, a finite set of candidate views, the
+selected-view history, the remaining acquisition budget, and a requested
+prediction horizon. It returns one conditional value for every materialized
+candidate. The hard feasibility mask remains outside the value function and
+restricts which of those candidates a policy may select.
 
-These axes prevent two recurrent category errors. Implemented does not mean
-selected or empirically supported, and scientific target does not mean one
-particular architecture. The target specifies the actor-visible information
-and evidence needed to answer the research questions; candidate realizations
-may then compete to satisfy it.
+Geometry enters through relations rather than absolute world coordinates.
+Candidate poses are expressed from the rollout root and current camera, the
+target is expressed relative to each candidate, and candidate rows remain
+exchangeable. Each candidate reads shared scene, target, history, budget, and
+horizon context through the same interaction module. The scene-carrier boundary
+separates immutable root evidence from information added by selected
+observations; the current compact controls use pooled EVL and semi-dense
+evidence, causal pose history, and an optional privileged selected-surface
+update. Richer ray-aware or entity-level memories can replace that carrier
+without changing the candidate-value interface.
 
-#figure(
-  publication-table(
-    text-size: 8.1pt,
-    columns: (0.83fr, 1.05fr, 1.45fr, 1.05fr),
-    header: ([*Scientific role*], [*Example*], [*Meaning in this chapter*], [*Present maturity*]),
-    rows: (
-      [Selected realization], [#symb.rl.s_pose, H0, A1, direct regression], [Executable reference method against which one-factor changes are interpreted.], [implemented; scientific evidence pending],
-      [Matched controls], [A0; #symb.rl.s_surface; H1; CORAL], [Executable contrasts that preserve a named comparison but are not part of the selected method.], [implemented; comparisons pending],
-      [Scientific target], [actor-visible target source and causal observation-updated state], [Information and evidence contract required for the core claim; architecture-neutral.], [partly implemented; not validated],
-      [Contingent alternatives], [#symb.rl.s_ray; candidate-set interaction; separate horizon heads], [Promoted only after a measured failure identifies the missing distinction.], [planned or executable; unselected],
-      [Exploratory ideas], [3DGS memory; SceneScript context; quantile value], [Conceptually relevant extensions whose estimand, comparison, or implementation is not yet frozen.], [ideas only],
-    ),
-  ),
-  caption: [Interpretive status for Method. Scientific role, implementation maturity, and evidence maturity are orthogonal; no row is an empirical ranking.],
-) <tab:method-status-semantics>
-
-All admitted state realizations share a scalar-horizon, target-conditioned candidate-value
-interface. The scorer reads admitted scene and target evidence, relative
-candidate geometry, causal history, and remaining budget; it predicts a
-conditional value for every materialized candidate before the authoritative
-hard mask is applied. What differs is whether the admitted actor state retains
-the target-specific information on which future return can depend.
-
-The selected executable configuration uses the
-@pose-only-counterfactual-state:short (#symb.rl.s_pose), H0 mean-pooled
-#symb.rl.selected_pose_prefix, A1 candidate-to-state cross-attention, and direct
-continuous Huber regression. A0 is the matched interaction control. The
-privileged selected-surface state #symb.rl.s_surface, ordered H1 history, and
-CORAL decoder are also executable controls, but none has a frozen comparative
-result. The planned ray-aware state #symb.rl.s_ray is a candidate realization
-of the actor-state target, not a claim that rays are already known to be the
-best carrier. Candidate-set interaction and distributional value prediction
-remain contingent hypotheses rather than silently discarded possibilities.
-
-The value query distinguishes factual remaining budget $b_t$ from requested
-residual horizon $h$. Current supervision supports dense one-step queries and
-recursive queries on the factual budget diagonal; wider executable inputs do
-not establish wider learned support. Exact horizon two is therefore the first
-model-level non-myopic falsification test of learned lookahead: it can compare learned recursion with an
-exact finite-support endpoint without trusting a learned longer-horizon
-continuation. Passing that test is necessary but not sufficient for a policy
-claim, which additionally requires positive oracle headroom and held-out
-endpoint recovery.
-
-The chapter proceeds from the state design space and selected encoding, through
-finite action and replay semantics, to interaction alternatives, acceptance
-properties, and the finite-horizon objective. This order keeps failures
-interpretable: lost state information, malformed action or replay semantics,
-insufficient relational structure, and value-learning error remain distinct
-explanations rather than an undifferentiated model defect.
+Learning follows the factual asymmetry of the replay data. Under the dense-label
+corpus, immediate oracle labels supervise every evaluable feasible candidate at
+a state. Longer-horizon targets are available only for selected actions whose
+factual successors are stored. The finite-horizon target therefore combines the
+selected action's immediate gain with a shorter-horizon value at the next causal
+state, as defined in @ssec:thesis-horizon-recursive-offline-learning. The
+following sections separate scene and target representation, geometric
+encoding, causal replay, architecture acceptance properties, and the fitted
+value objective so that each design choice can be tested without redefining the
+others.
 
 #include "04-01-scene-representation-requirements.typ"
 

@@ -80,8 +80,9 @@
 #include "sections/07-discussion.typ"
 #include "sections/08-conclusion.typ"
 
-// Development planning and gate reports own their own lazy development-only
+// Development editorial and planning reports own their own lazy development-only
 // boundaries, so they can also be compiled as standalone development sources.
+#include "development/reader-state.typ"
 #include "development/roadmap.typ"
 #include "development/s2-rollout-pilot.typ"
 #include "development/method-alternatives.typ"

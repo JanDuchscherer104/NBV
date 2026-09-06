@@ -15,7 +15,8 @@ from ...reporting import ScientificReportConfig
 from ._stored_rollouts import failure_triage, inspect_rerun, session, validity_support
 from ._stored_rollouts import overview_topology as overview
 from ._stored_rollouts import reconstruction_return as reconstruction
-from ._stored_rollouts.shared import download_json, render_stale_store_boundary
+from ._stored_rollouts.shared import render_stale_store_boundary
+from .common import download_json
 
 _SECTIONS = ("Overview", "Reward & reconstruction", "Admission & feasibility", "Failures", "Drill-down")
 _SECTION_KEY = "stored_rollouts_section"

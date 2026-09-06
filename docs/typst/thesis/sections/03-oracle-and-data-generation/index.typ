@@ -1,23 +1,21 @@
-#import "../../../shared/macros.typ": *
-#import "../../../shared/symbols.typ": symb
-
 = Oracle and Data Generation <sec:thesis-oracle-data-generation>
 
-This chapter defines the experimental objects from which ARIA-NBV constructs
-training and evaluation data. A logged snippet first induces an actor-side
-information state #symb.rl.s_hist. A target task then turns that state into a
-finite candidate table #symb.rl.candidate_table; the hard action mask
-#symb.rl.action_mask selects its feasible subset. Privileged rendering assigns
-target-specific reconstruction outcomes, while a selected action creates the
-only factual successor that may extend the causal history. Replay storage
-preserves these relations. Final padded tensors are model-specific projections.
+The preceding chapter established what a target-conditioned planning state must
+preserve. This chapter constructs the controlled decision process in which those
+requirements can be tested. Starting from a logged egocentric snippet and a
+requested target, the system proposes candidate observations, removes
+geometrically infeasible actions, and uses privileged scene geometry to measure
+the hypothetical reconstruction consequence of each remaining candidate.
 
-State determines what may be conditioned on. The target and proposal mechanism
-determine which actions can be compared. The oracle defines their supervision,
-and lineage determines which multi-step returns can be reconstructed from
-factual transitions. These dependencies connect the chapter's information,
-action, measurement, and storage contracts to the learned scorer in the Method
-chapter.
+The central structure is asymmetric. Every evaluable candidate may receive an
+immediate oracle label, but only the selected action creates a factual successor
+that can extend the actor's causal history. Unselected renders remain
+supervision; they do not become observations. This distinction determines both
+the actor--oracle information boundary and the replay relations from which
+finite-horizon targets can be constructed. The chapter therefore proceeds from
+information access, through target and action construction, to measurement and
+causal replay. Model-ready tensors in Chapter 4 are projections of these
+scientific relations, not their definition.
 
 #include "03-01-state-and-visibility.typ"
 

@@ -5,13 +5,45 @@ from __future__ import annotations
 import inspect
 import json
 from collections.abc import Mapping
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Generic, TypeVar, cast
 
 import streamlit as st
 
-from ...configs import ConfigAuthoringError, ConfigDocument, ConfigFieldDescriptor, PathConfig
+from ...configs import (
+    ConfigAuthoringError,
+    ConfigDocument,
+    ConfigFieldDescriptor,
+    ConfigValue,
+    ConfigWriteReceipt,
+    PathConfig,
+)
 from ...utils import BaseConfig
+
+ConfigT = TypeVar("ConfigT", bound=BaseConfig)
+
+
+@dataclass(frozen=True, slots=True)
+class ConfigEditorResult(Generic[ConfigT]):
+    """Result of one metadata-only Streamlit config editing transaction.
+
+    The adapter validates a draft through :class:`ConfigDocument`; it never
+    constructs the runtime target. Callers decide whether and when to invoke
+    ``ConfigT.setup_target()`` after an explicit submit.
+    """
+
+    config: ConfigT
+    """Last validated config, or the opened config before submission."""
+
+    submitted: bool
+    """Whether the user submitted validation or save in this rerun."""
+
+    receipt: ConfigWriteReceipt | None
+    """Atomic save receipt when the user requested a save copy."""
+
+    validation_succeeded: bool = False
+    """Whether the current submitted draft passed complete Pydantic validation."""
 
 
 def trusted_config_catalog() -> dict[str, type[BaseConfig]]:
@@ -130,32 +162,56 @@ def render_configuration_workspace(
         with st.expander("Root model contract"):
             st.markdown(model_docstring)
     st.caption(f"Source SHA-256: `{document.source_sha256}`")
+    render_config_document(
+        document,
+        save_root=root,
+        save_name=f"{selected_path.stem}.edited.toml",
+        key_prefix="config_workspace",
+    )
+
+
+def render_config_document(
+    document: ConfigDocument[ConfigT],
+    *,
+    save_root: Path,
+    save_name: str,
+    key_prefix: str,
+) -> ConfigEditorResult[ConfigT]:
+    """Render one reusable schema-driven editor for an opened config document.
+
+    The document is already validated before entering this adapter. The form
+    only edits JSON/TOML-compatible values and delegates validation and atomic
+    persistence back to :class:`ConfigDocument`; it never evaluates a target.
+    """
+
     descriptors = document.describe()
-    current = document.config.model_dump(mode="json")
-    patch: dict[str, object] = {}
-    with st.form("config_workspace_form"):
+    current = cast(dict[str, ConfigValue], document.config.model_dump(mode="json"))
+    patch: dict[str, ConfigValue] = {}
+    form_key = f"{key_prefix}:form"
+    with st.form(form_key):
         st.subheader("Validated fields")
         for descriptor in descriptors:
             value = _value_at(current, descriptor.path)
             if isinstance(value, dict) and any(item.path.startswith(f"{descriptor.path}.") for item in descriptors):
                 continue
-            updated = _field_widget(descriptor, value)
+            updated = _field_widget(descriptor, value, key_prefix=key_prefix)
             if updated != value:
                 _set_patch(patch, descriptor.path, updated)
-        save_name = st.text_input(
+        requested_name = st.text_input(
             "Save copy as",
-            value=f"{selected_path.stem}.edited.toml",
-            help="Relative names are saved below the configured .configs directory.",
+            value=save_name,
+            help="Relative names are saved below the configured config directory.",
+            key=f"{key_prefix}:save_name",
         )
         validate = st.form_submit_button("Validate draft", icon=":material/fact_check:")
         save = st.form_submit_button("Validate and save copy", type="primary", icon=":material/save:")
     if not validate and not save:
-        return
+        return ConfigEditorResult(config=document.config, submitted=False, receipt=None)
     try:
         updated = document.validate_patch(patch)
     except ConfigAuthoringError as exc:
         st.error(str(exc))
-        return
+        return ConfigEditorResult(config=document.config, submitted=True, receipt=None)
     diff = document.diff(updated)
     if diff.is_empty:
         st.success("Draft is valid and semantically unchanged.")
@@ -168,29 +224,36 @@ def render_configuration_workspace(
             ],
             hide_index=True,
         )
+    receipt: ConfigWriteReceipt | None = None
     if save:
-        requested_destination = Path(save_name).expanduser()
+        requested_destination = Path(requested_name).expanduser()
         destination = (
             requested_destination.resolve()
             if requested_destination.is_absolute()
-            else (root / requested_destination).resolve()
+            else (save_root / requested_destination).resolve()
         )
-        if not destination.is_relative_to(root):
-            st.error(f"Saved config copies must remain below `{root}`.")
-            return
+        if not destination.is_relative_to(save_root):
+            st.error(f"Saved config copies must remain below `{save_root}`.")
+            return ConfigEditorResult(config=updated, submitted=True, receipt=None, validation_succeeded=True)
         try:
             receipt = document.save_copy(destination, expected_sha256=document.source_sha256)
         except ConfigAuthoringError as exc:
             st.error(str(exc))
-            return
+            return ConfigEditorResult(config=updated, submitted=True, receipt=None, validation_succeeded=True)
         st.success(f"Saved `{receipt.path}` with SHA-256 `{receipt.sha256}`.")
+    return ConfigEditorResult(config=updated, submitted=True, receipt=receipt, validation_succeeded=True)
 
 
-def _field_widget(descriptor: ConfigFieldDescriptor, value: object) -> object:
+def _field_widget(
+    descriptor: ConfigFieldDescriptor,
+    value: ConfigValue | None,
+    *,
+    key_prefix: str,
+) -> ConfigValue:
     label = descriptor.path
     help_text = descriptor.documentation
     disabled = not descriptor.editable
-    key = f"config_workspace_field:{descriptor.path}"
+    key = f"{key_prefix}:field:{descriptor.path}"
     if descriptor.theory_ids:
         help_text = f"{help_text or ''}\n\n{_theory_help(descriptor.theory_ids)}".strip()
     if descriptor.allows_none:
@@ -208,9 +271,11 @@ def _field_widget(descriptor: ConfigFieldDescriptor, value: object) -> object:
     if descriptor.choices:
         options = tuple(descriptor.choices)
         index = options.index(value) if value in options else 0
-        return st.selectbox(label, options=options, index=index, disabled=disabled, help=help_text, key=key)
+        return cast(
+            ConfigValue, st.selectbox(label, options=options, index=index, disabled=disabled, help=help_text, key=key)
+        )
     if isinstance(value, bool):
-        return st.checkbox(label, value=value, disabled=disabled, help=help_text, key=key)
+        return st.checkbox(label, value=bool(value), disabled=disabled, help=help_text, key=key)
     if isinstance(value, int) and not isinstance(value, bool):
         kwargs: dict[str, Any] = {"value": value, "step": 1, "disabled": disabled, "help": help_text, "key": key}
         if descriptor.minimum is not None:
@@ -234,7 +299,7 @@ def _field_widget(descriptor: ConfigFieldDescriptor, value: object) -> object:
             key=key,
         )
         try:
-            return json.loads(raw)
+            return cast(ConfigValue, json.loads(raw))
         except json.JSONDecodeError:
             return raw
     rendered = "" if value is None else str(value)
@@ -249,8 +314,8 @@ def _field_widget(descriptor: ConfigFieldDescriptor, value: object) -> object:
     return None if value is None and not updated else updated
 
 
-def _value_at(values: Mapping[str, object], path: str) -> object:
-    current: object = values
+def _value_at(values: Mapping[str, ConfigValue], path: str) -> ConfigValue | None:
+    current: ConfigValue | None = values
     for segment in path.split("."):
         if not isinstance(current, Mapping):
             return None
@@ -258,7 +323,7 @@ def _value_at(values: Mapping[str, object], path: str) -> object:
     return current
 
 
-def _set_patch(patch: dict[str, object], path: str, value: object) -> None:
+def _set_patch(patch: dict[str, ConfigValue], path: str, value: ConfigValue) -> None:
     current = patch
     segments = path.split(".")
     for segment in segments[:-1]:
@@ -276,7 +341,7 @@ def _descriptor_for(
     return next((descriptor for descriptor in descriptors if descriptor.path == path), None)
 
 
-def _optional_seed(descriptor: ConfigFieldDescriptor) -> object:
+def _optional_seed(descriptor: ConfigFieldDescriptor) -> ConfigValue:
     annotation = descriptor.annotation.lower()
     if "bool" in annotation:
         return False
@@ -317,4 +382,10 @@ def _theory_help(identifiers: tuple[str, ...]) -> str:
     return "Canonical theory: " + "; ".join(rendered)
 
 
-__all__ = ["render_configuration_workspace", "trusted_config_catalog", "trusted_config_patterns"]
+__all__ = [
+    "ConfigEditorResult",
+    "render_config_document",
+    "render_configuration_workspace",
+    "trusted_config_catalog",
+    "trusted_config_patterns",
+]

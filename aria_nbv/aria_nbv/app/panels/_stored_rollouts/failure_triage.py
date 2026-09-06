@@ -8,9 +8,9 @@ import pandas as pd
 import plotly.express as px
 import streamlit as st
 
-from .shared import ExplanationSection, ScientificExplanation
-from .shared import download_frame as _download_frame
-from .shared import render_plot as _render_plot
+from ..common import ExplanationSection, ScientificExplanation
+from ..common import download_frame as _download_frame
+from ..common import render_plot as _render_plot
 
 _SECTION_KEY = "stored_rollouts_section"
 
