@@ -2,6 +2,7 @@
 config:
   theme: base
   htmlLabels: true
+  forceLegacyMathML: true
   layout: elk
   fontFamily: "CMU Serif, Latin Modern Roman, serif"
   flowchart:
@@ -33,17 +34,17 @@ flowchart TB
   accTitle: History, representation and decision sufficiency
   accDescr: Optimal history-conditioned value and the learned compressed-state approximation are different objects. Equality of the full decision laws is sufficient for Bellman closure; a counterexample demonstrates harmful aliasing, not merely different histories.
   %% aria-math: symbols.rl.history
-  History["<b>Causal history</b><br/>$$\mathcal{H}_t$$"]:::input
+  History["<b>Causal history</b>$$\mathcal{H}_t$$"]:::input
   %% aria-math: symbols.rl.decision_protocol
-  Protocol["<b>Decision protocol</b><br/>$$\Xi$$"]:::input
-  Ideal["<b>Ideal optimal value</b><br/>history-conditioned"]:::output
+  Protocol["<b>Decision protocol</b>$$\Xi$$"]:::input
+  Ideal["<b>Ideal optimal value</b>history-conditioned"]:::output
   %% aria-math: symbols.rl.representation_map
-  Map["<b>State construction</b><br/>$$\phi_{\sigma}$$"]:::compute
+  Map["<b>State construction</b>$$\phi_{\sigma}$$"]:::compute
   %% aria-math: symbols.rl.representation
-  State["<b>Compressed state</b><br/>$$z_t^{\sigma}$$"]:::data
+  State["<b>Compressed state</b>$$z_t^{\sigma}$$"]:::data
   %% aria-math: symbols.rl.learned_q
-  Learned["<b>Learned approximation</b><br/>$$\widehat{Q}_{\theta,h}^{\sigma,\Xi}$$"]:::output
-  Test["<b>Equal decision laws?</b><br/>compare aliased histories"]:::compute
+  Learned["<b>Learned approximation</b>$$\widehat{Q}_{\theta,h}^{\sigma,\Xi}$$"]:::output
+  Test["<b>Equal decision laws?</b>compare aliased histories"]:::compute
   Closure["<b>Sufficient for closure</b>"]:::output
   Alias["<b>Decision-relevant aliasing</b>"]:::output
   History --> Ideal

@@ -2,6 +2,7 @@
 config:
   theme: base
   htmlLabels: true
+  forceLegacyMathML: true
   layout: elk
   fontFamily: "CMU Serif, Latin Modern Roman, serif"
   flowchart:
@@ -33,22 +34,22 @@ flowchart TB
   accTitle: Oracle labels and the stored causal successor
   accDescr: Dense current-state immediate labels are not successor values. Current pose-only replay advances pose, selected-pose prefix, budget and candidates. Only selected depth may enter a separate privileged observation control; unselected renders have no state-update edge.
   %% aria-math: symbols.rl.s_oracle
-  Mesh["<b>Oracle state</b><br/>$$s_t^{\mathrm{oracle}}$$"]:::input
+  Mesh["<b>Oracle state</b>$$s_t^{\mathrm{oracle}}$$"]:::input
   %% aria-math: symbols.oracle.candidates_t
-  Candidates["<b>Candidate table</b><br/>$$\mathcal{Q}_t$$"]:::input
+  Candidates["<b>Candidate table</b>$$\mathcal{Q}_t$$"]:::input
   %% aria-math: symbols.oracle.depth_q
-  Render["<b>Oracle evaluation</b><br/>$$\boldsymbol{D}_q$$"]:::compute
-  Dense["<b>One-step labels</b><br/>valid candidate rows"]:::output
+  Render["<b>Oracle evaluation</b>$$\boldsymbol{D}_q$$"]:::compute
+  Dense["<b>One-step labels</b>valid candidate rows"]:::output
   %% aria-math: symbols.rl.s_pose
-  State["<b>Current state</b><br/>$$s_t^{\mathrm{S0-pose}}$$"]:::data
+  State["<b>Current state</b>$$s_t^{\mathrm{S0-pose}}$$"]:::data
   Select["<b>Choose one row</b>"]:::compute
   %% aria-math: symbols.rl.selected_pose_prefix_next
-  Step["<b>Pose-only step</b><br/>$$\boldsymbol{H}_{t+1}^{\mathrm{pose}}$$"]:::compute
-  Next["<b>Successor query</b><br/>new candidate table"]:::data
+  Step["<b>Pose-only step</b>$$\boldsymbol{H}_{t+1}^{\mathrm{pose}}$$"]:::compute
+  Next["<b>Successor query</b>new candidate table"]:::data
   %% aria-math: symbols.entity.target_reward
-  Reward["<b>Selected gain</b><br/>$$r_t^e$$"]:::data
-  Backup["<b>Double-Q target</b><br/>support · termination"]:::compute
-  Fusion["<b>Observation fusion</b><br/>privileged control"]:::compute
+  Reward["<b>Selected gain</b>$$r_t^e$$"]:::data
+  Backup["<b>Double-Q target</b>support · termination"]:::compute
+  Fusion["<b>Observation fusion</b>privileged control"]:::compute
   Mesh --> Render
   Candidates --> Render --> Dense
   State --> Select

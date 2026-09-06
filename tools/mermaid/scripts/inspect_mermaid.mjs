@@ -17,6 +17,23 @@ try {
   const page = await browser.newPage();
   await page.setViewport({ width: 1600, height: 1200, deviceScaleFactor: 2 });
   await page.goto(pathToFileURL(path.resolve(input)).href, { waitUntil: 'networkidle0' });
+  // Reuse the CLI's installed KaTeX CSS when inspecting its exported SVG.
+  // Font bytes stay in this transient browser DOM; no font assets are written.
+  const katexPath = new URL('../node_modules/katex/dist/katex.min.css', import.meta.url);
+  let css = await fs.readFile(katexPath, 'utf8');
+  const fontUrls = [...new Set([...css.matchAll(/url\(([^)]+)\)/g)].map(m => m[1]))];
+  for (const url of fontUrls) {
+    const name = url.replace(/^['"]|['"]$/g, '');
+    if (!name.startsWith('fonts/')) throw new Error(`unexpected KaTeX font URL: ${name}`);
+    const font = await fs.readFile(new URL(name, katexPath));
+    const mime = name.endsWith('.woff2') ? 'font/woff2' : name.endsWith('.woff') ? 'font/woff' : 'font/ttf';
+    css = css.split(`url(${url})`).join(`url(data:${mime};base64,${font.toString('base64')})`);
+  }
+  await page.evaluate((css) => {
+    const style = document.createElementNS('http://www.w3.org/2000/svg', 'style');
+    style.textContent = css;
+    document.documentElement.prepend(style);
+  }, css);
   await page.evaluate(() => document.fonts.ready);
   const report = await page.evaluate((widthMm) => {
     const svg = document.querySelector('svg');
@@ -67,6 +84,7 @@ try {
     if (edgePoints.some(pt => pt<8)) errors.push('edge label below 8 pt');
     if (!nodes.length) errors.push('no inspected nodes');
     if (document.querySelector('.katex-error')) errors.push('KaTeX error');
+    if (document.querySelector('.katex') && !document.querySelector('.katex-html')) errors.push('expected KaTeX HTML math, not native MathML');
     if (document.documentElement.textContent.includes('$$')) errors.push('unrendered math delimiter');
     const heightMm=widthMm*box.height/box.width;
     if (heightMm>230) errors.push(`figure height ${heightMm.toFixed(1)} mm exceeds 230 mm`);
@@ -83,6 +101,9 @@ try {
   const { nodeId } = await client.send('DOM.querySelector', { nodeId: root.nodeId, selector: 'g.node b' });
   const { fonts } = nodeId ? await client.send('CSS.getPlatformFontsForNode', { nodeId }) : { fonts: [] };
   report.titleFonts = fonts;
+  const { nodeId: mathId } = await client.send('DOM.querySelector', { nodeId: root.nodeId, selector: '.katex-html' });
+  report.mathFonts = mathId ? (await client.send('CSS.getPlatformFontsForNode', { nodeId: mathId })).fonts : [];
+  if (mathId && !report.mathFonts.some(f => f.familyName.startsWith('KaTeX') && f.glyphCount > 0)) report.errors.push('KaTeX font fallback detected');
   if (!fonts.some(f => f.familyName === 'CMU Serif' && f.glyphCount > 0)) report.errors.push('CMU Serif not used for title glyphs');
   const svg = await page.$('svg');
   await page.evaluate((widthMm) => {

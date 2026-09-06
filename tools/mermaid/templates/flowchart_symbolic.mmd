@@ -2,6 +2,7 @@
 config:
   theme: base
   htmlLabels: true
+  forceLegacyMathML: true
   layout: elk
   fontFamily: "CMU Serif, Latin Modern Roman, serif"
   flowchart:
@@ -31,10 +32,10 @@ flowchart TB
   %% aria-notation: strict
   %% aria-width-mm: 70
   %% aria-math: symbols.oracle.candidates_t
-  Candidates["<b>Candidate set</b><br/>$$\mathcal{Q}_t$$"]:::input
+  Candidates["<b>Candidate set</b>$$\mathcal{Q}_t$$"]:::input
   Model["<b>Shared scorer</b>"]:::compute
   %% aria-math: symbols.rl.conditional_q
-  Values["<b>Conditional values</b><br/>$$Q_{h,\theta,e,i}^{\mathrm{cond}}$$"]:::output
+  Values["<b>Conditional values</b>$$Q_{h,\theta,e,i}^{\mathrm{cond}}$$"]:::output
   Candidates --> Model --> Values
 
   classDef input fill:#D5E8D4,stroke:#82B366,color:#17202A,stroke-width:1.5px,rx:0,ry:0;

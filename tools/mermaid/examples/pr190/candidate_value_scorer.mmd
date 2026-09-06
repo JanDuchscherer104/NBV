@@ -2,6 +2,7 @@
 config:
   theme: base
   htmlLabels: true
+  forceLegacyMathML: true
   layout: elk
   fontFamily: "CMU Serif, Latin Modern Roman, serif"
   flowchart:
@@ -33,25 +34,25 @@ flowchart TB
   accTitle: Candidate-wise A1 scorer
   accDescr: Physical evidence branches to feasibility before target conditioning. Candidate queries read shared context; raw values reach a separate masked selector. The current experiment uses privileged target and action support.
   %% aria-math: symbols.scene.scene_memory_t
-  Scene["<b>Root evidence</b><br/>$$\boldsymbol{\Phi}_t^{\mathrm{scene}}$$"]:::data
+  Scene["<b>Root evidence</b>$$\boldsymbol{\Phi}_t^{\mathrm{scene}}$$"]:::data
   %% aria-math: symbols.oracle.candidate_qti
-  Pose["<b>Camera query</b><br/>$$q_{t,i}$$"]:::input
+  Pose["<b>Camera query</b>$$q_{t,i}$$"]:::input
   %% aria-math: symbols.entity.target_desc
-  Target["<b>Target geometry</b><br/>$$\boldsymbol{\phi}_e$$"]:::input
+  Target["<b>Target geometry</b>$$\boldsymbol{\phi}_e$$"]:::input
   %% aria-math: symbols.model.candidate_physical_token
-  Physical["<b>Physical token</b><br/>$$\boldsymbol{h}_{t,i}^{\mathrm{phys}}$$"]:::compute
+  Physical["<b>Physical token</b>$$\boldsymbol{h}_{t,i}^{\mathrm{phys}}$$"]:::compute
   %% aria-math: symbols.model.candidate_row
-  Row["<b>Value query</b><br/>$$\boldsymbol{x}_{t,i}$$"]:::compute
+  Row["<b>Value query</b>$$\boldsymbol{x}_{t,i}$$"]:::compute
   %% aria-math: symbols.model.target_token symbols.model.history_token
-  Context["<b>Shared context</b><br/>$$\boldsymbol{h}_e^{\mathrm{tgt}}$$ · $$\boldsymbol{h}_t^{\mathrm{hist}}$$<br/>scene · budget · horizon"]:::data
+  Context["<b>Shared context</b>$$\boldsymbol{h}_e^{\mathrm{tgt}}$$ $$\boldsymbol{h}_t^{\mathrm{hist}}$$<br/>scene · budget · horizon"]:::data
   Attention["<b>A1 attention</b>"]:::compute
-  Fuse["<b>Feature fusion</b><br/>query · context · product"]:::compute
+  Fuse["<b>Feature fusion</b>query · context · product"]:::compute
   %% aria-math: symbols.rl.conditional_q
-  Values["<b>Value decoder</b><br/>$$Q_{h,\theta,e,i}^{\mathrm{cond}}$$"]:::output
+  Values["<b>Value decoder</b>$$Q_{h,\theta,e,i}^{\mathrm{cond}}$$"]:::output
   %% aria-math: symbols.rl.feasibility_logits
-  Feasible["<b>Feasibility head</b><br/>$$\ell_{t,i}^{\mathrm{feas}}$$"]:::output
+  Feasible["<b>Feasibility head</b>$$\ell_{t,i}^{\mathrm{feas}}$$"]:::output
   %% aria-math: symbols.rl.action_mask
-  Mask["<b>Action support</b><br/>$$m_{t,i}^{\mathrm{act}}$$"]:::input
+  Mask["<b>Action support</b>$$m_{t,i}^{\mathrm{act}}$$"]:::input
   Select["<b>Masked selection</b>"]:::compute
   Action["<b>Next view</b>"]:::output
   Scene --> Physical

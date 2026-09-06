@@ -9,20 +9,22 @@ before reusing any parameter count, shape or equation. Do not copy historical
 notation, make every word a KaTeX expression, or import old model assumptions.
 The PR190 examples here are review candidates, not active thesis figures.
 
-Use a real HTML header: `<b>Physical projection</b><br/>$$...$$`. Ordinary text
+Use a real HTML header: `<b>Physical projection</b>$$...$$`. Ordinary text
 uses CMU Serif; mathematical content uses the renderer's math font. Do not apply
 a global font-weight to all math, because boldness can distinguish scalars,
 vectors and matrices. CSS font-family does not install a font. Check regular
 and bold faces (`fc-match 'CMU Serif'`, `fc-match 'CMU Serif:style=Bold'`) and the
 browser's actual platform font. Never commit/distribute system font files.
 
-Native MathML can introduce a flex-row wrapper that discards the intended
+Mermaid can introduce a flex-row wrapper that discards the intended
 header/body line break. The symbolic template uses
 `.nodeLabel div { flex-direction: column; }` and makes the bold header a block.
 Verify the actual header and formula occupy separate lines; a literal `<br/>`
-in source is not proof. The browser inspector rejects math positioned beside
-or above the title. Inspect the emitted CSS as well as the source: host-side
-sanitization can remove theme rules, and a fallback render is not style parity.
+in source is not proof. Do not add a redundant break after a block header or
+multiplication-like dots between separate symbol labels. The browser inspector
+rejects math positioned beside or above the title. Inspect the emitted CSS as
+well as the source: host-side sanitization can remove theme rules, and a fallback
+render is not style parity.
 
 ## Size the page, not an abstract canvas
 
@@ -55,7 +57,7 @@ following non-comment statement:
 
 ```mermaid
 %% aria-math: symbols.rl.budget symbols.rl.requested_horizon
-Budget["<b>Budget / horizon</b><br/>$$b_t$$ · $$h$$"]
+Budget["<b>Budget / horizon</b>$$b_t$$ $$h$$"]
 ```
 
 Add `%% aria-notation: strict` to the figure. Bind edge-label math the same way.
@@ -87,14 +89,23 @@ specific library contracts with invented shapes merely to look more mathematical
 
 ## Renderer evidence
 
-Official Mermaid math documentation states that default math is browser MathML;
-`forceLegacyMathML` requires matching KaTeX CSS supplied by the host. Do not turn
-it on without that stylesheet. Mixed HTML titles and math must be tested with
-the chosen engine. Root `htmlLabels` is the modern option; duplicated nested
-settings are unnecessary in the new profile.
+Use `forceLegacyMathML: true` for this symbolic profile so calligraphic,
+bold and other mathematical alphabets are rendered by KaTeX HTML/CSS rather
+than depending on browser MathML variants. The pinned Mermaid CLI supplies
+its installed KaTeX stylesheet and matching web fonts during layout. A host
+such as Mermaid Chart or a GitHub fence must also supply matching CSS; do not
+assume preview parity. CMU Serif is for titles/body text, not a global override
+of mathematical glyph fonts.
+
+The SVG inspector reuses the installed KaTeX CSS and temporarily loads font
+bytes in its browser DOM; it never writes or distributes font assets. It
+checks actual CMU title fonts, KaTeX math fonts and header/body positions.
+Review PNGs are self-contained. Exported SVGs remain browser assets that may
+require KaTeX styles; do not promote them as portable final-thesis vectors.
 
 References: https://mermaid.js.org/config/math.html and
-https://mermaid.js.org/config/schema-docs/config.html (checked 2026-09-06).
+https://github.com/mermaid-js/mermaid-cli/blob/11.17.0/src/index.js
+(checked 2026-09-06).
 
 A Mermaid SVG may contain HTML/MathML `foreignObject` elements. Browser rendering
 does not prove Typst can consume it. Use a verified browser PDF/PNG export or a
