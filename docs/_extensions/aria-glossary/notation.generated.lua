@@ -338,6 +338,12 @@ return {
       description = "Fixed continuous-Q representative used to decode one CORAL class.",
       thesis_list = true,
     },
+    ["rl.decision_protocol"] = {
+      tex = "\\Xi",
+      typst = "#symb.rl.decision_protocol",
+      description = "Fixed target, observation, action-support, reward and horizon protocol.",
+      thesis_list = false,
+    },
     ["rl.exact_q2_target"] = {
       tex = "y_t^{(2,\\mathrm{exact})}",
       typst = "#symb.rl.exact_q2_target",
@@ -362,11 +368,23 @@ return {
       description = "Return discount factor.",
       thesis_list = true,
     },
+    ["rl.history"] = {
+      tex = "\\mathcal{H}_t",
+      typst = "#symb.rl.history",
+      description = "Actor-visible observation/action history before decision t.",
+      thesis_list = false,
+    },
     ["rl.invalid_reason"] = {
       tex = "\\rho_{t,i}",
       typst = "#symb.rl.invalid_reason",
       description = "Invalid-action reason code for candidate i at rollout step t.",
       thesis_list = true,
+    },
+    ["rl.learned_q"] = {
+      tex = "\\widehat{Q}_{\\theta,h}^{\\sigma,\\Xi}",
+      typst = "#symb.rl.learned_q",
+      description = "Learned representation-conditioned finite-horizon value family.",
+      thesis_list = false,
     },
     ["rl.mdp_nbv"] = {
       tex = "\\mathcal{M}_{\\mathrm{NBV}}",
@@ -397,6 +415,18 @@ return {
       typst = "#symb.rl.r",
       description = "Scalar reward or immediate gain.",
       thesis_list = true,
+    },
+    ["rl.representation"] = {
+      tex = "z_t^{\\sigma}",
+      typst = "#symb.rl.representation",
+      description = "Finite actor representation of the causal history.",
+      thesis_list = false,
+    },
+    ["rl.representation_map"] = {
+      tex = "\\phi_{\\sigma}",
+      typst = "#symb.rl.representation_map",
+      description = "State-construction map from causal actor history.",
+      thesis_list = false,
     },
     ["rl.requested_horizon"] = {
       tex = "h",
@@ -916,10 +946,28 @@ return {
       description = "",
       thesis_list = false,
     },
+    ["model.qh_a0_read"] = {
+      tex = "\\boldsymbol{c}_{t,i}^{\\mathrm{A0}}=\\operatorname{MLP}_{\\mathrm{A0}}(\\operatorname{concat}(\\boldsymbol{x}_{t,i},\\operatorname{vec}(\\boldsymbol{Z}_t)))",
+      typst = "#eqs.model.qh_a0_read",
+      description = "Shared mathematical equation; reusable by thesis and diagrams.",
+      thesis_list = false,
+    },
+    ["model.qh_a1_read"] = {
+      tex = "\\boldsymbol{c}_{t,i}^{\\mathrm{A1}}=\\operatorname{CrossAttn}_{\\mathrm{A1}}(\\boldsymbol{x}_{t,i},\\boldsymbol{Z}_t,\\boldsymbol{Z}_t)",
+      typst = "#eqs.model.qh_a1_read",
+      description = "Shared mathematical equation; reusable by thesis and diagrams.",
+      thesis_list = false,
+    },
     ["model.qh_cfplus_h0_control"] = {
       tex = "\\operatorname{Struct}(\\boldsymbol{o}_t)=\\operatorname{Struct}(\\boldsymbol{o}'_t)\\Rightarrow f_\\theta^{\\mathrm{CF{+}-H0}}(s_t^{\\mathrm{S0-pose}},\\boldsymbol{o}_t,\\boldsymbol{\\phi}_e,\\{q_{t,i}\\}_{i=1}^{N_q},h)=f_\\theta^{\\mathrm{CF{+}-H0}}(s_t^{\\mathrm{S0-pose}},\\boldsymbol{o}'_t,\\boldsymbol{\\phi}_e,\\{q_{t,i}\\}_{i=1}^{N_q},h)",
       typst = "#eqs.model.qh_cfplus_h0_control",
       description = "Source-matched CF+ H0 validates selected-observation structure while remaining exactly invariant to its numeric payload.",
+      thesis_list = false,
+    },
+    ["model.qh_feature_fusion"] = {
+      tex = "\\begin{gathered}\\boldsymbol{u}_{t,i}^{\\mathrm{Ak}}=\\operatorname{concat}(\\boldsymbol{x}_{t,i},\\boldsymbol{c}_{t,i}^{\\mathrm{Ak}},\\boldsymbol{x}_{t,i}\\odot\\boldsymbol{c}_{t,i}^{\\mathrm{Ak}}),\\\\\\mathrm{Ak}\\in\\{\\mathrm{A0},\\mathrm{A1}\\}\\end{gathered}",
+      typst = "#eqs.model.qh_feature_fusion",
+      description = "Shared mathematical equation; reusable by thesis and diagrams.",
       thesis_list = false,
     },
     ["model.qh_frozen_interface"] = {
@@ -947,9 +995,15 @@ return {
       thesis_list = false,
     },
     ["model.qh_state_fusion_controls"] = {
-      tex = "\\boldsymbol{Z}_t=(\\boldsymbol{\\Phi}_t^{\\mathrm{scene}},\\boldsymbol{h}_e^{\\mathrm{tgt}},\\boldsymbol{h}_t^{\\mathrm{hist}},\\operatorname{Emb}(b_t/H_{\\max}),\\operatorname{Emb}(h/H_{\\max})),\\quad \\boldsymbol{c}_{t,i}^{\\mathrm{A0}}=\\operatorname{MLP}_{\\mathrm{A0}}([\\boldsymbol{x}_{t,i};\\operatorname{vec}(\\boldsymbol{Z}_t)]),\\quad \\boldsymbol{c}_{t,i}^{\\mathrm{A1}}=\\operatorname{CrossAttn}_{\\mathrm{A1}}(\\boldsymbol{x}_{t,i},\\boldsymbol{Z}_t,\\boldsymbol{Z}_t)",
+      tex = "\\begin{gathered}\\boldsymbol{Z}_t=\\bigl(\\boldsymbol{\\Phi}_t^{\\mathrm{scene}},\\boldsymbol{h}_e^{\\mathrm{tgt}},\\boldsymbol{h}_t^{\\mathrm{hist}},\\\\\\operatorname{Emb}(b_t/H_{\\max}),\\operatorname{Emb}(h/H_{\\max})\\bigr)\\end{gathered}\\quad \\boldsymbol{c}_{t,i}^{\\mathrm{A0}}=\\operatorname{MLP}_{\\mathrm{A0}}(\\operatorname{concat}(\\boldsymbol{x}_{t,i},\\operatorname{vec}(\\boldsymbol{Z}_t)))\\quad \\boldsymbol{c}_{t,i}^{\\mathrm{A1}}=\\operatorname{CrossAttn}_{\\mathrm{A1}}(\\boldsymbol{x}_{t,i},\\boldsymbol{Z}_t,\\boldsymbol{Z}_t)\\quad \\begin{gathered}\\boldsymbol{u}_{t,i}^{\\mathrm{Ak}}=\\operatorname{concat}(\\boldsymbol{x}_{t,i},\\boldsymbol{c}_{t,i}^{\\mathrm{Ak}},\\boldsymbol{x}_{t,i}\\odot\\boldsymbol{c}_{t,i}^{\\mathrm{Ak}}),\\\\\\mathrm{Ak}\\in\\{\\mathrm{A0},\\mathrm{A1}\\}\\end{gathered}",
       typst = "#eqs.model.qh_state_fusion_controls",
       description = "Feature-matched independent-row MLP and candidate-to-state attention controls.",
+      thesis_list = false,
+    },
+    ["model.qh_state_tokens"] = {
+      tex = "\\begin{gathered}\\boldsymbol{Z}_t=\\bigl(\\boldsymbol{\\Phi}_t^{\\mathrm{scene}},\\boldsymbol{h}_e^{\\mathrm{tgt}},\\boldsymbol{h}_t^{\\mathrm{hist}},\\\\\\operatorname{Emb}(b_t/H_{\\max}),\\operatorname{Emb}(h/H_{\\max})\\bigr)\\end{gathered}",
+      typst = "#eqs.model.qh_state_tokens",
+      description = "Shared mathematical equation; reusable by thesis and diagrams.",
       thesis_list = false,
     },
     ["model.qh_target_token"] = {
@@ -995,13 +1049,13 @@ return {
       thesis_list = false,
     },
     ["rl.finite_action_set"] = {
-      tex = "\\mathcal{Q}_t=\\{q_{t,i}\\}_{i=1}^{N_t},\\quad \\mathcal{A}(s_t)=\\{i\\in\\{1,\\ldots,N_t\\}:m_{t,i}=1\\},\\quad q_t=q_{t,a_t}",
+      tex = "\\begin{gathered}\\mathcal{Q}_t=\\{q_{t,i}\\}_{i=1}^{N_q},\\\\\\mathcal{A}_t=\\{i\\in\\{1,\\ldots,N_q\\}:m_{t,i}^{\\mathrm{act}}=1\\}\\end{gathered}",
       typst = "#eqs.rl.finite_action_set",
       description = "",
       thesis_list = false,
     },
     ["rl.finite_horizon_return"] = {
-      tex = "G_t^{(H)}=\\sum_{k=0}^{H-1}\\gamma^k r_{t+k}^e",
+      tex = "\\begin{gathered}G_{t,e}^{(h)}=\\sum_{k=0}^{h-1}\\gamma^k r_{t+k}^e,\\\\1\\le h\\le b_t\\le H_{\\max}\\end{gathered}",
       typst = "#eqs.rl.finite_horizon_return",
       description = "",
       thesis_list = false,
@@ -1066,8 +1120,20 @@ return {
       description = "Fixed-support CORAL loss and continuous conditional-Q decoding.",
       thesis_list = false,
     },
+    ["rl.qh_decision_outcome"] = {
+      tex = "Y_{t+1}=\\bigl(r_t^e,z_{t+1}^{\\sigma},b_{t+1},\\mathcal{Q}_{t+1},\\boldsymbol{m}_{t+1}^{\\mathrm{act}},d_t\\bigr)",
+      typst = "#eqs.rl.qh_decision_outcome",
+      description = "Shared mathematical equation; reusable by thesis and diagrams.",
+      thesis_list = false,
+    },
+    ["rl.qh_decision_sufficiency"] = {
+      tex = "\\begin{gathered}\\mathcal{L}(Y_{t+1}\\mid\\mathcal{H}_t,e,q_{t,i},\\Xi)\\\\=\\mathcal{L}(Y_{t+1}\\mid z_t^{\\sigma},e,q_{t,i},\\Xi)\\end{gathered}",
+      typst = "#eqs.rl.qh_decision_sufficiency",
+      description = "Shared mathematical equation; reusable by thesis and diagrams.",
+      thesis_list = false,
+    },
     ["rl.qh_doubleq_index"] = {
-      tex = "B_t^{(h,e)}=Q_{h-1,\\theta^-}(s_{t+1},\\operatorname*{argmax}_{i\\in\\mathcal{A}_{t+1}^{Q,h-1}}Q_{h-1,\\theta}(s_{t+1},i))",
+      tex = "\\begin{gathered}B_t^{(h,e)}=\\\\\\begin{cases}\\begin{gathered}Q_{h-1,\\theta^-,e}\\!\\left(s_{t+1},\\operatorname*{argmax}_{i\\in\\mathcal{A}_{t+1}^{Q,h-1}}Q_{h-1,\\theta,e}(s_{t+1},i)\\right)\\\\\\text{if }h\\gt1,\\ d_t=0,\\ \\mathcal{A}_{t+1}^{Q,h-1}\\ne\\varnothing\\end{gathered},\\\\[3pt]0\\quad\\text{otherwise}.\\end{cases}\\end{gathered}",
       typst = "#eqs.rl.qh_doubleq_index",
       description = "Successor maximum over the certified horizon-specific support set; terminal continuation is zero.",
       thesis_list = false,
@@ -1090,10 +1156,22 @@ return {
       description = "Factual dense-successor exact-Q2 control.",
       thesis_list = false,
     },
+    ["rl.qh_history_optimum"] = {
+      tex = "\\begin{gathered}Q_{h,e}^{\\star,\\Xi}(\\mathcal{H}_t,q_{t,i})=\\\\\\sup_{\\pi\\in\\Pi^{\\mathrm{act}}}\\mathbb{E}_\\pi\\!\\left[G_{t,e}^{(h)}\\mid\\mathcal{H}_t,q_{t,a_t}=q_{t,i}\\right],\\\\1\\le h\\le b_t\\le H_{\\max},\\quad Q_{0,e}^{\\star,\\Xi}(\\mathcal{H}_t,q_{t,i})=0\\end{gathered}",
+      typst = "#eqs.rl.qh_history_optimum",
+      description = "Shared mathematical equation; reusable by thesis and diagrams.",
+      thesis_list = false,
+    },
     ["rl.qh_masked_argmax"] = {
-      tex = "a_t^\\theta=\\operatorname*{argmax}_{i:m_{t,i}^{\\mathrm{act}}=1}Q_{H,\\theta,i}",
+      tex = "a_t^\\theta=\\operatorname*{argmax}_{i:m_{t,i}^{\\mathrm{act}}=1}Q_{h,\\theta,e}(s_t,i)",
       typst = "#eqs.rl.qh_masked_argmax",
       description = "",
+      thesis_list = false,
+    },
+    ["rl.qh_representation_map"] = {
+      tex = "z_t^{\\sigma}=\\phi_{\\sigma}(\\mathcal{H}_t)",
+      typst = "#eqs.rl.qh_representation_map",
+      description = "Shared mathematical equation; reusable by thesis and diagrams.",
       thesis_list = false,
     },
     ["rl.qh_residual_decomposition"] = {
@@ -1235,13 +1313,13 @@ return {
       thesis_list = false,
     },
     ["scene.candidate_query_pools"] = {
-      tex = "\\boldsymbol{g}_e^{\\mathrm{tgt}},\\boldsymbol{g}_{t,i}^{\\mathrm{fr}},\\boldsymbol{g}_{t,e,i}^{\\cap}=\\operatorname{Pool}(\\boldsymbol{x}_j^{\\mathrm{pt}})",
+      tex = "\\begin{gathered}\\boldsymbol{g}_e^{\\mathrm{tgt}}=\\operatorname{Pool}_{\\boldsymbol{p}_j\\in\\hat{\\boldsymbol{B}}_e}\\boldsymbol{x}_j^{\\mathrm{pt}},\\\\\\boldsymbol{g}_{t,i}^{\\mathrm{fr}}=\\operatorname{Pool}_{\\boldsymbol{p}_j\\in\\operatorname{Frustum}(q_{t,i})}\\boldsymbol{x}_j^{\\mathrm{pt}},\\\\\\boldsymbol{g}_{t,e,i}^{\\cap}=\\operatorname{Pool}_{\\boldsymbol{p}_j\\in\\hat{\\boldsymbol{B}}_e\\cap\\operatorname{Frustum}(q_{t,i})}\\boldsymbol{x}_j^{\\mathrm{pt}}\\end{gathered}",
       typst = "#eqs.scene.candidate_query_pools",
       description = "",
       thesis_list = false,
     },
     ["scene.candidate_ray_query"] = {
-      tex = "\\boldsymbol{g}_{t,i}^{\\mathrm{ray}}=\\operatorname{RenderQuery}(\\boldsymbol{M}_t^{\\mathrm{ray}},q_{t,i},\\hat{\\boldsymbol{B}}_e)",
+      tex = "\\begin{gathered}\\boldsymbol{g}_{t,i}^{\\mathrm{ray}}=\\operatorname{RenderQuery}(\\boldsymbol{M}_t^{\\mathrm{ray}},q_{t,i},\\hat{\\boldsymbol{B}}_e)\\\\=\\bigl(\\boldsymbol{D}_{t,i}^{\\mathrm{near}},\\boldsymbol{L}_{t,i}^{\\mathrm{free}},\\boldsymbol{L}_{t,i}^{\\mathrm{unk}},\\boldsymbol{M}_{t,i}^{\\mathrm{hit}},\\\\\\boldsymbol{W}_{t,i}^{\\mathrm{target}},\\boldsymbol{C}_{t,i}^{\\mathrm{support}},\\boldsymbol{\\Sigma}_{t,i}^{\\mathrm{geom}},\\boldsymbol{\\phi}_{t,i}^{\\mathrm{dir}}\\bigr)\\end{gathered}",
       typst = "#eqs.scene.candidate_ray_query",
       description = "",
       thesis_list = false,
@@ -1253,7 +1331,7 @@ return {
       thesis_list = false,
     },
     ["scene.qh_scene_memory"] = {
-      tex = "\\boldsymbol{\\Phi}_t^{\\mathrm{scene}}=(\\boldsymbol{M}_t^{\\mathrm{ray}},\\boldsymbol{X}_t^{\\mathrm{pt}},\\boldsymbol{F}_t^{\\mathrm{DINO@pt}},\\boldsymbol{E}_0^{\\mathrm{EVL-local}},\\boldsymbol{O}_t^{\\mathrm{pred}},\\boldsymbol{M}^{\\mathrm{dir}})",
+      tex = "\\begin{gathered}\\boldsymbol{\\Phi}_t^{\\mathrm{scene}}=\\bigl(\\boldsymbol{M}_t^{\\mathrm{ray}},\\boldsymbol{X}_t^{\\mathrm{pt}},\\boldsymbol{F}_t^{\\mathrm{DINO@pt}},\\\\\\boldsymbol{E}_0^{\\mathrm{EVL-local}},\\boldsymbol{O}_t^{\\mathrm{pred}},\\boldsymbol{M}^{\\mathrm{dir}}\\bigr)\\end{gathered}",
       typst = "#eqs.scene.qh_scene_memory",
       description = "",
       thesis_list = false,
