@@ -21,7 +21,6 @@ jobs:
       - name: Unit tests
         run: |
           python3 -W error -m unittest discover -s scripts/tests -p test_aria_mermaid_notation.py
-          bash tools/mermaid/scripts/test_render_mermaid.sh
       - name: Check canonical notation
         env:
           PR190_REF: b420d20cc01aa76451d002811f850bc87869b525
@@ -35,7 +34,8 @@ jobs:
       - name: Install renderer and fonts
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y fonts-cmu fonts-lmodern
+          sudo apt-get install -y fonts-cmu fonts-lmodern ripgrep
+          bash tools/mermaid/scripts/test_render_mermaid.sh
           fc-match 'CMU Serif'
           fc-match 'CMU Serif:style=Bold'
           npm install --prefix tools/mermaid --no-save --package-lock=false @mermaid-js/mermaid-cli@11.17.0 puppeteer@25.9.0
