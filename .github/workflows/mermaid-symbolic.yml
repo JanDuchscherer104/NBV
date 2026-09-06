@@ -9,6 +9,8 @@ on:
       - 'docs/typst/shared/equations.typ'
       - 'docs/typst/shared/equations/**'
       - 'docs/notation.yml'
+      - 'docs/_extensions/aria-glossary/notation.generated.lua'
+      - 'docs/typst/shared/notation.generated.typ'
       - 'scripts/tests/test_aria_mermaid_*.py'
       - '.github/workflows/mermaid-symbolic.yml'
   workflow_dispatch:
@@ -30,6 +32,7 @@ jobs:
         run: |
           python3 -m pip install PyYAML==6.0.2
           python3 scripts/glossary_build.py validate render-notation-yaml render-notation-lua render-notation-typst
+          git diff --exit-code -- docs/notation.yml docs/_extensions/aria-glossary/notation.generated.lua docs/typst/shared/notation.generated.typ
       - name: Unit tests
         run: |
           python3 -W error -m unittest discover -s scripts/tests -p 'test_aria_mermaid_*.py'
