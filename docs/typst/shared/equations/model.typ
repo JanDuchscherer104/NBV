@@ -23,7 +23,7 @@ $
 #let qh_feature_fusion = $
   #symb.rl.candidate_token^"Ak" = op("concat") (
     #symb.model.candidate_row, bold(c)_(t,i)^"Ak",
-    #symb.model.candidate_row dot.o bold(c)_(t,i)^"Ak"),
+    #symb.model.candidate_row ⊙ bold(c)_(t,i)^"Ak"),
   quad "Ak" in {"A0", "A1"}
 $
 
