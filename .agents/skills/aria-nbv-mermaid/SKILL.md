@@ -21,6 +21,7 @@ Load only the relevant reference:
 - [Direct-reference syntax, mathematical grammar and sizing](../../../tools/mermaid/references/symbolic-style.md).
 - [Scientific and cold-reader review](references/figure-review.md).
 - [Bounded iteration and Mermaid Chart](references/iteration.md).
+- [Renderer transport and visible-math pitfalls](../../../tools/mermaid/references/math-transport.md).
 - New notation, dense mathematics, spatial geometry and final PDF: `typst-authoring`.
 
 The seminar diagrams are composition baselines, not current model evidence.
@@ -33,7 +34,7 @@ Start from `tools/mermaid/templates/flowchart_symbolic.mmd`. New architecture
 sources require `%% aria-notation: typst` and
 `%% aria-architecture: symbolic-computational`.
 
-```mermaid
+```text
 State["<b>Memory</b>$$#symb.scene.scene_memory_t$$"]:::data
 Pools["<b>Pooling</b>$$#eqs.scene.candidate_query_pools$$"]:::compute
 ```
@@ -53,7 +54,10 @@ not silently trusted because a spelling check passes.
 
 ## Compile and verify
 
+After changing the canonical owners, refresh their projections first:
+
 ```sh
+python3 scripts/glossary_build.py validate render-notation-yaml render-notation-lua render-notation-typst
 python3 tools/mermaid/scripts/aria_mermaid_owners.py path/to/figure.mmd \
   --output /tmp/figure.mmd --receipt /tmp/figure.refs.json
 python3 tools/mermaid/scripts/aria_mermaid_lint.py /tmp/figure.mmd
@@ -62,11 +66,12 @@ tools/mermaid/scripts/render_mermaid.sh path/to/figure.mmd /tmp/figure.svg
 node tools/mermaid/scripts/inspect_mermaid.mjs /tmp/figure.svg 160 /tmp/figure
 ```
 
-The existing render wrapper resolves owner references automatically. The authored
-`.mmd` is canonical; generated plain Mermaid and hash receipts are build evidence.
-Send **generated** Mermaid to the official Mermaid Chart `display_mermaid` tool
-or GitHub fences. Neither host understands project Typst identifiers itself.
-A successful tool response is not a rendering or font-validation certificate.
+The existing render wrapper resolves owner references automatically against the
+prepared projection. The authored `.mmd` is canonical; generated plain Mermaid
+and hash receipts are build evidence. Send **generated** Mermaid to the official
+Mermaid Chart `display_mermaid` tool or GitHub fences. Neither host understands
+project Typst identifiers itself. A successful tool response is not a rendering
+or font-validation certificate.
 
 Use the professor/student loop on actual artifacts. Inspect mathematical fonts,
 indices, set membership, case branches and domains as well as physical sizes,
@@ -77,8 +82,9 @@ teach more than ten labelled boxes.
 ## Completion
 
 Report exact owners, notation-regeneration evidence, direct-reference tests,
-rendered math/font/size checks and inspected images. Final thesis inclusion still
-requires destination-source consistency, caption/include/cross-reference and
-PDF-page QA. Do not claim arbitrary Typst syntax runs inside Mermaid: only
-registered `#symb`/`#eqs` projections are supported. Use native Typst for math that
-its KaTeX projection cannot faithfully express.
+rendered math/font/size checks and inspected images. Commit refreshed tracked
+adapters with owner changes; build-time regeneration alone is not a synchronized
+checkout. Final thesis inclusion still requires destination-source consistency,
+caption/include/cross-reference and PDF-page QA. Do not claim arbitrary Typst
+syntax runs inside Mermaid: only registered `#symb`/`#eqs` projections are
+supported. Use native Typst for math its KaTeX projection cannot faithfully express.

@@ -4,7 +4,7 @@
 
 Authored `.mmd` files name the same objects as Typst:
 
-```mermaid
+```text
 %% aria-notation: typst
 %% aria-architecture: symbolic-computational
 Mask["<b>Support</b>$$#symb.rl.action_mask$$"]:::input
@@ -25,7 +25,8 @@ as a supposedly renderable Mermaid fence, or edit the generated output as if it
 were a second authoring source. The renderer uses the same compiler; no hidden
 network fetch, expression evaluation, custom symbol map or template language.
 Legacy `aria-notation: strict` diagrams still use the older exact-TeX validator;
-new examples and CI require direct owner references.
+new examples and CI require direct owner references. Refresh generated adapters
+with the canonical glossary build after editing owners, before compiling diagrams.
 
 ## Mathematical grammar
 
@@ -66,7 +67,7 @@ actual bold face for headings; KaTeX retains mathematical alphabets and weights.
 Never globally bold formulas: scalar/vector/matrix distinctions can be semantic.
 
 Start with 24 px math, 28 px headings, 22 px edge labels, 12 px padding, 16 px
-node separation and 24 px rank spacing, at a declared width of 140–160 mm.
+node separation and 24 px rank spacing, at a declared width suited to its panel.
 Source pixel sizes are not publication point sizes. For SVG width W:
 
 `effective_pt = source_px * (width_mm * 72 / 25.4) / W`.
@@ -76,12 +77,13 @@ labelled edges at the declared width, within 230 mm height. Aim above those
 floors. Subscripts naturally use smaller glyphs. Actual glyph/font/bounds checks
 and a cold-read of the color and grayscale images remain necessary.
 
-Break long equations in their canonical TeX projection with `aligned`, `gathered`
-or a properly aligned `cases` structure; do not delete a condition or force all
-expressions onto one line. A portrait mathematical panel can use the page better
-than a wide collection of tiny boxes. Split different explanatory views instead
-of lowering the floor or fabricating edges. Whitespace separates mechanisms;
-node-area occupancy is only a diagnostic, not an objective to maximize.
+Break long equations in their canonical TeX projection with tested multi-row
+layouts; do not delete a condition or force all expressions onto one line.
+A portrait mathematical panel can use the page better than a wide collection
+of tiny boxes. Split different explanatory views instead of lowering the floor
+or fabricating edges. Whitespace separates mechanisms; node-area occupancy is
+only a diagnostic, not an objective to maximize. See
+[math-transport.md](math-transport.md) for the pinned host's alignment limitations.
 
 The template's `.nodeLabel div { flex-direction: column; }` handles Mermaid's
 mixed-math wrapper; block headings and `.katex-display { margin: 0; }` prevent
