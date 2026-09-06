@@ -40,6 +40,11 @@ try {
         return null;
       }
       const a = rect(shape), b = rect(label);
+      const titleBounds = rect(title);
+      const math = el.querySelector('.katex');
+      if (math && rect(math).y < titleBounds.y + titleBounds.height - 1) {
+        errors.push(`${el.id}: math is not below the title`);
+      }
       const font = getComputedStyle(title);
       const body = getComputedStyle(el.querySelector('.nodeLabel') ?? label);
       const titlePt = parseFloat(font.fontSize) * scalePt;

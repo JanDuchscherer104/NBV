@@ -16,6 +16,14 @@ vectors and matrices. CSS font-family does not install a font. Check regular
 and bold faces (`fc-match 'CMU Serif'`, `fc-match 'CMU Serif:style=Bold'`) and the
 browser's actual platform font. Never commit/distribute system font files.
 
+Native MathML can introduce a flex-row wrapper that discards the intended
+header/body line break. The symbolic template uses
+`.nodeLabel div { flex-direction: column; }` and makes the bold header a block.
+Verify the actual header and formula occupy separate lines; a literal `<br/>`
+in source is not proof. The browser inspector rejects math positioned beside
+or above the title. Inspect the emitted CSS as well as the source: host-side
+sanitization can remove theme rules, and a fallback render is not style parity.
+
 ## Size the page, not an abstract canvas
 
 Start at **160 mm** width, body/math 24 px, headers 28 px/700, edge labels 22 px,
@@ -26,7 +34,7 @@ choose dimensions from the final-size render. For SVG width W and label size f:
 
 Target 10–12 pt body and 12–14 pt titles at final size. The automatic floor is
 9 pt body, 11 pt titles and 8 pt labelled edges; the figure must fit 230 mm
-height. These editorial thresholds are configurable inspection policy, not
+height. These editorial thresholds define this inspection profile, not
 universal readability constants. Inspect at actual scale, not only zoomed in.
 
 Prefer a compact two-column arrangement to a long one-line equation or a

@@ -21,7 +21,7 @@ config:
     lineColor: "#475569"
   themeCSS: |
     .nodeLabel { font-family: "CMU Serif", "Latin Modern Roman", serif; font-size: 24px; }
-    .nodeLabel > div { display: block !important; white-space: normal !important; line-height: 1.2; }
+    .nodeLabel div { flex-direction: column; line-height: 1.2; }
     .nodeLabel b { display: block; font-size: 28px; font-weight: 700; line-height: 1.15; margin-bottom: 6px; }
     .edgeLabel { font-family: "CMU Serif", "Latin Modern Roman", serif; font-size: 22px; }
     .cluster-label { font-family: "CMU Serif", "Latin Modern Roman", serif; font-size: 24px; font-weight: 700; }
@@ -50,6 +50,7 @@ flowchart TB
   Protocol --> Ideal
   History --> Map --> State --> Learned
   Protocol --> Learned
+  History -.->|"compare histories"| Test
   State -.->|"test compression"| Test
   Test -->|"equal"| Closure
   Test -->|"counterexample"| Alias
