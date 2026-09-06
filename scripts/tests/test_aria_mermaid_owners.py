@@ -135,7 +135,7 @@ class ProjectionContentTests(unittest.TestCase):
 
     def test_doubleq_keeps_terminal_and_empty_support_cases(self) -> None:
         text = self.records['equations.rl.qh_doubleq_index']
-        for token in (r'\begin{cases}', 'h>1', 'd_t=0', r'\varnothing', r'\theta^-', r'\text{otherwise}'):
+        for token in (r'\begin{cases}', r'h\gt1', 'd_t=0', r'\varnothing', r'\theta^-', r'\text{otherwise}'):
             self.assertIn(token, text)
 
     def test_masked_selection_preserves_state_target_and_requested_horizon(self) -> None:

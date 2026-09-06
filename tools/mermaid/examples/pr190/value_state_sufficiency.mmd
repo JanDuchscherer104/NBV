@@ -39,12 +39,10 @@ flowchart TB
   Ideal["<b>Optimum</b>$$#eqs.rl.qh_history_optimum$$"]:::compute
   Map["<b>Compression</b>$$#eqs.rl.qh_representation_map$$"]:::compute
   Learned["<b>Prediction</b>$$#symb.rl.learned_q$$"]:::output
-  Outcome["<b>Decision outcome</b>$$#eqs.rl.qh_decision_outcome$$"]:::compute
-  Law["<b>Sufficiency</b>$$#eqs.rl.qh_decision_sufficiency$$"]:::compute
+  Law["<b>Sufficiency</b>$$#eqs.rl.qh_decision_outcome$$ $$#eqs.rl.qh_decision_sufficiency$$"]:::compute
   History --> Ideal
   History --> Map
   Map --> Learned
-  Outcome --> Law
   Map -.-> Law
   Ideal -.-> Law
 

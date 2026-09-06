@@ -91,6 +91,9 @@ try {
     if (edgePoints.some(pt => pt<8)) errors.push('edge label below 8 pt');
     if (!nodes.length) errors.push('no inspected nodes');
     if (document.querySelector('.katex-error')) errors.push('KaTeX error');
+    const renderedMath = [...document.querySelectorAll('.katex-html')].map(el => el.textContent).join(' ');
+    if (/(?:amp|gt|lt|quot);/.test(renderedMath)) errors.push('HTML entity leaked into rendered mathematics');
+    if (/(?:operatorname|boldsymbol|mathrm|begin\{|end\{)/.test(renderedMath)) errors.push('unrendered TeX command in mathematics');
     if (document.querySelector('.katex') && !document.querySelector('.katex-html')) errors.push('expected KaTeX HTML math, not native MathML');
     if (document.documentElement.textContent.includes('$$')) errors.push('unrendered math delimiter');
     const heightMm=widthMm*box.height/box.width;
