@@ -1430,17 +1430,15 @@ def test_academic_owner_split_retains_typst_links_and_scientific_contract() -> N
         "mathematical, notation, or theoretical consistency",
     ):
         assert review_route in scientific_skill
-    assert (
-        "reader-centred-exposition.md#completion-and-review-lens"
-        in scientific_skill
-    )
-    assert "reader-centred-exposition.md" in typst_skill
+    assert "references/exposition-quality.md" in scientific_skill
+    assert "matching thesis reader-state record" in scientific_skill
+    assert "docs/typst/thesis/development/reader-state.toml" in typst_skill
     for contract_term in (
         "epistemic dependency",
-        "context-content-conclusion",
+        "context → content → consequence",
         "topic position",
-        "main text self-contained",
-        "takeaway density",
+        "main text remains sufficient",
+        "one to three takeaways",
     ):
         assert contract_term in reader_exposition
     skill_guide = _read(ROOT / ".agents" / "skills" / "README.md")
