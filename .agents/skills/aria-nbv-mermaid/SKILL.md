@@ -1,76 +1,93 @@
 ---
 name: aria-nbv-mermaid
-description: Create and review ARIA-NBV symbolic architecture diagrams, validate canonical notation, render publication-sized figures, and iterate through professor/student critique with Mermaid Chart previews.
+description: Build ARIA-NBV symbol-first diagrams with canonical Typst/LaTeX data notation, source-bound mathematical or computational process bodies, and rendered scientific/reader validation.
 ---
 
 # ARIA-NBV Mermaid Figures
 
-Teach one mechanism. Keep `.mmd` as the editable source and `tools/mermaid` as
-the rendering/validation owner. Scientific truth belongs to the exact thesis,
-implementation, configuration and tests, not to a diagram or a rendering tool.
+Teach one mechanism through its data and transformations. A short heading only
+names a box; it does not describe its computation. In architecture diagrams,
+**data and modalities use canonical symbols; processes show equations, operators,
+layer pipelines or compact computational pseudocode**. Prose belongs mainly in
+the caption. Do not satisfy this requirement by adding a few symbols to an
+otherwise prose-only graph.
 
-## Start narrowly
+## Owner-first route
 
-Read root and nearest `AGENTS.md`, then the exact passage or implementation.
-For existing diagrams inspect both source and rendered baseline. The seminar
-figures in `docs/figures/diagrams/vin_nbv/mermaid/` are visual references, not
-current architecture evidence. Prefer short headers, symbolic data, named
-transformations and purposeful edge labels over paragraphs in boxes.
+Read root/nearest `AGENTS.md`, the exact passage and its implementation. Preserve
+one scientific abstraction level and the distinction between selected methods,
+privileged controls and proposed architectures.
 
-Load only the relevant branch:
+- Meanings and executable Typst: `docs/typst/shared/symbols.typ`,
+  `equations.typ`, and their domain modules in `symbols/` and `equations/`.
+- Generated LaTeX: `docs/notation.yml`, `symbols.<domain>.<key>.tex` and
+  `equations.<domain>.<key>.tex`. It is an adapter, never a competing owner.
+- RL/history/value/replay: `symbols/rl.typ`, `equations/rl.typ`.
+- Candidate encoding, attention, fusion: `symbols/model.typ`, `equations/model.typ`.
+- Scene modalities, EVL, rays, pooling: `symbols/scene.typ`, `equations/scene.typ`.
+- Targets, observations, cameras, transforms and shapes: `symbols/{entity,obs,
+  oracle,spatial,frame,shape,vin}.typ` and the corresponding equation owner.
 
-- **Style and authoring:** [symbolic-style.md](../../../tools/mermaid/references/symbolic-style.md).
-- **Scientific and reader review:** [figure-review.md](references/figure-review.md).
-- **Iterative research and plugin use:** [iteration.md](references/iteration.md).
-- **Notation changes or final thesis inclusion:** `typst-authoring`; inspect
-  `docs/typst/shared/symbols.typ`, `equations.typ` and their domain modules.
-- **Metric geometry, frusta or quantitative plots:** hand off to `typst-authoring`.
-  A topology flowchart cannot certify physical geometry.
+Copy the current generated TeX only after checking meaning and transform direction
+in Typst. Register missing reusable notation through `typst-authoring`, then
+regenerate; never edit `notation.yml` or the old manual Mermaid symbol map.
+For a pinned PR example, inspect that exact owner/ref and revalidate against the
+destination branch before inclusion.
 
-## Working loop
+Progressive references:
 
-1. State the incoming reader knowledge, one takeaway, likely misconception and
-   exact source. Decide retain, revise, replace or remove; do not improve an
-   obsolete diagram merely because it exists.
-2. Select one abstraction level: conceptual relation, selected architecture or
-   implementation tensor flow. Separate target architectures from current
-   controls. Freeze the applicable source/notation revision.
-3. Start from `tools/mermaid/templates/flowchart_symbolic.mmd`. Titles are bold
-   **CMU Serif text**, outside math. Put only canonical symbols/equations in
-   `$$...$$`; use an adjacent `%% aria-math:` binding for every block.
-4. Check spelling against the generated `docs/notation.yml`, after checking
-   meaning in the Typst owner. Never edit the generated YAML or revive the
-   handwritten `aria_symbol_map.yaml` as another authority.
-5. Use the official Mermaid Chart `display_mermaid` action for an interactive
-   preview. It returns source to a browser widget; a successful tool response
-   alone is **not** syntax, rendering, font or visual-inspection evidence.
-6. Run local/hosted validation below. Inspect the actual result at its intended
-   width and in grayscale. Change topology, line breaks, padding and spacing
-   before shrinking type. Do not add false dependencies just to force layout.
-7. Perform distinct scientific and cold-reader passes; revise one diagnosed
-   defect at a time. Do not call a same-context pass an independent review.
-8. Publish only within the user's authorization. Final thesis placement requires
-   caption, include, cross-reference and PDF QA through `typst-authoring`.
+- [Symbolic/computational style and examples](../../../tools/mermaid/references/symbolic-style.md).
+- [Scientific and cold-reader review](references/figure-review.md).
+- [Bounded iteration and Mermaid Chart](references/iteration.md).
+- Scientific geometry, frusta, plots and final PDF inclusion: `typst-authoring`.
 
-## Proof
+## Non-negotiable authoring contract
+
+1. Start from `tools/mermaid/templates/flowchart_symbolic.mmd`. Keep short bold
+   CMU Serif headers outside mathematics and retain the physical-size profile.
+2. Require `%% aria-notation: strict` and
+   `%% aria-architecture: symbolic-computational` for new architecture figures.
+3. Every data/input/output node carries canonical math. Every process carries
+   an actual equation or `<code>` computation, not just its name or output symbol.
+4. Bind each `$$...$$` block to its exact `%% aria-math:` key. Bind pseudocode
+   with `%% aria-compute: equations.<domain>.<key>` to the relevant Typst equation.
+   Computational port names are local roles, not new thesis symbols; explain
+   their correspondence and check actual layers/operands against implementation.
+5. Prefer a compact canonical equation. When that would obscure the mechanism,
+   show a source-bound call, aggregation, conditional, or layer pipeline with
+   canonical inputs/outputs nearby. Never use a longer prose sentence merely
+   because no single registered operator exists.
+6. Put transformations or transferred symbolic data on edges where useful.
+   Keep control qualifiers short. Do not invent an edge shape, frame transform,
+   parameter count or modality for appearance.
+7. Use the seven seminar examples listed in the style reference for their
+   operations-and-symbols grammar, not their historical notation or model choices.
+
+## Working and verification loop
+
+Freeze incoming reader knowledge, one insight and one likely misconception.
+Draft the source, then perform scientific and cold-reader passes. A same-context
+pass is self-review, not independent approval. Revise one diagnosed defect at a
+time; preserve causality and support instead of adding layout-only dependencies.
 
 ```sh
 python3 tools/mermaid/scripts/aria_mermaid_lint.py path/to/figure.mmd
-python3 tools/mermaid/scripts/aria_mermaid_notation.py --require-strict path/to/figure.mmd
+python3 tools/mermaid/scripts/aria_mermaid_notation.py --require-strict --require-architecture path/to/figure.mmd
 python3 -W error -m unittest discover -s scripts/tests -p test_aria_mermaid_notation.py
 tools/mermaid/scripts/render_mermaid.sh path/to/figure.mmd /tmp/figure.svg
 node tools/mermaid/scripts/inspect_mermaid.mjs /tmp/figure.svg 160 /tmp/figure
 ```
 
-The inspector uses the existing local CLI's Puppeteer dependency. No second
-renderer is introduced. Missing CLI, fonts, browser or exact-source access is a
-named gap; use hosted CI when available, never a hand-drawn substitute as proof.
-For branch-specific examples pass `--notation` with that branch's verified
-projection. Revalidate against the destination branch before promotion.
+Use official Mermaid Chart `display_mermaid` for an interactive preview and
+copy edits back to `.mmd`. A successful tool response alone is not validation
+or evidence of visual inspection. Local/hosted rendering owns reproducibility.
+Check actual fonts, node/code/edge sizes, clipping and grayscale at the intended
+width; change wrapping/layout before reducing type. A source reference does not
+prove pseudocode correctness, nor does exact spelling prove scientific meaning.
 
 ## Completion
 
-Report source/ref, scientific corrections, exact-label test result, renderer
-version, font evidence, physical width and effective type sizes, inspected
-color/grayscale artifacts and remaining integration limits. A syntax check,
-prototype widget or source-only PR must not be called a publication-ready figure.
+Report source/ref, symbolic and computational coverage, notation checks, actual
+render/font/size evidence and inspected color/grayscale outputs. Publish only
+within user authorization. Final thesis placement requires destination-notation,
+caption/include/cross-reference and PDF-page checks through `typst-authoring`.

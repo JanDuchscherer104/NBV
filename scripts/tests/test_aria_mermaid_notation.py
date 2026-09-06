@@ -1,4 +1,4 @@
-"""Adversarial coverage of exact-label Mermaid notation validation."""
+"""Exact canonical-label checks and adversarial architecture-coverage tests."""
 from __future__ import annotations
 
 import importlib.util
@@ -61,8 +61,7 @@ class NotationTests(unittest.TestCase):
             return CHECK.read_projection(path)
 
     def test_generated_projection(self) -> None:
-        records = self.read("symbols:\n  x:\n    tex: 'x''_t'\n    typst: '#symb.x'\nequations:\n  x:\n    tex: 'x=y'\n")
-        self.assertEqual(records, {"symbols.x": "x'_t", "equations.x": "x=y"})
+        self.assertEqual(self.read("symbols:\n  x:\n    tex: 'x''_t'\n    typst: '#symb.x'\nequations:\n  x:\n    tex: 'x=y'\n"), {"symbols.x": "x'_t", "equations.x": "x=y"})
 
     def test_duplicate_key_fails(self) -> None:
         with self.assertRaisesRegex(ValueError, "duplicate record"):
@@ -76,6 +75,74 @@ class NotationTests(unittest.TestCase):
         for text in ("symbols:\n  x:\n    tex: null\n", "symbols:\n  x:\n    tex: |\n      x\n", "symbols:\n  x:\n    description: x\n", "symbols:\n  x:\n    tex: ''\n", ""):
             with self.subTest(text=text), self.assertRaises(ValueError):
                 self.read(text)
+
+
+class ArchitectureTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.records = {"symbols.state": "s", "equations.step": "s'=T(s,a)"}
+
+    def errors(self, source: str) -> list[str]:
+        return CHECK.check_math(source, self.records) + CHECK.check_architecture(source, self.records)
+
+    def test_symbolic_data_and_sourced_computation(self) -> None:
+        source = '%% aria-math: symbols.state\nS["<b>State</b>$$s$$"]:::data\n%% aria-compute: equations.step\nT["<b>Transition</b><code>Step(state, action)</code>"]:::compute\nS --> T'
+        self.assertEqual(self.errors(source), [])
+
+    def test_registered_equation_counts_as_computation(self) -> None:
+        source = '%% aria-math: equations.step\nT["<b>Transition</b>$$s\'=T(s,a)$$"]:::compute'
+        self.assertEqual(self.errors(source), [])
+
+    def test_prose_only_compute_fails(self) -> None:
+        self.assertIn("needs an equation or computation", " ".join(self.errors('A["<b>Attention</b>"]:::compute')))
+
+    def test_symbol_alone_in_compute_fails(self) -> None:
+        self.assertTrue(self.errors('%% aria-math: symbols.state\nA["<b>State update</b>$$s$$"]:::compute'))
+
+    def test_title_only_data_and_output_fail(self) -> None:
+        for role in ("data", "input", "output"):
+            with self.subTest(role=role):
+                self.assertTrue(self.errors(f'A["<b>Scene</b>"]:::{role}'))
+
+    def test_prose_in_code_not_a_computation(self) -> None:
+        self.assertTrue(self.errors('%% aria-compute: equations.step\nA["<b>Update</b><code>refresh scene memory</code>"]:::compute'))
+
+    def test_code_requires_equation_owner(self) -> None:
+        self.assertTrue(self.errors('A["<b>Update</b><code>Step(state)</code>"]:::compute'))
+        self.assertTrue(self.errors('%% aria-compute: equations.missing\nA["<b>Update</b><code>Step(state)</code>"]:::compute'))
+        self.assertTrue(self.errors('%% aria-compute: symbols.state\nA["<b>Update</b><code>Step(state)</code>"]:::compute'))
+
+    def test_owner_cannot_be_attached_elsewhere(self) -> None:
+        self.assertTrue(self.errors('%% aria-compute: equations.step\nA --> B\nB["<b>Step</b><code>Step(state)</code>"]:::compute'))
+        self.assertTrue(self.errors('%% aria-compute: equations.step'))
+
+    def test_pipeline_is_valid_computational_form(self) -> None:
+        self.assertEqual(self.errors('%% aria-compute: equations.step\nA["<b>Encoder</b><code>Linear → GELU → LayerNorm</code>"]:::compute'), [])
+
+    def test_tex_cannot_hide_in_code(self) -> None:
+        self.assertTrue(self.errors(r'''%% aria-compute: equations.step
+A["<b>Update</b><code>Step(\invented{x})</code>"]:::compute'''))
+
+    def test_status_is_explicit_and_terminal(self) -> None:
+        self.assertEqual(self.errors('A["<b>Harmful aliasing</b>"]:::status'), [])
+        self.assertTrue(self.errors('A["<b>Harmful aliasing</b>"]:::status\nA --> B'))
+        self.assertTrue(self.errors('\n'.join(f'{n}["<b>Outcome</b>"]:::status' for n in 'ABC')))
+
+    def test_untyped_or_unsupported_node_cannot_escape(self) -> None:
+        for source in ('A["<b>Update</b>"]', 'A("<b>Update</b>"):::compute', 'A["<b>Update</b>"]:::unknown', 'A["<b>Update</b>"]\nclass A compute;'):
+            with self.subTest(source=source):
+                self.assertTrue(self.errors(source))
+
+    def test_body_prose_rejected_even_with_valid_symbol(self) -> None:
+        self.assertTrue(self.errors('%% aria-math: symbols.state\nA["<b>State</b>$$s$$<br/>all modalities are present"]:::data'))
+
+    def test_edge_data_is_exact_and_qualifiers_stay_short(self) -> None:
+        node = '%% aria-math: symbols.state\nA["<b>State</b>$$s$$"]:::data\n'
+        self.assertEqual(self.errors(node+'%% aria-math: symbols.state\nA -->|"$$s$$"| B'), [])
+        self.assertTrue(self.errors(node+'A -->|"This is all the possible future state data"| B'))
+
+    def test_duplicate_nodes_rejected(self) -> None:
+        source = 'A["<b>Outcome</b>"]:::status\nA["<b>Outcome</b>"]:::status'
+        self.assertTrue(self.errors(source))
 
 
 if __name__ == "__main__":

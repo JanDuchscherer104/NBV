@@ -62,6 +62,13 @@ try {
       if (math && rect(math).y < titleBounds.y + titleBounds.height - 1) {
         errors.push(`${el.id}: math is not below the title`);
       }
+      const codePoints = [...el.querySelectorAll('code')].map(code => {
+        const sizePt = parseFloat(getComputedStyle(code).fontSize) * scalePt;
+        if (sizePt < 9) errors.push(`${el.id}: computational body below 9 pt`);
+        if (rect(code).y < titleBounds.y + titleBounds.height - 1) errors.push(`${el.id}: computation is not below the title`);
+        return sizePt;
+      });
+      const codePt = codePoints.length ? Math.min(...codePoints) : null;
       const font = getComputedStyle(title);
       const body = getComputedStyle(el.querySelector('.nodeLabel') ?? label);
       const titlePt = parseFloat(font.fontSize) * scalePt;
@@ -70,7 +77,7 @@ try {
       if (parseInt(font.fontWeight) < 700) errors.push(`${el.id}: title is not bold`);
       if (parseFloat(font.fontSize) < 1.15 * parseFloat(body.fontSize)) errors.push(`${el.id}: weak title hierarchy`);
       if (b.x < a.x - 1 || b.y < a.y - 1 || b.x+b.width > a.x+a.width+1 || b.y+b.height > a.y+a.height+1) errors.push(`${el.id}: label exceeds node bounds`);
-      return { id: el.id, title: title.textContent, titlePt, bodyPt, shape: a, label: b };
+      return { id: el.id, title: title.textContent, titlePt, bodyPt, codePt, shape: a, label: b };
     }).filter(Boolean);
     for (let i=0; i<nodes.length; i++) for (let j=i+1; j<nodes.length; j++) {
       const a=nodes[i].shape, b=nodes[j].shape;
@@ -88,8 +95,10 @@ try {
     if (document.documentElement.textContent.includes('$$')) errors.push('unrendered math delimiter');
     const heightMm=widthMm*box.height/box.width;
     if (heightMm>230) errors.push(`figure height ${heightMm.toFixed(1)} mm exceeds 230 mm`);
+    const codePoints = nodes.filter(n=>n.codePt!==null).map(n=>n.codePt);
     return { widthMm, heightMm, svgWidth:box.width, svgHeight:box.height,
       minTitlePt:Math.min(...nodes.map(n=>n.titlePt)), minBodyPt:Math.min(...nodes.map(n=>n.bodyPt)),
+      minCodePt:codePoints.length ? Math.min(...codePoints):null,
       minEdgePt:edgePoints.length ? Math.min(...edgePoints):null,
       nodeAreaFraction:nodes.reduce((s,n)=>s+n.shape.width*n.shape.height,0)/(box.width*box.height),
       nodes, errors };

@@ -21,15 +21,15 @@ jobs:
       - name: Unit tests
         run: |
           python3 -W error -m unittest discover -s scripts/tests -p test_aria_mermaid_notation.py
-      - name: Check canonical notation
+      - name: Check canonical notation and computational coverage
         env:
           PR190_REF: b420d20cc01aa76451d002811f850bc87869b525
         run: |
           mkdir -p .cache/mermaid
           git fetch --depth=1 origin "$PR190_REF"
           git show "$PR190_REF:docs/notation.yml" > .cache/mermaid/pr190-notation.yml
-          python3 tools/mermaid/scripts/aria_mermaid_notation.py --require-strict tools/mermaid/templates/flowchart_symbolic.mmd
-          python3 tools/mermaid/scripts/aria_mermaid_notation.py --require-strict --notation .cache/mermaid/pr190-notation.yml tools/mermaid/examples/pr190/*.mmd
+          python3 tools/mermaid/scripts/aria_mermaid_notation.py --require-strict --require-architecture tools/mermaid/templates/flowchart_symbolic.mmd
+          python3 tools/mermaid/scripts/aria_mermaid_notation.py --require-strict --require-architecture --notation .cache/mermaid/pr190-notation.yml tools/mermaid/examples/pr190/*.mmd
           python3 tools/mermaid/scripts/aria_mermaid_lint.py tools/mermaid/templates/flowchart_symbolic.mmd tools/mermaid/examples/pr190/*.mmd
       - name: Install renderer and fonts
         run: |

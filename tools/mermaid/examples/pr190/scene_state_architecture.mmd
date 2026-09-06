@@ -6,11 +6,11 @@ config:
   layout: elk
   fontFamily: "CMU Serif, Latin Modern Roman, serif"
   flowchart:
-    nodeSpacing: 18
-    rankSpacing: 30
+    nodeSpacing: 16
+    rankSpacing: 24
     padding: 12
     curve: linear
-    wrappingWidth: 240
+    wrappingWidth: 250
   themeVariables:
     background: "#ffffff"
     fontFamily: "CMU Serif, Latin Modern Roman, serif"
@@ -24,6 +24,7 @@ config:
     .nodeLabel { font-family: "CMU Serif", "Latin Modern Roman", serif; font-size: 24px; }
     .nodeLabel div { flex-direction: column; line-height: 1.2; }
     .nodeLabel b { display: block; font-size: 28px; font-weight: 700; line-height: 1.15; margin-bottom: 6px; }
+    .nodeLabel code { display: block; font-family: "CMU Serif", "Latin Modern Roman", serif; font-size: 22px; line-height: 1.15; margin: 3px 0; }
     .edgeLabel { font-family: "CMU Serif", "Latin Modern Roman", serif; font-size: 22px; }
     .cluster-label { font-family: "CMU Serif", "Latin Modern Roman", serif; font-size: 24px; font-weight: 700; }
     .katex { font-size: 1em; }
@@ -31,38 +32,42 @@ config:
 ---
 flowchart TB
   %% aria-notation: strict
+  %% aria-architecture: symbolic-computational
   %% aria-width-mm: 160
-  accTitle: Shared memory and candidate-conditioned readout
-  accDescr: A proposed source-aware actor memory is assembled before candidate queries. Read-only target and frustum queries produce candidate-conditioned features; they do not mutate shared memory. Pose-only and privileged surface states are independent controls, not additional model inputs.
+  accTitle: Computations over shared scene memory
+  accDescr: A proposed source-aware memory composes local EVL, causal rays and optional context. Target, frustum and intersection pooling and ray querying are read-only candidate-conditioned computations. Control states are not additive inputs. No new actor sensor modality or implemented model is claimed.
   subgraph Proposed["Proposed actor-visible representation"]
     direction TB
   %% aria-math: symbols.scene.evl_local
   EVL["<b>Local EVL</b>$$\boldsymbol{E}_0^{\mathrm{EVL-local}}$$"]:::data
   %% aria-math: symbols.scene.ray_memory_t
-  Rays["<b>Ray memory</b>$$\boldsymbol{M}_t^{\mathrm{ray}}$$"]:::data
+  Rays["<b>Causal ray memory</b>$$\boldsymbol{M}_t^{\mathrm{ray}}$$"]:::data
+  %% aria-compute: equations.scene.qh_scene_memory
   %% aria-math: symbols.scene.scene_memory_t
-  Memory["<b>Shared memory</b>$$\boldsymbol{\Phi}_t^{\mathrm{scene}}$$"]:::data
+  Memory["<b>Shared memory</b><code>compose(EVL, rays, ...)</code>$$\boldsymbol{\Phi}_t^{\mathrm{scene}}$$"]:::compute
   %% aria-math: symbols.entity.target_desc
   Target["<b>Observed target</b>$$\boldsymbol{\phi}_e$$"]:::input
   %% aria-math: symbols.oracle.candidate_qti
   Candidate["<b>Camera query</b>$$q_{t,i}$$"]:::input
-  %% aria-math: symbols.scene.render_query
-  Read["<b>Local readout</b>$$\operatorname{RenderQuery}$$"]:::compute
+  %% aria-compute: equations.scene.candidate_query_pools
   %% aria-math: symbols.scene.target_support_pool symbols.scene.frustum_support_pool symbols.scene.target_frustum_pool
-  Local["<b>Spatial support</b>$$\boldsymbol{g}_e^{\mathrm{tgt}}$$ $$\boldsymbol{g}_{t,i}^{\mathrm{fr}}$$ $$\boldsymbol{g}_{t,e,i}^{\cap}$$"]:::output
+  Pool["<b>Spatial pooling</b><code>Pool(features | target)<br/>Pool(features | frustum)<br/>Pool(features | intersection)</code>$$\boldsymbol{g}_e^{\mathrm{tgt}}$$ $$\boldsymbol{g}_{t,i}^{\mathrm{fr}}$$ $$\boldsymbol{g}_{t,e,i}^{\cap}$$"]:::compute
+  %% aria-compute: equations.scene.candidate_ray_query
   %% aria-math: symbols.scene.ray_query_ti
-  RayRead["<b>Ray evidence</b>$$\boldsymbol{g}_{t,i}^{\mathrm{ray}}$$"]:::output
+  RayRead["<b>Ray readout</b><code>RenderQuery(memory,<br/>candidate, target_box)</code>$$\boldsymbol{g}_{t,i}^{\mathrm{ray}}$$"]:::compute
   end
   EVL --> Memory
   Rays --> Memory
-  Memory --> Read
-  Target --> Read
-  Candidate --> Read
-  Read --> Local
-  Read --> RayRead
+  Memory --> Pool
+  Target --> Pool
+  Candidate --> Pool
+  Memory --> RayRead
+  Target --> RayRead
+  Candidate --> RayRead
   style Proposed stroke-dasharray:5 4
 
   classDef input fill:#D5E8D4,stroke:#82B366,color:#17202A,stroke-width:1.5px,rx:0,ry:0;
   classDef output fill:#F8CECC,stroke:#B85450,color:#17202A,stroke-width:1.5px,rx:0,ry:0;
   classDef compute fill:#E1D5E7,stroke:#9673A6,color:#17202A,stroke-width:1.5px,rx:8,ry:8;
   classDef data fill:#F5F5F5,stroke:#9E9E9E,color:#17202A,stroke-width:1.2px,rx:0,ry:0;
+  classDef status fill:#FFFFFF,stroke:#475569,color:#17202A,stroke-width:1.5px,stroke-dasharray:5 4,rx:0,ry:0;

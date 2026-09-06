@@ -6,11 +6,11 @@ config:
   layout: elk
   fontFamily: "CMU Serif, Latin Modern Roman, serif"
   flowchart:
-    nodeSpacing: 18
-    rankSpacing: 30
+    nodeSpacing: 16
+    rankSpacing: 24
     padding: 12
     curve: linear
-    wrappingWidth: 240
+    wrappingWidth: 250
   themeVariables:
     background: "#ffffff"
     fontFamily: "CMU Serif, Latin Modern Roman, serif"
@@ -24,6 +24,7 @@ config:
     .nodeLabel { font-family: "CMU Serif", "Latin Modern Roman", serif; font-size: 24px; }
     .nodeLabel div { flex-direction: column; line-height: 1.2; }
     .nodeLabel b { display: block; font-size: 28px; font-weight: 700; line-height: 1.15; margin-bottom: 6px; }
+    .nodeLabel code { display: block; font-family: "CMU Serif", "Latin Modern Roman", serif; font-size: 22px; line-height: 1.15; margin: 3px 0; }
     .edgeLabel { font-family: "CMU Serif", "Latin Modern Roman", serif; font-size: 22px; }
     .cluster-label { font-family: "CMU Serif", "Latin Modern Roman", serif; font-size: 24px; font-weight: 700; }
     .katex { font-size: 1em; }
@@ -31,33 +32,37 @@ config:
 ---
 flowchart TB
   %% aria-notation: strict
+  %% aria-architecture: symbolic-computational
   %% aria-width-mm: 160
-  accTitle: History, representation and decision sufficiency
-  accDescr: Optimal history-conditioned value and the learned compressed-state approximation are different objects. Equality of the full decision laws is sufficient for Bellman closure; a counterexample demonstrates harmful aliasing, not merely different histories.
+  accTitle: Ideal value, compression and sufficiency
+  accDescr: The state-construction formula comes directly from the canonical equation. Computational optimal value is a supremum over admitted policies, not the behavior return. The full joint decision law includes rewards, successor representation, budget, candidates, mask and termination. Status boxes are logical outcomes, not modalities.
   %% aria-math: symbols.rl.history
   History["<b>Causal history</b>$$\mathcal{H}_t$$"]:::input
   %% aria-math: symbols.rl.decision_protocol
   Protocol["<b>Decision protocol</b>$$\Xi$$"]:::input
-  Ideal["<b>Ideal optimal value</b>history-conditioned"]:::output
-  %% aria-math: symbols.rl.representation_map
-  Map["<b>State construction</b>$$\phi_{\sigma}$$"]:::compute
-  %% aria-math: symbols.rl.representation
-  State["<b>Compressed state</b>$$z_t^{\sigma}$$"]:::data
+  %% aria-compute: equations.rl.q_h
+  %% aria-math: symbols.rl.Q
+  Ideal["<b>Optimal value</b><code>sup_policy(E[return |<br/>history, first_action])</code>$$Q$$"]:::output
+  %% aria-math: equations.rl.qh_representation_map
+  Map["<b>State construction</b>$$z_t^{\sigma}=\phi_{\sigma}(\mathcal{H}_t)$$"]:::compute
+  %% aria-compute: equations.rl.qh_learned_predictor
   %% aria-math: symbols.rl.learned_q
-  Learned["<b>Learned approximation</b>$$\widehat{Q}_{\theta,h}^{\sigma,\Xi}$$"]:::output
-  Test["<b>Equal decision laws?</b>compare aliased histories"]:::compute
-  Closure["<b>Sufficient for closure</b>"]:::output
-  Alias["<b>Decision-relevant aliasing</b>"]:::output
+  Learned["<b>Learned value</b><code>predict(state, target,<br/>candidate, horizon)</code>$$\widehat{Q}_{\theta,h}^{\sigma,\Xi}$$"]:::output
+  %% aria-compute: equations.rl.qh_sufficiency_factorization
+  Test["<b>Sufficiency test</b><code>same_decision_law(<br/>histories | state, action)</code>"]:::compute
+  Closure["<b>Sufficient for closure</b>"]:::status
+  Alias["<b>Harmful aliasing</b>"]:::status
   History --> Ideal
   Protocol --> Ideal
-  History --> Map --> State --> Learned
+  History --> Map --> Learned
   Protocol --> Learned
   History -.->|"compare histories"| Test
-  State -.->|"test compression"| Test
-  Test -->|"equal"| Closure
+  Map -.->|"condition on state"| Test
+  Test -->|"equal laws"| Closure
   Test -->|"counterexample"| Alias
 
   classDef input fill:#D5E8D4,stroke:#82B366,color:#17202A,stroke-width:1.5px,rx:0,ry:0;
   classDef output fill:#F8CECC,stroke:#B85450,color:#17202A,stroke-width:1.5px,rx:0,ry:0;
   classDef compute fill:#E1D5E7,stroke:#9673A6,color:#17202A,stroke-width:1.5px,rx:8,ry:8;
   classDef data fill:#F5F5F5,stroke:#9E9E9E,color:#17202A,stroke-width:1.2px,rx:0,ry:0;
+  classDef status fill:#FFFFFF,stroke:#475569,color:#17202A,stroke-width:1.5px,stroke-dasharray:5 4,rx:0,ry:0;
