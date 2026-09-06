@@ -23,6 +23,7 @@ CODE = re.compile(r"<code>(.*?)</code>")
 TITLE = re.compile(r"^<b>[^<>]+</b>")
 STRICT = "%% aria-notation: strict"
 ARCHITECTURE = "%% aria-architecture: symbolic-computational"
+TRANSPORT = "%% aria-tex-transport: doubled-backslash"
 
 
 def read_projection(path: Path) -> dict[str, str]:
@@ -69,6 +70,10 @@ def body_lines(text: str) -> list[tuple[int, str]]:
 
 def check_math(text: str, records: dict[str, str]) -> list[str]:
     """Bind every single-line math block to an unchanged canonical expression."""
+    # Mermaid's math-label path collapses backslash pairs once. Compare the
+    # decoded expression, not its transport encoding, with canonical TeX.
+    if TRANSPORT in {line.strip() for _, line in body_lines(text)}:
+        text = MATH.sub(lambda match: "$$" + match[1].replace("\\\\", "\\") + "$$", text)
     errors: list[str] = []
     pending: list[str] | None = None
     for number, line in body_lines(text):

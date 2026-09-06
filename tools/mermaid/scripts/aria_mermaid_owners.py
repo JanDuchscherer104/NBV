@@ -14,7 +14,7 @@ import re
 from pathlib import Path
 
 from aria_mermaid_notation import (
-    ARCHITECTURE, KEY, SECTION, STRICT, body_lines, check_architecture,
+    ARCHITECTURE, KEY, SECTION, STRICT, TRANSPORT, body_lines, check_architecture,
     check_math, read_projection,
 )
 
@@ -42,7 +42,6 @@ def read_owners(path: Path) -> tuple[dict[str, str], dict[str, str]]:
                 raise ValueError(f"{path}:{number}: invalid generated Typst owner")
             owner = match[1].replace("''", "'")
             prefix = "#symb." if section == "symbols" else "#eqs."
-            # Detect a corrupt/stale adapter rather than accepting arbitrary aliases.
             expected = prefix + key.partition(".")[2]
             if not REFERENCE.fullmatch(owner) or owner != expected:
                 raise ValueError(f"{path}:{number}: expected {expected}, got {owner}")
@@ -58,16 +57,15 @@ def read_owners(path: Path) -> tuple[dict[str, str], dict[str, str]]:
 def compile_source(text: str, records: dict[str, str], owners: dict[str, str]) -> tuple[str, list[str]]:
     """Lower complete owner expressions, rejecting handwritten math/pseudocode.
 
-    Source uses the existing quoted-node architecture subset. The lowered text
-    passes the existing strict math and computational-coverage checks. No
-    slicing, eval, suffixes, free TeX or unregistered local aliases are allowed.
+    The lowered text passes the existing strict math and computational-coverage
+    checks. No slicing, eval, suffixes, free TeX or local aliases are allowed.
     """
     content = body_lines(text)
     directives = {line.strip() for _, line in content}
     if OWNERS not in directives or ARCHITECTURE not in directives:
         raise ValueError(f"owner source requires {OWNERS} and {ARCHITECTURE}")
-    if STRICT in directives:
-        raise ValueError("do not mix copied-TeX strict mode and Typst owner mode")
+    if STRICT in directives or TRANSPORT in directives:
+        raise ValueError("do not mix generated/copied-TeX modes with Typst owner mode")
     body_numbers = {number for number, _ in content}
     output: list[str] = []
     used: set[str] = set()
@@ -105,13 +103,18 @@ def compile_source(text: str, records: dict[str, str], owners: dict[str, str]) -
         if bindings:
             output.append("  %% aria-math: " + " ".join(bindings))
             index = iter(bindings)
-            # Callable replacement keeps TeX backslashes literal.
             line = MATH.sub(lambda _: "$$" + records[next(index)] + "$$", line)
         output.append(line)
     generated = "\n".join(output) + "\n"
     issues = check_math(generated, records) + check_architecture(generated, records)
     if issues:
         raise ValueError("\n".join(issues))
+    # Mermaid createText.ts collapses backslash pairs once before KaTeX.
+    # Escape transport, not mathematics: preserve commands AND row separators.
+    generated = MATH.sub(lambda match: "$$" + match[1].replace("\\", "\\\\") + "$$", generated)
+    generated = generated.replace(STRICT, STRICT + "\n  " + TRANSPORT, 1)
+    if check_math(generated, records):
+        raise ValueError("render-transport roundtrip changed canonical mathematics")
     return generated, sorted(used)
 
 

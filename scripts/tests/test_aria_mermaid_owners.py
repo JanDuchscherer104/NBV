@@ -45,7 +45,7 @@ class OwnerReferenceTests(unittest.TestCase):
         body = 'A["<b>Budget</b>$$#symb.rl.budget$$"]:::input'
         self.assertIn('$$b_t$$', self.compile(body))
         self.records['symbols.rl.budget'] = r'\beta_t'
-        self.assertIn(r'$$\beta_t$$', self.compile(body))
+        self.assertIn(r'$$\\beta_t$$', self.compile(body))
 
     def test_deterministic_source_and_dependency_order(self) -> None:
         source = self.source('A["<b>Update</b>$$#eqs.demo.eq$$ $$#symb.rl.budget$$"]:::compute')
