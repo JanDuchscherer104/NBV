@@ -10,7 +10,7 @@ config:
     rankSpacing: 24
     padding: 12
     curve: linear
-    wrappingWidth: 250
+    wrappingWidth: 320
   themeVariables:
     background: "#ffffff"
     fontFamily: "CMU Serif, Latin Modern Roman, serif"
@@ -24,61 +24,31 @@ config:
     .nodeLabel { font-family: "CMU Serif", "Latin Modern Roman", serif; font-size: 24px; }
     .nodeLabel div { flex-direction: column; line-height: 1.2; }
     .nodeLabel b { display: block; font-size: 28px; font-weight: 700; line-height: 1.15; margin-bottom: 6px; }
-    .nodeLabel code { display: block; font-family: "CMU Serif", "Latin Modern Roman", serif; font-size: 22px; line-height: 1.15; margin: 0; }
     .edgeLabel { font-family: "CMU Serif", "Latin Modern Roman", serif; font-size: 22px; }
     .cluster-label { font-family: "CMU Serif", "Latin Modern Roman", serif; font-size: 24px; font-weight: 700; }
     .katex { font-size: 1em; }
     .katex-display { margin: 0; }
 ---
 flowchart TB
-  %% aria-notation: strict
+  %% aria-notation: typst
   %% aria-architecture: symbolic-computational
   %% aria-width-mm: 160
-  accTitle: Symbolic and computational A1 scorer
-  accDescr: Canonical data symbols accompany source-bound processing descriptions. Pose encoding precedes physical projection; target conditioning follows the feasibility branch. A1 reads shared state, then concatenates query, context and their product. Action masking occurs only in selection. Pseudocode names are local input-port roles, not new notation.
-  %% aria-math: symbols.scene.scene_memory_t
-  Scene["<b>Root evidence</b>$$\boldsymbol{\Phi}_t^{\mathrm{scene}}$$"]:::data
-  %% aria-math: symbols.oracle.candidate_qti
-  Pose["<b>Candidate pose</b>$$q_{t,i}$$"]:::input
-  %% aria-math: symbols.entity.target_desc
-  Target["<b>Target geometry</b>$$\boldsymbol{\phi}_e$$"]:::input
-  %% aria-compute: equations.model.candidate_pose_context
-  %% aria-math: symbols.model.candidate_physical_token
-  Physical["<b>Physical encoder</b><code>cat(PoseEnc(root),</code><code>PoseEnc(current), scene)</code><code>Linear → GELU → LayerNorm</code>$$\boldsymbol{h}_{t,i}^{\mathrm{phys}}$$"]:::compute
-  %% aria-compute: equations.model.candidate_row_features
-  %% aria-math: symbols.model.candidate_row
-  Row["<b>Value query</b><code>concat(physical,</code><code>PoseEnc(target_relative))</code><code>Linear → GELU → LayerNorm</code>$$\boldsymbol{x}_{t,i}$$"]:::compute
-  %% aria-compute: equations.model.qh_state_fusion_controls
-  %% aria-math: symbols.model.history_token symbols.rl.budget symbols.rl.requested_horizon
-  Context["<b>State tokens</b><code>stack(scene, target, history,</code><code>Emb(budget / Hmax),</code><code>Emb(horizon / Hmax))</code>$$\boldsymbol{h}_t^{\mathrm{hist}}$$ $$b_t$$ $$h$$"]:::compute
-  %% aria-compute: equations.model.qh_state_fusion_controls
-  Attention["<b>A1 read</b><code>CrossAttn(query,</code><code>key=state, value=state)</code>"]:::compute
-  %% aria-compute: equations.model.qh_state_fusion_controls
-  Fuse["<b>Feature fusion</b><code>concat(query, context,</code><code>query * context)</code>"]:::compute
-  %% aria-compute: equations.rl.qh_scorer_interface
-  %% aria-math: symbols.rl.conditional_q
-  Values["<b>Value decoder</b><code>Linear → GELU</code><code>Dropout → Linear</code>$$Q_{h,\theta,e,i}^{\mathrm{cond}}$$"]:::output
-  %% aria-compute: equations.rl.qh_scorer_interface
-  %% aria-math: symbols.rl.feasibility_logits
-  Feasible["<b>Feasibility</b><code>Linear(physical)</code>$$\ell_{t,i}^{\mathrm{feas}}$$"]:::output
-  %% aria-math: symbols.rl.action_mask
-  Mask["<b>Action support</b>$$m_{t,i}^{\mathrm{act}}$$"]:::input
-  %% aria-compute: equations.rl.qh_masked_argmax
-  Select["<b>Policy</b><code>argmax(values[valid])</code>"]:::compute
-  Scene --> Physical
-  Pose --> Physical
-  Physical --> Row
-  Target --> Row
-  Physical --> Feasible
-  Scene --> Context
-  Target --> Context
-  Row --> Attention
-  Context --> Attention
-  Attention --> Fuse
-  Row --> Fuse
-  Fuse --> Values
-  Values --> Select
-  Mask --> Select
+  accTitle: A1 interaction and admissible selection
+  accDescr: Canonical shared equations show the five state tokens, independent candidate-to-state attention, concatenation with an elementwise product, and masked selection. Ak is A1 here. Candidate encoding and the separate physical feasibility head are outside this focused view; no candidate-to-candidate attention is implied.
+  Query["<b>Query</b>$$#symb.model.candidate_row$$"]:::input
+  State["<b>Context</b>$$#eqs.model.qh_state_tokens$$"]:::compute
+  Read["<b>A1</b>$$#eqs.model.qh_a1_read$$"]:::compute
+  Fuse["<b>Fusion</b>$$#eqs.model.qh_feature_fusion$$"]:::compute
+  Value["<b>Value</b>$$#symb.rl.conditional_q$$"]:::output
+  Mask["<b>Support</b>$$#symb.rl.action_mask$$"]:::input
+  Policy["<b>Selection</b>$$#eqs.rl.qh_masked_argmax$$"]:::compute
+  Query --> Read
+  State --> Read
+  Query --> Fuse
+  Read --> Fuse
+  Fuse --> Value
+  Value --> Policy
+  Mask --> Policy
 
   classDef input fill:#D5E8D4,stroke:#82B366,color:#17202A,stroke-width:1.5px,rx:0,ry:0;
   classDef output fill:#F8CECC,stroke:#B85450,color:#17202A,stroke-width:1.5px,rx:0,ry:0;

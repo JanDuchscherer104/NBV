@@ -10,7 +10,7 @@ config:
     rankSpacing: 24
     padding: 12
     curve: linear
-    wrappingWidth: 250
+    wrappingWidth: 320
   themeVariables:
     background: "#ffffff"
     fontFamily: "CMU Serif, Latin Modern Roman, serif"
@@ -24,30 +24,19 @@ config:
     .nodeLabel { font-family: "CMU Serif", "Latin Modern Roman", serif; font-size: 24px; }
     .nodeLabel div { flex-direction: column; line-height: 1.2; }
     .nodeLabel b { display: block; font-size: 28px; font-weight: 700; line-height: 1.15; margin-bottom: 6px; }
-    .nodeLabel code { display: block; font-family: "CMU Serif", "Latin Modern Roman", serif; font-size: 22px; line-height: 1.15; margin: 3px 0; }
     .edgeLabel { font-family: "CMU Serif", "Latin Modern Roman", serif; font-size: 22px; }
     .cluster-label { font-family: "CMU Serif", "Latin Modern Roman", serif; font-size: 24px; font-weight: 700; }
     .katex { font-size: 1em; }
     .katex-display { margin: 0; }
 ---
 flowchart TB
-  %% aria-notation: strict
+  %% aria-notation: typst
   %% aria-architecture: symbolic-computational
-  %% aria-width-mm: 160
-  %% aria-math: symbols.oracle.candidates_t
-  Candidates["<b>Candidates</b>$$\mathcal{Q}_t$$"]:::input
-  %% aria-math: symbols.rl.s
-  State["<b>Actor state</b>$$s$$"]:::input
-  %% aria-math: symbols.entity.target_desc symbols.rl.requested_horizon
-  Query["<b>Value query</b>$$\boldsymbol{\phi}_e$$ $$h$$"]:::input
-  %% aria-math: equations.rl.qh_candidate_token
-  Encode["<b>Shared encoder</b>$$\boldsymbol{u}_{t,i}=\operatorname{Enc}_\theta(\mathcal{I}_{t,e},q_{t,i})$$"]:::compute
-  %% aria-math: symbols.rl.conditional_q
-  Value["<b>Value output</b>$$Q_{h,\theta,e,i}^{\mathrm{cond}}$$"]:::output
-  Candidates --> Encode
-  State --> Encode
-  Query --> Encode
-  Encode --> Value
+  %% aria-width-mm: 140
+  Candidates["<b>Candidates</b>$$#symb.oracle.candidates_t$$"]:::input
+  Support["<b>Admissibility</b>$$#eqs.rl.finite_action_set$$"]:::compute
+  Policy["<b>Selection</b>$$#eqs.rl.qh_masked_argmax$$"]:::compute
+  Candidates --> Support --> Policy
 
   classDef input fill:#D5E8D4,stroke:#82B366,color:#17202A,stroke-width:1.5px,rx:0,ry:0;
   classDef output fill:#F8CECC,stroke:#B85450,color:#17202A,stroke-width:1.5px,rx:0,ry:0;

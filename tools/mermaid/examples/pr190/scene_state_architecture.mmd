@@ -10,7 +10,7 @@ config:
     rankSpacing: 24
     padding: 12
     curve: linear
-    wrappingWidth: 250
+    wrappingWidth: 320
   themeVariables:
     background: "#ffffff"
     fontFamily: "CMU Serif, Latin Modern Roman, serif"
@@ -24,47 +24,28 @@ config:
     .nodeLabel { font-family: "CMU Serif", "Latin Modern Roman", serif; font-size: 24px; }
     .nodeLabel div { flex-direction: column; line-height: 1.2; }
     .nodeLabel b { display: block; font-size: 28px; font-weight: 700; line-height: 1.15; margin-bottom: 6px; }
-    .nodeLabel code { display: block; font-family: "CMU Serif", "Latin Modern Roman", serif; font-size: 22px; line-height: 1.15; margin: 0; }
     .edgeLabel { font-family: "CMU Serif", "Latin Modern Roman", serif; font-size: 22px; }
     .cluster-label { font-family: "CMU Serif", "Latin Modern Roman", serif; font-size: 24px; font-weight: 700; }
     .katex { font-size: 1em; }
     .katex-display { margin: 0; }
 ---
 flowchart TB
-  %% aria-notation: strict
+  %% aria-notation: typst
   %% aria-architecture: symbolic-computational
   %% aria-width-mm: 160
-  accTitle: Computations over shared scene memory
-  accDescr: A proposed source-aware memory composes local EVL, causal rays and optional context. Target, frustum and intersection pooling and ray querying are read-only candidate-conditioned computations. Control states are not additive inputs. No new actor sensor modality or implemented model is claimed.
-  subgraph Proposed["Proposed actor-visible representation"]
-    direction TB
-  %% aria-math: symbols.scene.evl_local
-  EVL["<b>Local EVL</b>$$\boldsymbol{E}_0^{\mathrm{EVL-local}}$$"]:::data
-  %% aria-math: symbols.scene.ray_memory_t
-  Rays["<b>Causal ray memory</b>$$\boldsymbol{M}_t^{\mathrm{ray}}$$"]:::data
-  %% aria-compute: equations.scene.qh_scene_memory
-  %% aria-math: symbols.scene.scene_memory_t
-  Memory["<b>Shared memory</b><code>compose(EVL, rays, ...)</code>$$\boldsymbol{\Phi}_t^{\mathrm{scene}}$$"]:::compute
-  %% aria-math: symbols.entity.target_desc
-  Target["<b>Observed target</b>$$\boldsymbol{\phi}_e$$"]:::input
-  %% aria-math: symbols.oracle.candidate_qti
-  Candidate["<b>Camera query</b>$$q_{t,i}$$"]:::input
-  %% aria-compute: equations.scene.candidate_query_pools
-  %% aria-math: symbols.scene.target_support_pool symbols.scene.frustum_support_pool symbols.scene.target_frustum_pool
-  Pool["<b>Spatial pooling</b><code>Pool(features | target)</code><code>Pool(features | frustum)</code><code>Pool(features | intersection)</code>$$\boldsymbol{g}_e^{\mathrm{tgt}}$$ $$\boldsymbol{g}_{t,i}^{\mathrm{fr}}$$ $$\boldsymbol{g}_{t,e,i}^{\cap}$$"]:::compute
-  %% aria-compute: equations.scene.candidate_ray_query
-  %% aria-math: symbols.scene.ray_query_ti
-  RayRead["<b>Ray readout</b><code>RenderQuery(memory,</code><code>candidate, target_box)</code>$$\boldsymbol{g}_{t,i}^{\mathrm{ray}}$$"]:::compute
-  end
-  EVL --> Memory
-  Rays --> Memory
-  Memory --> Pool
-  Target --> Pool
-  Candidate --> Pool
-  Memory --> RayRead
-  Target --> RayRead
-  Candidate --> RayRead
-  style Proposed stroke-dasharray:5 4
+  accTitle: Proposed spatial memory and candidate-local mathematical reads
+  accDescr: Proposed representation, not implemented architecture. Shared memory is queried without mutation. The three pooling domains are target, candidate frustum and their intersection. The ray readout retains depth, free and unknown intervals, hits, target weights, support, geometric uncertainty and directional evidence. Separate S0/S1 controls are not additive inputs.
+  Memory["<b>Proposed memory</b>$$#eqs.scene.qh_scene_memory$$"]:::compute
+  Target["<b>Target</b>$$#symb.entity.target_desc$$"]:::input
+  Candidate["<b>Query</b>$$#symb.oracle.candidate_qti$$"]:::input
+  Pools["<b>Regional pooling</b>$$#eqs.scene.candidate_query_pools$$"]:::compute
+  Rays["<b>Ray query</b>$$#eqs.scene.candidate_ray_query$$"]:::compute
+  Memory --> Pools
+  Memory --> Rays
+  Target --> Pools
+  Target --> Rays
+  Candidate --> Pools
+  Candidate --> Rays
 
   classDef input fill:#D5E8D4,stroke:#82B366,color:#17202A,stroke-width:1.5px,rx:0,ry:0;
   classDef output fill:#F8CECC,stroke:#B85450,color:#17202A,stroke-width:1.5px,rx:0,ry:0;

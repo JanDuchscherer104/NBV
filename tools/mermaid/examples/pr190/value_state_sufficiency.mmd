@@ -10,7 +10,7 @@ config:
     rankSpacing: 24
     padding: 12
     curve: linear
-    wrappingWidth: 250
+    wrappingWidth: 320
   themeVariables:
     background: "#ffffff"
     fontFamily: "CMU Serif, Latin Modern Roman, serif"
@@ -24,41 +24,29 @@ config:
     .nodeLabel { font-family: "CMU Serif", "Latin Modern Roman", serif; font-size: 24px; }
     .nodeLabel div { flex-direction: column; line-height: 1.2; }
     .nodeLabel b { display: block; font-size: 28px; font-weight: 700; line-height: 1.15; margin-bottom: 6px; }
-    .nodeLabel code { display: block; font-family: "CMU Serif", "Latin Modern Roman", serif; font-size: 22px; line-height: 1.15; margin: 0; }
     .edgeLabel { font-family: "CMU Serif", "Latin Modern Roman", serif; font-size: 22px; }
     .cluster-label { font-family: "CMU Serif", "Latin Modern Roman", serif; font-size: 24px; font-weight: 700; }
     .katex { font-size: 1em; }
     .katex-display { margin: 0; }
 ---
 flowchart TB
-  %% aria-notation: strict
+  %% aria-notation: typst
   %% aria-architecture: symbolic-computational
   %% aria-width-mm: 160
-  accTitle: Ideal value, compression and sufficiency
-  accDescr: The state-construction formula comes directly from the canonical equation. Computational optimal value is a supremum over admitted policies, not the behavior return. The full joint decision law includes rewards, successor representation, budget, candidates, mask and termination. Status boxes are logical outcomes, not modalities.
-  %% aria-math: symbols.rl.history
-  History["<b>Causal history</b>$$\mathcal{H}_t$$"]:::input
-  %% aria-math: symbols.rl.decision_protocol
-  Protocol["<b>Decision protocol</b>$$\Xi$$"]:::input
-  %% aria-compute: equations.rl.q_h
-  Ideal["<b>Optimal value</b><code>sup_policy(E[return |</code><code>history, first_action])</code>"]:::compute
-  %% aria-math: equations.rl.qh_representation_map
-  Map["<b>State construction</b>$$z_t^{\sigma}=\phi_{\sigma}(\mathcal{H}_t)$$"]:::compute
-  %% aria-compute: equations.rl.qh_learned_predictor
-  %% aria-math: symbols.rl.learned_q
-  Learned["<b>Learned value</b><code>predict(state, target,</code><code>candidate, horizon)</code>$$\widehat{Q}_{\theta,h}^{\sigma,\Xi}$$"]:::output
-  %% aria-compute: equations.rl.qh_sufficiency_factorization
-  Test["<b>Sufficiency test</b><code>same_decision_law(</code><code>histories | state, action)</code>"]:::compute
-  Closure["<b>Sufficient for closure</b>"]:::status
-  Alias["<b>Harmful aliasing</b>"]:::status
+  accTitle: History, compressed representation and sufficiency
+  accDescr: The ideal optimum conditions on the full actor-visible history and a physical first action. State compression yields the learned predictor input. Decision-law equality is a requirement for every admitted history/action at fixed target and protocol, not a measured result. Dashed edges mark this sufficient condition, not a computation or a claim that empirical fit proves sufficiency.
+  History["<b>History</b>$$#symb.rl.history$$"]:::input
+  Ideal["<b>Optimum</b>$$#eqs.rl.qh_history_optimum$$"]:::compute
+  Map["<b>Compression</b>$$#eqs.rl.qh_representation_map$$"]:::compute
+  Learned["<b>Prediction</b>$$#symb.rl.learned_q$$"]:::output
+  Outcome["<b>Decision outcome</b>$$#eqs.rl.qh_decision_outcome$$"]:::compute
+  Law["<b>Sufficiency</b>$$#eqs.rl.qh_decision_sufficiency$$"]:::compute
   History --> Ideal
-  Protocol --> Ideal
-  History --> Map --> Learned
-  Protocol --> Learned
-  History -.->|"compare histories"| Test
-  Map -.->|"condition on state"| Test
-  Test -->|"equal laws"| Closure
-  Test -->|"counterexample"| Alias
+  History --> Map
+  Map --> Learned
+  Outcome --> Law
+  Map -.-> Law
+  Ideal -.-> Law
 
   classDef input fill:#D5E8D4,stroke:#82B366,color:#17202A,stroke-width:1.5px,rx:0,ry:0;
   classDef output fill:#F8CECC,stroke:#B85450,color:#17202A,stroke-width:1.5px,rx:0,ry:0;

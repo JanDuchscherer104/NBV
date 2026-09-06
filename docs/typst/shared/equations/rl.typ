@@ -1,6 +1,31 @@
 #import "../symbols.typ": symb
 
 #let rl = (
+
+  // Fixed target/protocol; a physical candidate is the conditioned first action.
+  // This history-level object does not assume Markov sufficiency of z.
+  qh_history_optimum: $
+    Q_(h,e)^(star,Xi)(#symb.rl.history, q_(t,i))
+      = op("sup", limits: #true)_(pi in cal(Pi)^"act")
+        bb(E)_pi [G_(t,e)^((h)) | #symb.rl.history, a_t=q_(t,i)] \
+    1 <= h <= b_t <= #symb.rl.H_max,
+    quad Q_(0,e)^(star,Xi)(#symb.rl.history,q_(t,i))=0
+  $,
+  qh_representation_map: $
+    #symb.rl.representation = #symb.rl.representation_map (#symb.rl.history)
+  $,
+  // Joint outcome includes the next support and termination, not just state/reward.
+  qh_decision_outcome: $
+    Y_(t+1) = (r_t^e, z_(t+1)^sigma, b_(t+1), cal(Q)_(t+1),
+      bold(m)_(t+1)^"act", d_t)
+  $,
+  // Required for all admitted histories and physical actions at fixed target e
+  // and protocol Xi. Equality is sufficient; finite tests cannot prove it.
+  qh_decision_sufficiency: $
+    cal(L)(Y_(t+1) | #symb.rl.history, e, q_(t,i), Xi)
+      = cal(L)(Y_(t+1) | #symb.rl.representation, e, q_(t,i), Xi)
+  $,
+
   mdp: $
     cal(M) = (cal(S), cal(A), P, #symb.rl.r, gamma)
   $,

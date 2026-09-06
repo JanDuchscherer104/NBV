@@ -28,6 +28,16 @@ else
   echo "Expected $local_mmdc, MERMAID_CLI, or mmdc on PATH. No automatic download." >&2
   exit 127
 fi
+# Typst-owner sources are lowered in a disposable file. The committed .mmd
+# keeps only owner names; external viewers receive the generated Mermaid.
+temporary=""
+trap '[[ -z "$temporary" ]] || rm -f "$temporary"' EXIT
+if grep -Eq '^[[:space:]]*%% aria-notation: typst[[:space:]]*$' "$input"; then
+  temporary="$(mktemp --suffix=.mmd)"
+  python3 "$repo_root/tools/mermaid/scripts/aria_mermaid_owners.py" "$input" \
+    --notation "${ARIA_NOTATION_PATH:-$repo_root/docs/notation.yml}" --output "$temporary"
+  input="$temporary"
+fi
 mkdir -p "$(dirname "$output")"
 cmd=("$mmdc" -i "$input" -o "$output" -b white -t default)
 if [[ -n "$scale" ]]; then cmd+=(-s "$scale"); fi

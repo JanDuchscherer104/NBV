@@ -10,7 +10,7 @@ config:
     rankSpacing: 24
     padding: 12
     curve: linear
-    wrappingWidth: 250
+    wrappingWidth: 320
   themeVariables:
     background: "#ffffff"
     fontFamily: "CMU Serif, Latin Modern Roman, serif"
@@ -24,55 +24,31 @@ config:
     .nodeLabel { font-family: "CMU Serif", "Latin Modern Roman", serif; font-size: 24px; }
     .nodeLabel div { flex-direction: column; line-height: 1.2; }
     .nodeLabel b { display: block; font-size: 28px; font-weight: 700; line-height: 1.15; margin-bottom: 6px; }
-    .nodeLabel code { display: block; font-family: "CMU Serif", "Latin Modern Roman", serif; font-size: 22px; line-height: 1.15; margin: 0; }
     .edgeLabel { font-family: "CMU Serif", "Latin Modern Roman", serif; font-size: 22px; }
     .cluster-label { font-family: "CMU Serif", "Latin Modern Roman", serif; font-size: 24px; font-weight: 700; }
     .katex { font-size: 1em; }
     .katex-display { margin: 0; }
 ---
 flowchart TB
-  %% aria-notation: strict
+  %% aria-notation: typst
   %% aria-architecture: symbolic-computational
   %% aria-width-mm: 160
-  accTitle: Oracle labels and computational replay
-  accDescr: Source-bound operations show dense rendering and current S0 pose/budget/candidate transitions. Current gains are gathered only for the selected action. Double-Q uses successor support, delayed evaluation and terminal zeroing. Selected-depth fusion is a separate privileged control; unselected depth never updates actor state.
-  %% aria-math: symbols.rl.s_oracle
-  Oracle["<b>Oracle state</b>$$s_t^{\mathrm{oracle}}$$"]:::input
-  %% aria-math: symbols.oracle.candidates_t
-  Candidates["<b>Candidate table</b>$$\mathcal{Q}_t$$"]:::input
-  %% aria-compute: equations.rl.target_root_gain_reward
-  %% aria-math: symbols.oracle.depth_q
-  Render["<b>Counterfactual labels</b><code>render → backproject</code><code>target_error → root_gain</code>$$\boldsymbol{D}_q$$"]:::compute
-  %% aria-math: symbols.rl.s_pose
-  State["<b>Pose-only state</b>$$s_t^{\mathrm{S0-pose}}$$"]:::data
-  %% aria-compute: equations.rl.qh_masked_argmax
-  Select["<b>Select one action</b><code>argmax(values[valid])</code>"]:::compute
-  %% aria-compute: equations.rl.replay_transition
-  %% aria-math: symbols.rl.selected_pose_prefix_next
-  Step["<b>Replay step</b><code>pose ← selected_pose</code><code>append(prefix, pose)</code><code>budget ← budget - 1</code>$$\boldsymbol{H}_{t+1}^{\mathrm{pose}}$$"]:::compute
-  %% aria-compute: equations.rl.replay_transition
-  Next["<b>Successor candidates</b><code>Generate(next_pose,</code><code>target, seed(prefix))</code>"]:::compute
-  %% aria-compute: equations.rl.target_root_gain_reward
-  %% aria-math: symbols.entity.target_reward
-  Reward["<b>Selected reward</b><code>gather(gains, action)</code>$$r_t^e$$"]:::compute
-  %% aria-compute: equations.rl.qh_doubleq_index
-  Backup["<b>Double-Q continuation</b><code>0 if terminal else</code><code>Q_target(next, h - 1,</code><code>argmax(Q_online(next,</code><code>h - 1)[supported]))</code>"]:::compute
-  %% aria-math: equations.rl.qh_doubleq_target
-  Target["<b>Training target</b>$$y_t^{(h,e)}=r_t^e+\gamma B_t^{(h,e)}$$"]:::compute
-  %% aria-compute: equations.model.qh_s1_selected_surface
-  Fusion["<b>Selected-depth encoder</b><code>backproject → transform</code><code>PointMLP → mean / max</code><code>root + residual</code>"]:::compute
-  Oracle --> Render
-  Candidates --> Render
-  State --> Select
-  Candidates --> Select
-  Select --> Step --> Next --> Backup
-  Render -->|"gain labels"| Reward
-  Select --> Reward
+  accTitle: Selected transition and supported Double-Q backup
+  accDescr: The pose-only Step updates pose, prefix, budget and candidates without fabricating an actor observation. The selected gain comes from privileged oracle measurement. Successor support intersects hard feasibility with horizon-specific label support. The piecewise bootstrap separates online selection from delayed evaluation and is zero for h=1, termination or empty support. Current-state all-candidate labels are not successor values.
+  State["<b>Actor</b>$$#symb.rl.s_pose$$"]:::input
+  Step["<b>Selected transition</b>$$#eqs.rl.replay_transition$$"]:::compute
+  Oracle["<b>Oracle</b>$$#symb.rl.s_oracle$$"]:::input
+  Reward["<b>Reward</b>$$#eqs.rl.target_root_gain_reward$$"]:::compute
+  Support["<b>Successor support</b>$$#eqs.rl.qh_supported_successor_set$$"]:::compute
+  Backup["<b>Double-Q</b>$$#eqs.rl.qh_doubleq_index$$"]:::compute
+  Target["<b>Target</b>$$#eqs.rl.qh_doubleq_target$$"]:::compute
+  State --> Step
+  Step --> Support
+  Step --> Reward
+  Oracle --> Reward
+  Support --> Backup
   Reward --> Target
   Backup --> Target
-  Render -.->|"selected depth only"| Fusion
-  Select -.->|"selection gate"| Fusion
-  style Fusion stroke-dasharray:5 4
 
   classDef input fill:#D5E8D4,stroke:#82B366,color:#17202A,stroke-width:1.5px,rx:0,ry:0;
   classDef output fill:#F8CECC,stroke:#B85450,color:#17202A,stroke-width:1.5px,rx:0,ry:0;

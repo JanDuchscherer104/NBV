@@ -1,5 +1,32 @@
 #import "../symbols.typ": symb
 
+
+// Reusable rows of the same shared fusion equation; diagram sources reference
+// these names instead of copying a local MLP/attention notation.
+#let qh_state_tokens = $
+  bold(Z)_t = (
+    #symb.scene.scene_memory_t, #symb.model.target_token,
+    #symb.model.history_token,
+    op("Emb") (#symb.rl.budget / #symb.rl.H_max),
+    op("Emb") (#symb.rl.requested_horizon / #symb.rl.H_max)
+  )
+$
+#let qh_a0_read = $
+  bold(c)_(t,i)^"A0" = op("MLP")_"A0" (
+    op("concat") (#symb.model.candidate_row, op("vec")(bold(Z)_t))
+  )
+$
+#let qh_a1_read = $
+  bold(c)_(t,i)^"A1" = op("CrossAttn")_"A1" (
+    #symb.model.candidate_row, bold(Z)_t, bold(Z)_t)
+$
+#let qh_feature_fusion = $
+  #symb.rl.candidate_token^"Ak" = op("concat") (
+    #symb.model.candidate_row, bold(c)_(t,i)^"Ak",
+    #symb.model.candidate_row dot.o bold(c)_(t,i)^"Ak"),
+  quad "Ak" in {"A0", "A1"}
+$
+
 #let model = (
   qh_input_contract: $
     cal(I)_(t,e)
@@ -78,32 +105,15 @@
       bold(m)_t
     )
   $,
+  qh_state_tokens: qh_state_tokens,
+  qh_a0_read: qh_a0_read,
+  qh_a1_read: qh_a1_read,
+  qh_feature_fusion: qh_feature_fusion,
   qh_state_fusion_controls: $
-    bold(Z)_t
-    &=
-    (
-      #symb.scene.scene_memory_t,
-      #symb.model.target_token,
-      bold(h)_t^"hist",
-      op("Emb") (#symb.rl.budget / #symb.rl.H_max),
-      op("Emb") (#symb.rl.requested_horizon / #symb.rl.H_max)
-    ) \
-    bold(c)_(t,i)^"A0"
-    &=
-    op("MLP")_"A0" (
-      op("concat") (#symb.model.candidate_row, op("vec")(bold(Z)_t))
-    ) \
-    bold(c)_(t,i)^"A1"
-    &=
-    op("CrossAttn")_"A1" (#symb.model.candidate_row, bold(Z)_t, bold(Z)_t) \
-    #symb.rl.candidate_token^"Ak"
-    &=
-    op("concat") (
-      #symb.model.candidate_row,
-      bold(c)_(t,i)^"Ak",
-      #symb.model.candidate_row dot bold(c)_(t,i)^"Ak"
-    ),
-    quad "Ak" in {"A0", "A1"}
+    #qh_state_tokens \
+    #qh_a0_read \
+    #qh_a1_read \
+    #qh_feature_fusion
   $,
   qh_history_controls: $
     #symb.model.history_pose_feature
