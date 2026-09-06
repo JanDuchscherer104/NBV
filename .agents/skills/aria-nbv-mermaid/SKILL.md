@@ -19,7 +19,7 @@ transformations and purposeful edge labels over paragraphs in boxes.
 
 Load only the relevant branch:
 
-- **Style and authoring:** [symbolic-style.md](../../../../tools/mermaid/references/symbolic-style.md).
+- **Style and authoring:** [symbolic-style.md](../../../tools/mermaid/references/symbolic-style.md).
 - **Scientific and reader review:** [figure-review.md](references/figure-review.md).
 - **Iterative research and plugin use:** [iteration.md](references/iteration.md).
 - **Notation changes or final thesis inclusion:** `typst-authoring`; inspect

@@ -19,7 +19,9 @@ jobs:
         with:
           node-version: '22'
       - name: Unit tests
-        run: python3 -W error -m unittest discover -s scripts/tests -p test_aria_mermaid_notation.py
+        run: |
+          python3 -W error -m unittest discover -s scripts/tests -p test_aria_mermaid_notation.py
+          bash tools/mermaid/scripts/test_render_mermaid.sh
       - name: Check canonical notation
         env:
           PR190_REF: b420d20cc01aa76451d002811f850bc87869b525
@@ -39,13 +41,14 @@ jobs:
           npm install --prefix tools/mermaid --no-save --package-lock=false @mermaid-js/mermaid-cli@11.17.0 puppeteer@25.9.0
           npm list --prefix tools/mermaid --all > .cache/mermaid/versions.txt || true
           printf '{"args":["--no-sandbox"]}\n' > .cache/mermaid/puppeteer.json
-      - name: Render and inspect at 160 mm
+      - name: Render and inspect at declared physical size
         run: |
           status=0
           for source in tools/mermaid/templates/flowchart_symbolic.mmd tools/mermaid/examples/pr190/*.mmd; do
             name="$(basename "$source" .mmd)"
             tools/mermaid/scripts/render_mermaid.sh "$source" ".cache/mermaid/$name.svg" --puppeteer-config .cache/mermaid/puppeteer.json || { status=1; continue; }
-            node tools/mermaid/scripts/inspect_mermaid.mjs ".cache/mermaid/$name.svg" 160 ".cache/mermaid/$name" || status=1
+            width="$(sed -n 's/^[[:space:]]*%% aria-width-mm: *//p' "$source")"
+            node tools/mermaid/scripts/inspect_mermaid.mjs ".cache/mermaid/$name.svg" "${width:-160}" ".cache/mermaid/$name" || status=1
           done
           exit "$status"
       - uses: actions/upload-artifact@v4

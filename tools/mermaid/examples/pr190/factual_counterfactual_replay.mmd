@@ -9,45 +9,46 @@ config:
     rankSpacing: 30
     padding: 12
     curve: linear
+    wrappingWidth: 240
   themeVariables:
     background: "#ffffff"
     fontFamily: "CMU Serif, Latin Modern Roman, serif"
     fontSize: "24px"
     primaryTextColor: "#17202A"
+    edgeLabelBackground: "#ffffff"
+    clusterBkg: "#fafafa"
+    clusterBorder: "#737373"
     lineColor: "#475569"
   themeCSS: |
     .nodeLabel { font-family: "CMU Serif", "Latin Modern Roman", serif; font-size: 24px; }
-    .nodeLabel b { font-size: 28px; font-weight: 700; }
+    .nodeLabel > div { display: block !important; white-space: normal !important; line-height: 1.2; }
+    .nodeLabel b { display: block; font-size: 28px; font-weight: 700; line-height: 1.15; margin-bottom: 6px; }
     .edgeLabel { font-family: "CMU Serif", "Latin Modern Roman", serif; font-size: 22px; }
     .cluster-label { font-family: "CMU Serif", "Latin Modern Roman", serif; font-size: 24px; font-weight: 700; }
     .katex { font-size: 1em; }
 ---
 flowchart TB
   %% aria-notation: strict
-  %% aria-width-mm: 160
+  %% aria-width-mm: 150
   accTitle: Oracle labels and the stored causal successor
   accDescr: Dense current-state immediate labels are not successor values. Current pose-only replay advances pose, selected-pose prefix, budget and candidates. Only selected depth may enter a separate privileged observation control; unselected renders have no state-update edge.
-  subgraph Labels["Counterfactual supervision"]
   %% aria-math: symbols.rl.s_oracle
   Mesh["<b>Oracle state</b><br/>$$s_t^{\mathrm{oracle}}$$"]:::input
   %% aria-math: symbols.oracle.candidates_t
   Candidates["<b>Candidate table</b><br/>$$\mathcal{Q}_t$$"]:::input
   %% aria-math: symbols.oracle.depth_q
-  Render["<b>Render and evaluate</b><br/>$$\boldsymbol{D}_q$$"]:::compute
-  Dense["<b>Immediate gain labels</b><br/>all evaluable valid rows"]:::output
-  end
-  subgraph Replay["Current pose-only replay"]
+  Render["<b>Oracle evaluation</b><br/>$$\boldsymbol{D}_q$$"]:::compute
+  Dense["<b>One-step labels</b><br/>valid candidate rows"]:::output
   %% aria-math: symbols.rl.s_pose
   State["<b>Current state</b><br/>$$s_t^{\mathrm{S0-pose}}$$"]:::data
   Select["<b>Choose one row</b>"]:::compute
   %% aria-math: symbols.rl.selected_pose_prefix_next
-  Step["<b>Pose / budget step</b><br/>$$\boldsymbol{H}_{t+1}^{\mathrm{pose}}$$"]:::compute
+  Step["<b>Pose-only step</b><br/>$$\boldsymbol{H}_{t+1}^{\mathrm{pose}}$$"]:::compute
   Next["<b>Successor query</b><br/>new candidate table"]:::data
-  end
   %% aria-math: symbols.entity.target_reward
   Reward["<b>Selected gain</b><br/>$$r_t^e$$"]:::data
-  Backup["<b>Double-Q target</b><br/>successor support · termination"]:::compute
-  Fusion["<b>Observation fusion</b><br/>separate control / target"]:::compute
+  Backup["<b>Double-Q target</b><br/>support · termination"]:::compute
+  Fusion["<b>Observation fusion</b><br/>privileged control"]:::compute
   Mesh --> Render
   Candidates --> Render --> Dense
   State --> Select

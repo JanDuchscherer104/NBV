@@ -9,15 +9,20 @@ config:
     rankSpacing: 30
     padding: 12
     curve: linear
+    wrappingWidth: 240
   themeVariables:
     background: "#ffffff"
     fontFamily: "CMU Serif, Latin Modern Roman, serif"
     fontSize: "24px"
     primaryTextColor: "#17202A"
+    edgeLabelBackground: "#ffffff"
+    clusterBkg: "#fafafa"
+    clusterBorder: "#737373"
     lineColor: "#475569"
   themeCSS: |
     .nodeLabel { font-family: "CMU Serif", "Latin Modern Roman", serif; font-size: 24px; }
-    .nodeLabel b { font-size: 28px; font-weight: 700; }
+    .nodeLabel > div { display: block !important; white-space: normal !important; line-height: 1.2; }
+    .nodeLabel b { display: block; font-size: 28px; font-weight: 700; line-height: 1.15; margin-bottom: 6px; }
     .edgeLabel { font-family: "CMU Serif", "Latin Modern Roman", serif; font-size: 22px; }
     .cluster-label { font-family: "CMU Serif", "Latin Modern Roman", serif; font-size: 24px; font-weight: 700; }
     .katex { font-size: 1em; }
@@ -27,11 +32,12 @@ flowchart TB
   %% aria-width-mm: 160
   accTitle: Shared memory and candidate-conditioned readout
   accDescr: A proposed source-aware actor memory is assembled before candidate queries. Read-only target and frustum queries produce candidate-conditioned features; they do not mutate shared memory. Pose-only and privileged surface states are independent controls, not additional model inputs.
-  subgraph Proposed["Proposed actor-visible memory / readout"]
+  subgraph Proposed["Proposed actor-visible representation"]
+    direction TB
   %% aria-math: symbols.scene.evl_local
   EVL["<b>Local EVL</b><br/>$$\boldsymbol{E}_0^{\mathrm{EVL-local}}$$"]:::data
   %% aria-math: symbols.scene.ray_memory_t
-  Rays["<b>Causal ray memory</b><br/>$$\boldsymbol{M}_t^{\mathrm{ray}}$$"]:::data
+  Rays["<b>Ray memory</b><br/>$$\boldsymbol{M}_t^{\mathrm{ray}}$$"]:::data
   %% aria-math: symbols.scene.scene_memory_t
   Memory["<b>Shared memory</b><br/>$$\boldsymbol{\Phi}_t^{\mathrm{scene}}$$"]:::data
   %% aria-math: symbols.entity.target_desc
@@ -39,17 +45,11 @@ flowchart TB
   %% aria-math: symbols.oracle.candidate_qti
   Candidate["<b>Camera query</b><br/>$$q_{t,i}$$"]:::input
   %% aria-math: symbols.scene.render_query
-  Read["<b>Candidate-local read</b><br/>$$\operatorname{RenderQuery}$$"]:::compute
+  Read["<b>Local readout</b><br/>$$\operatorname{RenderQuery}$$"]:::compute
   %% aria-math: symbols.scene.target_support_pool symbols.scene.frustum_support_pool symbols.scene.target_frustum_pool
   Local["<b>Spatial support</b><br/>$$\boldsymbol{g}_e^{\mathrm{tgt}}$$ · $$\boldsymbol{g}_{t,i}^{\mathrm{fr}}$$ · $$\boldsymbol{g}_{t,e,i}^{\cap}$$"]:::output
   %% aria-math: symbols.scene.ray_query_ti
   RayRead["<b>Ray evidence</b><br/>$$\boldsymbol{g}_{t,i}^{\mathrm{ray}}$$"]:::output
-  end
-  subgraph Controls["Separate executable controls"]
-  %% aria-math: symbols.rl.s_pose
-  S0["<b>Pose-only baseline</b><br/>$$s_t^{\mathrm{S0-pose}}$$"]:::data
-  %% aria-math: symbols.rl.s_surface
-  S1["<b>Privileged surface</b><br/>$$s_t^{\mathrm{S1-surface}}$$"]:::data
   end
   EVL --> Memory
   Rays --> Memory

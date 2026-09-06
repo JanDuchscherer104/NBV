@@ -9,15 +9,20 @@ config:
     rankSpacing: 30
     padding: 12
     curve: linear
+    wrappingWidth: 240
   themeVariables:
     background: "#ffffff"
     fontFamily: "CMU Serif, Latin Modern Roman, serif"
     fontSize: "24px"
     primaryTextColor: "#17202A"
+    edgeLabelBackground: "#ffffff"
+    clusterBkg: "#fafafa"
+    clusterBorder: "#737373"
     lineColor: "#475569"
   themeCSS: |
     .nodeLabel { font-family: "CMU Serif", "Latin Modern Roman", serif; font-size: 24px; }
-    .nodeLabel b { font-size: 28px; font-weight: 700; }
+    .nodeLabel > div { display: block !important; white-space: normal !important; line-height: 1.2; }
+    .nodeLabel b { display: block; font-size: 28px; font-weight: 700; line-height: 1.15; margin-bottom: 6px; }
     .edgeLabel { font-family: "CMU Serif", "Latin Modern Roman", serif; font-size: 22px; }
     .cluster-label { font-family: "CMU Serif", "Latin Modern Roman", serif; font-size: 24px; font-weight: 700; }
     .katex { font-size: 1em; }
@@ -34,13 +39,13 @@ flowchart TB
   %% aria-math: symbols.entity.target_desc
   Target["<b>Target geometry</b><br/>$$\boldsymbol{\phi}_e$$"]:::input
   %% aria-math: symbols.model.candidate_physical_token
-  Physical["<b>Physical projection</b><br/>$$\boldsymbol{h}_{t,i}^{\mathrm{phys}}$$"]:::compute
+  Physical["<b>Physical token</b><br/>$$\boldsymbol{h}_{t,i}^{\mathrm{phys}}$$"]:::compute
   %% aria-math: symbols.model.candidate_row
   Row["<b>Value query</b><br/>$$\boldsymbol{x}_{t,i}$$"]:::compute
   %% aria-math: symbols.model.target_token symbols.model.history_token
   Context["<b>Shared context</b><br/>$$\boldsymbol{h}_e^{\mathrm{tgt}}$$ · $$\boldsymbol{h}_t^{\mathrm{hist}}$$<br/>scene · budget · horizon"]:::data
-  Attention["<b>A1 cross-attention</b>"]:::compute
-  Fuse["<b>Query–context fusion</b><br/>concatenate · product"]:::compute
+  Attention["<b>A1 attention</b>"]:::compute
+  Fuse["<b>Feature fusion</b><br/>query · context · product"]:::compute
   %% aria-math: symbols.rl.conditional_q
   Values["<b>Value decoder</b><br/>$$Q_{h,\theta,e,i}^{\mathrm{cond}}$$"]:::output
   %% aria-math: symbols.rl.feasibility_logits
