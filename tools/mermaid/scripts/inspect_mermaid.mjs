@@ -101,9 +101,20 @@ try {
   const { nodeId } = await client.send('DOM.querySelector', { nodeId: root.nodeId, selector: 'g.node b' });
   const { fonts } = nodeId ? await client.send('CSS.getPlatformFontsForNode', { nodeId }) : { fonts: [] };
   report.titleFonts = fonts;
-  const { nodeId: mathId } = await client.send('DOM.querySelector', { nodeId: root.nodeId, selector: '.katex-html' });
-  report.mathFonts = mathId ? (await client.send('CSS.getPlatformFontsForNode', { nodeId: mathId })).fonts : [];
-  if (mathId && !report.mathFonts.some(f => f.familyName.startsWith('KaTeX') && f.glyphCount > 0)) report.errors.push('KaTeX font fallback detected');
+  // CDP reports glyph fonts on text-bearing nodes, not deep wrapper spans.
+  const probeCount = await page.evaluate(() => {
+    const leaves = [...document.querySelectorAll('.katex-html span')]
+      .filter(el => !el.childElementCount && el.textContent.trim() && el.getBoundingClientRect().width > 0)
+      .slice(0, 8);
+    leaves.forEach((el, i) => el.setAttribute('data-aria-font-probe', String(i)));
+    return leaves.length;
+  });
+  report.mathFonts = [];
+  for (let i = 0; i < probeCount; i++) {
+    const { nodeId: mathId } = await client.send('DOM.querySelector', { nodeId: root.nodeId, selector: `[data-aria-font-probe="${i}"]` });
+    if (mathId) report.mathFonts.push(...(await client.send('CSS.getPlatformFontsForNode', { nodeId: mathId })).fonts);
+  }
+  if (!probeCount || !report.mathFonts.some(f => f.familyName.startsWith('KaTeX') && f.glyphCount > 0)) report.errors.push('KaTeX glyph font not verified');
   if (!fonts.some(f => f.familyName === 'CMU Serif' && f.glyphCount > 0)) report.errors.push('CMU Serif not used for title glyphs');
   const svg = await page.$('svg');
   await page.evaluate((widthMm) => {
